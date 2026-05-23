@@ -214,6 +214,15 @@ and projection-lag state without secrets. RunbookValidator MUST reject
 incomplete backup/restore and rollback contracts. RuntimeSizing MUST validate
 process pool settings before deployment.
 
+Advanced community features MUST use narrow MentionExtractor, BookmarkStore,
+ReputationLedger, and FeedProjector boundaries. Mentions MUST be parsed and
+deduplicated before notification fanout. Bookmarks MUST be soft-deletable user
+state, not content authority. The bookmarks and mentions tables MUST remain
+user/community state rather than canonical content authority. Reputation MUST be
+append-ledger driven through reputation_events and trust_score_snapshots.
+FeedProjector MUST write rebuildable user_feed_items projections and MUST NOT
+make feeds authoritative.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.

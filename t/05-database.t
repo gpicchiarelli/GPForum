@@ -19,13 +19,14 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 221;
-const my $EXPECTED_MIGRATIONS          => 6;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 15;
+const my $EXPECTED_TESTS               => 249;
+const my $EXPECTED_MIGRATIONS          => 7;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 18;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
 const my $ATTACHMENT_MIGRATION_INDEX   => 5;
+const my $ADVANCED_COMMUNITY_INDEX     => 6;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -42,6 +43,11 @@ my $notification_read_source       = $schema->source('NotificationRead');
 my $attachment_source              = $schema->source('Attachment');
 my $attachment_link_source         = $schema->source('AttachmentLink');
 my $attachment_variant_source      = $schema->source('AttachmentVariant');
+my $bookmark_source                = $schema->source('Bookmark');
+my $mention_source                 = $schema->source('Mention');
+my $reputation_event_source        = $schema->source('ReputationEvent');
+my $trust_score_snapshot_source    = $schema->source('TrustScoreSnapshot');
+my $user_feed_item_source          = $schema->source('UserFeedItem');
 my $projection_offset_source       = $schema->source('ProjectionOffset');
 my $projection_generation_source   = $schema->source('ProjectionGeneration');
 
@@ -205,6 +211,53 @@ ok( $attachment_variant_source->has_column('variant_type'),
     'attachment variant stores variant type' );
 ok( $attachment_variant_source->has_column('object_key'),
     'attachment variant stores object key' );
+
+is( $bookmark_source->from, 'bookmarks', 'bookmark source maps table' );
+is_deeply( [ $bookmark_source->primary_columns ],
+    ['bookmark_id'], 'bookmark primary key is explicit' );
+ok( $bookmark_source->has_column('note'),       'bookmark stores note' );
+ok( $bookmark_source->has_relationship('user'), 'bookmark belongs to user' );
+
+is( $mention_source->from, 'mentions', 'mention source maps table' );
+is_deeply( [ $mention_source->primary_columns ],
+    ['mention_id'], 'mention primary key is explicit' );
+ok( $mention_source->has_column('mentioned_username'),
+    'mention stores username snapshot' );
+ok( $mention_source->has_relationship('actor'), 'mention belongs to actor' );
+ok( $mention_source->has_relationship('mentioned_user'),
+    'mention belongs to mentioned user' );
+
+is( $reputation_event_source->from,
+    'reputation_events', 'reputation event source maps table' );
+is_deeply( [ $reputation_event_source->primary_columns ],
+    ['reputation_event_id'], 'reputation event primary key is explicit' );
+ok( $reputation_event_source->has_column('delta'),
+    'reputation event stores delta' );
+ok( $reputation_event_source->has_relationship('user'),
+    'reputation event belongs to user' );
+
+is( $trust_score_snapshot_source->from,
+    'trust_score_snapshots', 'trust score snapshot source maps table' );
+is_deeply( [ $trust_score_snapshot_source->primary_columns ],
+    ['user_id'], 'trust score snapshot primary key is user' );
+ok( $trust_score_snapshot_source->has_column('trust_level'),
+    'trust score snapshot stores trust level' );
+ok( $trust_score_snapshot_source->has_relationship('user'),
+    'trust score snapshot belongs to user' );
+
+is( $user_feed_item_source->from,
+    'user_feed_items', 'user feed item source maps table' );
+is_deeply(
+    [ $user_feed_item_source->primary_columns ],
+    [ 'user_id', 'item_type', 'item_id' ],
+    'user feed item primary key is explicit'
+);
+ok( $user_feed_item_source->has_column('rank_score'),
+    'user feed item stores rank score' );
+ok( $user_feed_item_source->has_column('permission_version'),
+    'user feed item stores permission version' );
+ok( $user_feed_item_source->has_relationship('user'),
+    'user feed item belongs to user' );
 
 is( $projection_offset_source->from,
     'projection_offsets',
@@ -772,6 +825,40 @@ like( $attachment_sql, qr/attachment_links/msx,
     'attachments migration creates attachment links table' );
 like( $attachment_sql, qr/attachment_variants/msx,
     'attachments migration creates attachment variants table' );
+
+my $advanced_community_sql =
+  path( $summary->[$ADVANCED_COMMUNITY_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$ADVANCED_COMMUNITY_INDEX]->{description},
+    'advanced community',
+    'advanced community migration description is parsed'
+);
+like(
+    $advanced_community_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] bookmarks/msx,
+    'advanced community migration creates bookmarks table'
+);
+like(
+    $advanced_community_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] mentions/msx,
+    'advanced community migration creates mentions table'
+);
+like(
+    $advanced_community_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] reputation_events/msx,
+    'advanced community migration creates reputation events table'
+);
+like(
+    $advanced_community_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] trust_score_snapshots/msx,
+    'advanced community migration creates trust score snapshots table'
+);
+like(
+    $advanced_community_sql,
+    qr/idx_user_feed_items_ranked/msx,
+    'advanced community migration indexes ranked feed projection'
+);
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;
 my $runner           = GPForum::Migration::Runner->new(

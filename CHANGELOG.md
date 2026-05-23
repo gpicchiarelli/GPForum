@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added advanced community feature boundaries for mention extraction,
+  bookmarks, reputation ledger events, trust score snapshots, and rebuildable
+  user feed projections.
 - Added operations hardening boundaries for rate limiting, metrics snapshots,
   runbook validation, runtime sizing validation, and a JSON metrics endpoint.
 - Added attachment upload intent, validation, lifecycle persistence, links,

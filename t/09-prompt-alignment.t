@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 61;
+const my $EXPECTED_TESTS => 70;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -101,6 +101,15 @@ for my $required_term (
     MetricsSnapshot
     RunbookValidator
     RuntimeSizing
+    MentionExtractor
+    BookmarkStore
+    ReputationLedger
+    FeedProjector
+    bookmarks
+    mentions
+    reputation_events
+    trust_score_snapshots
+    user_feed_items
     SubscriptionStore
     PreferenceStore
     NotificationDispatcher

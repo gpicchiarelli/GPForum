@@ -14,7 +14,7 @@ use GPForum::Command::Migrate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 6;
+const my $EXPECTED_TESTS => 7;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -51,6 +51,11 @@ like(
     $output,
     qr/006 [ ] attachments/msx,
     'plan command prints attachments migration'
+);
+like(
+    $output,
+    qr/007 [ ] advanced [ ] community/msx,
+    'plan command prints advanced community migration'
 );
 
 throws_ok(
