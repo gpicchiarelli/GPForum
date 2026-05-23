@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added import/export portability boundaries for validated import manifests,
+  dry-run jobs, legacy id mapping, import failure reporting, privacy-aware
+  export manifests, and PostgreSQL migration coverage.
 - Added admin authorization management boundaries for role catalogs, scoped role
   bindings, permission review, and audit-backed role changes.
 - Added moderation review boundaries for reports, reversible moderation actions,

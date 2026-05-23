@@ -111,9 +111,10 @@ This repository currently contains:
 * advanced community boundaries for mentions, bookmarks, reputation, trust snapshots, and user feed projection;
 * moderation review boundaries for reports, reversible moderation actions, suspensions, and admin audit review;
 * admin authorization boundaries for role catalogs, scoped role bindings, permission review, and audit-backed role changes;
+* import/export portability boundaries for manifest validation, dry-run import jobs, legacy id mapping, failure reporting, and privacy-aware export manifests;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 12: Admin Authorization Management** service
+The current implementation has reached **Milestone 13: Import Export Portability** service
 boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture

@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 297;
-const my $EXPECTED_MIGRATIONS          => 9;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 24;
+const my $EXPECTED_TESTS               => 320;
+const my $EXPECTED_MIGRATIONS          => 10;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 27;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -29,6 +29,7 @@ const my $ATTACHMENT_MIGRATION_INDEX   => 5;
 const my $ADVANCED_COMMUNITY_INDEX     => 6;
 const my $MODERATION_REVIEW_INDEX      => 7;
 const my $ADMIN_AUTHORIZATION_INDEX    => 8;
+const my $IMPORT_EXPORT_INDEX          => 9;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -60,6 +61,10 @@ my $role_binding_source            = $schema->source('RoleBinding');
 my $resource_acl_source            = $schema->source('ResourceAcl');
 my $projection_offset_source       = $schema->source('ProjectionOffset');
 my $projection_generation_source   = $schema->source('ProjectionGeneration');
+my $import_job_source              = $schema->source('ImportJob');
+my $import_failure_source          = $schema->source('ImportFailure');
+my $legacy_id_map_source           = $schema->source('LegacyIdMap');
+my $export_request_source          = $schema->source('ExportRequest');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -369,6 +374,49 @@ ok(
     'projection generation stores active marker'
 );
 
+is( $import_job_source->from, 'import_jobs', 'import job source maps table' );
+is_deeply( [ $import_job_source->primary_columns ],
+    ['import_job_id'], 'import job primary key is explicit' );
+ok(
+    $import_job_source->has_column('manifest'),
+    'import job stores source manifest'
+);
+ok(
+    $import_job_source->has_column('progress'),
+    'import job stores progress snapshot'
+);
+ok( $import_job_source->has_relationship('failures'),
+    'import job has failure rows' );
+
+is( $import_failure_source->from,
+    'import_failures', 'import failure source maps table' );
+is_deeply( [ $import_failure_source->primary_columns ],
+    ['import_failure_id'], 'import failure primary key is explicit' );
+ok( $import_failure_source->has_column('error_code'),
+    'import failure stores error code' );
+ok( $import_failure_source->has_relationship('import_job'),
+    'import failure belongs to import job' );
+
+is( $legacy_id_map_source->from,
+    'legacy_id_map', 'legacy id map source maps table' );
+is_deeply( [ $legacy_id_map_source->primary_columns ],
+    ['legacy_id_map_id'], 'legacy id map primary key is explicit' );
+ok( $legacy_id_map_source->has_column('canonical_url'),
+    'legacy id map stores canonical urls' );
+ok( $legacy_id_map_source->has_relationship('import_job'),
+    'legacy id map belongs to import job' );
+
+is( $export_request_source->from,
+    'export_requests', 'export request source maps table' );
+is_deeply( [ $export_request_source->primary_columns ],
+    ['export_request_id'], 'export request primary key is explicit' );
+ok( $export_request_source->has_column('export_type'),
+    'export request stores export type' );
+ok( $export_request_source->has_relationship('requester'),
+    'export request belongs to requester' );
+ok( $export_request_source->has_relationship('subject'),
+    'export request belongs to subject' );
+
 my $user_source          = $schema->source('User');
 my $credential_source    = $schema->source('Credential');
 my $session_source       = $schema->source('Session');
@@ -569,7 +617,7 @@ is( $connected_schema->storage->connect_info->[0],
 my $plan    = GPForum::Migration::Plan->new;
 my $summary = $plan->summary;
 
-is( scalar @{$summary}, $EXPECTED_MIGRATIONS, 'four migrations are planned' );
+is( scalar @{$summary}, $EXPECTED_MIGRATIONS, 'all migrations are planned' );
 is( $summary->[0]->{version}, '001',          'migration version is parsed' );
 is(
     $summary->[0]->{description},
@@ -996,6 +1044,35 @@ like(
     $admin_authorization_sql,
     qr/idx_admin_role_audit_projection_actor/msx,
     'admin authorization migration indexes role audit projection'
+);
+
+my $import_export_sql =
+  path( $summary->[$IMPORT_EXPORT_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$IMPORT_EXPORT_INDEX]->{description},
+    'import export',
+    'import export migration description is parsed'
+);
+like(
+    $import_export_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] import_jobs/msx,
+    'import export migration creates import jobs table'
+);
+like(
+    $import_export_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] import_failures/msx,
+    'import export migration creates import failures table'
+);
+like(
+    $import_export_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] legacy_id_map/msx,
+    'import export migration creates legacy id map table'
+);
+like(
+    $import_export_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] export_requests/msx,
+    'import export migration creates export requests table'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

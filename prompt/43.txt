@@ -580,6 +580,41 @@ No deviation may ship without an accepted ADR.
 
 ---
 
+Import, Export, And Portability Contract
+
+Import/export workflows MUST remain narrow service boundaries and MUST NOT
+become application god classes.
+
+The required portability modules are:
+
+* ImportManifestValidator for source-system, adapter, dry-run, and record-count
+  validation;
+* ImportJobStore for import_jobs lifecycle, progress snapshots, and
+  import_failures recording;
+* LegacyIdMapper for legacy_id_map source-to-native identifier resolution;
+* ExportBundleBuilder for export_requests, user-data bundles, and safe export
+  manifests.
+
+The required persistence tables are:
+
+* import_jobs;
+* import_failures;
+* legacy_id_map;
+* export_requests.
+
+Imports MUST support dry-run execution, hostile input quarantine, deterministic
+failure reporting, legacy id mapping, and asynchronous worker execution.
+
+Exports MUST be privacy-aware, authorization-aware, and explicit about their
+manifest. User data exports MUST NOT include privileged audit log rows,
+moderation internals, credential secrets, or unrelated user data.
+
+Legacy identifiers MUST never collide with native identifiers. All source id
+resolution MUST pass through legacy_id_map or an equivalent reviewed mapping
+projection.
+
+---
+
 Milestone Definition Of Done
 
 Every milestone MUST include:

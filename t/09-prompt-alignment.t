@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 85;
+const my $EXPECTED_TESTS => 93;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -138,6 +138,14 @@ for my $required_term (
     thread_counters
     thread_counter_shards
     search_documents
+    ImportManifestValidator
+    ImportJobStore
+    LegacyIdMapper
+    ExportBundleBuilder
+    import_jobs
+    import_failures
+    legacy_id_map
+    export_requests
     )
   )
 {

@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 105;
+const my $TEST_COUNT => 113;
 
 plan tests => $TEST_COUNT;
 
@@ -37,6 +37,10 @@ use_ok('GPForum::Schema::Result::CategoryStat');
 use_ok('GPForum::Schema::Result::Credential');
 use_ok('GPForum::Schema::Result::DeadLetter');
 use_ok('GPForum::Schema::Result::EventLog');
+use_ok('GPForum::Schema::Result::ExportRequest');
+use_ok('GPForum::Schema::Result::ImportFailure');
+use_ok('GPForum::Schema::Result::ImportJob');
+use_ok('GPForum::Schema::Result::LegacyIdMap');
 use_ok('GPForum::Schema::Result::Mention');
 use_ok('GPForum::Schema::Result::ModerationAction');
 use_ok('GPForum::Schema::Result::Notification');
@@ -91,6 +95,10 @@ use_ok('GPForum::Service::Operations::MetricsSnapshot');
 use_ok('GPForum::Service::Operations::RateLimiter');
 use_ok('GPForum::Service::Operations::RunbookValidator');
 use_ok('GPForum::Service::Operations::RuntimeSizing');
+use_ok('GPForum::Service::Portability::ExportBundleBuilder');
+use_ok('GPForum::Service::Portability::ImportJobStore');
+use_ok('GPForum::Service::Portability::ImportManifestValidator');
+use_ok('GPForum::Service::Portability::LegacyIdMapper');
 use_ok('GPForum::Service::Forum::ThreadComposer');
 use_ok('GPForum::Service::Forum::ThreadStore');
 use_ok('GPForum::Service::Forum::PageWindow');

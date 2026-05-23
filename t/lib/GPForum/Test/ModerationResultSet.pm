@@ -34,7 +34,7 @@ sub update_or_create {
 sub find {
     my ( $self, $query ) = @_;
 
-    my $key = ref $query eq 'HASH' ? _composite_key($query) : $query;
+    my $key = ref $query eq 'HASH' ? _find_key($query) : $query;
 
     return $self->rows->{$key};
 }
@@ -77,9 +77,14 @@ sub _row_keys {
               acl_id
               post_id
               thread_id
+              import_job_id
+              import_failure_id
+              legacy_id_map_id
+              export_request_id
             )
         },
         _composite_key($row),
+        _legacy_key($row),
     );
 }
 
@@ -88,6 +93,20 @@ sub _composite_key {
 
     return join q{:},
       grep { defined } @{$row}{qw(target_type target_id status)};
+}
+
+sub _find_key {
+    my ($row) = @_;
+
+    return _legacy_key($row) if exists $row->{legacy_type};
+
+    return _composite_key($row);
+}
+
+sub _legacy_key {
+    my ($row) = @_;
+
+    return join q{:}, grep { defined } @{$row}{qw(legacy_type legacy_id)};
 }
 
 1;

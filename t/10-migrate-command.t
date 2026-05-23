@@ -14,7 +14,7 @@ use GPForum::Command::Migrate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 9;
+const my $EXPECTED_TESTS => 10;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -66,6 +66,11 @@ like(
     $output,
     qr/009 [ ] admin [ ] authorization/msx,
     'plan command prints admin authorization migration'
+);
+like(
+    $output,
+    qr/010 [ ] import [ ] export/msx,
+    'plan command prints import export migration'
 );
 
 throws_ok(
