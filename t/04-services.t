@@ -16,7 +16,8 @@ use GPForum::Service::SessionToken;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 13;
+const my $EXPECTED_TESTS => 14;
+const my $ONE_MINUTE     => 60;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -41,6 +42,11 @@ like(
     $clock->now_iso8601,
     qr/\A [[:digit:]]{4} - [[:digit:]]{2} - [[:digit:]]{2} T /msx,
     'clock returns ISO-8601 UTC timestamp',
+);
+like(
+    $clock->epoch_plus_iso8601($ONE_MINUTE),
+    qr/\A [[:digit:]]{4} - [[:digit:]]{2} - [[:digit:]]{2} T /msx,
+    'clock returns future ISO-8601 UTC timestamp',
 );
 like( $id->uuid, $uuid_version_seven, 'id service returns a UUIDv7' );
 

@@ -21,6 +21,12 @@ sub now_iso8601 {
     return gmtime( $self->now_epoch )->datetime . 'Z';
 }
 
+sub epoch_plus_iso8601 {
+    my ( $self, $seconds ) = @_;
+
+    return gmtime( $self->now_epoch + $seconds )->datetime . 'Z';
+}
+
 1;
 
 __END__

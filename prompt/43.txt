@@ -126,6 +126,10 @@ Domain event writes MUST create a matching outbox_messages row in the same
 transaction through a narrow builder equivalent to MessageBuilder, keeping
 delivery metadata outside EventStore and preventing store classes from becoming
 god-class dispatchers.
+Outbox delivery MUST use a narrow OutboxDispatcher contract: select ready
+pending/failed rows, claim them with worker and lock metadata, dispatch through
+an injectable transport, mark successful rows done, and mark failures failed
+with retry metadata.
 
 PermissionEngine:
 
