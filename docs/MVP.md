@@ -138,7 +138,8 @@ They currently cover home, category lists, category thread pages, thread view,
 thread/reply creation, and search. They are release-gate contracts for future
 instrumented observations rather than runtime query counters. The same service
 can synchronize the catalog into `endpoint_query_budgets` and report drift if
-the database contract diverges from the executable catalog.
+the database contract diverges from the executable catalog. The CLI entry point
+is `bin/gpforum-query-budget --print|--sync|--check`.
 
 Start workers after Minion configuration is present:
 

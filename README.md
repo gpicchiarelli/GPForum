@@ -162,6 +162,8 @@ by the database uniqueness constraint but should gain advisory locking or a
 dedicated sequence allocator before hot production traffic.
 Endpoint query budgets are now exposed through operational metrics for hot
 paths such as home, category threads, thread view, create workflows, and search.
+Use `bin/gpforum-query-budget --print`, `--sync`, or `--check` to inspect,
+persist, or verify those budgets against PostgreSQL governance state.
 
 ## Architecture
 
