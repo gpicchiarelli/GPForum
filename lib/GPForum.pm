@@ -10,6 +10,8 @@ use GPForum::Log;
 use GPForum::Runtime;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Password;
+use GPForum::Service::SessionToken;
 
 our $VERSION = '0.001';
 
@@ -27,6 +29,11 @@ sub startup {
     $self->helper( gp_runtime => sub { return $runtime; } );
     $self->helper( gp_clock   => sub { return GPForum::Service::Clock->new; } );
     $self->helper( gp_id      => sub { return GPForum::Service::Id->new; } );
+    $self->helper(
+        gp_password => sub { return GPForum::Service::Password->new; } );
+    $self->helper(
+        gp_session_token => sub { return GPForum::Service::SessionToken->new; }
+    );
 
     GPForum::Log->configure( $self, $config );
 

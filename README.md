@@ -77,11 +77,12 @@ This repository currently contains:
 * Mojolicious application skeleton in [lib/GPForum.pm](lib/GPForum.pm);
 * DBIx::Class schema root in [lib/GPForum/Schema.pm](lib/GPForum/Schema.pm);
 * PostgreSQL migration foundation in [migrations](migrations);
+* initial identity persistence for users, credentials, and revocable sessions;
+* Argon2id password hashing and random session token services;
 * automation scripts in [script](script).
 
-The current implementation step is completing **Milestone 0** foundation work.
-The next product milestone is **Milestone 1: Identity And Sessions** under the
-constraints in [prompt/20.txt](prompt/20.txt).
+The current implementation step is **Milestone 1: Identity And Sessions** under
+the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture
 

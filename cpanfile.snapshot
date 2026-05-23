@@ -239,6 +239,18 @@ DISTRIBUTIONS
       perl 5.006
       strict 0
       warnings 0
+  Crypt-URandom-0.55
+    pathname: D/DD/DDICK/Crypt-URandom-0.55.tar.gz
+    provides:
+      Crypt::URandom 0.55
+    requirements:
+      Carp 1.26
+      English 0
+      Exporter 0
+      ExtUtils::MakeMaker 0
+      FileHandle 0
+      constant 0
+      perl 5.006
   DBD-SQLite-1.78
     pathname: I/IS/ISHIGAKI/DBD-SQLite-1.78.tar.gz
     provides:

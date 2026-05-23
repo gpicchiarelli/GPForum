@@ -16,7 +16,7 @@ use GPForum::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 13;
+const my $EXPECTED_TESTS => 29;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -31,6 +31,41 @@ ok(
     $source->has_column('applied_at'),
     'schema version records application time'
 );
+
+my $user_source       = $schema->source('User');
+my $credential_source = $schema->source('Credential');
+my $session_source    = $schema->source('UserSession');
+
+is( $user_source->from, 'users', 'user source maps users table' );
+is_deeply( [ $user_source->primary_columns ],
+    ['id'], 'user primary key is explicit' );
+ok( $user_source->has_column('email_normalized'),
+    'user stores normalized email' );
+ok(
+    $user_source->has_column('email_verified_at'),
+    'user supports email verification placeholder'
+);
+ok(
+    $user_source->has_relationship('credentials'),
+    'user has credentials relationship'
+);
+ok( $user_source->has_relationship('sessions'),
+    'user has sessions relationship' );
+
+is( $credential_source->from, 'credentials',
+    'credential source maps credentials table' );
+ok(
+    $credential_source->has_column('secret_hash'),
+    'credential stores only secret hash'
+);
+ok( $credential_source->has_relationship('user'),
+    'credential belongs to user' );
+
+is( $session_source->from, 'user_sessions',
+    'session source maps user sessions table' );
+ok( $session_source->has_column('session_hash'), 'session stores token hash' );
+ok( $session_source->has_column('revoked_at'), 'session supports revocation' );
+ok( $session_source->has_relationship('user'), 'session belongs to user' );
 
 my $config = GPForum::Config->from_environment(
     {
@@ -47,7 +82,7 @@ is( $connected_schema->storage->connect_info->[0],
 my $plan    = GPForum::Migration::Plan->new;
 my $summary = $plan->summary;
 
-is( scalar @{$summary},       1,     'one migration is planned' );
+is( scalar @{$summary},       2,     'two migrations are planned' );
 is( $summary->[0]->{version}, '001', 'migration version is parsed' );
 is( $summary->[0]->{description},
     'foundation', 'migration description is parsed' );
@@ -68,6 +103,24 @@ like(
     $migration_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] audit_log/msx,
     'migration creates audit log table'
+);
+
+my $identity_sql = path( $summary->[1]->{file} )->slurp;
+
+like(
+    $identity_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] users/msx,
+    'identity migration creates users table'
+);
+like(
+    $identity_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] credentials/msx,
+    'identity migration creates credentials table'
+);
+like(
+    $identity_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] user_sessions/msx,
+    'identity migration creates user sessions table'
 );
 
 throws_ok(

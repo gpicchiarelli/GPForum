@@ -13,6 +13,7 @@ requires 'DateTime';
 requires 'DateTime::Format::Pg';
 requires 'UUID::Tiny';
 requires 'Crypt::Argon2';
+requires 'Crypt::URandom';
 requires 'Email::Sender';
 requires 'Email::MIME';
 requires 'Const::Fast';
