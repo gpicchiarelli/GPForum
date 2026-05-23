@@ -1,0 +1,79 @@
+% layout 'default';
+% title 'Roles - GPForum';
+
+<section aria-labelledby="admin-roles-heading">
+  <h1 id="admin-roles-heading">Roles and permissions</h1>
+
+  <section aria-labelledby="create-role-heading">
+    <h2 id="create-role-heading">Create role</h2>
+    <form method="post" action="<%= url_for('admin_role_create') %>">
+      <%= csrf_field %>
+      <label for="role-name">Name</label>
+      <input id="role-name" name="name" required>
+      <label for="role-description">Description</label>
+      <input id="role-description" name="description">
+      <button type="submit">Create role</button>
+    </form>
+  </section>
+
+  <section aria-labelledby="create-permission-heading">
+    <h2 id="create-permission-heading">Create permission</h2>
+    <form method="post" action="<%= url_for('admin_permission_create') %>">
+      <%= csrf_field %>
+      <label for="permission-name">Name</label>
+      <input id="permission-name" name="name" required>
+      <label for="permission-resource">Resource type</label>
+      <input id="permission-resource" name="resource_type" required>
+      <label for="permission-action">Action</label>
+      <input id="permission-action" name="action" required>
+      <button type="submit">Create permission</button>
+    </form>
+  </section>
+
+  <section aria-labelledby="role-list-heading">
+    <h2 id="role-list-heading">Existing roles</h2>
+    % if (@{$roles}) {
+      <ol aria-label="Admin role list">
+        % for my $role (@{$roles}) {
+          <li>
+            <article aria-labelledby="role-<%= $role->{role_id} %>-heading">
+              <h3 id="role-<%= $role->{role_id} %>-heading"><%= $role->{name} %></h3>
+              <p><%= $role->{description} %></p>
+              <form method="post" action="<%= url_for('admin_role_permission_attach', role_id => $role->{role_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="role_id" value="<%= $role->{role_id} %>">
+                <label for="role-<%= $role->{role_id} %>-permission">Permission</label>
+                <select id="role-<%= $role->{role_id} %>-permission" name="permission_id" required>
+                  % for my $permission (@{$permissions}) {
+                    <option value="<%= $permission->{permission_id} %>">
+                      <%= $permission->{resource_type} %>.<%= $permission->{action} %>
+                    </option>
+                  % }
+                </select>
+                <button type="submit">Attach permission</button>
+              </form>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <p>No roles have been defined.</p>
+    % }
+  </section>
+
+  <section aria-labelledby="permission-list-heading">
+    <h2 id="permission-list-heading">Existing permissions</h2>
+    % if (@{$permissions}) {
+      <ol aria-label="Admin permission list">
+        % for my $permission (@{$permissions}) {
+          <li>
+            <code><%= $permission->{resource_type} %>.<%= $permission->{action} %></code>
+            <span><%= $permission->{name} %></span>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <p>No permissions have been defined.</p>
+    % }
+  </section>
+</section>

@@ -23,6 +23,26 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 5,
         notes       => 'category head plus keyset thread list',
     },
+    admin_dashboard => {
+        max_queries => 6,
+        notes       => 'authorized admin role summary plus recent audit',
+    },
+    admin_roles => {
+        max_queries => 6,
+        notes       => 'authorized role and permission catalog review',
+    },
+    admin_role_update => {
+        max_queries => 6,
+        notes       => 'role, permission, or scoped binding write workflow',
+    },
+    admin_user_roles => {
+        max_queries => 5,
+        notes       => 'authorized active role binding review for one user',
+    },
+    admin_audit => {
+        max_queries => 5,
+        notes       => 'authorized bounded admin audit review',
+    },
     thread_view => {
         max_queries => 8,
         notes       => 'thread head, posts, authors, counters, permissions',

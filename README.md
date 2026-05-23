@@ -132,6 +132,15 @@ semantic SSR by default and still return JSON when requested with
 `Accept: application/json` or `?format=json`:
 
 * `GET /`
+* `GET /admin`
+* `GET /admin/roles`
+* `POST /admin/roles`
+* `POST /admin/permissions`
+* `POST /admin/roles/:role_id/permissions`
+* `GET /admin/users/:user_id/roles`
+* `POST /admin/users/:user_id/roles`
+* `POST /admin/role-bindings/:binding_id/revoke`
+* `GET /admin/audit`
 * `GET /categories`
 * `GET /c/:category_id`
 * `GET /t/:thread_id`
@@ -176,6 +185,13 @@ event log, audit log, outbox, bodies, revisions, and counters stay coherent.
 Thread read progress is stored as compressed per-user read state plus a
 coalescable delta row, preserving continuity without making it authoritative
 forum content.
+
+The admin console is now minimally traversable for operators with
+`admin_console.view` or `admin_console.manage` permissions. It exposes role and
+permission catalogs, scoped role binding review/write workflows, binding
+revocation, and bounded audit review through thin Mojolicious controllers over
+the existing admin services. Role binding writes remain audit-backed and
+CSRF-protected; the controller never manipulates persistence directly.
 
 The root home route is backed by `HomePageReader`. It renders a public forum
 index from visible categories and keyset-paginated public threads, while keeping

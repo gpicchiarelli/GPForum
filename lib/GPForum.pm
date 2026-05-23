@@ -30,7 +30,11 @@ use GPForum::Service::Forum::ThreadComposer;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Forum::ThreadStore;
+use GPForum::Service::Admin::AuditReview;
 use GPForum::Service::Admin::PermissionGate;
+use GPForum::Service::Admin::PermissionReview;
+use GPForum::Service::Admin::RoleBindingStore;
+use GPForum::Service::Admin::RoleCatalog;
 use GPForum::Service::Identity::ProfileReader;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
@@ -365,6 +369,38 @@ sub startup {
         }
     );
     $self->helper(
+        gp_role_catalog => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::RoleCatalog->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_role_binding_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::RoleBindingStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_permission_review => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::PermissionReview->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_admin_audit_review => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::AuditReview->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_search_service => sub {
             my ($controller) = @_;
 
@@ -385,6 +421,27 @@ sub startup {
     $routes->get('/health/live')->to('Health#live')->name('health_live');
     $routes->get('/health/ready')->to('Health#ready')->name('health_ready');
     $routes->get('/metrics')->to('Operations#metrics')->name('metrics');
+    $routes->get('/admin')->to('Admin#dashboard')->name('admin_dashboard');
+    $routes->get('/admin/roles')->to('Admin#roles')->name('admin_roles');
+    $routes->post('/admin/roles')
+      ->to('Admin#create_role')
+      ->name('admin_role_create');
+    $routes->post('/admin/permissions')
+      ->to('Admin#create_permission')
+      ->name('admin_permission_create');
+    $routes->post('/admin/roles/:role_id/permissions')
+      ->to('Admin#attach_permission')
+      ->name('admin_role_permission_attach');
+    $routes->get('/admin/users/:user_id/roles')
+      ->to('Admin#user_roles')
+      ->name('admin_user_roles');
+    $routes->post('/admin/users/:user_id/roles')
+      ->to('Admin#bind_role')
+      ->name('admin_role_bind');
+    $routes->post('/admin/role-bindings/:binding_id/revoke')
+      ->to('Admin#revoke_binding')
+      ->name('admin_role_binding_revoke');
+    $routes->get('/admin/audit')->to('Admin#audit')->name('admin_audit');
     $routes->get('/categories')->to('Forum#categories')->name('categories');
     $routes->get('/c/:category_id')->to('Forum#category')->name('category');
     $routes->get('/t/:thread_id')->to('Forum#thread')->name('thread');

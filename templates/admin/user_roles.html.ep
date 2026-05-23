@@ -1,0 +1,51 @@
+% layout 'default';
+% title 'User roles - GPForum';
+
+<section aria-labelledby="admin-user-roles-heading">
+  <h1 id="admin-user-roles-heading">User roles</h1>
+
+  <form method="post" action="<%= url_for('admin_role_bind', user_id => $user_id) %>">
+    <%= csrf_field %>
+    <label for="binding-role-id">Role id</label>
+    <input id="binding-role-id" name="role_id" required>
+    <label for="binding-resource-type">Resource type</label>
+    <input id="binding-resource-type" name="resource_type" value="global" required>
+    <label for="binding-resource-id">Resource id</label>
+    <input id="binding-resource-id" name="resource_id">
+    <label for="binding-space-id">Space id</label>
+    <input id="binding-space-id" name="space_id">
+    <button type="submit">Bind role</button>
+  </form>
+
+  % if (@{$bindings}) {
+    <ol aria-label="User role bindings">
+      % for my $binding (@{$bindings}) {
+        <li>
+          <article aria-labelledby="binding-<%= $binding->{binding_id} %>-heading">
+            <h2 id="binding-<%= $binding->{binding_id} %>-heading">
+              Role <%= $binding->{role_id} %>
+            </h2>
+            <dl>
+              <dt>User</dt>
+              <dd><%= $binding->{user_id} %></dd>
+              <dt>Scope</dt>
+              <dd><%= $binding->{resource_type} %> <%= $binding->{resource_id} || '' %></dd>
+              <dt>Created</dt>
+              <dd><time datetime="<%= $binding->{created_at} %>"><%= $binding->{created_at} %></time></dd>
+              <dt>Revoked</dt>
+              <dd><%= $binding->{revoked_at} || 'No' %></dd>
+            </dl>
+            % if (!$binding->{revoked_at}) {
+              <form method="post" action="<%= url_for('admin_role_binding_revoke', binding_id => $binding->{binding_id}) %>">
+                <%= csrf_field %>
+                <button type="submit">Revoke role binding</button>
+              </form>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No active role bindings for this user.</p>
+  % }
+</section>

@@ -1,0 +1,45 @@
+% layout 'default';
+% title 'Admin - GPForum';
+
+<section aria-labelledby="admin-dashboard-heading">
+  <h1 id="admin-dashboard-heading">Admin</h1>
+  <nav aria-label="Admin">
+    <a href="<%= url_for('admin_roles') %>">Roles</a>
+    <a href="<%= url_for('admin_audit') %>">Audit</a>
+  </nav>
+
+  <section aria-labelledby="admin-dashboard-roles-heading">
+    <h2 id="admin-dashboard-roles-heading">Roles</h2>
+    % if (@{$roles}) {
+      <ol aria-label="Admin role summary">
+        % for my $role (@{$roles}) {
+          <li><strong><%= $role->{name} %></strong> <%= $role->{description} %></li>
+        % }
+      </ol>
+    % } else {
+      <p>No roles have been defined.</p>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-dashboard-audit-heading">
+    <h2 id="admin-dashboard-audit-heading">Recent audit</h2>
+    % if (@{$audit_rows}) {
+      <ol aria-label="Admin audit summary">
+        % for my $row (@{$audit_rows}) {
+          <li>
+            <article aria-labelledby="audit-<%= $row->{audit_id} %>-heading">
+              <h3 id="audit-<%= $row->{audit_id} %>-heading"><%= $row->{action} %></h3>
+              <p>
+                <%= $row->{target_type} || 'system' %>
+                <%= $row->{target_id} || '' %>
+                <time datetime="<%= $row->{created_at} %>"><%= $row->{created_at} %></time>
+              </p>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <p>No audit rows are available.</p>
+    % }
+  </section>
+</section>

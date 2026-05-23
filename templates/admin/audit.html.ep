@@ -1,0 +1,37 @@
+% layout 'default';
+% title 'Admin audit - GPForum';
+
+<section aria-labelledby="admin-audit-heading">
+  <h1 id="admin-audit-heading">Admin audit</h1>
+  <form method="get" action="<%= url_for('admin_audit') %>">
+    <label for="audit-target-type">Target type</label>
+    <input id="audit-target-type" name="target_type" value="<%= $target_type || '' %>">
+    <label for="audit-target-id">Target id</label>
+    <input id="audit-target-id" name="target_id" value="<%= $target_id || '' %>">
+    <button type="submit">Filter</button>
+  </form>
+
+  % if (@{$audit_rows}) {
+    <ol aria-label="Admin audit log">
+      % for my $row (@{$audit_rows}) {
+        <li>
+          <article aria-labelledby="audit-<%= $row->{audit_id} %>-heading">
+            <h2 id="audit-<%= $row->{audit_id} %>-heading"><%= $row->{action} %></h2>
+            <dl>
+              <dt>Actor</dt>
+              <dd><%= $row->{actor_id} || 'system' %></dd>
+              <dt>Target</dt>
+              <dd><%= $row->{target_type} || 'system' %>: <%= $row->{target_id} || '' %></dd>
+              <dt>Created</dt>
+              <dd><time datetime="<%= $row->{created_at} %>"><%= $row->{created_at} %></time></dd>
+              <dt>Correlation</dt>
+              <dd><%= $row->{correlation_id} %></dd>
+            </dl>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No audit rows match this view.</p>
+  % }
+</section>

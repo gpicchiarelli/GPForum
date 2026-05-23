@@ -59,11 +59,33 @@ sub attach_permission {
 sub list_roles {
     my ( $self, $options ) = @_;
 
+    $options ||= {};
+
     my $search = $self->schema->resultset('Role')->search(
         {},
         {
             order_by => [ { -asc => 'name' } ],
             rows     => $options->{limit},
+        }
+    );
+
+    return [ _rows($search) ];
+}
+
+sub list_permissions {
+    my ( $self, $options ) = @_;
+
+    $options ||= {};
+
+    my $search = $self->schema->resultset('Permission')->search(
+        {},
+        {
+            order_by => [
+                { -asc => 'resource_type' },
+                { -asc => 'action' },
+                { -asc => 'name' },
+            ],
+            rows => $options->{limit},
         }
     );
 

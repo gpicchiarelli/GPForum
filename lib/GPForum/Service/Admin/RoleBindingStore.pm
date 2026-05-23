@@ -50,6 +50,8 @@ sub revoke_binding {
 
     my $revoked_at = $self->clock->now_iso8601;
     my $binding    = $self->schema->resultset('RoleBinding')->find($binding_id);
+    return if !$binding;
+
     $binding->update( { revoked_at => $revoked_at } );
     $self->_record_audit(
         {

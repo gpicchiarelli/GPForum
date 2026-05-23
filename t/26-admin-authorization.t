@@ -20,7 +20,7 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 42;
+const my $EXPECTED_TESTS      => 45;
 const my $ROLE_LIMIT          => 10;
 const my $REVIEW_LIMIT        => 20;
 const my $CREATED_ROLES       => 1;
@@ -102,6 +102,15 @@ my $listed_roles = $catalog->list_roles( { limit => $ROLE_LIMIT } );
 is( scalar @{$listed_roles},    $CREATED_ROLES, 'roles can be listed' );
 is( $roles->last_attrs->{rows}, $ROLE_LIMIT,    'role listing applies limit' );
 
+my $listed_permissions = $catalog->list_permissions( { limit => $ROLE_LIMIT } );
+is(
+    scalar @{$listed_permissions},
+    $CREATED_PERMISSIONS,
+    'permissions can be listed'
+);
+is( $permissions->last_attrs->{rows},
+    $ROLE_LIMIT, 'permission listing applies limit' );
+
 my $binding_store = GPForum::Service::Admin::RoleBindingStore->new(
     schema     => $schema,
     clock      => $clock,
@@ -142,6 +151,8 @@ is( scalar @{ $audit_log->created },
     $CREATED_AUDIT_ROWS, 'role binding revocation is audited' );
 is( $audit_log->created->[$SECOND_AUDIT_INDEX]{action},
     'role_binding.revoked', 'audit records binding revocation' );
+is( $binding_store->revoke_binding( 'missing-binding', 'admin-2' ),
+    undef, 'missing role binding cannot be revoked' );
 
 my $review =
   GPForum::Service::Admin::PermissionReview->new( schema => $schema );

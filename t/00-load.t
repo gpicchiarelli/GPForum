@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 162;
+const my $TEST_COUNT => 164;
 
 plan tests => $TEST_COUNT;
 
@@ -23,6 +23,7 @@ use_ok('GPForum::OS::Socket');
 use_ok('GPForum::Command::Migrate');
 use_ok('GPForum::Command::PlatformCheck');
 use_ok('GPForum::Command::QueryBudget');
+use_ok('GPForum::Controller::Admin');
 use_ok('GPForum::Controller::Health');
 use_ok('GPForum::Controller::Discovery');
 use_ok('GPForum::Controller::Forum');
@@ -175,6 +176,7 @@ use_ok('GPForum::Worker::MinionRegistrar');
 use_ok('GPForum::Test::MigrationDbh');
 use_ok('GPForum::Test::MigrationStorage');
 use_ok('GPForum::Test::MigrationSchema');
+use_ok('GPForum::Test::AdminWebServices');
 use_ok('GPForum::Test::QueryBudgetResultSet');
 use_ok('GPForum::Test::QueryBudgetSchema');
 

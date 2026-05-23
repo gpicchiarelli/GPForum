@@ -6,6 +6,15 @@ It is intentionally narrower than the full architectural contract.
 ## Available Routes
 
 * `GET /` renders the public forum home index with visible categories and latest public discussions.
+* `GET /admin` renders the authorized admin dashboard.
+* `GET /admin/roles` renders role and permission catalogs.
+* `POST /admin/roles` creates a role through `RoleCatalog`.
+* `POST /admin/permissions` creates a permission through `RoleCatalog`.
+* `POST /admin/roles/:role_id/permissions` attaches a permission to a role.
+* `GET /admin/users/:user_id/roles` reviews active role bindings for one user.
+* `POST /admin/users/:user_id/roles` creates a scoped role binding.
+* `POST /admin/role-bindings/:binding_id/revoke` revokes a role binding.
+* `GET /admin/audit` renders bounded admin audit review.
 * `GET /categories` renders visible categories.
 * `GET /c/:category_id` renders one category and a keyset-paginated thread list.
 * `GET /t/:thread_id` renders one visible thread and keyset-paginated posts.
@@ -46,6 +55,14 @@ It is intentionally narrower than the full architectural contract.
 Read endpoints render semantic SSR by default. They also return JSON when the
 client sends `Accept: application/json` or `?format=json`, using the same
 controller/service path without changing the command/read boundaries.
+
+The admin surface is an operational MVP, not a full back-office suite. It is
+permission-gated through `PermissionGate`, writes through `RoleCatalog` and
+`RoleBindingStore`, and reviews state through `PermissionReview` and
+`AuditReview`. Role binding changes are CSRF-protected and audit-backed. The
+bootstrap problem remains explicit: initial `admin_console.view` and
+`admin_console.manage` permissions must be provisioned by migration, console, or
+operator-run service code before the HTTP console can govern itself.
 
 The root home route uses `HomePageReader` to compose visible categories and
 latest public threads through existing reader boundaries. It is SSR/JSON,
