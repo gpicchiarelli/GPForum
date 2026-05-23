@@ -9,6 +9,10 @@ our $VERSION = '0.001';
 
 has mode => 'forum';
 
+sub can_participate {
+    return { ok => 1 };
+}
+
 sub home_page {
     my ($self) = @_;
 
@@ -336,6 +340,37 @@ sub reverse_action {
         moderation_action_id => $action_id,
         reversed_at          => '2026-05-23T12:00:00Z',
         reversed_by_user_id  => $reversed_by_user_id,
+    };
+}
+
+sub create_suspension {
+    my ( $self, $input ) = @_;
+
+    return if $input->{user_id} ne 'user-2';
+
+    return {
+        ok         => 1,
+        suspension => {
+            suspension_id => 'suspension-1',
+            user_id       => $input->{user_id},
+            actor_user_id => $input->{actor_user_id},
+            reason        => $input->{reason},
+            valid_from    => '2026-05-23T12:00:00Z',
+            valid_to      => $input->{valid_to},
+            revoked_at    => undef,
+        },
+    };
+}
+
+sub revoke_suspension {
+    my ( $self, $suspension_id, $actor_user_id ) = @_;
+
+    return if $suspension_id ne 'suspension-1';
+
+    return {
+        suspension_id => $suspension_id,
+        actor_user_id => $actor_user_id,
+        revoked_at    => '2026-05-23T12:00:00Z',
     };
 }
 

@@ -51,6 +51,10 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 6,
         notes       => 'content moderation action plus event/audit/outbox',
     },
+    user_suspension => {
+        max_queries => 6,
+        notes       => 'user suspension or revocation plus event/audit/outbox',
+    },
     search => {
         max_queries => 2,
         notes       => 'permission-aware search projection lookup',

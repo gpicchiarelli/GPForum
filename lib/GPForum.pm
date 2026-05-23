@@ -36,6 +36,7 @@ use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
+use GPForum::Service::Moderation::SuspensionStore;
 use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Operations::LocalCache;
@@ -339,6 +340,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_suspension_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Moderation::SuspensionStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_permission_gate => sub {
             my ($controller) = @_;
 
@@ -427,6 +436,12 @@ sub startup {
     $routes->post('/moderation/actions/:action_id/reverse')
       ->to('Moderation#reverse_action')
       ->name('moderation_action_reverse');
+    $routes->post('/moderation/users/:user_id/suspend')
+      ->to('Moderation#suspend_user')
+      ->name('moderation_user_suspend');
+    $routes->post('/moderation/suspensions/:suspension_id/revoke')
+      ->to('Moderation#revoke_suspension')
+      ->name('moderation_suspension_revoke');
     $routes->get('/notifications')
       ->to('Notifications#inbox')
       ->name('notifications');

@@ -30,6 +30,8 @@ It is intentionally narrower than the full architectural contract.
 * `POST /moderation/threads/:thread_id/lock` locks a thread through `ActionStore`.
 * `POST /moderation/threads/:thread_id/unlock` unlocks a thread through `ActionStore`.
 * `POST /moderation/actions/:action_id/reverse` records reversal of a moderation action.
+* `POST /moderation/users/:user_id/suspend` suspends a user through `SuspensionStore`.
+* `POST /moderation/suspensions/:suspension_id/revoke` revokes a user suspension.
 * `GET /notifications` renders the authenticated user's notification inbox.
 * `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /mentions` renders the authenticated user's mention history.
@@ -90,6 +92,13 @@ updates canonical content state only inside a PostgreSQL transaction and emits a
 moderation action row, domain event, audit row, and transactional outbox
 handoff. Locked threads remain readable so archival links and discussion
 continuity survive moderation, but `locked_at` keeps reply creation closed.
+
+User suspensions are executable and PostgreSQL-backed. Authorized staff can
+create and revoke suspension rows through `SuspensionStore`, which updates
+canonical user status and emits event/audit/outbox records. The forum write path
+checks the suspension boundary before publishing workflows, so suspended users
+cannot create threads or replies; read-continuity and reporting workflows remain
+separate from publishing authority.
 
 Authenticated personal feeds expose the existing `user_feed_items` projection
 through `FeedReader`. The route is SSR/JSON, keyset-paginated, and deliberately

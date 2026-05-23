@@ -20,10 +20,12 @@ const my $MODERATION_RESOURCE => 'moderation_action';
 const my $POST_RESOURCE       => 'post';
 const my $REPORT_RESOURCE     => 'report';
 const my $THREAD_RESOURCE     => 'thread';
+const my $USER_RESOURCE       => 'user';
 const my $ACTION_ASSIGN       => 'assign';
 const my $ACTION_MODERATE     => 'moderate';
 const my $ACTION_REVERSE      => 'reverse';
 const my $ACTION_RESOLVE      => 'resolve';
+const my $ACTION_SUSPEND      => 'suspend';
 const my $ACTION_VIEW_QUEUE   => 'view_queue';
 
 sub reports {
@@ -224,6 +226,53 @@ sub reverse_action {
     return _moderation_action_response( $self, 'action_reversed', $reversed );
 }
 
+sub suspend_user {
+    my ($self) = @_;
+
+    my $actor_user_id =
+      _authorized_write_user_id( $self, $USER_RESOURCE, $ACTION_SUSPEND );
+    return if !$actor_user_id;
+
+    my $reason = _reason_param($self);
+    return _bad_request( $self, { reason => 'reason is required' } )
+      if !length $reason;
+
+    my $suspended = eval {
+        return $self->gp_suspension_store->create_suspension(
+            {
+                actor_user_id => $actor_user_id,
+                reason        => $reason,
+                user_id       => $self->param('user_id'),
+                valid_to      => _optional_param( $self, 'valid_to' ),
+            }
+        );
+    };
+
+    return _system_failure($self)                if $EVAL_ERROR;
+    return _not_found( $self, 'user not found' ) if !$suspended;
+
+    return _suspension_response( $self, 'user_suspended', $suspended );
+}
+
+sub revoke_suspension {
+    my ($self) = @_;
+
+    my $actor_user_id =
+      _authorized_write_user_id( $self, $USER_RESOURCE, $ACTION_SUSPEND );
+    return if !$actor_user_id;
+
+    my $revoked = eval {
+        return $self->gp_suspension_store->revoke_suspension(
+            $self->param('suspension_id'),
+            $actor_user_id );
+    };
+
+    return _system_failure($self)                      if $EVAL_ERROR;
+    return _not_found( $self, 'suspension not found' ) if !$revoked;
+
+    return _suspension_response( $self, 'suspension_revoked', $revoked );
+}
+
 sub _authorized_write_user_id {
     my ( $controller, $resource_type, $action ) = @_;
 
@@ -286,6 +335,22 @@ sub _moderation_action_response {
     return $controller->redirect_to('moderation_reports');
 }
 
+sub _suspension_response {
+    my ( $controller, $status, $suspension ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                status     => $status,
+                suspension => _suspension_hash($suspension),
+            },
+            status => $HTTP_OK,
+        );
+    }
+
+    return $controller->redirect_to('moderation_reports');
+}
+
 sub _action_response {
     my ( $controller, $status, $report ) = @_;
 
@@ -334,6 +399,25 @@ sub _render_error {
         %{$payload},
         status => $status,
     );
+}
+
+sub _suspension_hash {
+    my ($result) = @_;
+
+    my $suspension =
+      ref $result eq 'HASH' && exists $result->{suspension}
+      ? $result->{suspension}
+      : $result;
+
+    return {
+        suspension_id => _column( $suspension, 'suspension_id' ),
+        user_id       => _column( $suspension, 'user_id' ),
+        actor_user_id => _column( $suspension, 'actor_user_id' ),
+        reason        => _column( $suspension, 'reason' ),
+        valid_from    => _column( $suspension, 'valid_from' ),
+        valid_to      => _column( $suspension, 'valid_to' ),
+        revoked_at    => _column( $suspension, 'revoked_at' ),
+    };
 }
 
 sub _moderation_action_hash {
@@ -393,6 +477,13 @@ sub _reason_param {
     my ($controller) = @_;
 
     return _trim( $controller->param('reason') );
+}
+
+sub _optional_param {
+    my ( $controller, $name ) = @_;
+
+    my $value = _trim( $controller->param($name) );
+    return length $value ? $value : undef;
 }
 
 sub _trim {

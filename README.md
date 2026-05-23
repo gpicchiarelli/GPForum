@@ -156,6 +156,8 @@ semantic SSR by default and still return JSON when requested with
 * `POST /moderation/threads/:thread_id/lock`
 * `POST /moderation/threads/:thread_id/unlock`
 * `POST /moderation/actions/:action_id/reverse`
+* `POST /moderation/users/:user_id/suspend`
+* `POST /moderation/suspensions/:suspension_id/revoke`
 * `GET /notifications`
 * `POST /notifications/:notification_id/read`
 * `GET /mentions`
@@ -199,6 +201,11 @@ delegate to `ActionStore`; each action runs in a PostgreSQL transaction and
 records the moderation action, domain event, audit row, and transactional
 outbox handoff. Locked threads remain readable for archival continuity, while
 reply creation is still blocked by `locked_at`.
+User suspension is also wired as an executable boundary. Authorized staff can
+suspend users and revoke suspensions through `SuspensionStore`; the store writes
+canonical suspension rows, updates user status, emits event/audit/outbox rows,
+and the forum write path blocks suspended users from creating threads or
+replies while keeping non-publishing continuity actions separate.
 The authenticated `/feed` route exposes the existing `user_feed_items`
 projection as a keyset-paginated personal continuity feed. It is derived,
 rebuildable, and non-authoritative: it stores only item references and version

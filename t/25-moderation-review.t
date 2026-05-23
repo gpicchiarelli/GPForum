@@ -12,6 +12,7 @@ use lib 't/lib';
 use GPForum::Service::Admin::AuditReview;
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
+use GPForum::Service::Moderation::SuspensionStore;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
 use GPForum::Test::ModerationResultSet;
@@ -19,7 +20,7 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 68;
+const my $EXPECTED_TESTS      => 94;
 const my $QUEUE_LIMIT         => 25;
 const my $AUDIT_LIMIT         => 10;
 const my $CREATED_REPORTS     => 1;
@@ -45,6 +46,8 @@ my $reports            = GPForum::Test::ModerationResultSet->new;
 my $moderation_actions = GPForum::Test::ModerationResultSet->new;
 my $posts              = GPForum::Test::ModerationResultSet->new;
 my $threads            = GPForum::Test::ModerationResultSet->new;
+my $users              = GPForum::Test::ModerationResultSet->new;
+my $suspensions        = GPForum::Test::ModerationResultSet->new;
 my $audit_log          = GPForum::Test::ModerationResultSet->new;
 my $event_log          = GPForum::Test::ModerationResultSet->new;
 my $outbox_messages    = GPForum::Test::ModerationResultSet->new;
@@ -53,7 +56,9 @@ my $schema             = GPForum::Test::ModerationSchema->new(
         Report           => $reports,
         ModerationAction => $moderation_actions,
         Post             => $posts,
+        Suspension       => $suspensions,
         Thread           => $threads,
+        User             => $users,
         AuditLog         => $audit_log,
         EventLog         => $event_log,
         OutboxMessage    => $outbox_messages,
@@ -73,6 +78,13 @@ $threads->create(
         thread_id        => 'thread-1',
         moderation_state => 'visible',
         locked_at        => undef,
+    }
+);
+$users->create(
+    {
+        id         => 'user-2',
+        status     => 'active',
+        updated_at => '2026-05-23T11:00:00Z',
     }
 );
 
@@ -254,5 +266,142 @@ is( $audit_log->last_query->{target_type},
     'post', 'target audit filters target type' );
 is( $audit_log->last_query->{target_id},
     'post-1', 'target audit filters target id' );
+
+my $suspension_store = GPForum::Service::Moderation::SuspensionStore->new(
+    schema     => $schema,
+    clock      => $clock,
+    id_service => GPForum::Test::Id->new,
+);
+my $suspension_event_start  = scalar @{ $event_log->created };
+my $suspension_audit_start  = scalar @{ $audit_log->created };
+my $suspension_outbox_start = scalar @{ $outbox_messages->created };
+my $suspended               = $suspension_store->create_suspension(
+    {
+        actor_user_id => 'moderator-1',
+        user_id       => 'user-2',
+        reason        => 'abuse campaign',
+        valid_to      => '2026-05-24T12:00:00Z',
+    }
+);
+ok( $suspended->{ok}, 'user suspension succeeds' );
+is( $suspended->{suspension}{suspension_id},
+    'generated-1', 'suspension id is generated' );
+is( $suspended->{suspension}{user_id},
+    'user-2', 'suspension stores target user' );
+is( $suspended->{suspension}{valid_from},
+    '2026-05-23T12:00:00Z', 'suspension stores valid_from' );
+is( $users->find('user-2')->get_column('status'),
+    'suspended', 'user status is suspended' );
+is( scalar @{ $suspensions->created }, 1, 'suspension row is inserted' );
+is(
+    scalar @{ $event_log->created },
+    $suspension_event_start + 1,
+    'suspension emits event'
+);
+is( $event_log->created->[-1]{event_type},
+    'user.suspended', 'suspension event type is explicit' );
+is(
+    scalar @{ $outbox_messages->created },
+    $suspension_outbox_start + 1,
+    'suspension emits outbox handoff'
+);
+is(
+    scalar @{ $audit_log->created },
+    $suspension_audit_start + 1,
+    'suspension emits audit row'
+);
+is( $audit_log->created->[-1]{action},
+    'user.suspended', 'suspension audit action is explicit' );
+
+my $participation = $suspension_store->can_participate('user-2');
+ok( !$participation->{ok}, 'suspended user cannot participate' );
+is( $participation->{reason}, 'suspended', 'participation denial is explicit' );
+
+my $revoked =
+  $suspension_store->revoke_suspension( 'generated-1', 'moderator-2' );
+is( $revoked->{suspension_id},
+    'generated-1', 'suspension revocation returns suspension id' );
+is( $revoked->{revoked_at},
+    '2026-05-23T12:00:00Z', 'suspension revocation stores timestamp' );
+is( $users->find('user-2')->get_column('status'),
+    'active', 'user status is restored after revocation' );
+is( $event_log->created->[-1]{event_type},
+    'user.suspension_revoked', 'revocation event type is explicit' );
+is( $audit_log->created->[-1]{action},
+    'user.suspension_revoked', 'revocation audit action is explicit' );
+
+is(
+    $suspension_store->create_suspension(
+        {
+            actor_user_id => 'moderator-1',
+            user_id       => 'missing-user',
+            reason        => 'missing',
+        }
+    ),
+    undef,
+    'missing user cannot be suspended'
+);
+is(
+    $suspension_store->revoke_suspension( 'missing-suspension', 'moderator-1' ),
+    undef,
+    'missing suspension cannot be revoked'
+);
+
+$users->create(
+    {
+        id         => 'user-deleted',
+        status     => 'deleted',
+        updated_at => '2026-05-23T11:00:00Z',
+    }
+);
+my $deleted_participation = $suspension_store->can_participate('user-deleted');
+ok( !$deleted_participation->{ok}, 'deleted user cannot participate' );
+is( $deleted_participation->{reason},
+    'user_deleted', 'deleted participation denial is explicit' );
+
+$suspensions->filter_search(1);
+$users->create(
+    {
+        id         => 'user-3',
+        status     => 'active',
+        updated_at => '2026-05-23T11:00:00Z',
+    }
+);
+$suspensions->create(
+    {
+        suspension_id => 'active-suspension',
+        user_id       => 'user-3',
+        revoked_at    => undef,
+        valid_from    => '2026-05-23T10:00:00Z',
+        valid_to      => undef,
+    }
+);
+my $active_participation = $suspension_store->can_participate('user-3');
+ok( !$active_participation->{ok}, 'active suspension blocks participation' );
+is( $active_participation->{suspension_id},
+    'active-suspension', 'active suspension denial exposes id' );
+
+$users->create(
+    {
+        id         => 'user-4',
+        status     => 'active',
+        updated_at => '2026-05-23T11:00:00Z',
+    }
+);
+$suspensions->create(
+    {
+        suspension_id => 'expired-suspension',
+        user_id       => 'user-4',
+        revoked_at    => undef,
+        valid_from    => '2026-05-22T10:00:00Z',
+        valid_to      => '2026-05-22T12:00:00Z',
+    }
+);
+ok(
+    $suspension_store->can_participate('user-4')->{ok},
+    'expired suspension does not block participation'
+);
+is( $suspension_store->active_for_user('missing-user'),
+    undef, 'missing user has no active suspension' );
 
 1;

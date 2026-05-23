@@ -856,23 +856,73 @@ sub _allowed {
 sub _write_user_id {
     my ( $controller, $action ) = @_;
 
-    if ( $controller->validation->csrf_protect->has_error('csrf_token') ) {
-        _csrf_failure($controller);
-        return;
-    }
+    return if _reject_bad_csrf($controller);
 
     my $user_id = _current_user_id($controller);
+    return if _reject_unauthenticated( $controller, $user_id );
+    return if _reject_rate_limited( $controller, $user_id, $action );
+    return if _reject_suspended( $controller, $user_id, $action );
+
+    return $user_id;
+}
+
+sub _reject_bad_csrf {
+    my ($controller) = @_;
+
+    if ( $controller->validation->csrf_protect->has_error('csrf_token') ) {
+        _csrf_failure($controller);
+        return 1;
+    }
+
+    return;
+}
+
+sub _reject_unauthenticated {
+    my ( $controller, $user_id ) = @_;
+
     if ( !$user_id ) {
         _unauthorized($controller);
-        return;
+        return 1;
     }
+
+    return;
+}
+
+sub _reject_rate_limited {
+    my ( $controller, $user_id, $action ) = @_;
 
     if ( !_allowed( $controller, $user_id, $action ) ) {
         _rate_limited($controller);
-        return;
+        return 1;
     }
 
-    return $user_id;
+    return;
+}
+
+sub _reject_suspended {
+    my ( $controller, $user_id, $action ) = @_;
+
+    if ( _requires_participation($action)
+        && !_can_participate( $controller, $user_id ) )
+    {
+        _forbidden( $controller, 'user is suspended' );
+        return 1;
+    }
+
+    return;
+}
+
+sub _requires_participation {
+    my ($action) = @_;
+
+    return $action eq 'thread.create' || $action eq 'reply.create' ? 1 : 0;
+}
+
+sub _can_participate {
+    my ( $controller, $user_id ) = @_;
+
+    my $decision = $controller->gp_suspension_store->can_participate($user_id);
+    return $decision->{ok};
 }
 
 sub _category_hash {

@@ -16,7 +16,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 52;
+const my $EXPECTED_TESTS    => 68;
 const my $HTTP_OK           => 200;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
@@ -109,6 +109,51 @@ $test->post_ok(
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/reversed_by_user_id' => 'moderator-1' );
 
+$test->post_ok('/moderation/users/user-2/suspend');
+$test->status_is($HTTP_FORBIDDEN);
+
+$test->post_ok(
+    '/moderation/users/user-2/suspend' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => q{},
+      }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/reason' => 'reason is required' );
+
+$test->post_ok(
+    '/moderation/users/user-2/suspend' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'abuse campaign',
+        valid_to   => '2026-05-24T12:00:00Z',
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'              => 'user_suspended' );
+$test->json_is( '/suspension/user_id'  => 'user-2' );
+$test->json_is( '/suspension/valid_to' => '2026-05-24T12:00:00Z' );
+
+$test->post_ok(
+    '/moderation/suspensions/suspension-1/revoke' =>
+      { Accept => 'application/json' } => form => {
+        csrf_token => $csrf_token,
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'                => 'suspension_revoked' );
+$test->json_is( '/suspension/revoked_at' => '2026-05-23T12:00:00Z' );
+
+$test->post_ok(
+    '/moderation/users/missing/suspend' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'missing user',
+      }
+);
+$test->status_is($HTTP_NOT_FOUND);
+
 $test->post_ok(
     '/moderation/posts/missing/restore' => { Accept => 'application/json' } =>
       form => {
@@ -175,6 +220,8 @@ sub _install_moderation_fakes {
     $test_object->app->helper( gp_report_store => sub { return $services; } );
     $test_object->app->helper(
         gp_moderation_action_store => sub { return $services; } );
+    $test_object->app->helper(
+        gp_suspension_store => sub { return $services; } );
     $test_object->app->helper(
         gp_permission_gate => sub {
             return GPForum::Test::AllowPermissionGate->new;

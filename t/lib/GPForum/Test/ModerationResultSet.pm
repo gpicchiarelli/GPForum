@@ -100,6 +100,8 @@ sub _row_keys {
               deletion_action_id
               erasure_job_id
               retention_hold_id
+              id
+              user_id
             )
         },
         _composite_key($row),

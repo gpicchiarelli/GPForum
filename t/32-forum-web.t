@@ -14,10 +14,11 @@ use lib 't/lib';
 use GPForum::Test::DenyLimiter;
 use GPForum::Test::FailReadiness;
 use GPForum::Test::ForumWebServices;
+use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 125;
+const my $EXPECTED_TESTS       => 127;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
@@ -129,6 +130,27 @@ $test->post_ok(
 );
 $test->status_is($HTTP_CREATED);
 $test->json_is( '/post_id' => 'post-created' );
+
+$test->app->helper(
+    gp_suspension_store => sub {
+        return GPForum::Test::SuspendedParticipation->new;
+    }
+);
+$test->post_ok(
+    '/threads' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        category_id => 'category-1',
+        title       => 'Suspended thread',
+        body_source => 'Blocked post',
+        visibility  => 'public',
+    }
+);
+$test->status_is($HTTP_FORBIDDEN);
+$test->app->helper(
+    gp_suspension_store => sub {
+        return GPForum::Test::ForumWebServices->new;
+    }
+);
 
 $test->post_ok(
     '/t/thread-1/read' => { Accept => 'application/json' } => form => {
@@ -299,7 +321,7 @@ sub _install_forum_fakes {
         gp_post_store gp_post_position gp_thread_read_state gp_mention_store
         gp_mention_reader gp_bookmark_store gp_subscription_store
         gp_notification_dispatcher gp_report_store gp_search_service
-        gp_rate_limiter
+        gp_rate_limiter gp_suspension_store
         )
       )
     {

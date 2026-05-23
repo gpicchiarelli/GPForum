@@ -48,6 +48,16 @@
                 <button type="submit">Lock thread</button>
               </form>
             % }
+            % if ($report->{target_type} eq 'user') {
+              <form method="post" action="<%= url_for('moderation_user_suspend', user_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <label for="report-<%= $report->{report_id} %>-user-reason">Moderation reason</label>
+                <input id="report-<%= $report->{report_id} %>-user-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <label for="report-<%= $report->{report_id} %>-valid-to">Valid until</label>
+                <input id="report-<%= $report->{report_id} %>-valid-to" name="valid_to">
+                <button type="submit">Suspend user</button>
+              </form>
+            % }
             <form method="post" action="<%= url_for('moderation_report_assign', report_id => $report->{report_id}) %>">
               <%= csrf_field %>
               <button type="submit">Assign to me</button>

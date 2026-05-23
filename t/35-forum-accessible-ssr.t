@@ -136,6 +136,7 @@ sub _install_forum_fakes {
         gp_post_position gp_thread_read_state gp_mention_store
         gp_mention_reader gp_bookmark_store gp_subscription_store
         gp_notification_dispatcher gp_search_service gp_rate_limiter
+        gp_suspension_store
         )
       )
     {
