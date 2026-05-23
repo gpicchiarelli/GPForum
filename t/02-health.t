@@ -8,6 +8,9 @@ use Test::More;
 use Test::Mojo;
 
 use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Test::ReadyHealth;
 
 our $VERSION = '0.001';
 
@@ -20,6 +23,11 @@ const my $DEFAULT_REALTIME_PROCESSES => 1;
 plan tests => $EXPECTED_TESTS;
 
 my $test = Test::Mojo->new('GPForum');
+$test->app->helper(
+    gp_readiness => sub {
+        return GPForum::Test::ReadyHealth->new;
+    }
+);
 
 $test->get_ok('/health');
 $test->status_is($HTTP_OK);

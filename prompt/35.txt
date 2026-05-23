@@ -119,3 +119,44 @@ Plugin failures SHOULD be visible in:
 
 Plugins MUST not hide operational errors.
 
+---
+
+Verifiable Plugin Contract Amendment
+
+Plugins MUST comply with prompt/45.txt.
+
+Every plugin extension point MUST define:
+
+* capability scope;
+* input contract;
+* output contract;
+* authorization context;
+* audit/event expectations;
+* timeout and failure behavior;
+* migration and rollback stance where data is stored.
+
+Plugin behavior MUST be contract-tested. Plugins MUST NOT create hidden
+authoritative state or bypass invariants owned by core bounded contexts.
+
+---
+
+Accessibility Plugin Amendment
+
+Plugins MUST comply with prompt/46.txt.
+
+Plugin-rendered UI MUST preserve semantic HTML, keyboard operation, focus
+visibility, accessible names/states, screen-reader compatibility, reduced-motion
+behavior, and theme contrast requirements.
+
+Plugins that inject inaccessible widgets or JavaScript-only core workflows MUST
+be rejected, quarantined, or disabled.
+
+---
+
+Core Discipline Plugin Amendment
+
+Plugins MUST comply with prompt/48.txt.
+
+Plugins MUST declare capabilities, use stable APIs, avoid arbitrary runtime
+patching, avoid direct access to unrelated core database state, and remain
+optional for core correctness unless promoted through ADR.

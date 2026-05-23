@@ -1,5 +1,17 @@
 GPForum — Software Engineering, Architecture Governance & Development Constitution
 
+Prompt 45 alignment: GPForum architecture MUST be preserved through verifiable
+invariants, explicit contracts, release gates, migration discipline, and
+architecture checks. Intent alone is insufficient. Every new bounded context,
+store, worker, plugin hook, projection, or authoritative workflow MUST document
+its invariants and testing expectations.
+
+Prompt 48 alignment: the core MUST remain small and stable. Features that are
+not universally necessary belong in plugins, capabilities, or optional
+subsystems. Controllers MUST validate, authorize, dispatch, and render only.
+Plugin capability boundaries, cache disposability, PostgreSQL authority, and
+moderation-as-core are mandatory architectural discipline.
+
 This document defines the mandatory software engineering philosophy, architectural governance model, engineering discipline, repository organization, code ownership principles, refactoring rules, review standards, documentation expectations, and long-term maintainability strategy of GPForum.
 
 This specification is foundational and mandatory.

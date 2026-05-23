@@ -11,12 +11,23 @@ use GPForum::Runtime;
 use GPForum::Schema;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Forum::CategoryReader;
+use GPForum::Service::Forum::PostComposer;
+use GPForum::Service::Forum::PostPosition;
+use GPForum::Service::Forum::PostReader;
+use GPForum::Service::Forum::PostStore;
+use GPForum::Service::Forum::ThreadComposer;
+use GPForum::Service::Forum::ThreadDetailReader;
+use GPForum::Service::Forum::ThreadReader;
+use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::RateLimiter;
+use GPForum::Service::Operations::Readiness;
 use GPForum::Service::Password;
 use GPForum::Service::Realtime::Hub;
+use GPForum::Service::Search::Searcher;
 use GPForum::Service::SessionToken;
 
 our $VERSION = '0.001';
@@ -75,9 +86,107 @@ sub startup {
 
             return GPForum::Service::Operations::MetricsSnapshot->new(
                 runtime      => $runtime,
+                schema       => $controller->gp_schema,
                 realtime_hub => $controller->gp_realtime_hub,
                 rate_limiter => $controller->gp_rate_limiter,
             );
+        }
+    );
+    $self->helper(
+        gp_readiness => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Operations::Readiness->new(
+                environment => $config->environment,
+                runtime     => $runtime,
+                schema      => $controller->gp_schema,
+            );
+        }
+    );
+    $self->helper(
+        gp_category_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::CategoryReader->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_thread_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::ThreadReader->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_post_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::PostReader->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_thread_detail_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::ThreadDetailReader->new(
+                schema      => $controller->gp_schema,
+                post_reader => $controller->gp_post_reader,
+            );
+        }
+    );
+    $self->helper(
+        gp_thread_composer => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::ThreadComposer->new(
+                id_service => $controller->gp_id );
+        }
+    );
+    $self->helper(
+        gp_thread_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::ThreadStore->new(
+                schema     => $controller->gp_schema,
+                id_service => $controller->gp_id,
+            );
+        }
+    );
+    $self->helper(
+        gp_post_composer => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::PostComposer->new(
+                id_service => $controller->gp_id );
+        }
+    );
+    $self->helper(
+        gp_post_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::PostStore->new(
+                schema     => $controller->gp_schema,
+                id_service => $controller->gp_id,
+            );
+        }
+    );
+    $self->helper(
+        gp_post_position => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::PostPosition->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_search_service => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Search::Searcher->new(
+                schema => $controller->gp_schema );
         }
     );
 
@@ -90,6 +199,17 @@ sub startup {
     $routes->get('/health/live')->to('Health#live')->name('health_live');
     $routes->get('/health/ready')->to('Health#ready')->name('health_ready');
     $routes->get('/metrics')->to('Operations#metrics')->name('metrics');
+    $routes->get('/categories')->to('Forum#categories')->name('categories');
+    $routes->get('/c/:category_id')->to('Forum#category')->name('category');
+    $routes->get('/t/:thread_id')->to('Forum#thread')->name('thread');
+    $routes->get('/new-thread')
+      ->to('Forum#new_thread_form')
+      ->name('new_thread');
+    $routes->post('/threads')->to('Forum#create_thread')->name('thread_create');
+    $routes->post('/t/:thread_id/replies')
+      ->to('Forum#create_reply')
+      ->name('reply_create');
+    $routes->get('/search')->to('Forum#search')->name('forum_search');
     $routes->get('/register')->to('Identity#register_form')->name('register');
     $routes->post('/register')
       ->to('Identity#register')

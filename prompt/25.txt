@@ -1,5 +1,17 @@
 GPForum - UX, Information Architecture & Interface Behavior Constitution
 
+Prompt 46 alignment: UX correctness includes accessibility correctness. All
+navigation, composer, thread reading, notification, moderation, mobile, and
+settings workflows MUST meet WCAG 2.2 AA targets, preserve keyboard access,
+provide visible focus, expose semantic state, and avoid inaccessible custom
+widgets or JavaScript-only core interactions.
+
+Prompt 47 alignment: UX correctness includes emotional usability and social
+continuity. Users SHOULD feel welcomed, oriented, and remembered. Return
+experience, unread state, contributor identity, long-form readability,
+newcomer guidance, and healthy re-engagement MUST reject addictive loops,
+artificial urgency, opaque ranking, and exploitative gamification.
+
 This document defines the mandatory user experience structure, navigation model, page inventory, interface states, accessibility expectations, and product interaction rules for GPForum.
 
 This specification is mandatory for frontend and product implementation.
@@ -216,4 +228,3 @@ Realtime MUST NOT cause:
 * inaccessible state changes.
 
 When realtime fails, the UI SHOULD degrade to refresh-based behavior.
-

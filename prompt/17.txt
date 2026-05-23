@@ -1,5 +1,17 @@
 GPForum - Community Operations, Forum Structure & Product Behavior Constitution
 
+Prompt 46 alignment: community participation MUST be accessible. Category
+navigation, thread lists, posting flows, reporting flows, profile surfaces,
+bookmarks, mentions, and community operations MUST preserve semantic rendering,
+keyboard operation, assistive-technology compatibility, and low-bandwidth
+graceful degradation.
+
+Prompt 47 alignment: GPForum community operations MUST support human-centered
+lifecycle design: anonymous visitor, newcomer, participant, regular, trusted
+contributor, moderator, and long-term steward. Discovery, onboarding,
+continuity, recognition, moderation care, and retention systems MUST remain
+explainable, privacy-aware, permission-aware, and anti-dark-pattern.
+
 This document defines the mandatory operational structure of the forum, community hierarchy, discussion lifecycle, user-facing workflows, moderation behavior, subscription model, feeds, trust signals, archival strategy, and practical product rules of GPForum.
 
 This specification is foundational and mandatory.
@@ -402,4 +414,3 @@ GPForum MUST remain:
 * durable over many years.
 
 The community structure is the product foundation of GPForum.
-

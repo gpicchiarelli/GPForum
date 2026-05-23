@@ -536,3 +536,38 @@ GPForum release engineering MUST remain:
 Delivery pipelines are part of the platform architecture.
 
 All future CI/CD and release workflows MUST comply with this constitution.
+
+⸻
+
+Verifiable Release Amendment
+
+Release engineering MUST enforce prompt/45.txt.
+
+Every release gate MUST verify not only tests and critic, but also architectural
+invariants for critical workflows.
+
+Architecture-changing releases MUST include:
+
+* prompt alignment;
+* contract tests;
+* migration validation where schema changes exist;
+* replay or projection-impact validation where events/projections change;
+* dependency review where dependencies change;
+* profiling smoke validation for hot paths.
+
+Emergency gate bypasses MUST be documented with scope, risk, operator, and
+follow-up verification.
+
+⸻
+
+Accessibility Release Amendment
+
+CI/CD MUST enforce prompt/46.txt.
+
+Accessibility checks are release gates for user-facing interfaces.
+
+Critical WCAG 2.2 AA regressions MUST block release unless an ADR documents the
+exception, mitigation, owner, and review date.
+
+Pipeline validation SHOULD include semantic HTML validation, contrast checks,
+keyboard smoke tests, and axe-core or pa11y where practical.

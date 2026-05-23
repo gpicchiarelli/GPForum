@@ -565,3 +565,21 @@ The GPForum Perl codebase MUST remain:
 * coherent across all modules.
 
 All future Perl code MUST comply with this constitution.
+
+⸻
+
+Verifiable Invariants Amendment
+
+All Perl code MUST align with prompt/45.txt.
+
+Perl modules MUST expose behavior that can be tested through explicit
+contracts, not only inferred from implementation.
+
+New services MUST document their invariants when they own canonical data,
+authorization behavior, replay behavior, projections, workers, plugins, or
+operational side effects.
+
+Controllers MUST remain thin enough for architecture checks to verify that they
+do not directly manipulate DBIx::Class resultsets.
+
+God-class services and hidden workflow coupling are prohibited.

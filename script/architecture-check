@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+status=0
+
+check_controller_forbidden_persistence() {
+    file="$1"
+
+    if grep -nE -- '->resultset[[:space:]]*\(|DBIx::Class|GPForum::Schema' "$file"; then
+        echo "architecture-check: controller persistence boundary violation in $file" >&2
+        status=1
+    fi
+}
+
+for file in lib/GPForum/Controller/*.pm; do
+    [ -f "$file" ] || continue
+    check_controller_forbidden_persistence "$file"
+done
+
+exit "$status"

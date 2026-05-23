@@ -1,5 +1,11 @@
 GPForum - Operational Runbooks & Production Procedures Constitution
 
+Prompt 45 alignment: runbooks are engineering contracts. Runbooks MUST cover
+recovery for invariant violations, replay failures, projection rebuilds,
+outbox backlog, failed migrations, release rollback, dependency emergency
+replacement, and degraded-mode operation. Recovery procedures MUST be testable
+or explicitly marked as manual drills.
+
 This document defines the mandatory operational runbooks, maintenance procedures, incident workflows, backup and restore practices, deployment operations, and production safety procedures for GPForum.
 
 This specification is mandatory for operations.

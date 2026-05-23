@@ -1,5 +1,11 @@
 GPForum - Packaging, Deployment & Runtime Process Constitution
 
+Prompt 45 alignment: deployments are engineering events. Deployment packages
+MUST preserve reproducibility, release-gate evidence, migration state,
+readiness checks, rollback stance, and dependency lockfile integrity. Runtime
+process changes MUST not introduce hidden dependencies or unverifiable
+operational behavior.
+
 This document defines the mandatory packaging model, runtime process layout, deployment target expectations, process supervision, web server integration, and production runtime discipline for GPForum.
 
 This specification is mandatory for deployment design.

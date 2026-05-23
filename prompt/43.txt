@@ -10,6 +10,11 @@ deployment, and future AI-assisted code generation.
 Every module, migration, workflow, event, permission rule, and milestone MUST be
 judged against this contract.
 
+This contract is extended by prompt/45.txt. Executable architecture now also
+requires verifiable invariants, contract tests, classified errors, release
+gates, dependency governance, migration metadata, replay validation, and
+observable operational guarantees.
+
 ---
 
 Contract Purpose

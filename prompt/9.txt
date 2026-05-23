@@ -1,5 +1,11 @@
 GPForum — Authorization, Moderation & Governance Constitution
 
+Prompt 46 alignment: authorization, moderation, and governance workflows MUST
+remain accessible to keyboard and assistive-technology users. Moderation queues,
+audit views, dialogs, filters, confirmations, and emergency controls MUST be
+semantic, focus-safe, screen-reader compatible, and non-color-only. Inaccessible
+staff tooling is an operational safety failure.
+
 This document defines the mandatory authorization architecture, permission model, moderation system, trust framework, governance rules, administrative boundaries, escalation policies, and operational control philosophy of GPForum.
 
 This specification is foundational and mandatory.

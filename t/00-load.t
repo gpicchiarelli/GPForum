@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 133;
+const my $TEST_COUNT => 138;
 
 plan tests => $TEST_COUNT;
 
@@ -20,6 +20,7 @@ use_ok('GPForum::Config');
 use_ok('GPForum::Runtime');
 use_ok('GPForum::Command::Migrate');
 use_ok('GPForum::Controller::Health');
+use_ok('GPForum::Controller::Forum');
 use_ok('GPForum::Controller::Identity');
 use_ok('GPForum::Controller::Operations');
 use_ok('GPForum::Controller::Realtime');
@@ -106,6 +107,7 @@ use_ok('GPForum::Service::Notification::PreferenceStore');
 use_ok('GPForum::Service::Notification::SubscriptionStore');
 use_ok('GPForum::Service::Operations::MetricsSnapshot');
 use_ok('GPForum::Service::Operations::RateLimiter');
+use_ok('GPForum::Service::Operations::Readiness');
 use_ok('GPForum::Service::Operations::RunbookValidator');
 use_ok('GPForum::Service::Operations::RuntimeSizing');
 use_ok('GPForum::Service::Portability::ExportBundleBuilder');
@@ -121,9 +123,12 @@ use_ok('GPForum::Service::Privacy::DeletionWorkflow');
 use_ok('GPForum::Service::Privacy::RetentionHoldStore');
 use_ok('GPForum::Service::Forum::ThreadComposer');
 use_ok('GPForum::Service::Forum::ThreadStore');
+use_ok('GPForum::Service::Forum::CategoryReader');
 use_ok('GPForum::Service::Forum::PageWindow');
 use_ok('GPForum::Service::Forum::PostReader');
+use_ok('GPForum::Service::Forum::PostPosition');
 use_ok('GPForum::Service::Forum::ThreadReader');
+use_ok('GPForum::Service::Forum::ThreadDetailReader');
 use_ok('GPForum::Service::Forum::PostComposer');
 use_ok('GPForum::Service::Forum::PostStore');
 use_ok('GPForum::Service::Outbox::Dispatcher');

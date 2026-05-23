@@ -1,5 +1,11 @@
 GPForum — Database Architecture Constitution
 
+Prompt 45 alignment: database design MUST preserve verifiable invariants.
+Canonical tables, event/audit logs, outbox tables, migration metadata, and
+projection lineage MUST remain mechanically testable. Migrations MUST document
+purpose, lock risk, rollback stance, online safety, backfill expectations,
+projection impact, and replay impact.
+
 This document defines the mandatory database architecture, persistence model, partitioning strategy, event storage philosophy, migration discipline, indexing rules, query standards, and long-term storage sustainability model of GPForum.
 
 This specification is foundational and mandatory.

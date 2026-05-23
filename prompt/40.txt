@@ -1,5 +1,11 @@
 GPForum - Perl Multi-Process, Threading & Dynamic Runtime Scalability Constitution
 
+Prompt 45 alignment: scaling claims MUST be verified by measurable invariants.
+Multi-process and threading behavior MUST preserve authoritative PostgreSQL
+state, disposable realtime/cache state, idempotent workers, observable
+coordination, and bounded query cost. Any distributed dependency introduced for
+coordination requires ADR justification and tests for degraded operation.
+
 This document defines the mandatory Perl runtime scalability model for GPForum, including multi-process execution, dynamic process scaling, bounded threading, workload isolation, and capacity estimation rules.
 
 This specification is foundational and mandatory.

@@ -488,3 +488,23 @@ GPForum observability architecture MUST remain:
 A distributed system that cannot be observed cannot be reliably operated.
 
 All future observability and operational tooling MUST comply with this constitution.
+
+⸻
+
+Engineering Invariants Amendment
+
+Observability is an engineering invariant under prompt/45.txt.
+
+Every critical workflow MUST expose enough correlation data to reconstruct:
+
+* request entry;
+* actor where safe;
+* command/service boundary;
+* event/audit/outbox effects;
+* worker execution where applicable;
+* projection generation or lag where applicable;
+* classified failure behavior.
+
+Silent workflow failure is prohibited.
+
+Metrics and logs MUST verify operational guarantees without leaking secrets.

@@ -138,3 +138,28 @@ Large prompt changes SHOULD include:
 * implementation impact.
 
 Architecture-changing prompt updates SHOULD be reviewed as seriously as code.
+
+---
+
+Verifiable Invariants Amendment
+
+New constitutions that introduce storage, workers, projections, plugins,
+external dependencies, authorization behavior, moderation behavior, or
+operational workflows MUST define their engineering invariants.
+
+Prompt alignment tests SHOULD include prompt/45.txt when architecture changes
+affect contracts, invariants, release gates, replay behavior, dependency
+governance, or migration discipline.
+
+Prompt alignment tests SHOULD include prompt/46.txt when architecture changes
+affect frontend rendering, themes, plugins, composer behavior, realtime
+interaction, notifications, moderation/admin UI, or user-facing workflow
+accessibility.
+
+Prompt alignment tests SHOULD include prompt/47.txt when architecture changes
+affect community lifecycle, emotional usability, contributor identity,
+discovery, personalization, retention, or social continuity.
+
+Prompt alignment tests SHOULD include prompt/48.txt when architecture changes
+affect core boundaries, plugin capability scope, controller responsibilities,
+cache authority, CQRS usage, PostgreSQL authority, or moderation core rules.

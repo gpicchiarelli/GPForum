@@ -1,5 +1,11 @@
 GPForum - HTTP Routes, Controllers & Application Workflow Constitution
 
+Prompt 46 alignment: HTTP workflows that render user-facing pages MUST return
+accessible SSR by default. Forms MUST have labels and associated errors,
+mutating controls MUST be semantic buttons, composer routes MUST support
+keyboard-only use, and no core route may require JavaScript as the only path to
+participation.
+
 This document defines the initial route map, controller responsibilities, request lifecycle, validation rules, and application workflow contracts for GPForum.
 
 This specification is mandatory for web implementation.
@@ -251,4 +257,3 @@ Errors MUST NOT leak:
 * internal paths;
 * secret values;
 * infrastructure topology.
-

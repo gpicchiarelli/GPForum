@@ -1,5 +1,10 @@
 GPForum - Initial Database Schema & Persistence Blueprint Constitution
 
+Prompt 45 alignment: schema evolution MUST be invariant-aware. New tables and
+columns MUST identify whether they are canonical, derived, disposable,
+rebuildable, or operational metadata. Persistence changes MUST preserve replay,
+authorization, audit, and projection rebuild guarantees.
+
 This document defines the initial database blueprint for GPForum, including core tables, relationships, indexing expectations, partitioning direction, and persistence invariants.
 
 This specification is a starting blueprint and MUST evolve through migrations and ADRs.

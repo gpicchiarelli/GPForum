@@ -3,9 +3,16 @@ package GPForum::Controller::Health;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Mojo::Base 'Mojolicious::Controller';
 
 our $VERSION = '0.001';
+
+const my %STATUS_CODE_FOR => (
+    ok       => 200,
+    degraded => 200,
+    fail     => 503,
+);
 
 sub live {
     my ($self) = @_;
@@ -22,13 +29,11 @@ sub live {
 sub ready {
     my ($self) = @_;
 
+    my $readiness = $self->gp_readiness->check;
+
     return $self->render(
-        json => {
-            status      => 'ok',
-            check       => 'ready',
-            runtime     => $self->gp_runtime->as_hash,
-            environment => $self->gp_config->environment,
-        },
+        json   => $readiness,
+        status => $STATUS_CODE_FOR{ $readiness->{status} },
     );
 }
 
@@ -98,7 +103,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Readiness does not yet verify database, queue, or cache connectivity.
+Readiness performs lightweight local database checks only; external worker and
+edge checks remain deployment responsibilities.
 
 =head1 AUTHOR
 

@@ -13,6 +13,19 @@ has last_attrs => undef;
 has last_query => undef;
 has rows       => sub { return []; };
 
+sub find {
+    my ( $self, $id ) = @_;
+
+    for my $row ( @{ $self->rows } ) {
+        for my $column (qw(category_id thread_id post_id)) {
+            my $value = $row->get_column($column);
+            return $row if defined $value && $value eq $id;
+        }
+    }
+
+    return;
+}
+
 sub search {
     my ( $self, $query, $attrs ) = @_;
 
@@ -23,4 +36,3 @@ sub search {
 }
 
 1;
-

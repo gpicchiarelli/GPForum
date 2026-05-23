@@ -1,5 +1,17 @@
 GPForum - Profiling, Coverage & Perl Automation Constitution
 
+Prompt 45 alignment: profiling and coverage are release gates for engineering
+invariants. Coverage MUST map to requirements, not vanity percentages. Profiling
+MUST remain runnable for HTTP routes, worker jobs, write workflows, search, and
+projection rebuilds. Critical hot-path regressions require investigation before
+release.
+
+Prompt 46 alignment: coverage and automation MUST track accessibility-critical
+routes and workflows where practical. Accessibility regressions in semantic
+rendering, keyboard access, focus behavior, forms, themes, plugins, realtime
+announcements, and moderation/admin surfaces are quality failures, not cosmetic
+defects.
+
 This document defines the mandatory profiling, coverage, dependency automation, and Perl tooling model for GPForum.
 
 This specification is foundational and mandatory.

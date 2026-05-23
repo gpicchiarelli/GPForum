@@ -1,0 +1,850 @@
+GPForum - Verifiable Engineering Invariants Constitution
+
+This document defines the mandatory engineering invariants, architectural
+contracts, release discipline, mechanical correctness rules, operational
+guarantees, testing rigor, dependency governance, migration discipline,
+observability guarantees, and long-term maintainability doctrine of GPForum.
+
+This constitution is mandatory.
+
+It evolves GPForum from architecture-by-intent into
+architecture-by-verifiable-invariants.
+
+It does not replace the existing constitutions. It binds them together with
+mechanically reviewable and testable engineering rules.
+
+---
+
+Constitutional Purpose
+
+GPForum is expected to survive:
+
+* a large future codebase;
+* multiple contributors;
+* plugin ecosystem growth;
+* architectural drift pressure;
+* accidental coupling;
+* operational regressions;
+* dependency churn;
+* long-term maintenance burden;
+* replay and rebuild requirements;
+* migration complexity;
+* feature pressure;
+* scaling pressure.
+
+The platform MUST preserve:
+
+* Perl-first implementation;
+* PostgreSQL-first authoritative storage;
+* SSR-first rendering;
+* explicit governance;
+* operational simplicity;
+* rebuildable projections;
+* auditability;
+* moderation authority;
+* deterministic recovery;
+* graceful degradation;
+* explicit trust boundaries;
+* anti-dark-pattern product philosophy.
+
+The platform MUST reject:
+
+* accidental architecture;
+* undocumented invariants;
+* hidden coupling;
+* unbounded complexity;
+* unreviewed dependencies;
+* opaque abstractions;
+* unverifiable workflows;
+* architectural drift;
+* unmeasured performance assumptions.
+
+---
+
+1. Engineering Philosophy
+
+Architecture MUST remain mechanically enforceable.
+
+Correctness MUST be testable.
+
+Architectural drift is expected. GPForum MUST resist it through tests,
+contracts, reviews, migration discipline, dependency governance, and observable
+runtime behavior.
+
+Maintainability is a first-class operational property.
+
+Operational simplicity is an engineering constraint, not a preference.
+
+Rebuildability is an engineering invariant.
+
+Observability is an engineering invariant.
+
+Explainability is an engineering invariant.
+
+Intentions are insufficient without verification.
+
+Boundaries MUST be enforceable.
+
+Invariants MUST be documented.
+
+Workflows MUST remain measurable.
+
+Operational behavior MUST remain reproducible.
+
+The platform MUST prohibit:
+
+* undocumented architectural assumptions;
+* hidden dependencies;
+* uncontrolled complexity growth;
+* accidental authoritative state;
+* unbounded workflow coupling;
+* workflow behavior that cannot be tested or observed.
+
+---
+
+2. Engineering Invariants
+
+Every critical architectural rule MUST be expressed as an invariant.
+
+Every invariant SHOULD have:
+
+* a written statement;
+* an owning bounded context;
+* affected tables or projections;
+* affected events;
+* expected failure behavior;
+* tests or explicit test-plan coverage;
+* observability hooks where operationally relevant.
+
+Invariant categories are mandatory:
+
+* canonical data invariants;
+* authorization invariants;
+* replay invariants;
+* projection invariants;
+* moderation invariants;
+* notification invariants;
+* search invariants;
+* cache invariants;
+* plugin invariants;
+* operational invariants.
+
+Mandatory examples:
+
+* PostgreSQL canonical records are authoritative.
+* EventLog and AuditLog are not UI read models.
+* Projections are never authoritative.
+* Search indexes are derived and rebuildable.
+* Caches are disposable.
+* Realtime state is disposable.
+* Outbox messages derive from authoritative events.
+* Deleted or hidden content MUST NOT leak into search.
+* Unauthorized content MUST never render.
+* Session revocation MUST prevent authentication.
+* Permission-aware rendering MUST be enforced server-side.
+* Event lineage MUST remain reconstructible.
+* Replay MUST remain possible.
+* Projection generation activation MUST be explicit.
+* Stale projections MUST be detectable or isolatable.
+* Plugins MUST NOT bypass authorization, audit, moderation, or event contracts.
+* No route may rely on OFFSET for hot forum pagination.
+* Critical workflow failure MUST be observable.
+
+Invariant violations are production-critical failures.
+
+Invariants MUST remain continuously testable.
+
+---
+
+3. Architectural Contracts
+
+GPForum MUST use contract-oriented architecture.
+
+Contracts MUST be explicit between:
+
+* controllers and application services;
+* services and persistence stores;
+* command composers and stores;
+* stores and event/audit/outbox append;
+* projections and canonical data;
+* workers and job payloads;
+* plugins and hook boundaries;
+* HTTP routes and response semantics;
+* migrations and schema state;
+* search indexers and search readers;
+* notification dispatchers and inbox projections.
+
+Contracts MUST define:
+
+* input structure;
+* output structure;
+* error semantics;
+* authorization expectations;
+* event emission expectations;
+* idempotency expectations;
+* retry behavior where relevant;
+* versioning where payloads may outlive a deployment.
+
+Event contracts MUST define:
+
+* event_type;
+* schema_version;
+* aggregate_type;
+* aggregate_id;
+* aggregate_version where applicable;
+* actor_id;
+* correlation_id;
+* causation_id;
+* idempotency_key;
+* payload schema;
+* metadata schema.
+
+Plugin contracts MUST define:
+
+* capability;
+* permission context;
+* input and output structures;
+* timeout behavior;
+* failure behavior;
+* audit expectations;
+* migration expectations if data is stored.
+
+The platform MUST prohibit:
+
+* implicit workflow coupling;
+* undocumented payload mutation;
+* hidden side effects;
+* unversioned long-lived payloads where replay or async delivery is possible.
+
+---
+
+4. Layering And Boundary Enforcement
+
+Controllers MUST remain thin.
+
+Controllers MAY:
+
+* parse request input;
+* invoke validation helpers;
+* check CSRF;
+* call authorization or service boundaries;
+* map service results to HTTP responses.
+
+Controllers MUST NOT:
+
+* directly manipulate DBIx::Class resultsets;
+* contain business rules;
+* implement persistence workflows;
+* implement projection logic;
+* implement plugin behavior.
+
+Services contain business logic.
+
+Stores isolate DBIx::Class persistence.
+
+Projections remain derived and MUST NOT mutate canonical state.
+
+Workers execute asynchronous workflows and MUST preserve idempotency.
+
+Plugins remain capability-scoped and MUST NOT bypass core contracts.
+
+Templates MUST NOT perform authorization, persistence, or workflow orchestration.
+
+Automated architecture checks SHOULD enforce forbidden imports, forbidden
+layer dependencies, and suspicious direct persistence access.
+
+Architectural review is mandatory for new bounded contexts, stores, workers,
+plugin hooks, and projection families.
+
+---
+
+5. Testing Doctrine
+
+Tests are executable architecture.
+
+GPForum MUST include:
+
+* unit tests;
+* contract tests;
+* workflow tests;
+* replay tests;
+* migration tests;
+* authorization tests;
+* invariant tests;
+* security tests;
+* projection rebuild tests;
+* smoke tests for operational endpoints.
+
+GPForum SHOULD support:
+
+* property-based testing;
+* mutation testing;
+* fuzz testing;
+* concurrency testing;
+* load-path testing;
+* database integration testing with real migrations.
+
+Tests MUST verify behavior, not incidental implementation details.
+
+Critical workflows require end-to-end tests.
+
+Replay safety requires dedicated tests.
+
+Authorization requires explicit negative tests.
+
+Search visibility requires negative tests proving hidden and unauthorized
+content is absent.
+
+Notification tests MUST verify muted, read, permission, and fanout behavior.
+
+Plugin tests MUST verify capability boundaries and failure isolation.
+
+The platform MUST NOT rely only on smoke tests or happy-path tests.
+
+---
+
+6. Golden Path Workflows
+
+Golden-path workflows MUST remain narratively testable and operationally
+reproducible.
+
+Mandatory golden paths SHOULD include:
+
+* registration -> login -> thread create -> reply -> notification;
+* report -> moderation action -> audit verification;
+* thread create -> event append -> outbox row -> projection handoff;
+* search indexing -> permission-aware search result;
+* projection rebuild -> activation -> query validation;
+* replay validation;
+* attachment upload -> scan/quarantine -> render;
+* plugin hook execution -> failure isolation;
+* migration apply -> readiness check -> rollback stance verification.
+
+Each golden path MUST document:
+
+* expected actors;
+* expected permission checks;
+* expected canonical writes;
+* expected event/audit/outbox effects;
+* expected projections;
+* expected metrics/logs;
+* failure and rollback behavior.
+
+---
+
+7. Observability As Engineering Guarantee
+
+Observability is part of correctness.
+
+Every critical workflow MUST be traceable.
+
+GPForum MUST propagate:
+
+* correlation_id;
+* request identifiers;
+* event identifiers;
+* actor identifiers where safe;
+* job identifiers;
+* projection generation identifiers where relevant.
+
+GPForum MUST expose:
+
+* operational metrics;
+* queue metrics;
+* projection lag metrics;
+* rebuild metrics;
+* security metrics;
+* authorization failure metrics;
+* rate-limit metrics;
+* database readiness and latency metrics;
+* worker visibility.
+
+Hidden failures reduce trust.
+
+Silent workflow failure is prohibited.
+
+Unclassified operational errors are prohibited.
+
+Metrics and logs MUST NOT expose secrets.
+
+---
+
+8. Error Taxonomy
+
+Errors MUST be classified.
+
+Mandatory categories:
+
+* ValidationError;
+* AuthorizationError;
+* NotFoundError;
+* ConflictError;
+* RateLimitError;
+* InvariantViolation;
+* InfrastructureError;
+* ReplayError;
+* ProjectionError;
+* PluginError.
+
+Every critical workflow MUST distinguish:
+
+* user-facing errors;
+* operator-facing errors;
+* retryable errors;
+* fatal errors;
+* security-sensitive errors.
+
+User-facing errors MUST NOT leak infrastructure internals.
+
+Operator-facing errors SHOULD include correlation context.
+
+InvariantViolation MUST be treated as production-critical.
+
+Retry behavior MUST be explicit for worker, outbox, notification, search, and
+projection errors.
+
+---
+
+9. Migration Discipline
+
+Every migration MUST document:
+
+* purpose;
+* forward behavior;
+* rollback stance;
+* lock risk;
+* online safety;
+* expected runtime;
+* backfill expectations;
+* projection impact;
+* replay impact;
+* readiness impact;
+* operator verification steps.
+
+Canonical schema evolution MUST prefer:
+
+* additive changes;
+* nullable-first rollout;
+* batched backfill;
+* constraint enforcement after validation;
+* concurrent index creation where PostgreSQL supports it;
+* explicit rollback stance;
+* projection generation rebuild when read-model semantics change.
+
+Migrations MUST NOT:
+
+* silently break replay;
+* silently make projections authoritative;
+* require app runtime superuser privileges;
+* mix unrelated schema changes without justification;
+* assume unbounded downtime for large tables.
+
+Dual-write transitions require ADR approval unless they are strictly local,
+short-lived, and fully tested.
+
+---
+
+10. Performance Engineering
+
+Performance claims MUST be measurable.
+
+GPForum MUST define and enforce performance budgets for hot paths where
+feasible.
+
+Mandatory budget categories:
+
+* endpoint query count;
+* endpoint latency;
+* queue latency;
+* outbox lag;
+* projection lag;
+* search rebuild cost;
+* notification fanout cost;
+* thread page render cost;
+* reply creation transaction cost.
+
+The platform MUST prohibit:
+
+* unmeasured performance assumptions;
+* hidden O(N) scaling traps;
+* accidental OFFSET pagination on hot forum paths;
+* UI reads directly from event log;
+* expensive metrics queries in hot operational endpoints.
+
+Hot-path reads SHOULD use explicit columns, bounded result sets, keyset
+pagination, and projection tables where appropriate.
+
+Profiling MUST be possible for HTTP routes, worker jobs, search, projection
+rebuilds, and write workflows.
+
+---
+
+11. Dependency Governance
+
+Every dependency is an operational commitment.
+
+New dependencies MUST be reviewed for:
+
+* license;
+* maintenance status;
+* operational risk;
+* replacement feasibility;
+* ecosystem maturity;
+* security posture;
+* transitive dependency burden;
+* XS/native build implications where applicable.
+
+Carton lockfiles are mandatory.
+
+Production dependency versions MUST NOT float.
+
+Dependency drift MUST be reviewed.
+
+Abandoned dependencies require replacement, vendoring, or explicit acceptance.
+
+Infrastructure dependencies require ADR approval if they become operationally
+mandatory.
+
+Plugins MUST declare dependency and capability requirements.
+
+---
+
+12. Release Discipline
+
+Releases are operational events.
+
+Every release MUST pass gates for:
+
+* tests;
+* Perl::Critic;
+* coverage validation;
+* migration validation;
+* profiling smoke validation;
+* authorization validation;
+* prompt alignment where architecture changed;
+* dependency lockfile consistency;
+* readiness and health smoke checks.
+
+Releases SHOULD support:
+
+* signed artifacts;
+* reproducible builds;
+* deployment smoke validation;
+* rollback rehearsal;
+* release notes with migration and operational impact.
+
+No production release may rely on undocumented manual steps.
+
+Rollback capability matters.
+
+Release observability matters.
+
+Emergency releases MUST document which gates were bypassed and why.
+
+---
+
+13. Replay And Rebuild Validation
+
+Replay is part of operational correctness.
+
+GPForum MUST test:
+
+* projection rebuilds;
+* projection generation activation;
+* stale projection detection;
+* event schema compatibility;
+* idempotent worker retries;
+* replay ordering;
+* rebuild observability.
+
+Projection rebuilds MUST be deterministic where the underlying canonical state
+is deterministic.
+
+Replay failures are architectural failures.
+
+Replay MUST remain operationally feasible, testable, and observable.
+
+---
+
+14. Static Architecture Verification
+
+Architecture SHOULD be machine-checkable where feasible.
+
+GPForum SHOULD implement:
+
+* forbidden import checks;
+* dependency graph checks;
+* direct DB access checks for controllers;
+* boundary naming checks;
+* migration metadata checks;
+* event schema checks;
+* route contract checks;
+* prompt alignment checks;
+* plugin capability contract checks.
+
+Static checks MUST remain explainable and maintainable.
+
+False positives MUST be fixed through better rules or explicit, reviewable
+exceptions.
+
+---
+
+15. Documentation As Engineering Contract
+
+Documentation is operational infrastructure.
+
+GPForum MUST maintain:
+
+* ADRs;
+* invariant documentation;
+* operational runbooks;
+* migration documentation;
+* replay documentation;
+* plugin capability documentation;
+* release notes;
+* implementation-status documentation.
+
+Undocumented systems reduce trust.
+
+Documentation MUST reflect reality, not aspiration.
+
+README status MUST distinguish implemented behavior from planned boundaries.
+
+---
+
+16. Definition Of Done
+
+Every major feature MUST include:
+
+* route or workflow wiring where user-facing;
+* authorization;
+* persistence;
+* event/audit emission where domain-relevant;
+* outbox handoff where asynchronous effects exist;
+* tests;
+* observability;
+* operational notes;
+* migration notes where schema changes exist;
+* replay considerations;
+* documentation;
+* prompt alignment where architecture changed.
+
+Incomplete observability means incomplete feature.
+
+Incomplete tests means incomplete feature.
+
+Incomplete authorization negative tests mean incomplete feature.
+
+Unclear replay impact means incomplete feature.
+
+---
+
+17. Long-Term Maintainability
+
+GPForum MUST optimize for:
+
+* readability;
+* predictability;
+* operational continuity;
+* contributor onboarding;
+* low cognitive load;
+* explicit behavior;
+* explainable systems;
+* narrow interfaces;
+* bounded modules.
+
+GPForum MUST discourage:
+
+* excessive magic;
+* hidden runtime mutation;
+* overengineered abstractions;
+* unnecessary metaprogramming;
+* god-class application services;
+* unbounded controller growth;
+* opaque plugin behavior.
+
+Every abstraction MUST earn its existence through reduced complexity,
+enforced boundaries, or measurable operational value.
+
+---
+
+18. Required Updates To Existing Constitutions
+
+The following constitutions MUST remain aligned with this document:
+
+* prompt/3.txt database;
+* prompt/4.txt Perl engineering;
+* prompt/10.txt observability;
+* prompt/11.txt CI/CD and release;
+* prompt/14.txt search;
+* prompt/15.txt performance;
+* prompt/16.txt architecture governance;
+* prompt/27.txt runbooks;
+* prompt/35.txt plugins;
+* prompt/36.txt testing;
+* prompt/38.txt deployment;
+* prompt/39.txt prompt governance;
+* prompt/40.txt scaling;
+* prompt/41.txt profiling and coverage;
+* prompt/43.txt executable architecture contract.
+* prompt/46.txt accessibility engineering.
+* prompt/47.txt human-centered community lifecycle.
+* prompt/48.txt core boundary and architectural discipline.
+
+Any future constitution that introduces workflows, storage, external
+dependencies, plugins, projections, workers, or operational behavior MUST define
+its invariants and test expectations.
+
+Accessibility invariants from prompt/46.txt are engineering invariants.
+WCAG-critical regressions, inaccessible core workflows, inaccessible plugin UI,
+and inaccessible themes MUST be treated as correctness failures.
+
+Community lifecycle invariants from prompt/47.txt are engineering and product
+invariants. Dark-pattern retention, opaque ranking, hostile UX, and continuity
+breakage in core workflows MUST be treated as architecture failures.
+
+Core boundary rules from prompt/48.txt are engineering invariants. Controller
+business logic, plugin omnipotence, cache authority, projection authority, and
+core feature sprawl MUST be blocked by review and automated checks where
+feasible.
+
+---
+
+19. Mandatory Vs Optional Engineering Controls
+
+Mandatory controls:
+
+* Perl::Critic release gate;
+* deterministic tests;
+* invariant tests for critical behavior;
+* authorization negative tests;
+* migration metadata and review;
+* coverage validation;
+* profiling smoke validation;
+* Carton lockfile discipline;
+* prompt alignment for architecture changes;
+* health/readiness smoke checks;
+* explicit error classification for critical workflows.
+
+Strongly recommended controls:
+
+* static architecture checks;
+* dependency graph validation;
+* route contract tests;
+* replay simulation tests;
+* real PostgreSQL integration tests;
+* signed release artifacts;
+* SBOM generation;
+* mutation testing for critical services;
+* concurrency tests for hot write paths.
+
+Optional advanced controls:
+
+* property-based testing;
+* fuzz testing;
+* full provenance attestations;
+* automated ADR impact analysis;
+* plugin sandbox verification;
+* formal schema compatibility checks.
+
+Experimental controls:
+
+* automated architecture-drift visualization;
+* generated invariant dashboards;
+* replay-diff tooling;
+* static effect analysis for plugins.
+
+---
+
+20. ADR Recommendations
+
+ADR approval SHOULD be required for:
+
+* new mandatory infrastructure dependencies;
+* new authoritative data stores;
+* any Redis/KeyDB requirement beyond optional acceleration;
+* any OpenSearch/external search requirement;
+* any SPA-first frontend shift;
+* new ORM adoption;
+* event schema breaking changes;
+* dual-write migration phases;
+* plugin execution privilege expansion;
+* distributed coordination mechanisms;
+* changes to canonical data ownership;
+* changes to authorization or moderation authority;
+* release-gate bypasses outside emergency procedure.
+
+---
+
+21. Incremental Adoption Roadmap
+
+Phase 1: Document invariants.
+
+* Add invariant sections to service and migration documentation.
+* Map each critical workflow to tests.
+* Update README status to distinguish implemented and planned behavior.
+
+Phase 2: Enforce contracts.
+
+* Add contract tests for controllers, services, events, workers, and plugins.
+* Add route workflow tests for golden paths.
+* Add negative authorization tests.
+
+Phase 3: Verify replay.
+
+* Add projection rebuild tests.
+* Add event compatibility checks.
+* Add projection generation activation tests.
+
+Phase 4: Strengthen migration discipline.
+
+* Require migration metadata.
+* Add online-safety review.
+* Add rollback stance checks.
+
+Phase 5: Automate architecture checks.
+
+* Add forbidden dependency checks.
+* Add controller persistence-access checks.
+* Add prompt alignment checks for new bounded contexts.
+
+Phase 6: Harden releases.
+
+* Add profiling budgets.
+* Add release smoke validation.
+* Add dependency review artifacts.
+* Add optional signed artifacts and SBOM.
+
+---
+
+22. Long-Term Recommendations
+
+GPForum SHOULD maintain a living invariant registry.
+
+Each milestone SHOULD update:
+
+* invariants;
+* contracts;
+* tests;
+* observability;
+* runbooks;
+* migration notes.
+
+Architecture review SHOULD ask:
+
+* What becomes authoritative?
+* What remains rebuildable?
+* What remains disposable?
+* What fails safely?
+* What is the invariant?
+* What test proves it?
+* What metric exposes it?
+* What runbook recovers it?
+
+The correct GPForum architecture is not the widest architecture.
+
+The correct GPForum architecture is the one whose guarantees remain true under
+implementation pressure, operational stress, contributor turnover, dependency
+churn, replay, migration, and time.
+
+1;

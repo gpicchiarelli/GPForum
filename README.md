@@ -11,7 +11,7 @@
 [![Project Hygiene](https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml/badge.svg)](https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml)
 [![Project Status](https://img.shields.io/badge/status-active%20development-214237.svg)](prompt/20.txt)
 [![Repository](https://img.shields.io/badge/repository-private-111412.svg)](https://github.com/gpicchiarelli/GPForum)
-[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-44-a6532f.svg)](prompt)
+[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-48-a6532f.svg)](prompt)
 [![GitHub Ready](https://img.shields.io/badge/github-project%20ready-3f5f72.svg)](prompt/44.txt)
 [![Security Policy](https://img.shields.io/badge/security-policy-111412.svg)](SECURITY.md)
 [![Contributing](https://img.shields.io/badge/contributing-guide-63735f.svg)](CONTRIBUTING.md)
@@ -75,7 +75,7 @@ This repository currently contains:
 * a public static platform page in [index.html](index.html);
 * visual identity assets in [assets](assets);
 * editable logo source artwork in [assets/source/gpforum-logo-source.svg](assets/source/gpforum-logo-source.svg);
-* 44 architectural prompt constitutions in [prompt](prompt);
+* 48 architectural prompt constitutions in [prompt](prompt);
 * GitHub project success surface in [.github](.github), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [GOVERNANCE.md](GOVERNANCE.md), [SUPPORT.md](SUPPORT.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), and [docs/adr](docs/adr);
 * BSD-3 license in [LICENSE](LICENSE);
 * strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
@@ -115,10 +115,35 @@ This repository currently contains:
 * plugin extension boundaries for manifest validation, plugin registry lifecycle, named hook dispatch, and observable plugin failures;
 * privacy rights boundaries for account deletion requests, erasure jobs, retention legal holds, and staff data-rights review;
 * public discovery boundaries for canonical URLs, no-leak metadata, robots rules, sitemaps, and safe public feeds;
+* navigable forum HTTP routes for categories, category thread lists, thread pages, thread creation, reply creation, and search;
+* real readiness checks for database/resultset availability;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 16: Public Discovery And Syndication** service
-boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
+The current implementation has reached **Milestone 17: Forum HTTP MVP** under the
+constraints in [prompt/20.txt](prompt/20.txt). See [docs/MVP.md](docs/MVP.md)
+for the route surface that is actually traversable today.
+
+## MVP Web Surface
+
+The current forum MVP exposes these JSON routes:
+
+* `GET /categories`
+* `GET /c/:category_id`
+* `GET /t/:thread_id`
+* `GET /new-thread`
+* `POST /threads`
+* `POST /t/:thread_id/replies`
+* `GET /search?q=...`
+
+State-changing forum routes require CSRF and an authenticated session user. Read
+paths use keyset pagination and never `OFFSET`. Thread and reply creation remain
+inside the existing `ThreadStore` and `PostStore` transaction boundaries, so
+event log, audit log, outbox, bodies, revisions, and counters stay coherent.
+
+Known MVP limits: realtime fanout and rate limiting are process-local, search
+depends on PostgreSQL projection rows, and reply position allocation is protected
+by the database uniqueness constraint but should gain advisory locking or a
+dedicated sequence allocator before hot production traffic.
 
 ## Architecture
 
@@ -171,6 +196,7 @@ script/perlcritic
 script/test
 script/coverage
 script/profile -Ilib bin/gpforum-migrate --plan
+script/profile-route /categories
 ```
 
 Inspect the migration plan:
@@ -262,6 +288,10 @@ Implementation and operations:
 * [42](prompt/42.txt) PostgreSQL-native search
 * [43](prompt/43.txt) Executable architecture contract
 * [44](prompt/44.txt) GitHub project success contract
+* [45](prompt/45.txt) Verifiable engineering invariants
+* [46](prompt/46.txt) Accessibility engineering
+* [47](prompt/47.txt) Human-centered community lifecycle
+* [48](prompt/48.txt) Core boundary and architectural discipline
 
 [prompt/18.txt](prompt/18.txt) is an exploration memo. [prompt/19.txt](prompt/19.txt) and [prompt/42.txt](prompt/42.txt) are authoritative final decisions.
 
@@ -282,6 +312,10 @@ Known final decisions:
 * Carton, coverage, profiling, and Perl::Critic are mandatory automation surfaces.
 * Prompt alignment is mandatory for every architecture-changing implementation.
 * GitHub project success surface is mandatory for reviewability, security, contribution, and release discipline.
+* Architecture-by-verifiable-invariants is mandatory for long-term correctness, release discipline, and maintainability.
+* Accessibility engineering is mandatory for participation equality, WCAG enforcement, semantic rendering, and release correctness.
+* Human-centered community lifecycle design is mandatory for durable participation without dark patterns.
+* Core boundary discipline is mandatory: small stable core, capability-scoped plugins, no controller business logic, and no cache/projection authority.
 
 ## License
 

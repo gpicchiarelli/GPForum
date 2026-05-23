@@ -1,5 +1,10 @@
 GPForum - MVP Roadmap & Implementation Sequencing Constitution
 
+Prompt 45 alignment: milestone completion MUST include verifiable invariants,
+contract tests, observability, prompt alignment, migration/replay notes, and
+release-gate evidence. A milestone is not complete if its guarantees are only
+stated and not mechanically checked where feasible.
+
 This document defines the mandatory implementation order, MVP scope, release milestones, and sequencing discipline for GPForum.
 
 This specification is mandatory for project planning.

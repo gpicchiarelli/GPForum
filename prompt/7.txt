@@ -1,5 +1,11 @@
 GPForum — Event-Driven, Realtime & Distributed Synchronization Constitution
 
+Prompt 46 alignment: realtime behavior MUST remain accessibility-safe.
+Websocket updates MUST preserve focus and reading position, avoid live-region
+spam, provide understandable status, and degrade to polling or refresh without
+blocking core forum usage. Realtime is enhancement only and MUST NOT become a
+JavaScript-only accessibility dependency.
+
 This document defines the mandatory event-driven architecture, distributed synchronization model, websocket strategy, asynchronous propagation rules, consistency philosophy, realtime workflows, pub/sub topology, and distributed coordination principles of GPForum.
 
 This specification is foundational and mandatory.

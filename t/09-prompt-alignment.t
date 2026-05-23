@@ -9,13 +9,17 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 122;
+const my $EXPECTED_TESTS => 153;
 
 plan tests => $EXPECTED_TESTS;
 
 my $prompt_governance = path('prompt/39.txt')->slurp;
 my $architecture      = path('prompt/43.txt')->slurp;
 my $github_success    = path('prompt/44.txt')->slurp;
+my $engineering       = path('prompt/45.txt')->slurp;
+my $accessibility     = path('prompt/46.txt')->slurp;
+my $community         = path('prompt/47.txt')->slurp;
+my $discipline        = path('prompt/48.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -57,6 +61,160 @@ like(
     $readme,
     qr/GitHub [ ] project [ ] success [ ] surface [ ] is [ ] mandatory/msx,
     'README records GitHub success as a final decision'
+);
+like(
+    $engineering,
+    qr/Verifiable [ ] Engineering [ ] Invariants [ ] Constitution/msx,
+    'engineering invariants prompt defines the new constitution'
+);
+like(
+    $engineering,
+    qr/architecture-by-verifiable-invariants/msx,
+    'engineering invariants prompt defines verifiable architecture'
+);
+like( $engineering, qr/InvariantViolation/msx,
+    'engineering invariants prompt defines invariant failure taxonomy' );
+like(
+    $engineering,
+    qr/Controllers [ ] MUST [ ] NOT .* DBIx::Class [ ] resultsets/msx,
+    'engineering invariants prompt forbids direct controller persistence'
+);
+like(
+    $engineering,
+    qr/Every [ ] migration [ ] MUST [ ] document/msx,
+    'engineering invariants prompt defines migration discipline'
+);
+like(
+    $engineering,
+    qr/Releases [ ] are [ ] operational [ ] events/msx,
+    'engineering invariants prompt defines release discipline'
+);
+like(
+    $readme,
+    qr/48 [ ] architectural [ ] prompt [ ] constitutions/msx,
+'README counts the verifiable, accessibility, community, and discipline constitutions'
+);
+like(
+    $readme,
+    qr/Architecture-by-verifiable-invariants [ ] is [ ] mandatory/msx,
+    'README records verifiable invariants as a final decision'
+);
+like(
+    $accessibility,
+    qr/Accessibility [ ] Engineering [ ] Constitution/msx,
+    'accessibility prompt defines the new constitution'
+);
+like(
+    $accessibility,
+    qr/WCAG [ ] 2[.]2 [ ] AA [ ] compliance/msx,
+    'accessibility prompt requires WCAG 2.2 AA'
+);
+like(
+    $accessibility,
+    qr/Semantic [ ] HTML [ ] is [ ] preferred [ ] over [ ] ARIA/msx,
+    'accessibility prompt defines semantic HTML doctrine'
+);
+like(
+    $accessibility,
+    qr/Keyboard [ ] users [ ] are [ ] first-class [ ] participants/msx,
+    'accessibility prompt defines keyboard users as first-class'
+);
+like(
+    $accessibility,
+    qr/Themes [ ] cannot [ ] degrade [ ] below [ ] WCAG [ ] 2[.]2 [ ] AA/msx,
+    'accessibility prompt governs theme accessibility'
+);
+like(
+    $accessibility,
+    qr/Plugins [ ] MUST .* preserve [ ] semantic [ ] rendering/msx,
+    'accessibility prompt governs plugin accessibility'
+);
+like(
+    $readme,
+    qr/48 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    'README counts the accessibility constitution'
+);
+like(
+    $readme,
+    qr/Accessibility [ ] engineering [ ] is [ ] mandatory/msx,
+    'README records accessibility as a final decision'
+);
+like(
+    $engineering,
+    qr/Accessibility [ ] invariants [ ] from [ ] prompt\/46[.]txt/msx,
+    'engineering invariants prompt includes accessibility invariants'
+);
+like(
+    $community,
+    qr/Human-Centered [ ] Community [ ] Lifecycle [ ] Constitution/msx,
+    'community lifecycle prompt defines the new constitution'
+);
+like(
+    $community,
+    qr/Forums [ ] are [ ] social [ ] memory [ ] systems/msx,
+    'community lifecycle prompt defines forums as social memory'
+);
+ok(
+    index( $community, 'anonymous visitor' ) >= 0
+      && index( $community, 'newcomer' ) >= 0
+      && index( $community, 'trusted contributor' ) >= 0
+      && index( $community, 'long-term steward' ) >= 0,
+    'community lifecycle prompt defines lifecycle stages'
+);
+like(
+    $community,
+    qr/Retention [ ] MUST [ ] emerge [ ] from [ ] value/msx,
+    'community lifecycle prompt rejects addiction loops'
+);
+like(
+    $community,
+    qr/Infinite-scroll [ ] addiction [ ] traps [ ] are [ ] prohibited/msx,
+    'community lifecycle prompt prohibits infinite-scroll traps'
+);
+like(
+    $discipline,
+    qr/Core [ ] Boundary/msx,
+    'core discipline prompt defines the new constitution'
+);
+like(
+    $discipline,
+    qr/The [ ] GPForum [ ] core [ ] MUST [ ] remain [ ] small/msx,
+    'core discipline prompt requires small core'
+);
+like(
+    $discipline,
+    qr/Controllers [ ] MUST [ ] NOT [ ] contain [ ] business [ ] logic/msx,
+    'core discipline prompt forbids controller business logic'
+);
+like(
+    $discipline,
+    qr/Plugins [ ] MUST [ ] declare [ ] capabilities/msx,
+    'core discipline prompt requires plugin capabilities'
+);
+like(
+    $discipline,
+qr/Cache [ ] MUST [ ] NEVER [ ] be [ ] the [ ] sole [ ] source [ ] of [ ] truth/msx,
+    'core discipline prompt forbids cache authority'
+);
+like(
+    $readme,
+    qr/Human-centered [ ] community [ ] lifecycle/msx,
+    'README records human-centered community lifecycle as final decision'
+);
+like(
+    $readme,
+    qr/Core [ ] boundary [ ] discipline [ ] is [ ] mandatory/msx,
+    'README records core boundary discipline as final decision'
+);
+like(
+    $engineering,
+    qr/Community [ ] lifecycle [ ] invariants [ ] from [ ] prompt\/47[.]txt/msx,
+    'engineering invariants prompt includes community lifecycle invariants'
+);
+like(
+    $engineering,
+    qr/Core [ ] boundary [ ] rules [ ] from [ ] prompt\/48[.]txt/msx,
+    'engineering invariants prompt includes core boundary invariants'
 );
 
 for my $required_term (

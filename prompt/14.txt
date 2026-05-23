@@ -1,5 +1,15 @@
 GPForum — Search, Indexing & Information Retrieval Constitution
 
+Prompt 45 alignment: search is a derived, rebuildable, permission-aware system.
+Search documents MUST NOT become authoritative state. Search invariants MUST be
+contract-tested, including negative tests that hidden, deleted, quarantined, or
+unauthorized content never appears in search output.
+
+Prompt 46 alignment: search interfaces MUST be accessible. Search forms,
+filters, result lists, snippets, empty states, and pagination MUST use semantic
+HTML, accessible labels, keyboard navigation, and screen-reader-safe result
+counts/status messages.
+
 This document defines the mandatory search architecture, indexing philosophy, retrieval model, ranking strategy, query discipline, synchronization workflows, language analysis rules, authorization-aware filtering, and long-term information retrieval principles of GPForum.
 
 This specification is foundational and mandatory.

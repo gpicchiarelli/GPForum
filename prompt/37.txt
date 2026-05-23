@@ -1,5 +1,10 @@
 GPForum - API Contracts, OpenAPI & Websocket Schema Constitution
 
+Prompt 46 alignment: browser-facing API and websocket schemas that drive UI
+state MUST preserve accessibility semantics. Dynamic states, realtime messages,
+notification updates, validation errors, and dialog/menu states MUST expose
+enough structured data for accessible rendering and assistive-safe updates.
+
 This document defines the mandatory API contract format, OpenAPI expectations, websocket message schemas, pagination standards, error response format, webhook contracts, and compatibility rules for GPForum.
 
 This specification is mandatory for external and internal API design.
@@ -131,4 +136,3 @@ Breaking API changes MUST require:
 * contract tests.
 
 Experimental APIs MUST be clearly marked.
-

@@ -190,3 +190,34 @@ Release gates SHOULD include:
 * smoke tests.
 
 Failing release gates MUST block production deployment unless explicitly overridden by emergency procedure.
+
+---
+
+Verifiable Invariants Amendment
+
+Testing MUST enforce prompt/45.txt.
+
+Every critical invariant MUST have either an automated test or a documented
+verification plan with release-gate consequences.
+
+The test suite MUST include negative tests for authorization, search leakage,
+moderation visibility, replay safety, plugin boundary failure, and projection
+staleness where those features exist.
+
+Golden-path workflow tests MUST verify canonical writes, event/audit/outbox
+effects, projection handoff, metrics/logging expectations, and classified error
+behavior.
+
+---
+
+Accessibility Testing Amendment
+
+Testing MUST enforce prompt/46.txt.
+
+Critical user-facing routes SHOULD have automated accessibility checks where
+practical, including semantic HTML validation, contrast checks, keyboard smoke
+tests, and axe-core or pa11y scans.
+
+Accessibility tests MUST cover home, category, thread, composer, search,
+login/register, notifications, moderation, and admin dashboard surfaces as those
+surfaces become implemented.

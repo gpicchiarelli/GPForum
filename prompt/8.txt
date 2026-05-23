@@ -1,5 +1,10 @@
 GPForum — Worker, Queue & Asynchronous Processing Constitution
 
+Prompt 45 alignment: workers MUST preserve idempotent, observable, replay-safe
+contracts. Queue payloads MUST be versioned where long-lived, failures MUST be
+classified, retries MUST be bounded, and asynchronous state MUST NOT become
+authoritative.
+
 This document defines the mandatory asynchronous processing architecture, worker orchestration philosophy, queue discipline, retry model, job lifecycle standards, distributed execution behavior, scheduling principles, and operational workload isolation model of GPForum.
 
 This specification is foundational and mandatory.

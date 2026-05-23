@@ -1,5 +1,12 @@
 GPForum — Frontend, Rendering & Theme System Constitution
 
+Prompt 46 alignment: frontend rendering MUST treat accessibility as an
+architectural invariant. SSR templates MUST use semantic HTML, landmarks,
+logical headings, accessible forms, keyboard-operable controls, visible focus,
+WCAG 2.2 AA contrast, and graceful no-JavaScript behavior. Themes MUST NOT
+degrade semantic structure, focus visibility, reduced-motion behavior, or
+contrast below policy.
+
 This document defines the mandatory frontend architecture, rendering philosophy, theme system structure, component model, asset strategy, UI composition rules, realtime rendering behavior, browser compatibility assumptions, and long-term maintainability standards of GPForum.
 
 This specification is foundational and mandatory.
