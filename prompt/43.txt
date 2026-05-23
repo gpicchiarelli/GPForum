@@ -250,6 +250,15 @@ partitioned event tables this MAY be implemented with a companion
 aggregate_stream_versions table because global unique constraints on
 partitioned tables must include the partition key.
 
+Command log and event log MUST remain separate:
+
+* command_log records commands received, idempotency, actor, correlation, input
+  payload, response hash, and handling status;
+* event_log records durable domain facts produced by accepted commands;
+* audit_log records security and governance observations.
+
+Knowing what was requested MUST NOT be confused with knowing what happened.
+
 Events MUST be safe to inspect without exposing secrets.
 
 Events MUST NOT contain raw passwords, raw session tokens, API secrets, private
@@ -484,7 +493,8 @@ Every milestone MUST include:
 * coverage command execution;
 * Perl::Critic pass;
 * migration safety review;
-* failure mode review.
+* failure mode review;
+* prompt alignment review.
 
 Milestones are incomplete if they only add code.
 
@@ -533,6 +543,17 @@ Audit integrity failure:
 * audit_log SHOULD use a hash chain;
 * audit_checkpoints SHOULD be exported externally on a fixed cadence;
 * missing or invalid checkpoints MUST be treated as an operations incident.
+
+Platform governance failure:
+
+* partition_registry MUST describe managed partitions before lifecycle jobs
+  detach, archive, or drop them;
+* dead_letters MUST preserve failed technical deliveries;
+* endpoint_query_budgets MUST define query and transaction ceilings for hot
+  endpoints before implementation;
+* database_role_contracts MUST document least-privilege DB roles;
+* migration_safety MUST record lock, reversibility, checksum, and rollback hash
+  expectations.
 
 Email failure:
 

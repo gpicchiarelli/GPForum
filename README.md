@@ -249,6 +249,7 @@ Known final decisions:
 * OpenSearch is no longer default; PostgreSQL-native search is authoritative.
 * Perl application runtime is multi-process and process-first.
 * Carton, coverage, profiling, and Perl::Critic are mandatory automation surfaces.
+* Prompt alignment is mandatory for every architecture-changing implementation.
 
 ## License
 

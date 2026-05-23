@@ -107,6 +107,25 @@ AI review MUST:
 
 ---
 
+Prompt Alignment Gate
+
+Every architecture-changing commit MUST update the relevant prompt documents in
+the same change.
+
+Executable contracts, migrations, tests, README status, ADRs, and prompt
+constitutions MUST remain mutually consistent.
+
+If implementation introduces or renames a bounded context, table, interface,
+event, worker, security rule, operational invariant, or deployment discipline,
+the matching prompt MUST be updated before the change is considered complete.
+
+Prompt alignment MUST be verified by automated tests where practical.
+
+The Definition of Done for every milestone MUST include a prompt alignment
+review.
+
+---
+
 Change Management
 
 Prompt changes SHOULD be committed intentionally.
@@ -119,4 +138,3 @@ Large prompt changes SHOULD include:
 * implementation impact.
 
 Architecture-changing prompt updates SHOULD be reviewed as seriously as code.
-
