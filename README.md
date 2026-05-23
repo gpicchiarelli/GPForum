@@ -148,6 +148,7 @@ Inspect the migration plan:
 
 ```sh
 carton exec perl -Ilib bin/gpforum-migrate --plan
+carton exec perl -Ilib bin/gpforum-migrate --apply
 ```
 
 Enable PostgreSQL-specific Perl modules after installing system PostgreSQL client development files:

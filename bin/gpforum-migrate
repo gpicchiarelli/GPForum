@@ -4,28 +4,11 @@ package main;
 use strict;
 use warnings;
 
-use Carp qw(croak);
 use FindBin;
 use lib "$FindBin::Bin/../lib";
 
-use GPForum::Migration::Plan;
+use GPForum::Command::Migrate;
 
 our $VERSION = '0.001';
 
-my $command = shift @ARGV;
-if ( !defined $command ) {
-    $command = '--plan';
-}
-
-if ( $command ne '--plan' ) {
-    croak "Usage: bin/gpforum-migrate --plan\n";
-}
-
-my $plan = GPForum::Migration::Plan->new->summary;
-
-for my $migration ( @{$plan} ) {
-    print "$migration->{version} $migration->{description} $migration->{file}\n"
-      or croak 'failed to write migration plan';
-}
-
-1;
+exit GPForum::Command::Migrate->new->run(@ARGV);

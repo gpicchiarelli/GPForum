@@ -9,15 +9,19 @@ use Test::Exception;
 use Test::More;
 
 use lib 'lib';
+use lib 't/lib';
 
 use GPForum::Config;
 use GPForum::Migration::Plan;
+use GPForum::Migration::Runner;
 use GPForum::Schema;
+use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 106;
+const my $EXPECTED_TESTS             => 115;
 const my $EXPECTED_MIGRATIONS        => 4;
+const my $EXPECTED_RUNNER_EXECUTIONS => 9;
 const my $FORUM_MIGRATION_INDEX      => 2;
 const my $GOVERNANCE_MIGRATION_INDEX => 3;
 
@@ -455,6 +459,49 @@ like(
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] migration_safety/msx,
     'platform governance migration creates migration safety table'
 );
+
+my $migration_schema = GPForum::Test::MigrationSchema->new;
+my $runner           = GPForum::Migration::Runner->new(
+    schema     => $migration_schema,
+    applied_by => 'test-runner',
+);
+my $pending = $runner->pending;
+
+is( scalar @{$pending},
+    $EXPECTED_MIGRATIONS, 'runner sees all migrations pending on empty DB' );
+
+my $applied = $runner->apply_pending;
+my $dbh     = $migration_schema->storage->dbh;
+
+is( scalar @{$applied},
+    $EXPECTED_MIGRATIONS, 'runner applies all pending migrations' );
+is( scalar @{ $dbh->executed },
+    $EXPECTED_RUNNER_EXECUTIONS,
+    'runner executes migration SQL plus tracking inserts' );
+like(
+    $dbh->executed->[0]->{statement},
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] schema_versions/msx,
+    'runner executes first migration SQL'
+);
+like(
+    $dbh->executed->[1]->{statement},
+    qr/INSERT [ ] INTO [ ] schema_versions/msx,
+    'runner records schema version after migration'
+);
+is( $dbh->executed->[1]->{bind}->[0],
+    '001', 'runner records first migration version' );
+like(
+    $applied->[0]->{checksum},
+    qr/\A [[:xdigit:]]{64} \z/msx,
+    'runner reports SHA-256 migration checksum'
+);
+like(
+    $dbh->executed->[-1]->{statement},
+    qr/INSERT [ ] INTO [ ] migration_safety/msx,
+    'runner records migration safety metadata once available'
+);
+is( $dbh->executed->[-1]->{bind}->[2],
+    'test-runner', 'runner records applied-by identity' );
 
 throws_ok(
     sub {

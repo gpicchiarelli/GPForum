@@ -483,6 +483,7 @@ Every milestone MUST include:
 
 * tests for every new workflow;
 * migration files for schema changes;
+* migration_runner coverage where schema changes are introduced;
 * rollback or forward-fix strategy;
 * health check impact review;
 * audit event review;
@@ -554,6 +555,13 @@ Platform governance failure:
 * database_role_contracts MUST document least-privilege DB roles;
 * migration_safety MUST record lock, reversibility, checksum, and rollback hash
   expectations.
+
+Migration runner failure:
+
+* failed migration execution MUST stop the deployment path;
+* applied migrations MUST be recorded in schema_versions with checksums;
+* migration_safety MUST be populated once available;
+* re-running the migrator MUST skip already-applied versions.
 
 Email failure:
 
