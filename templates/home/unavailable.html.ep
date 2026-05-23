@@ -1,0 +1,7 @@
+% layout 'default';
+% title 'GPForum unavailable';
+
+<section aria-labelledby="home-unavailable-heading">
+  <h1 id="home-unavailable-heading">GPForum</h1>
+  <p>The forum index is temporarily unavailable.</p>
+</section>

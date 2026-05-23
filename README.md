@@ -117,7 +117,7 @@ This repository currently contains:
 * plugin extension boundaries for manifest validation, plugin registry lifecycle, named hook dispatch, and observable plugin failures;
 * privacy rights boundaries for account deletion requests, erasure jobs, retention legal holds, and staff data-rights review;
 * public discovery boundaries for canonical URLs, no-leak metadata, robots rules, sitemaps, and safe public feeds;
-* navigable forum HTTP routes for categories, category thread lists, thread pages, thread creation, reply creation, and search;
+* navigable forum HTTP routes for the public home index, categories, category thread lists, thread pages, thread creation, reply creation, and search;
 * real readiness checks for database/resultset availability;
 * automation scripts in [script](script).
 
@@ -131,6 +131,7 @@ The current forum MVP exposes these routes. Read routes render accessible,
 semantic SSR by default and still return JSON when requested with
 `Accept: application/json` or `?format=json`:
 
+* `GET /`
 * `GET /categories`
 * `GET /c/:category_id`
 * `GET /t/:thread_id`
@@ -161,6 +162,11 @@ event log, audit log, outbox, bodies, revisions, and counters stay coherent.
 Thread read progress is stored as compressed per-user read state plus a
 coalescable delta row, preserving continuity without making it authoritative
 forum content.
+
+The root home route is backed by `HomePageReader`. It renders a public forum
+index from visible categories and keyset-paginated public threads, while keeping
+the controller free of DBIx::Class resultset logic.
+
 Public contributor profiles are backed by `ProfileReader`. They expose a safe
 identity summary, trust snapshot, and keyset-paginated public discussions
 without leaking email, credential, deleted, suspended, private, or moderated

@@ -20,6 +20,7 @@ use GPForum::Service::Discovery::RobotsPolicy;
 use GPForum::Service::Discovery::SitemapBuilder;
 use GPForum::Service::Id;
 use GPForum::Service::Forum::CategoryReader;
+use GPForum::Service::Forum::HomePageReader;
 use GPForum::Service::Forum::PostComposer;
 use GPForum::Service::Forum::PostPosition;
 use GPForum::Service::Forum::PostReader;
@@ -183,6 +184,16 @@ sub startup {
 
             return GPForum::Service::Forum::ThreadReader->new(
                 schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_home_page_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::HomePageReader->new(
+                category_reader => $controller->gp_category_reader,
+                thread_reader   => $controller->gp_thread_reader,
+            );
         }
     );
     $self->helper(
@@ -399,7 +410,7 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Bootstraps the GPForum web application, helpers, logging, runtime profile, and
-initial routes for milestone zero.
+the currently traversable forum routes.
 
 =head1 SUBROUTINES/METHODS
 
@@ -426,7 +437,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Milestone zero exposes only home and health endpoints.
+The application is still an MVP. Some advanced boundaries remain operational
+contracts before becoming complete product workflows.
 
 =head1 AUTHOR
 

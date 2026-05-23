@@ -5,6 +5,7 @@ It is intentionally narrower than the full architectural contract.
 
 ## Available Routes
 
+* `GET /` renders the public forum home index with visible categories and latest public discussions.
 * `GET /categories` renders visible categories.
 * `GET /c/:category_id` renders one category and a keyset-paginated thread list.
 * `GET /t/:thread_id` renders one visible thread and keyset-paginated posts.
@@ -31,6 +32,11 @@ It is intentionally narrower than the full architectural contract.
 Read endpoints render semantic SSR by default. They also return JSON when the
 client sends `Accept: application/json` or `?format=json`, using the same
 controller/service path without changing the command/read boundaries.
+
+The root home route uses `HomePageReader` to compose visible categories and
+latest public threads through existing reader boundaries. It is SSR/JSON,
+keyset-paginated for latest discussions, and deliberately avoids direct
+DBIx::Class resultset manipulation in the controller.
 
 Forum form submissions are SSR-friendly: successful thread creation redirects
 to the new thread, and successful reply creation redirects to the created post

@@ -9,6 +9,30 @@ our $VERSION = '0.001';
 
 has mode => 'forum';
 
+sub home_page {
+    my ($self) = @_;
+
+    return {
+        categories     => $self->list_categories,
+        latest_threads => {
+            items => [
+                {
+                    thread_id        => 'thread-1',
+                    category_id      => 'category-1',
+                    author_user_id   => 'user-1',
+                    title            => 'Welcome',
+                    slug             => 'welcome',
+                    visibility       => 'public',
+                    moderation_state => 'visible',
+                    last_activity_at => '2026-05-23T12:00:00Z',
+                    safe_excerpt     => 'First public post',
+                },
+            ],
+            next_cursor => 'home-thread-cursor',
+        },
+    };
+}
+
 sub list_categories {
     return [
         {

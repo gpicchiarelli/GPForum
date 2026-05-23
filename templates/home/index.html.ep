@@ -1,9 +1,62 @@
 % layout 'default';
 % title 'GPForum';
 
-<section>
-  <h1>GPForum</h1>
-  <p>Milestone zero application skeleton is running.</p>
+<section aria-labelledby="home-heading">
+  <h1 id="home-heading">GPForum</h1>
+  <p>Independent discussion index.</p>
+  <nav aria-label="Forum actions">
+    <a href="<%= url_for('categories') %>">Categories</a>
+    <a href="<%= url_for('new_thread') %>">New thread</a>
+    <a href="<%= url_for('forum_search') %>">Search</a>
+  </nav>
+</section>
+
+<section aria-labelledby="home-categories-heading">
+  <h2 id="home-categories-heading">Categories</h2>
+  % if (@{ $home->{categories} }) {
+    <ol aria-label="Forum categories">
+      % for my $category (@{ $home->{categories} }) {
+        <li>
+          <a href="<%= url_for('category', category_id => $category->{category_id}) %>"><%= $category->{title} %></a>
+          % if ($category->{description}) {
+            <p><%= $category->{description} %></p>
+          % }
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No categories are visible yet.</p>
+  % }
+</section>
+
+<section aria-labelledby="home-latest-heading">
+  <h2 id="home-latest-heading">Latest public discussions</h2>
+  % if (@{ $home->{latest_threads}{items} }) {
+    <ol aria-label="Latest public discussions">
+      % for my $thread (@{ $home->{latest_threads}{items} }) {
+        <li>
+          <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>"><%= $thread->{title} %></a>
+          % if ($thread->{last_activity_at}) {
+            <time datetime="<%= $thread->{last_activity_at} %>"><%= $thread->{last_activity_at} %></time>
+          % }
+          % if ($thread->{safe_excerpt}) {
+            <p><%= $thread->{safe_excerpt} %></p>
+          % }
+        </li>
+      % }
+    </ol>
+    % if ($home->{latest_threads}{next_cursor}) {
+      <nav aria-label="Latest discussion pagination">
+        <a href="<%= url_for('home')->query(after => $home->{latest_threads}{next_cursor}) %>">Older discussions</a>
+      </nav>
+    % }
+  % } else {
+    <p>No public discussions are visible yet.</p>
+  % }
+</section>
+
+<section aria-labelledby="home-runtime-heading">
+  <h2 id="home-runtime-heading">Runtime</h2>
   <dl>
     <dt>Web processes</dt>
     <dd><%= $runtime->{web_processes} %></dd>
@@ -13,4 +66,3 @@
     <dd><%= $runtime->{realtime_processes} %></dd>
   </dl>
 </section>
-

@@ -10,6 +10,7 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Service::Forum::CategoryReader;
+use GPForum::Service::Forum::HomePageReader;
 use GPForum::Service::Forum::PostPosition;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Operations::LocalCache;
@@ -19,8 +20,9 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 19;
-const my $NEXT_REPLY_POSITION => 3;
+const my $EXPECTED_TESTS         => 28;
+const my $HOME_THREAD_FETCH_ROWS => 2;
+const my $NEXT_REPLY_POSITION    => 3;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -38,10 +40,27 @@ my $thread_rows = [
     _row(
         {
             thread_id        => 'thread-1',
+            category_id      => 'category-1',
+            author_user_id   => 'user-1',
             title            => 'Welcome',
+            slug             => 'welcome',
+            visibility       => 'public',
             moderation_state => 'visible',
             deleted_at       => undef,
             last_activity_at => '2026-05-23T12:00:00Z',
+        }
+    ),
+    _row(
+        {
+            thread_id        => 'thread-2',
+            category_id      => 'category-1',
+            author_user_id   => 'user-2',
+            title            => 'Second',
+            slug             => 'second',
+            visibility       => 'public',
+            moderation_state => 'visible',
+            deleted_at       => undef,
+            last_activity_at => '2026-05-23T11:00:00Z',
         }
     ),
 ];
@@ -88,6 +107,41 @@ is( $after_cache_miss_count, 2,
     'cached category reader queries on first cache miss' );
 is( $schema->resultset('Category')->search_count,
     2, 'cached category reader avoids second query' );
+
+my $home_reader = GPForum::Service::Forum::HomePageReader->new(
+    category_reader => $category_reader,
+    thread_reader   =>
+      GPForum::Service::Forum::ThreadReader->new( schema => $schema ),
+);
+my $home = $home_reader->home_page(
+    {
+        category_limit => 10,
+        thread_limit   => 1,
+    }
+);
+
+is( scalar @{ $home->{categories} },
+    1, 'home page reader returns category view models' );
+is( $home->{categories}[0]{title},
+    'General', 'home page reader maps category title' );
+is( scalar @{ $home->{latest_threads}{items} },
+    1, 'home page reader applies thread limit' );
+is( $home->{latest_threads}{items}[0]{thread_id},
+    'thread-1', 'home page reader maps latest public thread' );
+ok(
+    $home->{latest_threads}{next_cursor},
+    'home page reader exposes keyset cursor'
+);
+is( $schema->resultset('Thread')->last_query->{visibility},
+    'public', 'home page reader uses public thread reader' );
+is( $schema->resultset('Thread')->last_attrs->{rows},
+    $HOME_THREAD_FETCH_ROWS, 'home page reader asks for keyset lookahead' );
+ok(
+    !exists $schema->resultset('Thread')->last_attrs->{offset},
+    'home page reader does not use offset pagination'
+);
+is( $schema->resultset('Thread')->last_attrs->{columns}[0],
+    'thread_id', 'home page reader uses explicit thread columns' );
 
 my $detail_reader =
   GPForum::Service::Forum::ThreadDetailReader->new( schema => $schema );
