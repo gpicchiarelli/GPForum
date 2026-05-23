@@ -112,5 +112,13 @@ __PACKAGE__->has_many(
     counter_shards => 'GPForum::Schema::Result::ThreadCounterShard',
     'thread_id'
 );
+__PACKAGE__->has_many(
+    read_states => 'GPForum::Schema::Result::ThreadReadState',
+    'thread_id'
+);
+__PACKAGE__->has_many(
+    read_marker_deltas => 'GPForum::Schema::Result::UserReadMarkerDelta',
+    'thread_id'
+);
 
 1;

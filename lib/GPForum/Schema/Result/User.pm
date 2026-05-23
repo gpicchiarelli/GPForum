@@ -93,6 +93,14 @@ __PACKAGE__->has_many(
     post_revisions => 'GPForum::Schema::Result::PostRevision',
     'editor_user_id'
 );
+__PACKAGE__->has_many(
+    thread_read_states => 'GPForum::Schema::Result::ThreadReadState',
+    'user_id'
+);
+__PACKAGE__->has_many(
+    read_marker_deltas => 'GPForum::Schema::Result::UserReadMarkerDelta',
+    'user_id'
+);
 
 1;
 

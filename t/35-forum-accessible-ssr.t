@@ -14,7 +14,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 50;
+const my $EXPECTED_TESTS => 53;
 const my $HTTP_FOUND     => 302;
 const my $HTTP_OK        => 200;
 
@@ -72,6 +72,9 @@ $test->element_exists('ol[aria-label="Search results"]');
 
 $test->get_ok('/__test/session/user-1');
 $test->status_is($HTTP_OK);
+$test->get_ok('/t/thread-1');
+$test->status_is($HTTP_OK);
+$test->element_exists('section[aria-labelledby="reading-heading"]');
 $test->get_ok('/new-thread');
 my $csrf_token = _csrf_token($test);
 $test->post_ok(
@@ -104,7 +107,7 @@ sub _install_forum_fakes {
         qw(
         gp_category_reader gp_thread_reader gp_thread_detail_reader
         gp_thread_composer gp_thread_store gp_post_composer gp_post_store
-        gp_post_position gp_search_service gp_rate_limiter
+        gp_post_position gp_thread_read_state gp_search_service gp_rate_limiter
         )
       )
     {

@@ -135,12 +135,16 @@ semantic SSR by default and still return JSON when requested with
 * `GET /new-thread`
 * `POST /threads`
 * `POST /t/:thread_id/replies`
+* `POST /t/:thread_id/read`
 * `GET /search?q=...`
 
 State-changing forum routes require CSRF and an authenticated session user. Read
 paths use keyset pagination and never `OFFSET`. Thread and reply creation remain
 inside the existing `ThreadStore` and `PostStore` transaction boundaries, so
 event log, audit log, outbox, bodies, revisions, and counters stay coherent.
+Thread read progress is stored as compressed per-user read state plus a
+coalescable delta row, preserving continuity without making it authoritative
+forum content.
 SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,

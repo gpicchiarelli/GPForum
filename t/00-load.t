@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 148;
+const my $TEST_COUNT => 151;
 
 plan tests => $TEST_COUNT;
 
@@ -81,9 +81,11 @@ use_ok('GPForum::Schema::Result::Suspension');
 use_ok('GPForum::Schema::Result::Thread');
 use_ok('GPForum::Schema::Result::ThreadCounter');
 use_ok('GPForum::Schema::Result::ThreadCounterShard');
+use_ok('GPForum::Schema::Result::ThreadReadState');
 use_ok('GPForum::Schema::Result::TrustScoreSnapshot');
 use_ok('GPForum::Schema::Result::User');
 use_ok('GPForum::Schema::Result::UserFeedItem');
+use_ok('GPForum::Schema::Result::UserReadMarkerDelta');
 use_ok('GPForum::Service::Password');
 use_ok('GPForum::Service::SessionToken');
 use_ok('GPForum::Service::Attachment::IntentBuilder');
@@ -135,6 +137,7 @@ use_ok('GPForum::Service::Forum::CategoryReader');
 use_ok('GPForum::Service::Forum::PageWindow');
 use_ok('GPForum::Service::Forum::PostReader');
 use_ok('GPForum::Service::Forum::PostPosition');
+use_ok('GPForum::Service::Forum::ReadState');
 use_ok('GPForum::Service::Forum::ThreadReader');
 use_ok('GPForum::Service::Forum::ThreadDetailReader');
 use_ok('GPForum::Service::Forum::PostComposer');

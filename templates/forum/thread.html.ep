@@ -7,6 +7,21 @@
   % if ($thread->{locked_at}) {
     <p role="status">This thread is locked.</p>
   % }
+  % if ($reading && $reading->{authenticated}) {
+    <section aria-labelledby="reading-heading">
+      <h2 id="reading-heading">Reading progress</h2>
+      % if ($reading->{first_unread_anchor}) {
+        <p><a href="#<%= $reading->{first_unread_anchor} %>">Jump to first unread post</a></p>
+      % } else {
+        <p role="status">You are caught up on this page.</p>
+      % }
+      <form method="post" action="<%= url_for('thread_mark_read', thread_id => $thread->{thread_id}) %>">
+        <%= csrf_field %>
+        <input type="hidden" name="last_read_position" value="<%= $reading->{last_visible_position} // 0 %>">
+        <button type="submit">Mark visible posts as read</button>
+      </form>
+    </section>
+  % }
   <section aria-labelledby="posts-heading">
     <h2 id="posts-heading">Posts</h2>
     % if (@{$posts}) {

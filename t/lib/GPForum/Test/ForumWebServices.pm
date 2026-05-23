@@ -114,6 +114,32 @@ sub create_post {
     return { ok => 1, post => { post_id => 'post-created' } };
 }
 
+sub summary_for_page {
+    return {
+        authenticated         => 1,
+        first_unread_anchor   => 'post-post-1',
+        first_unread_position => 1,
+        first_unread_post_id  => 'post-1',
+        last_read_position    => 0,
+        last_visible_position => 1,
+        unread_in_page        => 1,
+    };
+}
+
+sub mark_thread_read {
+    my ( $self, $input ) = @_;
+
+    return {
+        ok         => 1,
+        read_state => {
+            user_id            => $input->{user_id},
+            thread_id          => $input->{thread_id},
+            last_read_position => $input->{last_read_position},
+            last_read_at       => '2026-05-23T12:00:00Z',
+        },
+    };
+}
+
 sub next_position {
     return 2;
 }

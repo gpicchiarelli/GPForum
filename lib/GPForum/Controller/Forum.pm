@@ -76,6 +76,7 @@ sub thread {
     my $payload = {
         thread      => _thread_hash( $page->{thread} ),
         posts       => [ map { _post_hash($_) } @{ $page->{posts}{items} } ],
+        reading     => _reading_summary( $self, $page ),
         next_cursor => $page->{posts}{next_cursor},
     };
 
@@ -143,6 +144,38 @@ sub create_reply {
     return _post_creation_response( $self, $prepared );
 }
 
+sub mark_thread_read {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'thread.read' );
+    return if !$user_id;
+
+    my $thread_id = $self->param('thread_id');
+    return _not_found( $self, 'thread not found' )
+      if !$self->gp_thread_detail_reader->find_thread($thread_id);
+
+    my $position = $self->param('last_read_position');
+    return _bad_request(
+        $self,
+        {
+            last_read_position =>
+              'last_read_position must be a non-negative integer',
+        }
+    ) if !_is_non_negative_integer($position);
+
+    my $marked = $self->gp_thread_read_state->mark_thread_read(
+        {
+            user_id            => $user_id,
+            thread_id          => $thread_id,
+            last_read_position => $position,
+        }
+    );
+
+    return _bad_request( $self, $marked->{errors} ) if !$marked->{ok};
+
+    return _read_marker_response( $self, $marked );
+}
+
 sub _reply_thread {
     my ($controller) = @_;
 
@@ -199,6 +232,19 @@ sub _post_creation_response {
     return _created_post_response( $controller, $stored );
 }
 
+sub _reading_summary {
+    my ( $controller, $page ) = @_;
+
+    my $user_id = _current_user_id($controller);
+    return { authenticated => 0 } if !$user_id;
+
+    return $controller->gp_thread_read_state->summary_for_page(
+        $user_id,
+        $controller->param('thread_id'),
+        $page->{posts}{items},
+    );
+}
+
 sub _created_thread_response {
     my ( $controller, $stored ) = @_;
 
@@ -236,6 +282,23 @@ sub _created_post_response {
     return $controller->redirect_to(
         $controller->url_for( 'thread', thread_id => $thread_id )
           ->fragment( 'post-' . $post_id ) );
+}
+
+sub _read_marker_response {
+    my ( $controller, $marked ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                status     => 'ok',
+                read_state => $marked->{read_state},
+            },
+            status => $HTTP_OK,
+        );
+    }
+
+    return $controller->redirect_to( 'thread',
+        thread_id => $marked->{read_state}{thread_id}, );
 }
 
 sub search {
@@ -485,6 +548,14 @@ sub _trim {
     $value =~ s/\s+ \z//msx;
 
     return $value;
+}
+
+sub _is_non_negative_integer {
+    my ($value) = @_;
+
+    return 0 if !defined $value;
+
+    return $value =~ /\A [[:digit:]]+ \z/msx ? 1 : 0;
 }
 
 sub _bad_request {

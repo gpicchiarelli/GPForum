@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 356;
+const my $EXPECTED_TESTS               => 370;
 const my $EXPECTED_MIGRATIONS          => 11;
 const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
 const my $FORUM_MIGRATION_INDEX        => 2;
@@ -44,6 +44,8 @@ my $notification_source            = $schema->source('Notification');
 my $notification_inbox_source      = $schema->source('NotificationInbox');
 my $notification_preference_source = $schema->source('NotificationPreference');
 my $notification_read_source       = $schema->source('NotificationRead');
+my $thread_read_state_source       = $schema->source('ThreadReadState');
+my $read_marker_delta_source       = $schema->source('UserReadMarkerDelta');
 my $attachment_source              = $schema->source('Attachment');
 my $attachment_link_source         = $schema->source('AttachmentLink');
 my $attachment_variant_source      = $schema->source('AttachmentVariant');
@@ -179,6 +181,38 @@ is_deeply(
 );
 ok( $notification_read_source->has_column('read_at'),
     'notification read stores timestamp' );
+
+is( $thread_read_state_source->from,
+    'thread_read_state', 'thread read state source maps read markers' );
+is_deeply(
+    [ $thread_read_state_source->primary_columns ],
+    [ 'user_id', 'thread_id' ],
+    'thread read state primary key is explicit'
+);
+ok( $thread_read_state_source->has_column('last_read_position'),
+    'thread read state stores last read position' );
+ok(
+    $thread_read_state_source->has_column('last_read_at'),
+    'thread read state stores read timestamp'
+);
+ok( $thread_read_state_source->has_relationship('thread'),
+    'thread read state belongs to thread' );
+
+is( $read_marker_delta_source->from,
+    'user_read_marker_deltas', 'read marker delta source maps delta table' );
+is_deeply(
+    [ $read_marker_delta_source->primary_columns ],
+    [ 'user_id', 'thread_id' ],
+    'read marker delta primary key is explicit'
+);
+ok( $read_marker_delta_source->has_column('last_read_position'),
+    'read marker delta stores last read position' );
+ok(
+    $read_marker_delta_source->has_column('last_read_at'),
+    'read marker delta stores read timestamp'
+);
+ok( $read_marker_delta_source->has_relationship('thread'),
+    'read marker delta belongs to thread' );
 
 is( $notification_inbox_source->from,
     'notification_inbox', 'notification inbox source maps inbox table' );
@@ -524,6 +558,14 @@ ok(
 );
 ok( $user_source->has_relationship('sessions'),
     'user has sessions relationship' );
+ok(
+    $user_source->has_relationship('thread_read_states'),
+    'user has thread read states relationship'
+);
+ok(
+    $user_source->has_relationship('read_marker_deltas'),
+    'user has read marker delta relationship'
+);
 
 is( $credential_source->from, 'credentials',
     'credential source maps credentials table' );
@@ -587,6 +629,14 @@ ok( $thread_source->has_relationship('posts'),
 ok(
     $thread_source->has_relationship('counters'),
     'thread has counters projection relationship'
+);
+ok(
+    $thread_source->has_relationship('read_states'),
+    'thread has read states relationship'
+);
+ok(
+    $thread_source->has_relationship('read_marker_deltas'),
+    'thread has read marker delta relationship'
 );
 
 is( $post_source->from, 'posts', 'post source maps posts table' );

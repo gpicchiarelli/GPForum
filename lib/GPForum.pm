@@ -16,6 +16,7 @@ use GPForum::Service::Forum::PostComposer;
 use GPForum::Service::Forum::PostPosition;
 use GPForum::Service::Forum::PostReader;
 use GPForum::Service::Forum::PostStore;
+use GPForum::Service::Forum::ReadState;
 use GPForum::Service::Forum::ThreadComposer;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Forum::ThreadReader;
@@ -197,6 +198,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_thread_read_state => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::ReadState->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_search_service => sub {
             my ($controller) = @_;
 
@@ -224,6 +233,9 @@ sub startup {
     $routes->post('/t/:thread_id/replies')
       ->to('Forum#create_reply')
       ->name('reply_create');
+    $routes->post('/t/:thread_id/read')
+      ->to('Forum#mark_thread_read')
+      ->name('thread_mark_read');
     $routes->get('/search')->to('Forum#search')->name('forum_search');
     $routes->get('/register')->to('Identity#register_form')->name('register');
     $routes->post('/register')

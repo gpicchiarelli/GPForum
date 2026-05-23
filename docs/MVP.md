@@ -11,6 +11,7 @@ It is intentionally narrower than the full architectural contract.
 * `GET /new-thread` renders the thread form with a CSRF token.
 * `POST /threads` creates a thread for an authenticated session user.
 * `POST /t/:thread_id/replies` creates a reply for an authenticated session user.
+* `POST /t/:thread_id/read` records per-user thread reading progress.
 * `GET /search?q=...` renders PostgreSQL-native search results.
 
 Read endpoints render semantic SSR by default. They also return JSON when the
@@ -21,6 +22,12 @@ Forum form submissions are SSR-friendly: successful thread creation redirects
 to the new thread, and successful reply creation redirects to the created post
 anchor. API-style clients still receive JSON by sending `Accept:
 application/json`.
+
+Authenticated thread pages include read-continuity metadata: last read position,
+first unread post anchor, unread count for the current page, and a CSRF-protected
+form to mark visible posts as read. The read marker model is compressed to one
+row per `(user_id, thread_id)` plus a coalescable delta table for future
+asynchronous consolidation.
 
 ## What Works
 
