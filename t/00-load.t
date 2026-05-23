@@ -10,7 +10,7 @@ use lib 'lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 4;
+const my $TEST_COUNT => 7;
 
 plan tests => $TEST_COUNT;
 
@@ -18,5 +18,8 @@ use_ok('GPForum');
 use_ok('GPForum::Config');
 use_ok('GPForum::Runtime');
 use_ok('GPForum::Controller::Health');
+use_ok('GPForum::Schema');
+use_ok('GPForum::Schema::Result::SchemaVersion');
+use_ok('GPForum::Migration::Plan');
 
 1;

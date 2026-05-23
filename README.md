@@ -74,9 +74,14 @@ This repository currently contains:
 * strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
 * Carton dependency manifests in [cpanfile](cpanfile) and [cpanfile.snapshot](cpanfile.snapshot);
 * PostgreSQL-specific dependency manifest in [cpanfile.postgres](cpanfile.postgres);
+* Mojolicious application skeleton in [lib/GPForum.pm](lib/GPForum.pm);
+* DBIx::Class schema root in [lib/GPForum/Schema.pm](lib/GPForum/Schema.pm);
+* PostgreSQL migration foundation in [migrations](migrations);
 * automation scripts in [script](script).
 
-The next implementation step is **Milestone 0**: generate the Mojolicious application skeleton under the constraints in [prompt/28.txt](prompt/28.txt).
+The current implementation step is completing **Milestone 0** foundation work.
+The next product milestone is **Milestone 1: Identity And Sessions** under the
+constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture
 
@@ -126,7 +131,13 @@ Run quality commands:
 script/perlcritic
 script/test
 script/coverage
-script/profile -e 'print qq(profile ok\n)'
+script/profile -Ilib bin/gpforum-migrate --plan
+```
+
+Inspect the migration plan:
+
+```sh
+carton exec perl -Ilib bin/gpforum-migrate --plan
 ```
 
 Enable PostgreSQL-specific Perl modules after installing system PostgreSQL client development files:

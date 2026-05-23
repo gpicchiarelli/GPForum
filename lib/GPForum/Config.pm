@@ -9,10 +9,14 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_ENVIRONMENT        => 'development';
-const my $DEFAULT_LOG_LEVEL          => 'debug';
-const my $DEFAULT_PUBLIC_BASE_URL    => 'http://127.0.0.1:3000';
-const my $DEFAULT_SESSION_SECRET     => 'gpforum-development-secret-change-me';
+const my $DEFAULT_ENVIRONMENT     => 'development';
+const my $DEFAULT_LOG_LEVEL       => 'debug';
+const my $DEFAULT_PUBLIC_BASE_URL => 'http://127.0.0.1:3000';
+const my $DEFAULT_SESSION_SECRET  => 'gpforum-development-secret-change-me';
+const my $DEFAULT_DATABASE_DSN =>
+  'dbi:Pg:dbname=gpforum;host=127.0.0.1;port=5432';
+const my $DEFAULT_DATABASE_USER      => 'gpforum';
+const my $DEFAULT_DATABASE_PASSWORD  => q{};
 const my $DEFAULT_WEB_PROCESSES      => 4;
 const my $DEFAULT_WORKER_PROCESSES   => 2;
 const my $DEFAULT_REALTIME_PROCESSES => 1;
@@ -23,6 +27,9 @@ has environment        => sub { return $DEFAULT_ENVIRONMENT; };
 has log_level          => sub { return $DEFAULT_LOG_LEVEL; };
 has public_base_url    => sub { return $DEFAULT_PUBLIC_BASE_URL; };
 has session_secret     => sub { return $DEFAULT_SESSION_SECRET; };
+has database_dsn       => sub { return $DEFAULT_DATABASE_DSN; };
+has database_user      => sub { return $DEFAULT_DATABASE_USER; };
+has database_password  => sub { return $DEFAULT_DATABASE_PASSWORD; };
 has web_processes      => sub { return $DEFAULT_WEB_PROCESSES; };
 has worker_processes   => sub { return $DEFAULT_WORKER_PROCESSES; };
 has realtime_processes => sub { return $DEFAULT_REALTIME_PROCESSES; };
@@ -44,6 +51,16 @@ sub from_environment {
         ),
         session_secret => _env_value(
             $environment, 'GPFORUM_SESSION_SECRET', $DEFAULT_SESSION_SECRET
+        ),
+        database_dsn => _env_value(
+            $environment, 'GPFORUM_DATABASE_DSN', $DEFAULT_DATABASE_DSN
+        ),
+        database_user => _env_value(
+            $environment, 'GPFORUM_DATABASE_USER', $DEFAULT_DATABASE_USER
+        ),
+        database_password => _env_value(
+            $environment, 'GPFORUM_DATABASE_PASSWORD',
+            $DEFAULT_DATABASE_PASSWORD
         ),
         web_processes => _env_integer(
             $environment, 'GPFORUM_WEB_PROCESSES', $DEFAULT_WEB_PROCESSES
@@ -70,6 +87,8 @@ sub validate {
     _require_non_empty( 'log_level',       $self->log_level );
     _require_non_empty( 'public_base_url', $self->public_base_url );
     _require_non_empty( 'session_secret',  $self->session_secret );
+    _require_non_empty( 'database_dsn',    $self->database_dsn );
+    _require_non_empty( 'database_user',   $self->database_user );
     _require_process_count( 'web_processes',      $self->web_processes );
     _require_process_count( 'worker_processes',   $self->worker_processes );
     _require_process_count( 'realtime_processes', $self->realtime_processes );
@@ -81,6 +100,22 @@ sub validate {
     }
 
     return $self;
+}
+
+sub database_connect_info {
+    my ($self) = @_;
+
+    return (
+        $self->database_dsn,
+        $self->database_user,
+        $self->database_password,
+        {
+            AutoCommit     => 1,
+            RaiseError     => 1,
+            PrintError     => 0,
+            pg_enable_utf8 => 1,
+        },
+    );
 }
 
 sub _env_value {
@@ -155,6 +190,10 @@ Builds configuration from an environment hash.
 
 Validates required configuration and process bounds.
 
+=head2 database_connect_info
+
+Returns DBI connection arguments for DBIx::Class.
+
 =head1 DIAGNOSTICS
 
 Throws exceptions for missing values, invalid integers, and unsafe production
@@ -162,7 +201,8 @@ secrets.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Reads C<GPFORUM_*> environment variables.
+Reads C<GPFORUM_*> environment variables, including PostgreSQL connection
+settings.
 
 =head1 DEPENDENCIES
 
@@ -174,7 +214,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-The first milestone validates only process-count and base application settings.
+The first milestone validates database connection shape but does not connect
+unless a caller asks the schema layer to do so.
 
 =head1 AUTHOR
 
