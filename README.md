@@ -68,6 +68,7 @@ This repository currently contains:
 
 * a public static platform page in [index.html](index.html);
 * visual identity assets in [assets](assets);
+* editable logo source artwork in [assets/source/gpforum-logo-source.svg](assets/source/gpforum-logo-source.svg);
 * 42 architectural prompt constitutions in [prompt](prompt);
 * BSD-3 license in [LICENSE](LICENSE);
 * strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
