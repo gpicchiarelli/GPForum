@@ -50,9 +50,9 @@ users:
 * updated_at
 * deleted_at
 
-user_sessions:
+sessions:
 
-* id
+* session_id
 * user_id
 * session_hash
 * created_at
@@ -227,16 +227,19 @@ suspensions:
 
 Event And Audit Tables
 
-domain_events:
+event_log:
 
-* id
-* event_name
+* event_id
+* event_type
+* schema_version
 * aggregate_type
 * aggregate_id
-* actor_user_id
+* actor_id
 * correlation_id
+* causation_id
 * idempotency_key
 * payload
+* metadata
 * created_at
 
 audit_log:
@@ -251,7 +254,7 @@ audit_log:
 * metadata
 * created_at
 
-domain_events SHOULD be append-only.
+event_log SHOULD be append-only.
 
 audit_log SHOULD be append-only.
 
@@ -348,14 +351,15 @@ Partitioning Direction
 
 The following tables SHOULD be evaluated for partitioning:
 
-* posts;
-* post_revisions;
-* domain_events;
+* event_log;
 * audit_log;
 * notifications;
-* analytics tables.
 
-Partitioning strategy MUST be decided before these tables reach operational scale.
+users, threads, categories, and sessions MUST NOT be partitioned without an ADR
+and measured operational need.
+
+Partitioning strategy MUST be decided before any high-volume append table reaches
+operational scale.
 
 ---
 
@@ -367,4 +371,3 @@ Every schema change MUST be:
 * reviewable;
 * rollback-aware where possible;
 * compatible with running application nodes during deployment when feasible.
-

@@ -18,6 +18,10 @@ __PACKAGE__->add_columns(
         data_type   => 'text',
         is_nullable => 0,
     },
+    schema_version => {
+        data_type   => 'integer',
+        is_nullable => 0,
+    },
     aggregate_type => {
         data_type   => 'text',
         is_nullable => 0,
@@ -29,6 +33,18 @@ __PACKAGE__->add_columns(
     actor_id => {
         data_type   => 'uuid',
         is_nullable => 1,
+    },
+    correlation_id => {
+        data_type   => 'uuid',
+        is_nullable => 0,
+    },
+    causation_id => {
+        data_type   => 'uuid',
+        is_nullable => 1,
+    },
+    idempotency_key => {
+        data_type   => 'text',
+        is_nullable => 0,
     },
     payload => {
         data_type     => 'jsonb',
@@ -46,7 +62,7 @@ __PACKAGE__->add_columns(
     },
 );
 
-__PACKAGE__->set_primary_key('event_id');
+__PACKAGE__->set_primary_key( 'event_id', 'created_at' );
 
 1;
 

@@ -12,6 +12,7 @@ use GPForum::Service::Id;
 our $VERSION = '0.001';
 
 const my $USER_AGGREGATE => 'user';
+const my $SCHEMA_VERSION => 1;
 
 has schema     => undef;
 has clock      => sub { return GPForum::Service::Clock->new; };
@@ -71,24 +72,33 @@ sub _insert_registration {
         }
     );
 
-    $self->_record_event($user);
-    $self->_record_audit($user);
+    my $correlation_id = $self->id_service->uuid;
+
+    $self->_record_event( $user, $correlation_id );
+    $self->_record_audit( $user, $correlation_id );
 
     return { user => $created_user };
 }
 
 sub _record_event {
-    my ( $self, $user ) = @_;
+    my ( $self, $user, $correlation_id ) = @_;
+
+    my $event_id        = $self->id_service->uuid;
+    my $idempotency_key = join q{:}, 'user.registered', $user->{id};
 
     $self->schema->resultset('EventLog')->create(
         {
-            event_id       => $self->id_service->uuid,
-            event_type     => 'user.registered',
-            aggregate_type => $USER_AGGREGATE,
-            aggregate_id   => $user->{id},
-            actor_id       => $user->{id},
-            payload        => { username => $user->{username} },
-            metadata       => {},
+            event_id        => $event_id,
+            event_type      => 'user.registered',
+            schema_version  => $SCHEMA_VERSION,
+            aggregate_type  => $USER_AGGREGATE,
+            aggregate_id    => $user->{id},
+            actor_id        => $user->{id},
+            correlation_id  => $correlation_id,
+            causation_id    => undef,
+            idempotency_key => $idempotency_key,
+            payload         => { username => $user->{username} },
+            metadata        => {},
         }
     );
 
@@ -96,16 +106,18 @@ sub _record_event {
 }
 
 sub _record_audit {
-    my ( $self, $user ) = @_;
+    my ( $self, $user, $correlation_id ) = @_;
 
     $self->schema->resultset('AuditLog')->create(
         {
-            audit_id    => $self->id_service->uuid,
-            action      => 'user.registered',
-            actor_id    => $user->{id},
-            target_type => $USER_AGGREGATE,
-            target_id   => $user->{id},
-            metadata    => { username => $user->{username} },
+            audit_id       => $self->id_service->uuid,
+            action         => 'user.registered',
+            schema_version => $SCHEMA_VERSION,
+            actor_id       => $user->{id},
+            target_type    => $USER_AGGREGATE,
+            target_id      => $user->{id},
+            correlation_id => $correlation_id,
+            metadata       => { username => $user->{username} },
         }
     );
 

@@ -65,18 +65,20 @@ Recommended projection fields:
 
 * entity_type;
 * entity_id;
+* space_id;
 * visibility;
-* permission scope;
+* permission_scope;
 * language;
 * title;
 * body;
-* excerpt;
 * search_vector;
-* ranking metadata;
 * indexed_at;
 * source_version.
 
 Search projections MUST remain rebuildable from canonical persistence.
+
+Search documents are never authoritative. A hidden post MUST be removed from or
+filtered out of search before it can be shown to ordinary users.
 
 ---
 
@@ -167,4 +169,3 @@ Any external search engine MUST remain:
 * operationally optional.
 
 The default GPForum architecture remains PostgreSQL-native search with Perl orchestration.
-

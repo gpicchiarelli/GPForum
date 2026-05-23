@@ -153,7 +153,7 @@ Canonical Minimum Schema
 The canonical minimum database schema MUST include:
 
 * users
-* user_sessions
+* sessions
 * credentials
 * spaces
 * categories
@@ -166,6 +166,23 @@ The canonical minimum database schema MUST include:
 * permissions
 * role_permissions
 * role_bindings
+
+Canonical tables MUST NOT be optimized by reading event_log for ordinary UI
+screens.
+
+Projection tables MUST be separate from canonical tables.
+
+The minimum projection set SHOULD include:
+
+* thread_counters
+* category_stats
+* search_documents
+* notification_inbox
+* user_feed_items
+
+Derived counters such as reply_count, last_post_id, last_activity_at, and
+thread_count MUST live in projection tables unless an ADR approves a
+transactional projection column on a canonical table.
 
 The canonical minimum schema SHOULD include:
 
@@ -195,7 +212,7 @@ Every durable event MUST include:
 
 * event_id
 * event_type
-* event_version
+* schema_version
 * aggregate_type
 * aggregate_id
 * actor_id
@@ -224,7 +241,7 @@ user.registered:
 * aggregate_type: user
 * aggregate_id: user_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: registration request key
 * payload: user_id, username, email_normalized
 
@@ -233,7 +250,7 @@ user.login_succeeded:
 * aggregate_type: user
 * aggregate_id: user_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: session_id
 * payload: user_id, session_id
 
@@ -242,7 +259,7 @@ user.login_failed:
 * aggregate_type: user
 * aggregate_id: nullable user_id
 * actor_id: nullable user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: login attempt key
 * payload: identifier_hash, reason
 
@@ -251,7 +268,7 @@ session.revoked:
 * aggregate_type: session
 * aggregate_id: session_id
 * actor_id: user_id or admin_user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: revocation key
 * payload: user_id, session_id, reason
 
@@ -260,7 +277,7 @@ space.created:
 * aggregate_type: space
 * aggregate_id: space_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: command id
 * payload: space_id, slug, title, visibility
 
@@ -269,7 +286,7 @@ category.created:
 * aggregate_type: category
 * aggregate_id: category_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: command id
 * payload: category_id, space_id, slug, title, visibility
 
@@ -278,7 +295,7 @@ thread.created:
 * aggregate_type: thread
 * aggregate_id: thread_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: command id
 * payload: thread_id, category_id, author_user_id, title, visibility
 
@@ -287,7 +304,7 @@ post.created:
 * aggregate_type: post
 * aggregate_id: post_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: command id
 * payload: post_id, thread_id, author_user_id, revision_id
 
@@ -296,7 +313,7 @@ post.edited:
 * aggregate_type: post
 * aggregate_id: post_id
 * actor_id: user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: command id
 * payload: post_id, revision_id, edit_reason
 
@@ -305,7 +322,7 @@ post.hidden:
 * aggregate_type: post
 * aggregate_id: post_id
 * actor_id: moderator_user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: moderation action id
 * payload: post_id, reason, previous_visibility
 
@@ -314,7 +331,7 @@ thread.locked:
 * aggregate_type: thread
 * aggregate_id: thread_id
 * actor_id: moderator_user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: moderation action id
 * payload: thread_id, reason
 
@@ -323,7 +340,7 @@ role.assigned:
 * aggregate_type: role_binding
 * aggregate_id: role_binding_id
 * actor_id: admin_user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: role assignment command id
 * payload: user_id, role_id, scope_type, scope_id
 
@@ -332,7 +349,7 @@ notification.created:
 * aggregate_type: notification
 * aggregate_id: notification_id
 * actor_id: nullable user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: notification source key
 * payload: recipient_user_id, type, source_type, source_id
 
@@ -341,7 +358,7 @@ search.index_requested:
 * aggregate_type: search_document
 * aggregate_id: source resource id
 * actor_id: nullable user_id
-* event_version: 1
+* schema_version: 1
 * idempotency_key: source resource version key
 * payload: source_type, source_id, reason
 
@@ -468,6 +485,14 @@ Minion failure:
 * async jobs MUST be retryable;
 * job failure MUST be observable;
 * derived projections MUST be rebuildable.
+
+Outbox failure:
+
+* canonical write, event append, idempotency key insert, and outbox insert MUST
+  be in the same PostgreSQL transaction;
+* consumers MUST tolerate duplicate delivery;
+* pending outbox lag MUST be observable;
+* no workflow may accept "row written but event lost" as a valid state.
 
 Email failure:
 

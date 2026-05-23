@@ -16,7 +16,7 @@ use GPForum::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 37;
+const my $EXPECTED_TESTS => 51;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -35,20 +35,48 @@ ok(
 );
 
 is( $event_source->from, 'event_log', 'event source maps event log table' );
-is_deeply( [ $event_source->primary_columns ],
-    ['event_id'], 'event log primary key is explicit' );
+is_deeply(
+    [ $event_source->primary_columns ],
+    [ 'event_id', 'created_at' ],
+    'event log primary key is partition-safe'
+);
 ok( $event_source->has_column('event_type'), 'event log stores event type' );
-ok( $event_source->has_column('payload'),    'event log stores payload' );
+ok(
+    $event_source->has_column('schema_version'),
+    'event log stores schema version'
+);
+ok(
+    $event_source->has_column('correlation_id'),
+    'event log stores correlation id'
+);
+ok( $event_source->has_column('causation_id'),
+    'event log stores causation id' );
+ok(
+    $event_source->has_column('idempotency_key'),
+    'event log stores idempotency key'
+);
+ok( $event_source->has_column('payload'), 'event log stores payload' );
 
 is( $audit_source->from, 'audit_log', 'audit source maps audit log table' );
-is_deeply( [ $audit_source->primary_columns ],
-    ['audit_id'], 'audit log primary key is explicit' );
-ok( $audit_source->has_column('action'),   'audit log stores action' );
+is_deeply(
+    [ $audit_source->primary_columns ],
+    [ 'audit_id', 'created_at' ],
+    'audit log primary key is partition-safe'
+);
+ok( $audit_source->has_column('action'), 'audit log stores action' );
+ok(
+    $audit_source->has_column('schema_version'),
+    'audit log stores schema version'
+);
+ok(
+    $audit_source->has_column('correlation_id'),
+    'audit log stores correlation id'
+);
 ok( $audit_source->has_column('metadata'), 'audit log stores metadata' );
 
 my $user_source       = $schema->source('User');
 my $credential_source = $schema->source('Credential');
-my $session_source    = $schema->source('UserSession');
+my $session_source    = $schema->source('Session');
 
 is( $user_source->from, 'users', 'user source maps users table' );
 is_deeply( [ $user_source->primary_columns ],
@@ -75,8 +103,9 @@ ok(
 ok( $credential_source->has_relationship('user'),
     'credential belongs to user' );
 
-is( $session_source->from, 'user_sessions',
-    'session source maps user sessions table' );
+is( $session_source->from, 'sessions', 'session source maps sessions table' );
+is_deeply( [ $session_source->primary_columns ],
+    ['session_id'], 'session primary key is explicit' );
 ok( $session_source->has_column('session_hash'), 'session stores token hash' );
 ok( $session_source->has_column('revoked_at'), 'session supports revocation' );
 ok( $session_source->has_relationship('user'), 'session belongs to user' );
@@ -98,8 +127,11 @@ my $summary = $plan->summary;
 
 is( scalar @{$summary},       2,     'two migrations are planned' );
 is( $summary->[0]->{version}, '001', 'migration version is parsed' );
-is( $summary->[0]->{description},
-    'foundation', 'migration description is parsed' );
+is(
+    $summary->[0]->{description},
+    'core identity',
+    'migration description is parsed'
+);
 
 my $migration_sql = path( $summary->[0]->{file} )->slurp;
 
@@ -110,31 +142,63 @@ like(
 );
 like(
     $migration_sql,
-    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] event_log/msx,
-    'migration creates event log table'
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] users/msx,
+    'core identity migration creates users table'
 );
 like(
     $migration_sql,
-    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] audit_log/msx,
-    'migration creates audit log table'
-);
-
-my $identity_sql = path( $summary->[1]->{file} )->slurp;
-
-like(
-    $identity_sql,
-    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] users/msx,
-    'identity migration creates users table'
-);
-like(
-    $identity_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] credentials/msx,
-    'identity migration creates credentials table'
+    'core identity migration creates credentials table'
 );
 like(
-    $identity_sql,
-    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] user_sessions/msx,
-    'identity migration creates user sessions table'
+    $migration_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] sessions/msx,
+    'core identity migration creates sessions table'
+);
+like(
+    $migration_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] roles/msx,
+    'core identity migration creates roles table'
+);
+like(
+    $migration_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] role_bindings/msx,
+    'core identity migration creates role bindings table'
+);
+like(
+    $migration_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] resource_acl/msx,
+    'core identity migration creates resource acl table'
+);
+
+my $event_audit_sql = path( $summary->[1]->{file} )->slurp;
+
+is( $summary->[1]->{description},
+    'event audit', 'event audit migration description is parsed' );
+like(
+    $event_audit_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] event_log/msx,
+    'event audit migration creates event log table'
+);
+like(
+    $event_audit_sql,
+    qr/PARTITION [ ] BY [ ] RANGE [ ] [(] created_at [)]/msx,
+    'event audit migration partitions append logs by created_at'
+);
+like(
+    $event_audit_sql,
+qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] event_idempotency_keys/msx,
+    'event audit migration creates global idempotency table'
+);
+like(
+    $event_audit_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] audit_log/msx,
+    'event audit migration creates audit log table'
+);
+like(
+    $event_audit_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] outbox_jobs/msx,
+    'event audit migration creates outbox jobs table'
 );
 
 throws_ok(

@@ -15,7 +15,7 @@ use GPForum::Service::Identity::Store;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 13;
+const my $EXPECTED_TESTS => 16;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -52,8 +52,17 @@ is( $schema->created_for('Credential')->[0]{user_id},
     'user-1', 'credential is linked to user' );
 is( $schema->created_for('EventLog')->[0]{event_type},
     'user.registered', 'registration event is recorded' );
+is( $schema->created_for('EventLog')->[0]{schema_version},
+    1, 'registration event is versioned' );
+is( $schema->created_for('EventLog')->[0]{idempotency_key},
+    'user.registered:user-1', 'registration event has idempotency key' );
 is( $schema->created_for('AuditLog')->[0]{action},
     'user.registered', 'registration audit is recorded' );
+is(
+    $schema->created_for('AuditLog')->[0]{correlation_id},
+    $schema->created_for('EventLog')->[0]{correlation_id},
+    'event and audit share a correlation id'
+);
 is( $schema->transaction_count, 1, 'registration uses one transaction' );
 
 my $duplicate_schema = GPForum::Test::Schema->new(

@@ -187,9 +187,13 @@ The event_log MUST minimally include:
 
 * event_id
 * event_type
+* schema_version
 * aggregate_type
 * aggregate_id
 * actor_id
+* correlation_id
+* causation_id
+* idempotency_key
 * payload
 * metadata
 * created_at
@@ -265,13 +269,13 @@ Mandatory Partition Candidates
 Strong partition candidates include:
 
 * event_log
-* audit_events
+* audit_log
 * notifications
-* sessions
-* websocket_presence
-* analytics tables
 
-High-volume append-oriented tables SHOULD be partitioned.
+Users, threads, categories, and sessions MUST NOT be partitioned by default.
+
+Other high-volume append-oriented tables SHOULD be partitioned only after an
+ADR documents the concrete retention, archival, and query-pruning benefit.
 
 ⸻
 
@@ -369,6 +373,11 @@ Read models MAY include:
 * search indexes;
 * materialized views;
 * denormalized projections.
+
+Canonical tables and projection tables MUST be separated. Ordinary UI screens
+MUST read query-specific projections such as thread_counters, category_stats,
+notification_inbox, user_feed_items, and search_documents instead of scanning
+event_log.
 
 ⸻
 

@@ -68,7 +68,7 @@ __PACKAGE__->has_many(
     'user_id'
 );
 __PACKAGE__->has_many(
-    sessions => 'GPForum::Schema::Result::UserSession',
+    sessions => 'GPForum::Schema::Result::Session',
     'user_id'
 );
 

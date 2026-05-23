@@ -220,9 +220,11 @@ Mandatory partition candidates:
 
 * event_log;
 * notifications;
-* audit_events;
-* sessions;
-* high-volume append-oriented tables.
+* audit_log.
+
+Sessions, users, threads, and categories MUST NOT be partitioned prematurely.
+Any additional partitioned table requires a measurable volume, retention, or
+archival reason recorded in an ADR.
 
 Partitioning MUST:
 

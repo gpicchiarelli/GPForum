@@ -18,6 +18,10 @@ __PACKAGE__->add_columns(
         data_type   => 'text',
         is_nullable => 0,
     },
+    schema_version => {
+        data_type   => 'integer',
+        is_nullable => 0,
+    },
     actor_id => {
         data_type   => 'uuid',
         is_nullable => 1,
@@ -30,6 +34,10 @@ __PACKAGE__->add_columns(
         data_type   => 'uuid',
         is_nullable => 1,
     },
+    correlation_id => {
+        data_type   => 'uuid',
+        is_nullable => 0,
+    },
     metadata => {
         data_type     => 'jsonb',
         default_value => '{}',
@@ -41,7 +49,7 @@ __PACKAGE__->add_columns(
     },
 );
 
-__PACKAGE__->set_primary_key('audit_id');
+__PACKAGE__->set_primary_key( 'audit_id', 'created_at' );
 
 1;
 

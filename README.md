@@ -76,8 +76,9 @@ This repository currently contains:
 * PostgreSQL-specific dependency manifest in [cpanfile.postgres](cpanfile.postgres);
 * Mojolicious application skeleton in [lib/GPForum.pm](lib/GPForum.pm);
 * DBIx::Class schema root in [lib/GPForum/Schema.pm](lib/GPForum/Schema.pm);
-* PostgreSQL migration foundation in [migrations](migrations);
-* initial identity persistence for users, credentials, and revocable sessions;
+* PostgreSQL core identity and event/audit migrations in [migrations](migrations);
+* server-side session persistence in the canonical `sessions` table;
+* UUIDv7 identifier generation for sortable distributed ids;
 * Argon2id password hashing and random session token services;
 * server-rendered identity routes for registration, login, logout, and public profiles;
 * CSRF enforcement for state-changing identity requests;
@@ -107,7 +108,9 @@ The application runtime is Perl-first and process-first. Threads are allowed onl
 * **Language:** modern Perl.
 * **Web:** Mojolicious, server-rendered first.
 * **Persistence:** PostgreSQL as authoritative system of record.
+* **Schema Style:** canonical tables separated from rebuildable projection tables.
 * **Search:** PostgreSQL full-text search, `tsvector`, GIN, `pg_trgm`, Perl orchestration.
+* **Events:** partition-aware event/audit logs plus transactional outbox.
 * **Async:** Minion workers.
 * **Caching:** local disposable caches, Redis/KeyDB optional.
 * **Dependencies:** Carton.

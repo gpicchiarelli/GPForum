@@ -1,4 +1,4 @@
-package GPForum::Schema::Result::UserSession;
+package GPForum::Schema::Result::Session;
 
 use strict;
 use warnings;
@@ -7,10 +7,10 @@ use Mojo::Base 'DBIx::Class::Core';
 
 our $VERSION = '0.001';
 
-__PACKAGE__->table('user_sessions');
+__PACKAGE__->table('sessions');
 
 __PACKAGE__->add_columns(
-    id => {
+    session_id => {
         data_type   => 'uuid',
         is_nullable => 0,
     },
@@ -48,9 +48,9 @@ __PACKAGE__->add_columns(
     },
 );
 
-__PACKAGE__->set_primary_key('id');
+__PACKAGE__->set_primary_key('session_id');
 __PACKAGE__->add_unique_constraint(
-    user_sessions_session_hash_key => ['session_hash'] );
+    sessions_session_hash_key => ['session_hash'] );
 __PACKAGE__->belongs_to( user => 'GPForum::Schema::Result::User', 'user_id' );
 
 1;
@@ -59,7 +59,7 @@ __END__
 
 =head1 NAME
 
-GPForum::Schema::Result::UserSession - Revocable user session record.
+GPForum::Schema::Result::Session - Revocable server-side session record.
 
 =head1 VERSION
 
@@ -67,7 +67,7 @@ Version 0.001.
 
 =head1 SYNOPSIS
 
-    my $sessions = $schema->resultset('UserSession');
+    my $sessions = $schema->resultset('Session');
 
 =head1 DESCRIPTION
 

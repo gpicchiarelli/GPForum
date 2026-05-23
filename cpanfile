@@ -11,7 +11,6 @@ requires 'Log::Any';
 requires 'Log::Any::Adapter';
 requires 'DateTime';
 requires 'DateTime::Format::Pg';
-requires 'UUID::Tiny';
 requires 'Crypt::Argon2';
 requires 'Crypt::URandom';
 requires 'Email::Sender';
