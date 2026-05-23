@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added moderation review boundaries for reports, reversible moderation actions,
+  suspensions, audit-backed moderation changes, and admin audit browsing.
 - Added advanced community feature boundaries for mention extraction,
   bookmarks, reputation ledger events, trust score snapshots, and rebuildable
   user feed projections.

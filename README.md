@@ -109,9 +109,10 @@ This repository currently contains:
 * attachment upload intent, validation, lifecycle persistence, links, variants, scanning hook, and media processing worker boundaries;
 * operations hardening boundaries for rate limiting, metrics snapshots, runbook validation, and runtime sizing;
 * advanced community boundaries for mentions, bookmarks, reputation, trust snapshots, and user feed projection;
+* moderation review boundaries for reports, reversible moderation actions, suspensions, and admin audit review;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 10: Advanced Community Features** service
+The current implementation has reached **Milestone 11: Moderation Review** service
 boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture

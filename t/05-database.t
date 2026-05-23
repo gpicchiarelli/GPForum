@@ -19,14 +19,15 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 249;
-const my $EXPECTED_MIGRATIONS          => 7;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 18;
+const my $EXPECTED_TESTS               => 269;
+const my $EXPECTED_MIGRATIONS          => 8;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 21;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
 const my $ATTACHMENT_MIGRATION_INDEX   => 5;
 const my $ADVANCED_COMMUNITY_INDEX     => 6;
+const my $MODERATION_REVIEW_INDEX      => 7;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -48,6 +49,9 @@ my $mention_source                 = $schema->source('Mention');
 my $reputation_event_source        = $schema->source('ReputationEvent');
 my $trust_score_snapshot_source    = $schema->source('TrustScoreSnapshot');
 my $user_feed_item_source          = $schema->source('UserFeedItem');
+my $report_source                  = $schema->source('Report');
+my $moderation_action_source       = $schema->source('ModerationAction');
+my $suspension_source              = $schema->source('Suspension');
 my $projection_offset_source       = $schema->source('ProjectionOffset');
 my $projection_generation_source   = $schema->source('ProjectionGeneration');
 
@@ -258,6 +262,35 @@ ok( $user_feed_item_source->has_column('permission_version'),
     'user feed item stores permission version' );
 ok( $user_feed_item_source->has_relationship('user'),
     'user feed item belongs to user' );
+
+is( $report_source->from, 'reports', 'report source maps table' );
+is_deeply( [ $report_source->primary_columns ],
+    ['report_id'], 'report primary key is explicit' );
+ok( $report_source->has_column('status'),     'report stores status' );
+ok( $report_source->has_column('resolution'), 'report stores resolution' );
+ok( $report_source->has_relationship('reporter'),
+    'report belongs to reporter' );
+
+is( $moderation_action_source->from,
+    'moderation_actions', 'moderation action source maps table' );
+is_deeply( [ $moderation_action_source->primary_columns ],
+    ['moderation_action_id'], 'moderation action primary key is explicit' );
+ok( $moderation_action_source->has_column('action_type'),
+    'moderation action stores action type' );
+ok( $moderation_action_source->has_column('reversed_at'),
+    'moderation action supports reversal' );
+ok( $moderation_action_source->has_relationship('actor'),
+    'moderation action belongs to actor' );
+
+is( $suspension_source->from, 'suspensions', 'suspension source maps table' );
+is_deeply( [ $suspension_source->primary_columns ],
+    ['suspension_id'], 'suspension primary key is explicit' );
+ok( $suspension_source->has_column('valid_from'),
+    'suspension stores valid_from' );
+ok( $suspension_source->has_column('revoked_at'),
+    'suspension supports revocation' );
+ok( $suspension_source->has_relationship('user'),
+    'suspension belongs to user' );
 
 is( $projection_offset_source->from,
     'projection_offsets',
@@ -859,6 +892,32 @@ like(
     qr/idx_user_feed_items_ranked/msx,
     'advanced community migration indexes ranked feed projection'
 );
+
+my $moderation_review_sql =
+  path( $summary->[$MODERATION_REVIEW_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$MODERATION_REVIEW_INDEX]->{description},
+    'moderation review',
+    'moderation review migration description is parsed'
+);
+like(
+    $moderation_review_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] reports/msx,
+    'moderation review migration creates reports table'
+);
+like(
+    $moderation_review_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] moderation_actions/msx,
+    'moderation review migration creates moderation actions table'
+);
+like(
+    $moderation_review_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] suspensions/msx,
+    'moderation review migration creates suspensions table'
+);
+like( $moderation_review_sql, qr/idx_reports_queue/msx,
+    'moderation review migration indexes report queue' );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;
 my $runner           = GPForum::Migration::Runner->new(

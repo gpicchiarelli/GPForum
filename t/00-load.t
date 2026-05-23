@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 91;
+const my $TEST_COUNT => 97;
 
 plan tests => $TEST_COUNT;
 
@@ -38,6 +38,7 @@ use_ok('GPForum::Schema::Result::Credential');
 use_ok('GPForum::Schema::Result::DeadLetter');
 use_ok('GPForum::Schema::Result::EventLog');
 use_ok('GPForum::Schema::Result::Mention');
+use_ok('GPForum::Schema::Result::ModerationAction');
 use_ok('GPForum::Schema::Result::Notification');
 use_ok('GPForum::Schema::Result::NotificationInbox');
 use_ok('GPForum::Schema::Result::NotificationPreference');
@@ -49,10 +50,12 @@ use_ok('GPForum::Schema::Result::PostRevision');
 use_ok('GPForum::Schema::Result::ProjectionGeneration');
 use_ok('GPForum::Schema::Result::ProjectionOffset');
 use_ok('GPForum::Schema::Result::ReputationEvent');
+use_ok('GPForum::Schema::Result::Report');
 use_ok('GPForum::Schema::Result::SearchDocument');
 use_ok('GPForum::Schema::Result::Session');
 use_ok('GPForum::Schema::Result::Space');
 use_ok('GPForum::Schema::Result::Subscription');
+use_ok('GPForum::Schema::Result::Suspension');
 use_ok('GPForum::Schema::Result::Thread');
 use_ok('GPForum::Schema::Result::ThreadCounter');
 use_ok('GPForum::Schema::Result::ThreadCounterShard');
@@ -68,8 +71,11 @@ use_ok('GPForum::Service::Community::BookmarkStore');
 use_ok('GPForum::Service::Community::FeedProjector');
 use_ok('GPForum::Service::Community::MentionExtractor');
 use_ok('GPForum::Service::Community::ReputationLedger');
+use_ok('GPForum::Service::Admin::AuditReview');
 use_ok('GPForum::Service::Identity::Registration');
 use_ok('GPForum::Service::Identity::Store');
+use_ok('GPForum::Service::Moderation::ActionStore');
+use_ok('GPForum::Service::Moderation::ReportStore');
 use_ok('GPForum::Service::Notification::Dispatcher');
 use_ok('GPForum::Service::Notification::PreferenceStore');
 use_ok('GPForum::Service::Notification::SubscriptionStore');

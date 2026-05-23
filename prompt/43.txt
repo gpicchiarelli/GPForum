@@ -223,6 +223,13 @@ append-ledger driven through reputation_events and trust_score_snapshots.
 FeedProjector MUST write rebuildable user_feed_items projections and MUST NOT
 make feeds authoritative.
 
+Moderation review MUST use narrow ReportStore, ActionStore, and AuditReview
+boundaries. ReportStore MUST create, assign, list, and resolve reports without
+embedding moderation action workflow. ActionStore MUST apply reversible
+moderation actions to posts and threads while creating moderation_actions and
+audit_log records. AuditReview MUST expose read-only admin audit browsing.
+reports, moderation_actions, and suspensions MUST remain explicit tables.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.
