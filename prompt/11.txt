@@ -1,0 +1,483 @@
+GPForum — CI/CD, Quality Assurance & Release Engineering Constitution
+
+This document defines the mandatory continuous integration architecture, quality assurance standards, release engineering discipline, deployment validation model, automated testing philosophy, dependency governance, build reproducibility requirements, and operational delivery standards of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Release Engineering Philosophy
+
+GPForum MUST prioritize:
+
+* deterministic releases;
+* operational safety;
+* reproducibility;
+* rollback capability;
+* deployment auditability;
+* long-term maintainability.
+
+The platform MUST avoid:
+
+* uncontrolled deployments;
+* manual production patching;
+* untested releases;
+* environment drift;
+* hidden operational changes.
+
+Release engineering is a core architectural discipline.
+
+⸻
+
+CI/CD Philosophy
+
+Continuous integration and deployment pipelines MUST:
+
+* enforce architectural discipline;
+* enforce security policies;
+* enforce test coverage;
+* enforce reproducibility;
+* remain observable.
+
+The pipeline is authoritative.
+
+Code MUST NOT bypass:
+
+* automated validation;
+* security scanning;
+* critic enforcement;
+* testing workflows.
+
+⸻
+
+Mandatory Pipeline Stages
+
+Every pipeline MUST minimally include:
+
+* dependency validation
+* static analysis
+* formatting validation
+* test execution
+* security scanning
+* artifact creation
+* deployment validation
+
+No production deployment MAY bypass pipeline validation.
+
+⸻
+
+Build Reproducibility
+
+Builds MUST remain:
+
+* deterministic;
+* reproducible;
+* environment-controlled.
+
+Dependencies MUST:
+
+* remain pinned where appropriate;
+* remain auditable;
+* remain versioned.
+
+The system MUST minimize:
+
+* environment drift;
+* dependency ambiguity;
+* uncontrolled upgrades.
+
+⸻
+
+Perl::Critic Enforcement
+
+Perl::Critic is mandatory.
+
+CI pipelines MUST:
+
+* fail on critic violations;
+* enforce severity rules;
+* enforce maintainability discipline;
+* enforce security discipline.
+
+Critic exceptions MUST:
+
+* remain explicit;
+* remain documented;
+* remain reviewable.
+
+⸻
+
+Static Analysis
+
+Mandatory static validation:
+
+* Perl::Critic
+* syntax validation
+* dependency analysis
+* security linting
+
+Static analysis MUST execute:
+
+* automatically;
+* consistently;
+* on every merge workflow.
+
+⸻
+
+Formatting Discipline
+
+Code formatting MUST remain:
+
+* consistent;
+* predictable;
+* review-friendly.
+
+Formatting SHOULD:
+
+* minimize review noise;
+* support readability;
+* support maintainability.
+
+Formatting MUST NOT become:
+
+* developer-specific.
+
+⸻
+
+Dependency Governance
+
+Dependencies MUST:
+
+* remain reviewed;
+* remain maintained;
+* remain version-aware;
+* remain security-audited.
+
+The platform MUST avoid:
+
+* abandoned dependencies;
+* unnecessary dependencies;
+* hidden transitive risk.
+
+Dependency additions MUST remain:
+
+* reviewable;
+* justified;
+* operationally sustainable.
+
+⸻
+
+Test Philosophy
+
+Testing is mandatory.
+
+The platform MUST support:
+
+* unit tests;
+* integration tests;
+* authorization tests;
+* regression tests;
+* security tests;
+* distributed workflow tests.
+
+Critical workflows MUST remain continuously testable.
+
+⸻
+
+Unit Testing
+
+Unit tests MUST:
+
+* remain deterministic;
+* remain isolated;
+* avoid external side effects.
+
+Business logic MUST remain unit-testable.
+
+⸻
+
+Integration Testing
+
+Integration tests MUST validate:
+
+* database interaction;
+* queue interaction;
+* websocket behavior;
+* authorization flows;
+* event propagation;
+* distributed workflows.
+
+Distributed systems assumptions MUST remain testable.
+
+⸻
+
+Security Testing
+
+Mandatory security validation SHOULD include:
+
+* authorization testing;
+* input fuzzing;
+* CSRF validation;
+* XSS validation;
+* rate-limit testing;
+* session validation;
+* abuse testing.
+
+Security regressions MUST block release workflows.
+
+⸻
+
+Regression Philosophy
+
+All production bugs SHOULD generate:
+
+* regression tests.
+
+The platform MUST minimize:
+
+* recurring failure patterns;
+* silent regressions;
+* behavior drift.
+
+⸻
+
+Database Migration Validation
+
+All migrations MUST:
+
+* remain versioned;
+* remain reproducible;
+* remain rollback-aware where possible.
+
+Migration workflows MUST support:
+
+* automated validation;
+* schema consistency checks;
+* deployment safety.
+
+Manual production schema edits are prohibited.
+
+⸻
+
+Artifact Philosophy
+
+Build artifacts MUST remain:
+
+* immutable;
+* reproducible;
+* traceable.
+
+Deployments SHOULD use:
+
+* versioned artifacts;
+* reproducible containers;
+* immutable deployment units.
+
+⸻
+
+Deployment Philosophy
+
+Deployments MUST support:
+
+* rolling updates;
+* graceful restart;
+* rapid rollback;
+* zero-downtime deployment where possible.
+
+Deployment workflows MUST remain:
+
+* observable;
+* auditable;
+* deterministic.
+
+⸻
+
+Environment Separation
+
+Mandatory environments:
+
+* development
+* testing
+* staging
+* production
+
+Production MUST NOT become:
+
+* the testing environment.
+
+Environment behavior MUST remain:
+
+* reproducible;
+* configuration-controlled.
+
+⸻
+
+Configuration Philosophy
+
+Configuration MUST:
+
+* remain externalized;
+* remain version-aware;
+* avoid hardcoded secrets.
+
+Configuration SHOULD support:
+
+* environment isolation;
+* deployment automation;
+* operational override.
+
+⸻
+
+Secret Management
+
+Secrets MUST:
+
+* remain externalized;
+* remain revocable;
+* avoid repository storage.
+
+Examples:
+
+* API keys
+* database credentials
+* signing keys
+* encryption material
+
+Secrets MUST remain rotatable.
+
+⸻
+
+Release Validation
+
+Production releases MUST validate:
+
+* migration success;
+* queue health;
+* websocket stability;
+* replication state;
+* search indexing state;
+* observability health.
+
+The platform MUST support:
+
+* deployment verification;
+* rollback workflows;
+* operational recovery.
+
+⸻
+
+Rollback Philosophy
+
+Rollback MUST remain:
+
+* operationally possible;
+* documented;
+* rehearsed.
+
+The architecture MUST minimize:
+
+* irreversible deployments;
+* destructive migration coupling.
+
+⸻
+
+Feature Rollout Philosophy
+
+The platform SHOULD support:
+
+* staged rollout;
+* feature gating;
+* operational toggles;
+* gradual enablement.
+
+Critical features SHOULD support:
+
+* rapid disablement.
+
+⸻
+
+Distributed Deployment Philosophy
+
+Distributed deployments MUST tolerate:
+
+* partial rollout;
+* rolling replacement;
+* temporary version skew;
+* websocket reconnection;
+* delayed worker upgrade.
+
+The system MUST degrade gracefully during deployment.
+
+⸻
+
+Operational Validation
+
+Post-deployment validation SHOULD include:
+
+* queue monitoring;
+* websocket metrics;
+* replication verification;
+* error-rate monitoring;
+* latency monitoring.
+
+Operational verification is mandatory.
+
+⸻
+
+Observability Integration
+
+CI/CD workflows SHOULD integrate:
+
+* release metrics;
+* deployment tracing;
+* incident correlation;
+* rollback telemetry.
+
+Release engineering MUST remain observable.
+
+⸻
+
+Infrastructure-as-Code Philosophy
+
+Infrastructure configuration SHOULD remain:
+
+* versioned;
+* reviewable;
+* reproducible.
+
+Operational state MUST avoid:
+
+* undocumented manual mutation.
+
+⸻
+
+Incident Readiness
+
+The release process MUST assume:
+
+* deployment failure;
+* rollback necessity;
+* infrastructure degradation;
+* partial outage.
+
+Recovery workflows MUST remain:
+
+* documented;
+* testable;
+* operationally realistic.
+
+⸻
+
+Long-Term Delivery Goal
+
+GPForum release engineering MUST remain:
+
+* deterministic;
+* auditable;
+* scalable;
+* operationally sustainable;
+* resilient under distributed deployments.
+
+Delivery pipelines are part of the platform architecture.
+
+All future CI/CD and release workflows MUST comply with this constitution.

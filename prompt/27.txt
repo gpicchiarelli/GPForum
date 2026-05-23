@@ -1,0 +1,214 @@
+GPForum - Operational Runbooks & Production Procedures Constitution
+
+This document defines the mandatory operational runbooks, maintenance procedures, incident workflows, backup and restore practices, deployment operations, and production safety procedures for GPForum.
+
+This specification is mandatory for operations.
+
+---
+
+Runbook Philosophy
+
+Every critical operational workflow MUST be documented before production reliance.
+
+Runbooks MUST be:
+
+* executable;
+* current;
+* concise;
+* role-aware;
+* testable;
+* linked to observability.
+
+The platform MUST avoid undocumented tribal operations.
+
+---
+
+Mandatory Runbooks
+
+GPForum MUST maintain runbooks for:
+
+* deploy;
+* rollback;
+* database migration;
+* backup;
+* restore;
+* disaster recovery;
+* search index rebuild;
+* event replay;
+* cache purge;
+* compromised account response;
+* spam wave response;
+* abusive content escalation;
+* object storage incident;
+* websocket degradation;
+* worker queue backlog;
+* secret rotation.
+
+---
+
+Backup Runbook
+
+The backup runbook MUST define:
+
+* PostgreSQL backup method;
+* backup schedule;
+* object storage backup policy;
+* configuration backup policy;
+* encryption requirements;
+* retention duration;
+* restore testing cadence.
+
+Backups MUST be monitored.
+
+Untested backups MUST NOT be considered reliable.
+
+---
+
+Restore Runbook
+
+The restore runbook MUST define:
+
+* restore target selection;
+* PostgreSQL restore procedure;
+* object storage reconciliation;
+* search rebuild procedure;
+* event replay considerations;
+* validation checks;
+* user-facing communication steps.
+
+Restore MUST be rehearsed periodically.
+
+---
+
+Deployment Runbook
+
+The deployment runbook MUST include:
+
+* preflight checks;
+* migration order;
+* application rollout;
+* worker rollout;
+* health checks;
+* smoke tests;
+* observability review;
+* rollback trigger criteria.
+
+Deployments MUST remain observable.
+
+---
+
+Migration Runbook
+
+Database migrations MUST define:
+
+* forward migration;
+* rollback or mitigation;
+* expected lock behavior;
+* estimated duration;
+* compatibility with old and new app versions;
+* validation queries;
+* backup requirement.
+
+Risky migrations MUST be rehearsed outside production.
+
+---
+
+Incident Runbook
+
+Incident response MUST define:
+
+* severity levels;
+* incident commander role;
+* communication channel;
+* timeline capture;
+* mitigation steps;
+* user impact assessment;
+* post-incident review.
+
+Incidents MUST produce follow-up actions when root causes are found.
+
+---
+
+Abuse Runbook
+
+Abuse response MUST cover:
+
+* spam floods;
+* credential stuffing;
+* coordinated reporting abuse;
+* harassment waves;
+* malicious uploads;
+* scraping spikes.
+
+Abuse controls SHOULD include:
+
+* rate limit changes;
+* temporary posting restrictions;
+* quarantine rules;
+* account suspension batches;
+* WAF/CDN coordination where available.
+
+All emergency controls MUST be reversible and audited.
+
+---
+
+Search Rebuild Runbook
+
+Search rebuild MUST define:
+
+* source tables;
+* index version naming;
+* rebuild job execution;
+* alias swap;
+* validation checks;
+* rollback strategy.
+
+Search rebuild MUST NOT block canonical forum writes.
+
+---
+
+Event Replay Runbook
+
+Event replay MUST define:
+
+* replay range;
+* target consumer;
+* idempotency protection;
+* side-effect suppression;
+* progress tracking;
+* validation checks.
+
+Replay MUST NOT resend external notifications unless explicitly approved.
+
+---
+
+Secret Rotation Runbook
+
+Secret rotation MUST cover:
+
+* database credentials;
+* session signing secrets;
+* object storage credentials;
+* API tokens;
+* webhook secrets;
+* deployment credentials.
+
+Rotation MUST include:
+
+* compatibility window;
+* revocation step;
+* validation step;
+* audit record.
+
+---
+
+Operational Readiness Rule
+
+A feature is not production-ready until its failure mode has:
+
+* metrics;
+* logs;
+* alerts where appropriate;
+* rollback or mitigation;
+* runbook coverage.
+

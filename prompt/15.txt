@@ -1,0 +1,489 @@
+GPForum — Performance, Scalability & Capacity Engineering Constitution
+
+This document defines the mandatory performance philosophy, scalability architecture, latency discipline, throughput strategy, resource management model, cache hierarchy, backpressure behavior, load-shedding principles, and long-term capacity engineering standards of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Performance Philosophy
+
+Performance is:
+
+* an architectural property;
+* an operational discipline;
+* a scalability constraint system.
+
+Performance MUST prioritize:
+
+* predictability;
+* bounded latency;
+* graceful degradation;
+* operational sustainability;
+* distributed scalability.
+
+The platform MUST avoid:
+
+* uncontrolled resource amplification;
+* latency spikes;
+* unbounded memory growth;
+* hidden scalability cliffs.
+
+⸻
+
+Scalability Philosophy
+
+GPForum MUST scale:
+
+* horizontally;
+* incrementally;
+* operationally predictably.
+
+The architecture MUST assume:
+
+* millions of users;
+* massive read concurrency;
+* distributed websocket traffic;
+* asynchronous event propagation;
+* long-term data growth.
+
+The platform MUST prioritize:
+
+* stateless application nodes;
+* asynchronous processing;
+* partition-aware persistence;
+* cache efficiency.
+
+⸻
+
+Capacity Engineering Philosophy
+
+Capacity planning MUST remain:
+
+* measurable;
+* observable;
+* proactive;
+* continuously validated.
+
+The platform MUST support:
+
+* node replacement;
+* rolling scaling;
+* workload isolation;
+* capacity forecasting.
+
+⸻
+
+Latency Philosophy
+
+Latency MUST remain:
+
+* bounded;
+* measurable;
+* operationally observable.
+
+Critical user-facing workflows SHOULD prioritize:
+
+* low p95 latency;
+* low p99 latency;
+* graceful degradation under load.
+
+Latency spikes MUST remain:
+
+* diagnosable;
+* attributable;
+* operationally visible.
+
+⸻
+
+Throughput Philosophy
+
+The architecture MUST optimize for:
+
+* high concurrent reads;
+* bounded write amplification;
+* asynchronous fanout;
+* distributed workload handling.
+
+The platform MUST avoid:
+
+* synchronous bottlenecks;
+* centralized coordination hotspots;
+* global serialization points.
+
+⸻
+
+Resource Management
+
+All workloads MUST maintain:
+
+* bounded memory usage;
+* bounded concurrency;
+* bounded queue growth;
+* bounded connection usage.
+
+The system MUST avoid:
+
+* uncontrolled buffering;
+* unbounded websocket fanout;
+* unbounded worker accumulation.
+
+⸻
+
+Stateless Scaling
+
+Application nodes MUST remain:
+
+* stateless;
+* disposable;
+* horizontally scalable.
+
+The architecture MUST support:
+
+* rolling deployment;
+* autoscaling;
+* node replacement;
+* workload redistribution.
+
+No application node may become irreplaceable.
+
+⸻
+
+Database Scaling Philosophy
+
+PostgreSQL scaling MUST prioritize:
+
+* partitioning;
+* replica reads;
+* bounded transactions;
+* index efficiency;
+* append-oriented persistence.
+
+The platform MUST avoid:
+
+* giant mutable tables;
+* unbounded scans;
+* destructive cleanup workloads.
+
+⸻
+
+Query Discipline
+
+Queries MUST remain:
+
+* bounded;
+* indexed;
+* partition-aware;
+* pagination-aware.
+
+Forbidden:
+
+* unbounded ORM loads;
+* SELECT * on large datasets;
+* unrestricted joins;
+* unbounded aggregation scans.
+
+All high-volume queries MUST support:
+
+* deterministic execution plans;
+* selective indexes;
+* explicit ordering.
+
+⸻
+
+Partitioning Philosophy
+
+Partitioning is mandatory.
+
+Partitioning MUST:
+
+* reduce vacuum pressure;
+* reduce index bloat;
+* support retention;
+* improve operational predictability.
+
+The architecture MUST support:
+
+* partition pruning;
+* partition rotation;
+* partition archival.
+
+⸻
+
+Cache Philosophy
+
+Caching MUST remain:
+
+* explicit;
+* observable;
+* disposable;
+* authorization-aware.
+
+Caches MUST NOT become:
+
+* canonical persistence;
+* hidden business authority.
+
+Preferred cache targets:
+
+* rendered fragments;
+* expensive aggregates;
+* anonymous content;
+* search projections.
+
+⸻
+
+Cache Hierarchy
+
+Recommended cache layers:
+
+* CDN cache
+* edge cache
+* application cache
+* fragment cache
+* search cache
+
+Each layer MUST remain:
+
+* independently invalidatable;
+* operationally observable.
+
+⸻
+
+Cache Invalidation
+
+Cache invalidation MUST remain:
+
+* explicit;
+* event-driven where possible;
+* bounded.
+
+The architecture MUST avoid:
+
+* uncontrolled cache staleness;
+* hidden invalidation coupling.
+
+⸻
+
+Realtime Scaling
+
+Realtime infrastructure MUST support:
+
+* distributed websocket nodes;
+* incremental propagation;
+* asynchronous fanout;
+* connection recovery.
+
+Realtime systems MUST avoid:
+
+* centralized websocket ownership;
+* synchronous broadcast bottlenecks.
+
+⸻
+
+Connection Management
+
+The platform MUST support:
+
+* high websocket concurrency;
+* connection lifecycle management;
+* idle timeout policies;
+* reconnect workflows.
+
+Connection handling MUST remain:
+
+* memory-aware;
+* resource-bounded;
+* operationally observable.
+
+⸻
+
+Backpressure Philosophy
+
+The platform MUST support:
+
+* graceful degradation under load;
+* queue backpressure;
+* rate limiting;
+* overload protection.
+
+The system MUST prefer:
+
+* controlled degradation;
+    over:
+* catastrophic collapse.
+
+⸻
+
+Load Shedding
+
+The architecture SHOULD support:
+
+* selective workload shedding;
+* degraded realtime behavior;
+* delayed non-critical workflows;
+* queue prioritization.
+
+Critical persistence workflows MUST remain prioritized.
+
+⸻
+
+Queue Scalability
+
+Worker systems MUST support:
+
+* workload isolation;
+* queue prioritization;
+* distributed execution;
+* autoscaling.
+
+Queue growth MUST remain:
+
+* observable;
+* bounded;
+* recoverable.
+
+⸻
+
+Search Scalability
+
+Search infrastructure MUST support:
+
+* distributed indexing;
+* shard-aware scaling;
+* asynchronous ingestion;
+* rebuild workflows.
+
+Search failures MUST NOT block:
+
+* persistence workflows;
+* posting workflows.
+
+⸻
+
+Asset Delivery
+
+Static assets MUST support:
+
+* CDN delivery;
+* immutable caching;
+* compression;
+* fingerprinting.
+
+Asset delivery MUST remain:
+
+* horizontally scalable;
+* cache-efficient.
+
+⸻
+
+Frontend Performance
+
+Frontend rendering MUST prioritize:
+
+* server-side rendering;
+* incremental updates;
+* minimal JavaScript;
+* cache-friendly delivery.
+
+The platform MUST avoid:
+
+* hydration-heavy architectures;
+* giant frontend runtime costs.
+
+⸻
+
+Observability of Performance
+
+Performance metrics MUST include:
+
+* request latency;
+* websocket latency;
+* queue latency;
+* cache hit ratio;
+* database latency;
+* replication lag;
+* event propagation delay.
+
+Performance visibility is mandatory.
+
+⸻
+
+Capacity Limits
+
+The architecture MUST support:
+
+* configurable operational limits;
+* queue limits;
+* connection limits;
+* upload limits;
+* search limits;
+* API rate limits.
+
+The system MUST remain:
+
+* bounded;
+* controllable;
+* abuse-resistant.
+
+⸻
+
+Failure Philosophy
+
+The platform MUST assume:
+
+* traffic spikes;
+* node crashes;
+* queue backlog;
+* replica lag;
+* websocket storms;
+* abusive clients.
+
+The architecture MUST degrade gracefully.
+
+⸻
+
+Benchmarking Philosophy
+
+Performance testing SHOULD include:
+
+* concurrency testing;
+* websocket testing;
+* queue stress testing;
+* indexing stress testing;
+* partition scaling tests.
+
+Performance assumptions MUST remain:
+
+* measurable;
+* reproducible.
+
+⸻
+
+Operational Sustainability
+
+The platform MUST remain:
+
+* operable by small teams;
+* understandable under load;
+* recoverable during incidents.
+
+Operational simplicity is a scalability feature.
+
+⸻
+
+Long-Term Performance Goal
+
+GPForum performance architecture MUST remain:
+
+* horizontally scalable;
+* latency-aware;
+* operationally predictable;
+* resilient under extreme concurrency;
+* sustainable under long-term growth.
+
+Performance is not optimization theater.
+
+Performance is disciplined distributed systems engineering.
+
+All future scalability and performance decisions MUST comply with this constitution.

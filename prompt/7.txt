@@ -1,0 +1,492 @@
+GPForum — Event-Driven, Realtime & Distributed Synchronization Constitution
+
+This document defines the mandatory event-driven architecture, distributed synchronization model, websocket strategy, asynchronous propagation rules, consistency philosophy, realtime workflows, pub/sub topology, and distributed coordination principles of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Distributed Systems Philosophy
+
+GPForum MUST operate as:
+
+* distributed;
+* event-driven;
+* horizontally scalable;
+* asynchronously coordinated.
+
+The platform MUST assume:
+
+* multiple application nodes;
+* multiple websocket nodes;
+* distributed workers;
+* partial failures;
+* network latency;
+* eventual consistency.
+
+The architecture MUST prioritize:
+
+* decoupling;
+* resilience;
+* replayability;
+* operational predictability;
+* graceful degradation.
+
+⸻
+
+Event-Driven Philosophy
+
+Events are foundational.
+
+All significant actions MUST emit events.
+
+Examples:
+
+* thread.created
+* thread.locked
+* post.created
+* post.edited
+* notification.sent
+* user.banned
+* session.revoked
+* attachment.uploaded
+
+Events MUST become:
+
+* synchronization primitives;
+* audit primitives;
+* workflow triggers;
+* realtime propagation sources.
+
+⸻
+
+Event Characteristics
+
+Events MUST remain:
+
+* immutable;
+* timestamped;
+* attributable;
+* append-oriented;
+* traceable.
+
+Events SHOULD support:
+
+* replayability;
+* asynchronous propagation;
+* observability.
+
+⸻
+
+Event Ownership
+
+Business workflows MUST remain:
+
+* event-originating;
+* not event-dependent for core persistence.
+
+Canonical writes MUST succeed before:
+
+* asynchronous propagation;
+* websocket fanout;
+* search indexing;
+* notifications.
+
+The relational database remains authoritative.
+
+⸻
+
+Event Log
+
+The system MUST implement:
+
+* append-only event_log.
+
+The event log MUST support:
+
+* partitioning;
+* replay;
+* auditing;
+* asynchronous consumption;
+* distributed processing.
+
+Events MUST NEVER be silently mutated.
+
+⸻
+
+Event Payload Philosophy
+
+Events SHOULD contain:
+
+* identifiers;
+* timestamps;
+* minimal authoritative metadata;
+* traceability metadata.
+
+Events SHOULD avoid:
+
+* excessive duplication;
+* giant payloads;
+* embedded business authority.
+
+Payloads MAY use JSONB.
+
+⸻
+
+Event Categories
+
+Recommended event categories:
+
+* domain events
+* system events
+* moderation events
+* security events
+* realtime events
+* analytics events
+
+Events SHOULD remain semantically explicit.
+
+⸻
+
+Realtime Philosophy
+
+Realtime systems MUST:
+
+* remain eventually consistent;
+* tolerate propagation delays;
+* tolerate temporary disconnects;
+* avoid centralized bottlenecks.
+
+Realtime functionality MUST enhance the platform but MUST NOT become the canonical persistence layer.
+
+⸻
+
+Websocket Architecture
+
+Websocket nodes MUST remain:
+
+* stateless where possible;
+* horizontally scalable;
+* event-subscribed;
+* lightweight.
+
+Websocket nodes MUST NOT:
+
+* own authoritative business state;
+* execute heavy workflows;
+* perform direct persistence orchestration.
+
+⸻
+
+Realtime Node Separation
+
+The architecture SHOULD support:
+
+* dedicated websocket nodes.
+
+HTTP and websocket workloads MAY be separated operationally.
+
+The system MUST support:
+
+* distributed websocket clusters;
+* rolling node replacement;
+* graceful disconnect recovery.
+
+⸻
+
+Pub/Sub Philosophy
+
+Distributed synchronization SHOULD use:
+
+* Redis pub/sub;
+* PostgreSQL LISTEN/NOTIFY;
+* event propagation queues;
+* worker-dispatched synchronization.
+
+Pub/sub MUST remain:
+
+* transient;
+* replay-tolerant;
+* non-authoritative.
+
+⸻
+
+Distributed Fanout
+
+Realtime fanout MUST support:
+
+* multi-node propagation;
+* selective subscription delivery;
+* channel isolation;
+* scalable dissemination.
+
+The architecture MUST avoid:
+
+* single-node websocket ownership;
+* centralized realtime bottlenecks.
+
+⸻
+
+Presence System
+
+Presence data:
+
+* online users;
+* typing indicators;
+* active sessions;
+* websocket subscriptions
+
+MUST remain:
+
+* ephemeral;
+* disposable;
+* reconstructable.
+
+Presence MUST NOT become authoritative business data.
+
+⸻
+
+Realtime Consistency
+
+The realtime layer MUST tolerate:
+
+* eventual consistency;
+* delayed propagation;
+* duplicate delivery;
+* reconnect replay.
+
+Strong consistency SHOULD NOT be required for:
+
+* notifications;
+* presence;
+* typing indicators;
+* incremental UI updates.
+
+⸻
+
+Idempotency Philosophy
+
+Asynchronous consumers MUST support:
+
+* idempotent processing.
+
+Duplicate event delivery MUST NOT:
+
+* corrupt state;
+* create duplicated persistence;
+* generate inconsistent side effects.
+
+⸻
+
+Ordering Philosophy
+
+The architecture MUST NOT assume:
+
+* perfect global ordering across distributed nodes.
+
+Ordering guarantees SHOULD remain:
+
+* localized;
+* bounded;
+* workflow-specific.
+
+Event timestamps MUST remain authoritative.
+
+⸻
+
+Distributed Failure Philosophy
+
+The architecture MUST assume:
+
+* websocket node crashes;
+* delayed workers;
+* temporary Redis outages;
+* replica lag;
+* dropped pub/sub messages;
+* partial propagation failure.
+
+The system MUST degrade gracefully.
+
+⸻
+
+Retry Philosophy
+
+Asynchronous workflows MUST support:
+
+* retries;
+* exponential backoff;
+* failure isolation;
+* replay safety.
+
+Retries MUST remain:
+
+* observable;
+* bounded;
+* idempotent-aware.
+
+⸻
+
+Distributed Locking
+
+Distributed locking SHOULD remain:
+
+* minimal;
+* bounded;
+* time-limited.
+
+Global locks SHOULD be avoided whenever possible.
+
+The architecture SHOULD prefer:
+
+* optimistic concurrency;
+* append-oriented workflows;
+* immutable event flows.
+
+⸻
+
+CQRS-lite Philosophy
+
+The architecture SHOULD support:
+
+* lightweight CQRS patterns.
+
+Canonical writes:
+
+* PostgreSQL.
+
+Read projections MAY include:
+
+* cached aggregates;
+* realtime projections;
+* search indexes;
+* websocket state.
+
+Read models MUST remain rebuildable.
+
+⸻
+
+Search Synchronization
+
+Search indexing MUST occur:
+
+* asynchronously;
+* event-driven;
+* eventually consistent.
+
+Search indexing MUST tolerate:
+
+* delayed indexing;
+* replay;
+* partial rebuilds.
+
+⸻
+
+Notification System
+
+Notifications MUST:
+
+* remain asynchronous;
+* support distributed fanout;
+* tolerate delayed delivery.
+
+Notification persistence MUST remain:
+
+* authoritative;
+* replayable;
+* audit-capable.
+
+⸻
+
+Realtime UI Philosophy
+
+Realtime UI updates SHOULD:
+
+* incrementally update fragments;
+* avoid full application hydration;
+* remain server-authoritative.
+
+The frontend MUST tolerate:
+
+* websocket interruption;
+* delayed updates;
+* partial propagation.
+
+⸻
+
+Replay Philosophy
+
+Critical event streams SHOULD support:
+
+* replay;
+* reconstruction;
+* recovery workflows.
+
+The architecture SHOULD support:
+
+* rebuilding projections;
+* rebuilding caches;
+* rebuilding indexes.
+
+⸻
+
+Observability
+
+Distributed synchronization MUST expose:
+
+* propagation metrics;
+* retry metrics;
+* queue depth;
+* websocket metrics;
+* fanout metrics;
+* delivery failures.
+
+Operational visibility is mandatory.
+
+⸻
+
+Security of Realtime Systems
+
+Realtime systems MUST:
+
+* authenticate websocket connections;
+* authorize subscriptions;
+* validate payloads;
+* rate limit abusive traffic.
+
+Pub/sub systems MUST assume hostile payload injection attempts.
+
+⸻
+
+Scalability Philosophy
+
+Realtime scalability MUST prioritize:
+
+* horizontal scaling;
+* event propagation efficiency;
+* stateless nodes;
+* bounded memory usage;
+* incremental synchronization.
+
+The architecture MUST assume:
+
+* millions of concurrent connections;
+* distributed websocket clusters;
+* high-frequency event propagation.
+
+⸻
+
+Long-Term Distributed Systems Goal
+
+GPForum realtime and distributed architecture MUST remain:
+
+* resilient;
+* replayable;
+* horizontally scalable;
+* operationally predictable;
+* event-driven;
+* eventually consistent where appropriate;
+* sustainable under extreme concurrency.
+
+The distributed layer is a synchronization system over authoritative persistence.
+
+All future realtime and synchronization development MUST comply with this constitution.

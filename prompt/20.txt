@@ -1,0 +1,223 @@
+GPForum - MVP Roadmap & Implementation Sequencing Constitution
+
+This document defines the mandatory implementation order, MVP scope, release milestones, and sequencing discipline for GPForum.
+
+This specification is mandatory for project planning.
+
+---
+
+Roadmap Philosophy
+
+GPForum MUST be built incrementally.
+
+The project MUST avoid:
+
+* building distributed complexity before core forum behavior exists;
+* optimizing projections before canonical writes exist;
+* implementing advanced governance before basic moderation exists;
+* adding optional integrations before stable domain workflows exist.
+
+Each milestone MUST produce a working, testable system.
+
+---
+
+Milestone 0 - Project Skeleton
+
+Milestone 0 MUST deliver:
+
+* Mojolicious application skeleton;
+* DBIx::Class schema structure;
+* PostgreSQL connection;
+* migration framework;
+* configuration loading;
+* structured logging;
+* health endpoint;
+* basic CI checks;
+* Perl::Critic configuration.
+
+No product feature should bypass this foundation.
+
+---
+
+Milestone 1 - Identity And Sessions
+
+Milestone 1 MUST deliver:
+
+* user registration;
+* login;
+* logout;
+* secure password hashing;
+* session creation;
+* session revocation;
+* CSRF protection;
+* account status checks;
+* minimal profile page.
+
+Milestone 1 SHOULD include:
+
+* email verification placeholder;
+* MFA-ready credential model;
+* audit events for login and logout.
+
+---
+
+Milestone 2 - Core Forum
+
+Milestone 2 MUST deliver:
+
+* spaces;
+* categories;
+* thread creation;
+* post creation;
+* thread view;
+* category view;
+* pagination;
+* server-rendered composer;
+* post revisions for edits;
+* soft deletion primitives.
+
+This milestone is the first real GPForum product surface.
+
+---
+
+Milestone 3 - Authorization And Moderation
+
+Milestone 3 MUST deliver:
+
+* RBAC baseline;
+* ABAC ownership checks;
+* moderator role;
+* admin role;
+* lock/unlock thread;
+* hide/unhide post;
+* move thread;
+* report content;
+* moderation audit log;
+* suspended users cannot post.
+
+Moderation MUST be server-authoritative.
+
+---
+
+Milestone 4 - Events And Workers
+
+Milestone 4 MUST deliver:
+
+* durable event table;
+* event emission from core workflows;
+* Minion integration;
+* idempotent job pattern;
+* notification job placeholder;
+* search indexing job placeholder;
+* cache invalidation signal placeholder.
+
+No asynchronous workflow may become authoritative before this milestone is stable.
+
+---
+
+Milestone 5 - Notifications And Subscriptions
+
+Milestone 5 MUST deliver:
+
+* thread subscriptions;
+* notification preferences;
+* notification creation;
+* notification list;
+* notification read state;
+* digest-ready data model;
+* asynchronous fanout.
+
+Notifications MUST respect permissions at creation and render time.
+
+---
+
+Milestone 6 - Search
+
+Milestone 6 MUST deliver:
+
+* OpenSearch integration;
+* indexing worker;
+* rebuild command;
+* permission-aware search filtering;
+* basic thread/post search;
+* search observability.
+
+Search MUST remain derived and rebuildable.
+
+---
+
+Milestone 7 - Realtime
+
+Milestone 7 MUST deliver:
+
+* authenticated websocket connections;
+* authorized channel subscription;
+* thread update notifications;
+* notification badge updates;
+* reconnect behavior;
+* graceful fallback without websocket.
+
+Realtime MUST not be required for core forum usability.
+
+---
+
+Milestone 8 - Attachments
+
+Milestone 8 MUST deliver:
+
+* upload intent;
+* object storage integration;
+* file validation;
+* malware scanning hook;
+* media processing job;
+* attachment moderation;
+* attachment lifecycle.
+
+Uploads MUST remain non-executable and permission-aware.
+
+---
+
+Milestone 9 - Operations Hardening
+
+Milestone 9 MUST deliver:
+
+* backup/restore runbook validation;
+* deployment rollback validation;
+* metrics dashboards;
+* alert rules;
+* rate limiting;
+* abuse mitigation;
+* retention jobs;
+* disaster recovery rehearsal.
+
+---
+
+Milestone 10 - Advanced Community Features
+
+Milestone 10 MAY deliver:
+
+* trust scoring;
+* reputation;
+* advanced feeds;
+* user mentions;
+* bookmarks;
+* advanced admin console;
+* federation experiments;
+* import/export tooling.
+
+These features MUST NOT compromise the core architecture.
+
+---
+
+Sequencing Rule
+
+No milestone may depend on a later milestone for correctness.
+
+Every milestone MUST preserve:
+
+* security;
+* auditability;
+* testability;
+* migration safety;
+* operational visibility.
+

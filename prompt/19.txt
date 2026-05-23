@@ -1,0 +1,209 @@
+GPForum - Cache, Coordination & Redis Decision Constitution
+
+This document resolves the cache and distributed coordination philosophy of GPForum after the Redis/KeyDB versus PostgreSQL-centric design discussion.
+
+This specification is foundational and mandatory.
+
+---
+
+Decision
+
+GPForum MUST be PostgreSQL-authoritative and Perl-orchestrated.
+
+Redis or KeyDB is OPTIONAL infrastructure, not mandatory business infrastructure.
+
+The canonical coordination model is:
+
+* PostgreSQL for durable state;
+* event tables for replayable workflows;
+* PostgreSQL LISTEN/NOTIFY for lightweight signaling;
+* Minion for durable asynchronous jobs;
+* local in-memory caches for per-node acceleration;
+* OpenSearch for derived search projections.
+
+Redis or KeyDB MAY be introduced only as ephemeral acceleration when the operational value justifies the additional moving part.
+
+---
+
+Non-Negotiable Rule
+
+No business-critical state may exist only in Redis, KeyDB, process memory, websocket memory, or OpenSearch.
+
+All critical state MUST be recoverable from PostgreSQL.
+
+---
+
+PostgreSQL Role
+
+PostgreSQL is responsible for:
+
+* authoritative persistence;
+* append-oriented event history;
+* transactional integrity;
+* audit trails;
+* durable read-model rebuild sources;
+* retention and partitioning.
+
+PostgreSQL MUST NOT be abused as:
+
+* a high-volume message broker;
+* a websocket fanout engine;
+* an unbounded transient queue;
+* a dumping ground for ephemeral presence noise.
+
+---
+
+LISTEN/NOTIFY Role
+
+LISTEN/NOTIFY is a signaling mechanism.
+
+It MAY be used for:
+
+* cache invalidation hints;
+* lightweight node wakeups;
+* projection refresh hints;
+* realtime dispatch hints;
+* operational coordination signals.
+
+LISTEN/NOTIFY MUST NOT be used as:
+
+* durable event storage;
+* a guaranteed message queue;
+* a replacement for event tables;
+* a replacement for Minion jobs;
+* a bulk data transport.
+
+Every NOTIFY payload SHOULD contain only:
+
+* event identifier;
+* entity type;
+* entity id;
+* version or timestamp;
+* correlation id where available.
+
+Consumers MUST fetch authoritative data from PostgreSQL when needed.
+
+---
+
+Event Table Role
+
+Durable domain events MUST be stored in PostgreSQL event tables.
+
+Event tables MUST support:
+
+* replay;
+* idempotency;
+* ordering by aggregate where required;
+* correlation;
+* projection rebuild;
+* audit investigation.
+
+NOTIFY may announce an event, but the event table is the durable source.
+
+---
+
+Local Cache Role
+
+Application nodes MAY maintain local in-memory caches.
+
+Local caches MUST be:
+
+* disposable;
+* bounded;
+* TTL-controlled;
+* invalidation-aware;
+* safe to lose at any time.
+
+Local caches MAY store:
+
+* rendered fragments;
+* permission-safe lookup data;
+* short-lived configuration snapshots;
+* hot category/thread metadata;
+* rate-limit hints when backed by authoritative checks.
+
+Local caches MUST NOT store:
+
+* unrecoverable user content;
+* authoritative sessions;
+* final authorization decisions without context;
+* unique counters requiring exactness;
+* moderation state as the only source.
+
+---
+
+Redis/KeyDB Optional Use
+
+Redis or KeyDB MAY be used for:
+
+* high-volume ephemeral rate limiting;
+* websocket fanout acceleration;
+* short-lived presence;
+* cross-node cache acceleration;
+* operationally isolated pub/sub.
+
+Redis or KeyDB MUST remain:
+
+* disposable;
+* reconstructable;
+* non-authoritative;
+* removable without data loss.
+
+If Redis becomes required for correctness, the design is invalid.
+
+---
+
+Cache Invalidation
+
+Cache invalidation MUST be event-driven where possible.
+
+Invalidation inputs MAY include:
+
+* PostgreSQL events;
+* LISTEN/NOTIFY signals;
+* Minion job completion;
+* explicit administrative invalidation;
+* TTL expiry.
+
+Permission-sensitive fragments MUST use conservative cache keys.
+
+Cache keys SHOULD include:
+
+* entity type;
+* entity id;
+* visibility version;
+* permission scope where needed;
+* language or locale where needed;
+* theme variant where needed.
+
+---
+
+Failure Behavior
+
+If all local caches are lost, GPForum MUST continue operating.
+
+If LISTEN/NOTIFY messages are missed, nodes MUST recover through:
+
+* TTL expiry;
+* version checks;
+* event table polling;
+* projection reconciliation.
+
+If Redis exists and fails, GPForum MUST degrade gracefully.
+
+---
+
+Final Architecture
+
+The preferred architecture is:
+
+* PostgreSQL-centric;
+* Perl-native;
+* event-table durable;
+* LISTEN/NOTIFY signaled;
+* local-cache accelerated;
+* Minion-orchestrated;
+* Redis-optional.
+
+This decision supersedes any interpretation that makes Redis/KeyDB mandatory for correctness.
+

@@ -1,0 +1,495 @@
+GPForum — Database Architecture Constitution
+
+This document defines the mandatory database architecture, persistence model, partitioning strategy, event storage philosophy, migration discipline, indexing rules, query standards, and long-term storage sustainability model of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Database Philosophy
+
+GPForum database architecture MUST prioritize:
+
+* long-term operational sustainability;
+* append-oriented persistence;
+* deterministic query behavior;
+* auditability;
+* horizontal scalability support;
+* partition-aware growth;
+* low-maintenance operation.
+
+The database is NOT merely storage.
+
+It is:
+
+* the canonical system of record;
+* the event backbone;
+* the audit substrate;
+* the synchronization foundation.
+
+⸻
+
+Canonical Database
+
+Mandatory database:
+
+* PostgreSQL.
+
+PostgreSQL is the authoritative source of truth.
+
+No other system may become authoritative over business-critical data.
+
+⸻
+
+Core Persistence Principles
+
+The persistence layer MUST:
+
+* avoid giant mutable tables;
+* minimize destructive UPDATE and DELETE operations;
+* prefer append-only workflows;
+* separate hot and cold data;
+* support replayability;
+* support partition-aware retention.
+
+The architecture MUST be designed for:
+
+* billions of records;
+* multi-year retention;
+* distributed deployments;
+* operational predictability.
+
+⸻
+
+Database Naming Standards
+
+Mandatory conventions:
+
+Tables:
+
+* snake_case;
+* pluralized.
+
+Columns:
+
+* snake_case.
+
+Foreign keys:
+
+* explicit naming.
+
+Indexes:
+
+* prefixed and descriptive.
+
+Constraints:
+
+* explicitly named.
+
+Examples:
+
+* users
+* posts
+* event_log
+* notification_queue
+
+Examples:
+
+* user_id
+* thread_id
+* created_at
+* updated_at
+
+⸻
+
+Identifier Strategy
+
+The platform MUST use:
+
+* UUIDv7;
+    or equivalent sortable distributed identifiers.
+
+Sequential integers SHOULD NOT be used as public identifiers.
+
+UUID requirements:
+
+* distributed-safe;
+* sortable;
+* collision-resistant;
+* replication-friendly.
+
+⸻
+
+Timestamp Standards
+
+All timestamps MUST:
+
+* use UTC;
+* include timezone awareness;
+* use timestamptz.
+
+Mandatory fields where applicable:
+
+* created_at
+* updated_at
+
+Append-only entities SHOULD avoid updated_at unless necessary.
+
+⸻
+
+Core Relational Tables
+
+Mandatory relational entities include:
+
+* users
+* threads
+* posts
+* categories
+* tags
+* permissions
+* role_bindings
+* attachments
+* notifications
+
+Additional domain entities MUST remain normalized unless denormalization is explicitly justified.
+
+⸻
+
+Event Log Architecture
+
+The platform MUST implement:
+
+* append-only event_log.
+
+The event log is foundational.
+
+Events MUST:
+
+* be immutable;
+* timestamped;
+* traceable;
+* replayable when possible.
+
+Example event categories:
+
+* thread.created
+* post.created
+* post.edited
+* user.banned
+* role.assigned
+* attachment.uploaded
+
+⸻
+
+Event Storage Structure
+
+The event_log MUST minimally include:
+
+* event_id
+* event_type
+* aggregate_type
+* aggregate_id
+* actor_id
+* payload
+* metadata
+* created_at
+
+Payloads MAY use JSONB.
+
+Events MUST remain immutable after insertion.
+
+⸻
+
+Audit Architecture
+
+The platform MUST maintain:
+
+* append-only audit records.
+
+Audit records MUST:
+
+* never be modified;
+* never be silently deleted;
+* remain queryable historically.
+
+Security-critical operations MUST generate audit events.
+
+Examples:
+
+* login
+* failed login
+* role change
+* moderation action
+* permission modification
+* session revocation
+
+⸻
+
+Revision Strategy
+
+Mutable user content SHOULD use:
+
+* immutable revision tables.
+
+Example:
+
+* posts
+* post_revisions
+
+The architecture SHOULD prefer:
+
+* historical preservation;
+* reversible moderation;
+* forensic traceability.
+
+⸻
+
+Partitioning Philosophy
+
+The database MUST use:
+
+* native PostgreSQL partitioning.
+
+Partitioning is mandatory from day zero.
+
+The architecture MUST assume:
+
+* long-term growth;
+* large datasets;
+* retention management.
+
+⸻
+
+Mandatory Partition Candidates
+
+Strong partition candidates include:
+
+* event_log
+* audit_events
+* notifications
+* sessions
+* websocket_presence
+* analytics tables
+
+High-volume append-oriented tables SHOULD be partitioned.
+
+⸻
+
+Partitioning Strategy
+
+Preferred partitioning:
+
+* RANGE partitioning by created_at.
+
+Recommended intervals:
+
+* daily for ephemeral data;
+* weekly for high-volume events;
+* monthly for long-term entities.
+
+Partitioning MUST support:
+
+* retention expiration;
+* archival workflows;
+* rapid partition dropping;
+* minimized vacuum pressure.
+
+⸻
+
+Retention Philosophy
+
+The architecture MUST support:
+
+* automated retention policies.
+
+The platform MUST avoid:
+
+* giant DELETE operations;
+* long-running cleanup transactions.
+
+Preferred lifecycle:
+
+* partition expiration;
+* detach;
+* archive;
+* drop.
+
+⸻
+
+Query Philosophy
+
+Queries MUST prioritize:
+
+* deterministic execution;
+* bounded result sets;
+* index-aware access;
+* partition pruning.
+
+Unbounded queries are prohibited.
+
+All high-volume queries MUST:
+
+* paginate;
+* use explicit ordering;
+* use selective columns.
+
+⸻
+
+ORM Discipline
+
+Mandatory ORM:
+
+* DBIx::Class.
+
+ORM usage MUST remain disciplined.
+
+Forbidden patterns:
+
+* uncontrolled eager loading;
+* ORM logic inside controllers;
+* unbounded resultset materialization.
+
+Business logic MUST NOT reside inside ORM entities.
+
+⸻
+
+Read/Write Separation
+
+The architecture SHOULD support:
+
+* CQRS-lite patterns.
+
+Write model:
+
+* canonical PostgreSQL.
+
+Read models MAY include:
+
+* cached aggregates;
+* search indexes;
+* materialized views;
+* denormalized projections.
+
+⸻
+
+Search Separation
+
+Search workloads MUST remain separated from relational persistence.
+
+The relational database MUST NOT become the primary global search engine.
+
+Search indexing MUST occur asynchronously.
+
+⸻
+
+Transactions
+
+Transactions MUST remain:
+
+* short-lived;
+* deterministic;
+* bounded.
+
+Long-running transactions are prohibited.
+
+Distributed locking MUST be minimized.
+
+⸻
+
+Concurrency Philosophy
+
+The architecture MUST assume:
+
+* concurrent writes;
+* distributed readers;
+* replica lag;
+* asynchronous propagation.
+
+The persistence layer MUST tolerate:
+
+* eventual consistency where appropriate.
+
+⸻
+
+Session Persistence
+
+Sessions MUST:
+
+* remain revocable;
+* support distributed deployments;
+* support expiration;
+* avoid filesystem persistence.
+
+Session persistence MAY use:
+
+* Redis;
+* PostgreSQL;
+* hybrid strategies.
+
+⸻
+
+Cache Philosophy
+
+Caches MUST remain:
+
+* disposable;
+* reconstructable;
+* non-authoritative.
+
+Critical business state MUST remain recoverable from PostgreSQL.
+
+⸻
+
+Migration Discipline
+
+All schema changes MUST:
+
+* use migrations;
+* remain versioned;
+* support rollback where possible;
+* remain reproducible.
+
+Direct manual production schema editing is prohibited.
+
+⸻
+
+Backup Philosophy
+
+The database architecture MUST support:
+
+* WAL archiving;
+* point-in-time recovery;
+* replica restoration;
+* automated backups;
+* disaster recovery workflows.
+
+Recovery procedures MUST be tested.
+
+⸻
+
+Performance Philosophy
+
+Performance MUST prioritize:
+
+* predictable latency;
+* partition-aware access;
+* index efficiency;
+* append-oriented writes;
+* bounded reads.
+
+Premature denormalization SHOULD be avoided.
+
+⸻
+
+Long-Term Sustainability Goal
+
+The GPForum database architecture MUST remain:
+
+* maintainable for decades;
+* operationally predictable;
+* partition-aware;
+* audit-friendly;
+* scalable under extreme growth;
+* resilient under distributed workloads.
+
+All future schema and persistence decisions MUST comply with this constitution.

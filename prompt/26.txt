@@ -1,0 +1,208 @@
+GPForum - Privacy, Data Protection & Legal Operations Constitution
+
+This document defines the mandatory privacy, data protection, user data rights, legal compliance, consent, retention, export, deletion, and policy operation standards for GPForum.
+
+This specification is mandatory.
+
+---
+
+Privacy Philosophy
+
+GPForum MUST treat user data as sensitive operational material.
+
+The platform MUST prioritize:
+
+* data minimization;
+* explicit purpose;
+* access control;
+* auditability;
+* retention discipline;
+* user rights;
+* breach readiness.
+
+The platform MUST avoid:
+
+* unnecessary personal data collection;
+* indefinite retention without reason;
+* hidden tracking;
+* leaking moderation/security data;
+* storing secrets in logs;
+* exposing private data through search or cache.
+
+---
+
+Personal Data Categories
+
+The platform SHOULD classify:
+
+* account identifiers;
+* email addresses;
+* authentication data;
+* session metadata;
+* IP-derived security metadata;
+* user-authored content;
+* attachments;
+* moderation records;
+* notification preferences;
+* audit logs.
+
+Each category MUST have:
+
+* purpose;
+* retention expectation;
+* access rules;
+* deletion or anonymization policy.
+
+---
+
+User Rights
+
+Where legally applicable, GPForum SHOULD support:
+
+* access request;
+* data export;
+* correction;
+* account deletion;
+* anonymization;
+* objection to optional processing;
+* consent withdrawal.
+
+User rights workflows MUST be:
+
+* authenticated;
+* audited;
+* rate-limited;
+* abuse-aware.
+
+---
+
+Account Deletion
+
+Account deletion MUST distinguish between:
+
+* account access removal;
+* profile anonymization;
+* content retention for conversation integrity;
+* legal deletion requirements;
+* moderation/audit retention.
+
+Deleting an account MUST NOT automatically destroy discussion coherence unless policy requires it.
+
+User-authored content MAY be anonymized instead of removed where lawful and disclosed.
+
+---
+
+Data Export
+
+Data export SHOULD include:
+
+* profile data;
+* authored posts;
+* uploaded attachment references where allowed;
+* notification preferences;
+* subscription data;
+* account security events safe to disclose.
+
+Exports MUST NOT include:
+
+* other users' private data;
+* internal moderation notes not legally required;
+* secret hashes;
+* infrastructure details;
+* privileged audit context.
+
+---
+
+Consent And Cookies
+
+Essential cookies MAY be required for:
+
+* session;
+* CSRF protection;
+* security;
+* preferences.
+
+Optional cookies or tracking MUST require appropriate consent where legally applicable.
+
+Consent records SHOULD be:
+
+* versioned;
+* timestamped;
+* revocable;
+* auditable.
+
+---
+
+Retention
+
+Retention policies MUST cover:
+
+* sessions;
+* audit logs;
+* security logs;
+* deleted content;
+* attachments;
+* notifications;
+* analytics;
+* backups.
+
+Retention enforcement SHOULD be automated through scheduled jobs.
+
+Retention jobs MUST be observable and auditable.
+
+---
+
+Moderation And Privacy
+
+Moderation data is sensitive.
+
+Moderation records MUST be visible only to authorized staff.
+
+Reports MUST protect reporter identity from unauthorized users.
+
+Staff access to sensitive moderation records SHOULD be logged.
+
+---
+
+Search And Privacy
+
+Search indexing MUST respect:
+
+* visibility;
+* deletion;
+* quarantine;
+* permissions;
+* privacy restrictions.
+
+Private or restricted content MUST NOT leak through snippets, autocomplete, counts, or cached results.
+
+---
+
+Breach Readiness
+
+The platform MUST support:
+
+* security incident identification;
+* affected data classification;
+* audit review;
+* credential/session revocation;
+* operational reporting;
+* legal notification workflows where required.
+
+Incident response MUST have a runbook.
+
+---
+
+Policy Versioning
+
+Terms, privacy policy, and community guidelines SHOULD be versioned.
+
+Policy acceptance SHOULD record:
+
+* user id;
+* policy version;
+* accepted_at;
+* source.
+
+Policy changes that affect user rights SHOULD be communicated clearly.
+

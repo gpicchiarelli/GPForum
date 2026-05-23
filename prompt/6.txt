@@ -1,0 +1,509 @@
+GPForum — Frontend, Rendering & Theme System Constitution
+
+This document defines the mandatory frontend architecture, rendering philosophy, theme system structure, component model, asset strategy, UI composition rules, realtime rendering behavior, browser compatibility assumptions, and long-term maintainability standards of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Frontend Philosophy
+
+GPForum frontend architecture MUST prioritize:
+
+* simplicity;
+* maintainability;
+* performance;
+* accessibility;
+* security;
+* deterministic rendering;
+* long-term sustainability.
+
+The platform MUST avoid:
+
+* frontend complexity inflation;
+* unnecessary client-side frameworks;
+* hydration-heavy architectures;
+* JavaScript-first rendering models.
+
+The preferred frontend model is:
+
+* server-side rendering;
+* progressive enhancement;
+* minimal JavaScript;
+* component-oriented UI composition.
+
+⸻
+
+Rendering Philosophy
+
+Rendering MUST remain:
+
+* deterministic;
+* server-driven;
+* security-aware;
+* cache-friendly.
+
+The canonical rendering strategy is:
+
+* SSR (server-side rendering).
+
+The frontend MUST remain functional:
+
+* without heavy client-side execution;
+* under degraded JavaScript environments;
+* under partial realtime disruption.
+
+⸻
+
+Preferred Frontend Stack
+
+Preferred technologies:
+
+* Mojolicious rendering;
+* HTMX;
+* Alpine.js (minimal usage only);
+* CSS custom properties;
+* server-rendered HTML.
+
+The platform MUST avoid:
+
+* SPA-first architecture;
+* unnecessary hydration systems;
+* frontend state duplication.
+
+⸻
+
+Progressive Enhancement
+
+The frontend MUST degrade gracefully.
+
+Core functionality MUST remain usable:
+
+* without JavaScript where possible;
+* under websocket failure;
+* under delayed asynchronous updates.
+
+JavaScript MUST enhance functionality, not define baseline usability.
+
+⸻
+
+Template Architecture
+
+Templates MUST remain:
+
+* presentation-oriented;
+* deterministic;
+* minimal in logic.
+
+Business logic inside templates is prohibited.
+
+Templates MUST NOT:
+
+* perform authorization logic;
+* perform persistence logic;
+* execute workflow orchestration;
+* access infrastructure services directly.
+
+⸻
+
+ViewModel Philosophy
+
+Rendering MUST consume:
+
+* prepared ViewModels.
+
+The application layer MUST prepare:
+
+* visibility flags;
+* permissions;
+* rendering states;
+* formatted content;
+* UI-safe values.
+
+Templates SHOULD remain declarative.
+
+⸻
+
+Template Structure
+
+Recommended structure:
+
+templates/
+layouts/
+components/
+partials/
+
+Themes MAY override:
+
+* layouts;
+* components;
+* assets;
+* visual tokens.
+
+Themes MUST NOT redefine:
+
+* business workflows;
+* security logic;
+* authorization rules.
+
+⸻
+
+Theme System Philosophy
+
+Themes are presentation-only.
+
+Themes MUST:
+
+* remain isolated;
+* remain replaceable;
+* remain inheritable;
+* remain security-constrained.
+
+Themes MUST NOT:
+
+* execute arbitrary Perl;
+* access databases;
+* bypass sanitization;
+* introduce unsafe JavaScript.
+
+⸻
+
+Theme Architecture
+
+Recommended structure:
+
+themes/
+default/
+dark/
+minimal/
+corporate/
+
+Each theme SHOULD contain:
+
+* templates;
+* layouts;
+* partials;
+* assets;
+* tokens;
+* theme manifest.
+
+⸻
+
+Theme Manifest
+
+Themes SHOULD expose:
+
+* metadata;
+* inheritance declarations;
+* versioning;
+* asset versions.
+
+Recommended metadata:
+
+* name
+* version
+* parent
+* compatibility
+
+⸻
+
+Theme Inheritance
+
+Theme inheritance is mandatory.
+
+Themes SHOULD:
+
+* override selectively;
+* inherit defaults automatically;
+* minimize duplication.
+
+The architecture MUST support:
+
+* partial overrides;
+* fallback resolution;
+* component replacement.
+
+⸻
+
+Component System
+
+The frontend MUST use:
+
+* reusable UI components.
+
+Examples:
+
+* thread card
+* post renderer
+* notification item
+* paginator
+* modal
+* navigation bar
+
+Components MUST remain:
+
+* composable;
+* isolated;
+* predictable.
+
+⸻
+
+Component Philosophy
+
+Components MUST:
+
+* receive prepared data;
+* avoid direct infrastructure access;
+* avoid business logic execution.
+
+Components SHOULD remain:
+
+* reusable;
+* themeable;
+* testable.
+
+⸻
+
+CSS Architecture
+
+The platform MUST use:
+
+* design tokens;
+* CSS custom properties;
+* predictable spacing systems;
+* scalable typography systems.
+
+The architecture MUST avoid:
+
+* uncontrolled CSS sprawl;
+* global override chaos;
+* duplicated style logic.
+
+⸻
+
+Design Tokens
+
+Mandatory token categories:
+
+* colors;
+* spacing;
+* typography;
+* radii;
+* elevation;
+* motion timing.
+
+Themes SHOULD customize tokens rather than raw layout structures.
+
+⸻
+
+Dark Mode
+
+Dark mode SHOULD use:
+
+* token-based rendering;
+* prefers-color-scheme support.
+
+Dark mode SHOULD NOT require:
+
+* separate frontend architecture;
+* duplicated layouts.
+
+⸻
+
+Asset Philosophy
+
+Assets MUST support:
+
+* fingerprinting;
+* immutable caching;
+* compression;
+* CDN delivery.
+
+The platform MUST avoid:
+
+* mutable asset URLs;
+* cache-unsafe deployment.
+
+⸻
+
+JavaScript Philosophy
+
+JavaScript MUST remain:
+
+* minimal;
+* explicit;
+* progressively enhanced;
+* security-aware.
+
+The platform SHOULD avoid:
+
+* frontend state duplication;
+* giant client-side runtimes;
+* hydration-heavy rendering.
+
+⸻
+
+HTMX Philosophy
+
+HTMX is preferred for:
+
+* incremental updates;
+* partial rendering;
+* realtime fragment updates;
+* low-complexity interactivity.
+
+HTMX interactions MUST remain:
+
+* server-authoritative;
+* permission-aware;
+* validation-aware.
+
+⸻
+
+Alpine.js Philosophy
+
+Alpine.js MAY be used for:
+
+* lightweight UI behavior;
+* toggles;
+* dropdowns;
+* local interaction state.
+
+Alpine.js MUST NOT become:
+
+* the application state layer.
+
+⸻
+
+Accessibility Philosophy
+
+The frontend MUST prioritize:
+
+* semantic HTML;
+* keyboard navigation;
+* screen reader compatibility;
+* accessible forms;
+* focus visibility.
+
+Accessibility is mandatory.
+
+⸻
+
+Browser Security
+
+Frontend rendering MUST comply with:
+
+* CSP;
+* output escaping;
+* strict sanitization;
+* safe asset delivery.
+
+Unsafe inline JavaScript SHOULD be minimized.
+
+⸻
+
+User Content Rendering
+
+User-generated content MUST:
+
+* remain sanitized;
+* remain escaped appropriately;
+* support safe markdown rendering.
+
+Unsafe HTML execution is prohibited.
+
+⸻
+
+Realtime UI Philosophy
+
+Realtime UI updates MUST:
+
+* degrade gracefully;
+* remain eventually consistent;
+* avoid frontend authority assumptions.
+
+Realtime rendering SHOULD:
+
+* update fragments incrementally;
+* avoid full-page rerenders.
+
+⸻
+
+Caching Philosophy
+
+The frontend MUST support:
+
+* fragment caching;
+* edge caching;
+* ETag validation;
+* conditional responses.
+
+Rendered fragments MUST remain:
+
+* permission-aware;
+* cache-safe.
+
+⸻
+
+Responsive Design
+
+The frontend MUST support:
+
+* mobile layouts;
+* desktop layouts;
+* adaptive rendering;
+* touch-safe interactions.
+
+Responsive behavior MUST remain:
+
+* token-driven;
+* component-oriented.
+
+⸻
+
+Internationalization
+
+The frontend SHOULD support:
+
+* localization;
+* translation;
+* pluralization;
+* timezone-aware rendering.
+
+UI text MUST avoid hardcoded language assumptions.
+
+⸻
+
+Error Rendering
+
+Frontend error states MUST:
+
+* remain graceful;
+* remain user-safe;
+* avoid information leakage.
+
+Internal exceptions MUST NOT leak:
+
+* stack traces;
+* SQL;
+* infrastructure details.
+
+⸻
+
+Long-Term Frontend Goal
+
+The GPForum frontend architecture MUST remain:
+
+* maintainable for decades;
+* security-focused;
+* highly performant;
+* accessible;
+* cache-efficient;
+* operationally predictable;
+* adaptable to future UI evolution.
+
+The frontend is NOT a separate application.
+
+It is a rendering layer over a server-authoritative distributed platform.
+
+All future frontend and theme development MUST comply with this constitution.

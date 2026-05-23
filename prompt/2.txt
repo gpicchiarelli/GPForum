@@ -1,0 +1,449 @@
+GPForum — Infrastructure & Distributed Systems Constitution
+
+This document defines the mandatory infrastructure, distributed systems behavior, operational topology, scaling model, persistence strategy, synchronization rules, deployment philosophy, and node responsibilities of GPForum.
+
+This specification is foundational and mandatory for all future architectural decisions.
+
+⸻
+
+Global Infrastructure Philosophy
+
+GPForum MUST be designed as:
+
+* horizontally scalable;
+* distributed;
+* stateless at the application layer;
+* operationally predictable;
+* failure-tolerant;
+* append-oriented.
+
+The infrastructure MUST prioritize:
+
+* operational simplicity;
+* deterministic behavior;
+* graceful degradation;
+* recoverability;
+* observability;
+* low operational entropy.
+
+⸻
+
+Global Topology
+
+Canonical topology:
+
+CDN/WAF
+↓
+HAProxy or Nginx
+↓
+Application Nodes
+↓
+Shared Infrastructure
+↓
+Workers / Search / Realtime
+
+Shared infrastructure includes:
+
+* PostgreSQL;
+* OpenSearch;
+* object storage;
+* Minion backend.
+
+Optional shared acceleration infrastructure includes:
+
+* Redis or KeyDB.
+
+⸻
+
+Edge Layer
+
+The edge layer MUST provide:
+
+* TLS termination;
+* HTTP/2 and HTTP/3 support when possible;
+* DDoS mitigation;
+* request buffering;
+* compression;
+* static asset caching;
+* WAF integration;
+* rate limiting.
+
+Preferred edge technologies:
+
+* Nginx;
+* HAProxy;
+* CDN providers;
+* external WAF systems.
+
+The application MUST NOT directly expose raw application nodes to the public internet.
+
+⸻
+
+Application Node Philosophy
+
+Application nodes MUST be:
+
+* stateless;
+* disposable;
+* horizontally scalable;
+* immutable when deployed.
+
+Application nodes MUST NOT:
+
+* store persistent sessions locally;
+* store authoritative state locally;
+* depend on local filesystem persistence;
+* maintain exclusive ownership of resources.
+
+Application nodes MUST support:
+
+* rolling deployment;
+* graceful restart;
+* rapid autoscaling;
+* distributed operation.
+
+⸻
+
+Node Types
+
+The architecture SHOULD support specialized node categories.
+
+Examples:
+
+* HTTP nodes;
+* realtime websocket nodes;
+* worker nodes;
+* indexing nodes;
+* administrative nodes.
+
+The system MUST allow separation of workloads across node classes.
+
+⸻
+
+HTTP Nodes
+
+HTTP nodes MUST:
+
+* remain lightweight;
+* prioritize low request latency;
+* avoid long-running operations;
+* avoid blocking operations;
+* offload asynchronous work to workers.
+
+HTTP nodes MUST:
+
+* validate requests;
+* enforce authentication;
+* enforce authorization;
+* emit domain events;
+* enqueue background jobs.
+
+⸻
+
+Realtime Nodes
+
+Realtime nodes MUST:
+
+* manage websocket connections;
+* support distributed synchronization;
+* avoid direct business persistence logic;
+* subscribe to distributed event streams.
+
+Realtime nodes MUST support:
+
+* pub/sub synchronization;
+* distributed fanout;
+* connection recovery;
+* graceful degradation.
+
+Realtime nodes MUST NOT become authoritative state owners.
+
+⸻
+
+Worker Nodes
+
+Worker nodes MUST process:
+
+* notifications;
+* email;
+* indexing;
+* analytics;
+* moderation;
+* media processing;
+* cleanup operations;
+* asynchronous workflows.
+
+Worker execution MUST support:
+
+* retries;
+* idempotency;
+* distributed scheduling;
+* failure isolation.
+
+Worker workloads MUST remain decoupled from HTTP request latency.
+
+⸻
+
+PostgreSQL Infrastructure
+
+PostgreSQL is the canonical system of record.
+
+The PostgreSQL architecture MUST support:
+
+* streaming replication;
+* WAL archiving;
+* partitioning;
+* online backup;
+* read replicas;
+* point-in-time recovery.
+
+The database MUST be designed for:
+
+* multi-year growth;
+* large event volumes;
+* distributed deployments;
+* operational stability.
+
+⸻
+
+PostgreSQL Partitioning
+
+The system MUST use native PostgreSQL partitioning.
+
+Mandatory partition candidates:
+
+* event_log;
+* notifications;
+* audit_events;
+* sessions;
+* high-volume append-oriented tables.
+
+Partitioning MUST:
+
+* support retention policies;
+* support archival strategies;
+* minimize vacuum pressure;
+* minimize index bloat.
+
+The architecture MUST avoid giant mutable tables.
+
+⸻
+
+UUID Strategy
+
+Identifiers MUST use UUIDv7 or equivalent sortable distributed identifiers.
+
+Sequential integer identifiers SHOULD be avoided for distributed scaling.
+
+⸻
+
+Redis / KeyDB Optional Acceleration Philosophy
+
+Redis or KeyDB MAY be used, but MUST be treated as ephemeral infrastructure.
+
+Redis MAY be used for:
+
+* cache;
+* distributed locks;
+* pub/sub;
+* rate limiting;
+* session acceleration;
+* online presence;
+* short-lived transient state.
+
+Redis MUST NOT become the canonical persistence layer.
+
+Business-critical data MUST remain recoverable from PostgreSQL.
+
+Redis or KeyDB MUST NOT be required for correctness.
+
+⸻
+
+Search Infrastructure
+
+Search infrastructure MUST remain separated from the relational database.
+
+Preferred technology:
+
+* OpenSearch.
+
+Search indexing MUST operate asynchronously.
+
+The search subsystem MUST support:
+
+* incremental indexing;
+* eventual consistency;
+* distributed indexing;
+* relevance tuning;
+* language-aware analysis;
+* permission-aware filtering.
+
+⸻
+
+Object Storage
+
+User-generated media MUST be stored in object storage.
+
+The application MUST avoid:
+
+* local upload persistence;
+* local attachment ownership.
+
+Object storage MUST support:
+
+* redundancy;
+* lifecycle management;
+* antivirus scanning workflows;
+* immutable asset delivery.
+
+⸻
+
+Event Synchronization
+
+The system MUST support distributed event propagation.
+
+Synchronization mechanisms MAY include:
+
+* Redis pub/sub;
+* PostgreSQL LISTEN/NOTIFY;
+* event tables;
+* worker queues.
+
+All synchronization MUST tolerate:
+
+* node failure;
+* delayed propagation;
+* temporary inconsistency;
+* replay scenarios.
+
+⸻
+
+Eventual Consistency
+
+The architecture MUST tolerate eventual consistency where appropriate.
+
+Strong consistency SHOULD be reserved for:
+
+* authentication;
+* authorization;
+* financial operations;
+* security-critical actions.
+
+Realtime UI updates MAY operate asynchronously.
+
+⸻
+
+Queueing Philosophy
+
+Slow operations MUST execute asynchronously.
+
+Minion is the preferred orchestration layer.
+
+Queue-backed workflows MUST support:
+
+* retry policies;
+* idempotency;
+* failure recovery;
+* distributed execution;
+* workload isolation.
+
+⸻
+
+Deployment Philosophy
+
+The deployment architecture MUST support:
+
+* zero-downtime deployment;
+* rolling updates;
+* blue/green deployment when possible;
+* horizontal scaling;
+* rapid node replacement.
+
+Containers MAY be used.
+
+Kubernetes is OPTIONAL and MUST NOT become mandatory for the platform architecture.
+
+⸻
+
+Caching Philosophy
+
+Caching MUST remain:
+
+* explicit;
+* observable;
+* invalidation-aware;
+* non-authoritative.
+
+Preferred caching targets:
+
+* rendered fragments;
+* computed read models;
+* anonymous page delivery;
+* expensive aggregations.
+
+Caching MUST NOT compromise correctness or authorization.
+
+⸻
+
+Observability Infrastructure
+
+The infrastructure MUST expose:
+
+* metrics;
+* tracing;
+* structured logs;
+* health endpoints;
+* auditability.
+
+Mandatory observability characteristics:
+
+* correlation IDs;
+* distributed tracing;
+* centralized logging;
+* operational dashboards.
+
+⸻
+
+Failure Philosophy
+
+The infrastructure MUST assume:
+
+* node crashes;
+* partial outages;
+* delayed jobs;
+* replication lag;
+* cache loss;
+* websocket interruptions.
+
+The system MUST degrade gracefully.
+
+No single application node may become critical infrastructure.
+
+⸻
+
+Operational Philosophy
+
+The platform MUST prioritize:
+
+* predictable operations;
+* recoverability;
+* low maintenance burden;
+* deterministic scaling;
+* infrastructure transparency.
+
+Operational complexity MUST remain controlled at all times.
+
+⸻
+
+Long-Term Infrastructure Goal
+
+GPForum infrastructure MUST remain:
+
+* scalable;
+* comprehensible;
+* auditable;
+* maintainable for decades;
+* resilient under high concurrency;
+* adaptable to future distributed workloads.
+
+All future infrastructure decisions MUST comply with this constitution.

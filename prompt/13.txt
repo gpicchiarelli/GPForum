@@ -1,0 +1,558 @@
+GPForum — Domain Model, Core Entities & Business Architecture Constitution
+
+This document defines the mandatory domain architecture, business entity philosophy, aggregate boundaries, lifecycle rules, invariants, ownership semantics, revision strategies, and long-term domain consistency principles of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Domain Philosophy
+
+GPForum is:
+
+* a distributed community platform;
+* an event-driven social system;
+* a long-lived collaborative environment.
+
+The domain model MUST prioritize:
+
+* explicit business meaning;
+* bounded responsibility;
+* auditability;
+* scalability;
+* operational sustainability;
+* long-term coherence.
+
+The domain model MUST avoid:
+
+* accidental complexity;
+* god entities;
+* implicit relationships;
+* uncontrolled cross-domain coupling.
+
+⸻
+
+Domain Architecture Philosophy
+
+The domain layer MUST:
+
+* remain infrastructure-independent;
+* remain persistence-independent;
+* remain transport-independent.
+
+Business rules MUST live inside:
+
+* domain services;
+* application workflows;
+* domain invariants.
+
+The domain model MUST remain authoritative for:
+
+* business semantics;
+* ownership rules;
+* moderation constraints;
+* lifecycle rules.
+
+⸻
+
+Aggregate Philosophy
+
+Aggregates MUST remain:
+
+* bounded;
+* explicit;
+* consistency-aware.
+
+Aggregates SHOULD:
+
+* minimize locking scope;
+* minimize transactional complexity;
+* support distributed workflows.
+
+The architecture MUST avoid:
+
+* giant transactional aggregates;
+* hidden cross-domain mutation.
+
+⸻
+
+Core Domain Areas
+
+Recommended domain boundaries:
+
+* Identity
+* Discussion
+* Moderation
+* Authorization
+* Realtime
+* Notification
+* Search
+* Attachment
+* Governance
+* Analytics
+
+Each domain MUST remain:
+
+* explicit;
+* bounded;
+* independently understandable.
+
+⸻
+
+Identity Domain
+
+Core entities:
+
+* User
+* Session
+* Credential
+* MFADevice
+* TrustProfile
+
+The identity system MUST support:
+
+* revocation;
+* auditability;
+* distributed sessions;
+* security-first workflows.
+
+Identity state MUST remain authoritative.
+
+⸻
+
+User Entity Philosophy
+
+Users are:
+
+* security principals;
+* ownership anchors;
+* moderation subjects;
+* authorization actors.
+
+User entities MUST support:
+
+* lifecycle tracking;
+* trust evolution;
+* moderation state;
+* permission relationships.
+
+The system MUST avoid:
+
+* implicit authority assumptions.
+
+⸻
+
+Discussion Domain
+
+Core entities:
+
+* Thread
+* Post
+* PostRevision
+* Category
+* Tag
+* Subscription
+
+Discussion entities MUST support:
+
+* scalability;
+* revision history;
+* moderation workflows;
+* distributed rendering.
+
+⸻
+
+Thread Philosophy
+
+Threads are:
+
+* conversation containers;
+* moderation scopes;
+* realtime synchronization targets.
+
+Threads MUST support:
+
+* locking;
+* archival;
+* visibility control;
+* category scoping;
+* moderation state.
+
+Thread lifecycle MUST remain explicit.
+
+⸻
+
+Post Philosophy
+
+Posts are:
+
+* immutable historical artifacts;
+* user-owned content entities;
+* moderation targets.
+
+Posts SHOULD prefer:
+
+* append-oriented revision history.
+
+Post editing SHOULD generate:
+
+* revision records;
+* audit trails;
+* synchronization events.
+
+⸻
+
+Revision Philosophy
+
+Mutable content SHOULD support:
+
+* immutable revisions.
+
+Examples:
+
+* post_revisions
+* moderation_revisions
+* policy_revisions
+
+Historical reconstruction SHOULD remain possible.
+
+⸻
+
+Category Philosophy
+
+Categories are:
+
+* organizational boundaries;
+* moderation scopes;
+* authorization boundaries.
+
+Categories MUST support:
+
+* scoped moderation;
+* scoped permissions;
+* visibility policies;
+* lifecycle governance.
+
+⸻
+
+Tag Philosophy
+
+Tags SHOULD remain:
+
+* lightweight;
+* queryable;
+* searchable;
+* moderation-aware.
+
+Tags MUST support:
+
+* permission-aware visibility;
+* moderation workflows;
+* scalable indexing.
+
+⸻
+
+Subscription Philosophy
+
+Subscriptions represent:
+
+* notification intent;
+* follow state;
+* personalization metadata.
+
+Subscriptions MUST remain:
+
+* revocable;
+* queryable;
+* asynchronous-friendly.
+
+⸻
+
+Notification Domain
+
+Core entities:
+
+* Notification
+* NotificationPreference
+* DeliveryAttempt
+
+Notifications MUST support:
+
+* asynchronous delivery;
+* distributed fanout;
+* replayability;
+* eventual consistency.
+
+Notifications MUST remain:
+
+* permission-aware;
+* user-scoped.
+
+⸻
+
+Moderation Domain
+
+Core entities:
+
+* ModerationAction
+* Report
+* Suspension
+* TrustRestriction
+* QuarantineEntry
+
+Moderation workflows MUST remain:
+
+* auditable;
+* attributable;
+* reversible where possible.
+
+Moderation entities MUST support:
+
+* escalation;
+* review;
+* lifecycle tracking.
+
+⸻
+
+Authorization Domain
+
+Core entities:
+
+* Role
+* Permission
+* RoleBinding
+* ResourcePolicy
+
+Authorization entities MUST support:
+
+* contextual evaluation;
+* scoped authority;
+* explicit revocation.
+
+The authorization model MUST avoid:
+
+* hidden privilege inheritance.
+
+⸻
+
+Attachment Domain
+
+Core entities:
+
+* Attachment
+* AttachmentVariant
+* MediaProcessingTask
+
+Attachments MUST support:
+
+* asynchronous processing;
+* scanning workflows;
+* immutable storage references;
+* lifecycle management.
+
+Attachments MUST NOT:
+
+* execute server-side;
+* bypass moderation.
+
+⸻
+
+Search Domain
+
+Core entities:
+
+* SearchDocument
+* SearchProjection
+* IndexingTask
+
+Search MUST remain:
+
+* projection-oriented;
+* asynchronously synchronized;
+* rebuildable.
+
+Search state MUST remain reconstructable from authoritative persistence.
+
+⸻
+
+Realtime Domain
+
+Core entities:
+
+* PresenceSession
+* WebsocketConnection
+* SubscriptionChannel
+
+Realtime entities SHOULD remain:
+
+* ephemeral;
+* reconstructable;
+* eventually consistent.
+
+Realtime state MUST NOT become authoritative business persistence.
+
+⸻
+
+Analytics Domain
+
+Analytics SHOULD remain:
+
+* append-oriented;
+* partition-aware;
+* asynchronous.
+
+Analytics MUST NOT:
+
+* block operational workflows;
+* become transactional dependencies.
+
+⸻
+
+Ownership Philosophy
+
+Ownership MUST remain explicit.
+
+Examples:
+
+* post ownership
+* attachment ownership
+* moderation ownership
+* thread ownership
+
+Ownership MUST support:
+
+* transfer rules;
+* revocation;
+* moderation override.
+
+⸻
+
+Lifecycle Philosophy
+
+All major entities SHOULD support:
+
+* creation;
+* moderation;
+* archival;
+* expiration where applicable.
+
+Lifecycle state MUST remain:
+
+* explicit;
+* queryable;
+* auditable.
+
+⸻
+
+Visibility Philosophy
+
+Visibility MUST support:
+
+* public visibility;
+* restricted visibility;
+* moderated visibility;
+* quarantined visibility;
+* deleted visibility.
+
+Visibility rules MUST remain:
+
+* authorization-aware;
+* moderation-aware.
+
+⸻
+
+Soft Deletion Philosophy
+
+Destructive deletion SHOULD be minimized.
+
+Preferred approach:
+
+* soft deletion;
+* archival;
+* reversible moderation.
+
+Hard deletion SHOULD remain:
+
+* exceptional;
+* restricted;
+* auditable.
+
+⸻
+
+Event Integration
+
+All major domain workflows SHOULD emit:
+
+* domain events;
+* moderation events;
+* synchronization events;
+* audit events.
+
+The domain model MUST remain:
+
+* event-aware;
+* replay-friendly.
+
+⸻
+
+Invariant Philosophy
+
+Critical invariants MUST remain:
+
+* explicit;
+* testable;
+* centralized.
+
+Examples:
+
+* locked threads reject replies;
+* suspended users cannot post;
+* quarantined content cannot render publicly.
+
+Invariant enforcement MUST remain server-authoritative.
+
+⸻
+
+CQRS-lite Philosophy
+
+The domain model SHOULD support:
+
+* canonical write persistence;
+* asynchronous projections;
+* denormalized read models.
+
+Read models MUST remain:
+
+* rebuildable;
+* eventually consistent where appropriate.
+
+⸻
+
+Domain Service Philosophy
+
+Complex workflows SHOULD use:
+
+* domain services;
+* application workflows.
+
+Entities SHOULD avoid:
+
+* infrastructure coupling;
+* orchestration complexity.
+
+⸻
+
+Long-Term Domain Goal
+
+The GPForum domain architecture MUST remain:
+
+* coherent;
+* scalable;
+* auditable;
+* distributed-safe;
+* operationally sustainable;
+* understandable by future maintainers.
+
+The domain model is the semantic foundation of the platform.
+
+All future business logic and entities MUST comply with this constitution.
