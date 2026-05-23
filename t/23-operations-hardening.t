@@ -20,10 +20,12 @@ use GPForum::Service::Operations::RuntimeSizing;
 use GPForum::Service::Realtime::Hub;
 use GPForum::Test::OperationsClock;
 use GPForum::Test::ProjectionLagProbe;
+use GPForum::Test::QueryBudgetResultSet;
+use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 48;
+const my $EXPECTED_TESTS            => 53;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -252,6 +254,27 @@ ok(
     exists $query_budget->snapshot->{endpoints}{search},
     'query budget snapshot includes search endpoint'
 );
+my $query_budget_resultset = GPForum::Test::QueryBudgetResultSet->new;
+my $query_budget_schema    = GPForum::Test::QueryBudgetSchema->new(
+    budget_resultset => $query_budget_resultset, );
+my $sync = $query_budget->sync_schema($query_budget_schema);
+is(
+    $sync->{synced},
+    scalar keys %{ $query_budget->catalog },
+    'query budget sync writes every catalog endpoint'
+);
+is(
+    $query_budget_resultset->rows->{thread_view}->get_column('max_queries'),
+    $THREAD_VIEW_QUERY_BUDGET,
+    'query budget sync persists thread view budget'
+);
+is( $query_budget->drift_report($query_budget_schema)->{status},
+    'ok', 'query budget drift report accepts synchronized catalog' );
+$query_budget_resultset->rows->{thread_view}->update( { max_queries => 1 } );
+is( $query_budget->drift_report($query_budget_schema)->{status},
+    'fail', 'query budget drift report rejects mismatched stored budget' );
+is( $query_budget->drift_report($query_budget_schema)->{mismatched}[0],
+    'thread_view', 'query budget drift report names mismatched endpoint' );
 my $bad_runtime = GPForum::Runtime->new(
     web_processes      => $BAD_WEB_PROCESSES,
     worker_processes   => $BAD_WORKER_PROCESSES,

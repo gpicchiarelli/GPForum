@@ -9,6 +9,7 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my $DEFAULT_TRANSACTION_BUDGET => 1;
+const my $BUDGET_SEARCH_ROWS         => 1_000;
 const my %DEFAULT_BUDGETS => (
     home => {
         max_queries => 5,
@@ -41,6 +42,7 @@ const my %DEFAULT_BUDGETS => (
 );
 
 has budgets => sub { return _default_budgets(); };
+has schema  => undef;
 
 sub catalog {
     my ($self) = @_;
@@ -96,6 +98,40 @@ sub snapshot {
     };
 }
 
+sub sync_schema {
+    my ( $self, $schema ) = @_;
+
+    my $resultset = $self->_resultset($schema);
+    my @endpoints = sort keys %{ $self->budgets };
+
+    for my $endpoint_name (@endpoints) {
+        $resultset->update_or_create(
+            _storage_row( $self->budget_for($endpoint_name) ) );
+    }
+
+    return {
+        synced    => scalar @endpoints,
+        endpoints => \@endpoints,
+    };
+}
+
+sub drift_report {
+    my ( $self, $schema ) = @_;
+
+    my %stored     = $self->_stored_budget_rows($schema);
+    my $catalog    = $self->catalog;
+    my @missing    = _missing_endpoints( $catalog, \%stored );
+    my @extra      = _extra_endpoints( $catalog, \%stored );
+    my @mismatched = _mismatched_endpoints( $catalog, \%stored );
+
+    return {
+        status     => @missing || @extra || @mismatched ? 'fail' : 'ok',
+        missing    => \@missing,
+        extra      => \@extra,
+        mismatched => \@mismatched,
+    };
+}
+
 sub _default_budgets {
     my %budgets;
 
@@ -131,6 +167,100 @@ sub _unknown_endpoint {
         observed      => {},
         violations    => ['endpoint'],
     };
+}
+
+sub _resultset {
+    my ( $self, $schema ) = @_;
+
+    if ( !$schema ) {
+        $schema = $self->schema;
+    }
+
+    return $schema->resultset('EndpointQueryBudget');
+}
+
+sub _storage_row {
+    my ($budget) = @_;
+
+    return {
+        endpoint_name    => $budget->{endpoint_name},
+        max_queries      => $budget->{max_queries},
+        max_transactions => $budget->{max_transactions},
+        notes            => $budget->{notes},
+    };
+}
+
+sub _stored_budget_rows {
+    my ( $self, $schema ) = @_;
+
+    my $search = $self->_resultset($schema)->search(
+        {},
+        {
+            rows     => $BUDGET_SEARCH_ROWS,
+            order_by => { -asc => 'endpoint_name' },
+        },
+    );
+
+    return map { _column( $_, 'endpoint_name' ) => $_ } _rows($search);
+}
+
+sub _missing_endpoints {
+    my ( $catalog, $stored ) = @_;
+
+    return grep { !exists $stored->{$_} } sort keys %{$catalog};
+}
+
+sub _extra_endpoints {
+    my ( $catalog, $stored ) = @_;
+
+    return grep { !exists $catalog->{$_} } sort keys %{$stored};
+}
+
+sub _mismatched_endpoints {
+    my ( $catalog, $stored ) = @_;
+
+    my @mismatched;
+    for my $endpoint_name ( sort keys %{$catalog} ) {
+        next if !exists $stored->{$endpoint_name};
+        if (
+            _budget_mismatch(
+                $catalog->{$endpoint_name},
+                $stored->{$endpoint_name}
+            )
+          )
+        {
+            push @mismatched, $endpoint_name;
+        }
+    }
+
+    return @mismatched;
+}
+
+sub _budget_mismatch {
+    my ( $budget, $row ) = @_;
+
+    return 1 if _column( $row, 'max_queries' ) != $budget->{max_queries};
+    return 1
+      if _column( $row, 'max_transactions' ) != $budget->{max_transactions};
+
+    return 0;
+}
+
+sub _rows {
+    my ($search) = @_;
+
+    return $search->all       if $search->can('all');
+    return @{ $search->rows } if $search->can('rows');
+
+    return;
+}
+
+sub _column {
+    my ( $row, $column ) = @_;
+
+    return $row->get_column($column) if $row->can('get_column');
+
+    return $row->{$column};
 }
 
 1;

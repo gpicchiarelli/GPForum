@@ -136,7 +136,9 @@ Endpoint query budgets are represented by
 `GPForum::Service::Operations::QueryBudget` and surfaced through `/metrics`.
 They currently cover home, category lists, category thread pages, thread view,
 thread/reply creation, and search. They are release-gate contracts for future
-instrumented observations rather than runtime query counters.
+instrumented observations rather than runtime query counters. The same service
+can synchronize the catalog into `endpoint_query_budgets` and report drift if
+the database contract diverges from the executable catalog.
 
 Start workers after Minion configuration is present:
 
