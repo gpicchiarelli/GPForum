@@ -38,6 +38,15 @@ __PACKAGE__->add_columns(
         data_type   => 'uuid',
         is_nullable => 0,
     },
+    previous_hash => {
+        data_type   => 'text',
+        is_nullable => 1,
+    },
+    record_hash => {
+        data_type     => 'text',
+        default_value => q{},
+        is_nullable   => 0,
+    },
     metadata => {
         data_type     => 'jsonb',
         default_value => '{}',

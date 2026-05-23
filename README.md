@@ -78,6 +78,7 @@ This repository currently contains:
 * DBIx::Class schema root in [lib/GPForum/Schema.pm](lib/GPForum/Schema.pm);
 * PostgreSQL core identity and event/audit migrations in [migrations](migrations);
 * forum hot-path/projection migration with post head/body/revision split;
+* platform governance migration for command log, ledgers, projection lag, partition registry, dead letters, and query budgets;
 * partial, BRIN, covering, trigram, and projection-oriented indexes;
 * server-side session persistence in the canonical `sessions` table;
 * UUIDv7 identifier generation for sortable distributed ids;

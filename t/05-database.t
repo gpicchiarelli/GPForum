@@ -16,8 +16,10 @@ use GPForum::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 76;
-const my $EXPECTED_MIGRATIONS => 3;
+const my $EXPECTED_TESTS             => 106;
+const my $EXPECTED_MIGRATIONS        => 4;
+const my $FORUM_MIGRATION_INDEX      => 2;
+const my $GOVERNANCE_MIGRATION_INDEX => 3;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -53,6 +55,10 @@ ok(
 ok( $event_source->has_column('causation_id'),
     'event log stores causation id' );
 ok(
+    $event_source->has_column('aggregate_version'),
+    'event log stores aggregate stream version'
+);
+ok(
     $event_source->has_column('idempotency_key'),
     'event log stores idempotency key'
 );
@@ -72,6 +78,14 @@ ok(
 ok(
     $audit_source->has_column('correlation_id'),
     'audit log stores correlation id'
+);
+ok(
+    $audit_source->has_column('previous_hash'),
+    'audit log supports hash chain previous hash'
+);
+ok(
+    $audit_source->has_column('record_hash'),
+    'audit log supports hash chain record hash'
 );
 ok( $audit_source->has_column('metadata'), 'audit log stores metadata' );
 
@@ -131,7 +145,7 @@ is( $connected_schema->storage->connect_info->[0],
 my $plan    = GPForum::Migration::Plan->new;
 my $summary = $plan->summary;
 
-is( scalar @{$summary}, $EXPECTED_MIGRATIONS, 'three migrations are planned' );
+is( scalar @{$summary}, $EXPECTED_MIGRATIONS, 'four migrations are planned' );
 is( $summary->[0]->{version}, '001',          'migration version is parsed' );
 is(
     $summary->[0]->{description},
@@ -196,6 +210,15 @@ like(
 qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] event_idempotency_keys/msx,
     'event audit migration creates global idempotency table'
 );
+like( $event_audit_sql, qr/aggregate_version/msx,
+    'event audit migration stores aggregate versions' );
+like(
+    $event_audit_sql,
+    qr/aggregate_stream_versions/msx,
+    'event audit migration creates aggregate stream version guard'
+);
+like( $event_audit_sql, qr/previous_hash/msx,
+    'event audit migration stores audit hash chain links' );
 like(
     $event_audit_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] idempotency_keys/msx,
@@ -217,10 +240,11 @@ like(
     'event audit migration creates BRIN indexes for append logs'
 );
 
-my $forum_projection_sql = path( $summary->[2]->{file} )->slurp;
+my $forum_projection_sql =
+  path( $summary->[$FORUM_MIGRATION_INDEX]->{file} )->slurp;
 
 is(
-    $summary->[2]->{description},
+    $summary->[$FORUM_MIGRATION_INDEX]->{description},
     'forum projection',
     'forum projection migration description is parsed'
 );
@@ -315,6 +339,121 @@ like(
     $forum_projection_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] user_feed_items/msx,
     'forum projection migration creates user feed projection'
+);
+
+my $platform_governance_sql =
+  path( $summary->[$GOVERNANCE_MIGRATION_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$GOVERNANCE_MIGRATION_INDEX]->{description},
+    'platform governance',
+    'platform governance migration description is parsed'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] SCHEMA [ ] IF [ ] NOT [ ] EXISTS [ ] security/msx,
+    'platform governance migration declares security schema'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] command_log/msx,
+    'platform governance migration creates command log'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] role_binding_events/msx,
+    'platform governance migration creates role binding event ledger'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] permission_grants/msx,
+    'platform governance migration creates permission grant ledger'
+);
+like(
+    $platform_governance_sql,
+qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] permission_revocations/msx,
+    'platform governance migration creates permission revocation ledger'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] effective_permissions/msx,
+    'platform governance migration creates effective permissions projection'
+);
+like( $platform_governance_sql, qr/valid_from/msx,
+    'platform governance migration supports temporal authorization' );
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] visibility_events/msx,
+    'platform governance migration creates visibility ledger'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] deletion_requests/msx,
+    'platform governance migration creates deletion request ledger'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] erasure_jobs/msx,
+    'platform governance migration creates erasure jobs'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] retention_holds/msx,
+    'platform governance migration creates retention holds'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] audit_checkpoints/msx,
+    'platform governance migration creates audit checkpoints'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] projection_offsets/msx,
+    'platform governance migration tracks projection lag'
+);
+like(
+    $platform_governance_sql,
+qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] projection_generations/msx,
+    'platform governance migration supports projection rebuild generations'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] partition_registry/msx,
+    'platform governance migration creates partition registry'
+);
+like( $platform_governance_sql, qr/next_attempt_at/msx,
+    'platform governance migration materializes retry scheduling' );
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] dead_letters/msx,
+    'platform governance migration creates dead letter queue'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] thread_counter_shards/msx,
+    'platform governance migration creates anti-hot-row counter shards'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] view_count_deltas/msx,
+    'platform governance migration creates write coalescing deltas'
+);
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] thread_read_state/msx,
+    'platform governance migration creates compressed read markers'
+);
+like(
+    $platform_governance_sql,
+qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] endpoint_query_budgets/msx,
+    'platform governance migration creates endpoint query budgets'
+);
+like( $platform_governance_sql, qr/gpforum_web/msx,
+    'platform governance migration records least-privilege DB role contracts' );
+like(
+    $platform_governance_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] migration_safety/msx,
+    'platform governance migration creates migration safety table'
 );
 
 throws_ok(

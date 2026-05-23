@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS event_log (
     schema_version integer NOT NULL,
     aggregate_type text NOT NULL,
     aggregate_id uuid,
+    aggregate_version bigint NOT NULL DEFAULT 1,
     actor_id uuid,
     correlation_id uuid NOT NULL,
     causation_id uuid,
@@ -14,7 +15,8 @@ CREATE TABLE IF NOT EXISTS event_log (
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT event_log_pkey PRIMARY KEY (event_id, created_at),
-    CONSTRAINT event_log_schema_version_check CHECK (schema_version > 0)
+    CONSTRAINT event_log_schema_version_check CHECK (schema_version > 0),
+    CONSTRAINT event_log_aggregate_version_check CHECK (aggregate_version > 0)
 ) PARTITION BY RANGE (created_at);
 
 CREATE TABLE IF NOT EXISTS event_log_default
@@ -22,6 +24,9 @@ CREATE TABLE IF NOT EXISTS event_log_default
 
 CREATE INDEX IF NOT EXISTS idx_event_log_aggregate_created_at
     ON event_log (aggregate_type, aggregate_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_event_log_aggregate_version
+    ON event_log (aggregate_type, aggregate_id, aggregate_version);
 
 CREATE INDEX IF NOT EXISTS idx_event_log_type_created_at
     ON event_log (event_type, created_at);
@@ -40,6 +45,16 @@ CREATE TABLE IF NOT EXISTS event_idempotency_keys (
     event_id uuid NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT event_idempotency_keys_pkey PRIMARY KEY (idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS aggregate_stream_versions (
+    aggregate_type text NOT NULL,
+    aggregate_id uuid NOT NULL,
+    aggregate_version bigint NOT NULL,
+    event_id uuid NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT aggregate_stream_versions_pkey PRIMARY KEY (aggregate_type, aggregate_id, aggregate_version),
+    CONSTRAINT aggregate_stream_versions_version_check CHECK (aggregate_version > 0)
 );
 
 CREATE TABLE IF NOT EXISTS idempotency_keys (
@@ -64,6 +79,8 @@ CREATE TABLE IF NOT EXISTS audit_log (
     target_type text,
     target_id uuid,
     correlation_id uuid NOT NULL,
+    previous_hash text,
+    record_hash text NOT NULL DEFAULT '',
     metadata jsonb NOT NULL DEFAULT '{}'::jsonb,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT audit_log_pkey PRIMARY KEY (audit_id, created_at),

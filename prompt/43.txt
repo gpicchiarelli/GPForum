@@ -232,6 +232,7 @@ Every durable event MUST include:
 * schema_version
 * aggregate_type
 * aggregate_id
+* aggregate_version
 * actor_id
 * idempotency_key
 * correlation_id
@@ -243,6 +244,11 @@ Every durable event MUST include:
 Events MUST be immutable after insertion.
 
 Events MUST be versioned from the first version.
+
+Each aggregate stream MUST have a strong monotonic version guard. On PostgreSQL
+partitioned event tables this MAY be implemented with a companion
+aggregate_stream_versions table because global unique constraints on
+partitioned tables must include the partition key.
 
 Events MUST be safe to inspect without exposing secrets.
 
@@ -510,6 +516,23 @@ Outbox failure:
 * consumers MUST tolerate duplicate delivery;
 * pending outbox lag MUST be observable;
 * no workflow may accept "row written but event lost" as a valid state.
+
+Dead-letter handling MUST preserve failed payload, error class, retry count,
+and first/last failure timestamps.
+
+Projection failure:
+
+* projection_offsets MUST expose lag and status for search, notifications,
+  feed, and counters;
+* projection_generations MUST allow blue/green read-model rebuilds;
+* feed projections MUST be degradable to slower canonical queries and MUST
+  never become authoritative truth.
+
+Audit integrity failure:
+
+* audit_log SHOULD use a hash chain;
+* audit_checkpoints SHOULD be exported externally on a fixed cadence;
+* missing or invalid checkpoints MUST be treated as an operations incident.
 
 Email failure:
 

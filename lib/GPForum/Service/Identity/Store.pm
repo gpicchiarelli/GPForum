@@ -88,17 +88,18 @@ sub _record_event {
 
     $self->schema->resultset('EventLog')->create(
         {
-            event_id        => $event_id,
-            event_type      => 'user.registered',
-            schema_version  => $SCHEMA_VERSION,
-            aggregate_type  => $USER_AGGREGATE,
-            aggregate_id    => $user->{id},
-            actor_id        => $user->{id},
-            correlation_id  => $correlation_id,
-            causation_id    => undef,
-            idempotency_key => $idempotency_key,
-            payload         => { username => $user->{username} },
-            metadata        => {},
+            event_id          => $event_id,
+            event_type        => 'user.registered',
+            schema_version    => $SCHEMA_VERSION,
+            aggregate_type    => $USER_AGGREGATE,
+            aggregate_id      => $user->{id},
+            aggregate_version => $SCHEMA_VERSION,
+            actor_id          => $user->{id},
+            correlation_id    => $correlation_id,
+            causation_id      => undef,
+            idempotency_key   => $idempotency_key,
+            payload           => { username => $user->{username} },
+            metadata          => {},
         }
     );
 

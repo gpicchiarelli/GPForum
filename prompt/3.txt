@@ -347,6 +347,14 @@ SHOULD use partial indexes that exclude deleted or hidden rows. Append-only
 logs SHOULD use BRIN indexes on created_at when scale makes B-tree indexes too
 large.
 
+Endpoint query budgets are part of the database contract. Home, thread view,
+post create, and search endpoints MUST declare maximum query counts and
+transaction counts before implementation.
+
+Write coalescing MUST be used for view counts, read markers, and presence-like
+signals. Anti-hot-row counters SHOULD use sharded delta tables for viral
+threads.
+
 ⸻
 
 ORM Discipline
@@ -392,6 +400,9 @@ event_log.
 Materialized views MUST be reserved for admin, moderation, reporting, trend, or
 daily statistics workloads. They MUST NOT be placed on a hot user path if they
 require heavy refresh.
+
+Projection lag and rebuild generations MUST be first-class operational data,
+not implicit worker behavior.
 
 ⸻
 

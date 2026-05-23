@@ -30,6 +30,11 @@ __PACKAGE__->add_columns(
         data_type   => 'uuid',
         is_nullable => 1,
     },
+    aggregate_version => {
+        data_type     => 'bigint',
+        default_value => 1,
+        is_nullable   => 0,
+    },
     actor_id => {
         data_type   => 'uuid',
         is_nullable => 1,
