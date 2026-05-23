@@ -6,6 +6,12 @@ state, disposable realtime/cache state, idempotent workers, observable
 coordination, and bounded query cost. Any distributed dependency introduced for
 coordination requires ADR justification and tests for degraded operation.
 
+Prompt 49 alignment: process scaling MUST be OS-aware and resource-bounded.
+GPForum MUST use persistent Perl processes, never fork per request, and MUST
+centralize OS-specific behavior behind `GPForum::OS`. Worker counts MUST account
+for CPU, memory, file descriptors, PostgreSQL connection pressure, event
+backend, and deployment profile.
+
 This document defines the mandatory Perl runtime scalability model for GPForum, including multi-process execution, dynamic process scaling, bounded threading, workload isolation, and capacity estimation rules.
 
 This specification is foundational and mandatory.

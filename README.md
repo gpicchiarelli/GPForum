@@ -75,7 +75,7 @@ This repository currently contains:
 * a public static platform page in [index.html](index.html);
 * visual identity assets in [assets](assets);
 * editable logo source artwork in [assets/source/gpforum-logo-source.svg](assets/source/gpforum-logo-source.svg);
-* 48 architectural prompt constitutions in [prompt](prompt);
+* 49 architectural prompt constitutions in [prompt](prompt);
 * GitHub project success surface in [.github](.github), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [GOVERNANCE.md](GOVERNANCE.md), [SUPPORT.md](SUPPORT.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), and [docs/adr](docs/adr);
 * BSD-3 license in [LICENSE](LICENSE);
 * strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
@@ -296,6 +296,7 @@ Implementation and operations:
 * [46](prompt/46.txt) Accessibility engineering
 * [47](prompt/47.txt) Human-centered community lifecycle
 * [48](prompt/48.txt) Core boundary and architectural discipline
+* [49](prompt/49.txt) OS-level performance
 
 [prompt/18.txt](prompt/18.txt) is an exploration memo. [prompt/19.txt](prompt/19.txt) and [prompt/42.txt](prompt/42.txt) are authoritative final decisions.
 
@@ -320,6 +321,7 @@ Known final decisions:
 * Accessibility engineering is mandatory for participation equality, WCAG enforcement, semantic rendering, and release correctness.
 * Human-centered community lifecycle design is mandatory for durable participation without dark patterns.
 * Core boundary discipline is mandatory: small stable core, capability-scoped plugins, no controller business logic, and no cache/projection authority.
+* OS-level performance discipline is mandatory: persistent Perl processes, centralized OS abstraction, bounded hot paths, reverse-proxy file delivery, PostgreSQL coordination, and profiling before invasive optimization.
 
 ## License
 

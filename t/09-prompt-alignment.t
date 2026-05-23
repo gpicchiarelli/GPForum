@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 153;
+const my $EXPECTED_TESTS => 166;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -20,6 +20,7 @@ my $engineering       = path('prompt/45.txt')->slurp;
 my $accessibility     = path('prompt/46.txt')->slurp;
 my $community         = path('prompt/47.txt')->slurp;
 my $discipline        = path('prompt/48.txt')->slurp;
+my $os_performance    = path('prompt/49.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -91,7 +92,7 @@ like(
 );
 like(
     $readme,
-    qr/48 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/49 [ ] architectural [ ] prompt [ ] constitutions/msx,
 'README counts the verifiable, accessibility, community, and discipline constitutions'
 );
 like(
@@ -131,7 +132,7 @@ like(
 );
 like(
     $readme,
-    qr/48 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/49 [ ] architectural [ ] prompt [ ] constitutions/msx,
     'README counts the accessibility constitution'
 );
 like(
@@ -215,6 +216,65 @@ like(
     $engineering,
     qr/Core [ ] boundary [ ] rules [ ] from [ ] prompt\/48[.]txt/msx,
     'engineering invariants prompt includes core boundary invariants'
+);
+like(
+    $os_performance,
+    qr/OS-Level [ ] Performance [ ] Constitution/msx,
+    'OS performance prompt defines the new constitution'
+);
+like(
+    $os_performance,
+    qr/macOS, [ ] FreeBSD, [ ] and [ ] Linux/msx,
+    'OS performance prompt defines supported systems'
+);
+like( $os_performance, qr/GPForum::OS/msx,
+    'OS performance prompt requires centralized OS abstraction' );
+like(
+    $os_performance,
+    qr/fork [ ] per [ ] request/msx,
+    'OS performance prompt forbids fork per request'
+);
+like( $os_performance, qr/SO_REUSEPORT/msx,
+    'OS performance prompt defines socket capability policy' );
+like(
+    $os_performance,
+    qr/Templates [ ] MUST [ ] render/msx,
+    'OS performance prompt forbids template business logic'
+);
+like(
+    $os_performance,
+    qr/GPForum [ ] MUST [ ] NOT [ ] require [ ] Redis/msx,
+    'OS performance prompt preserves Redis optionality'
+);
+like(
+    $readme,
+    qr/OS-level [ ] performance [ ] discipline [ ] is [ ] mandatory/msx,
+    'README records OS performance as a final decision'
+);
+like(
+    path('prompt/15.txt')->slurp,
+    qr/Prompt [ ] 49 [ ] alignment/msx,
+    'performance prompt aligns with OS performance constitution'
+);
+like(
+    path('prompt/38.txt')->slurp,
+    qr/Prompt [ ] 49 [ ] alignment/msx,
+    'deployment prompt aligns with OS performance constitution'
+);
+like(
+    path('prompt/40.txt')->slurp,
+    qr/Prompt [ ] 49 [ ] alignment/msx,
+    'multi-process prompt aligns with OS performance constitution'
+);
+like(
+    path('prompt/41.txt')->slurp,
+    qr/Prompt [ ] 49 [ ] alignment/msx,
+    'profiling prompt aligns with OS performance constitution'
+);
+ok(
+    index( $engineering,
+        'OS-level performance rules are engineering invariants' ) >= 0,
+    'engineering invariants prompt aligns with OS performance constitution'
 );
 
 for my $required_term (

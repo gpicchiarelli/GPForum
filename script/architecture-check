@@ -12,9 +12,20 @@ check_controller_forbidden_persistence() {
     fi
 }
 
+check_os_specific_logic() {
+    if grep -RInE -- '\$\^O|OSNAME' lib t script bin \
+        | grep -vE '^lib/GPForum/OS([.]pm|/[^:]*[.]pm):' \
+        | grep -vE '^script/architecture-check:'; then
+        echo "architecture-check: OS-specific logic must live behind lib/GPForum/OS*.pm" >&2
+        status=1
+    fi
+}
+
 for file in lib/GPForum/Controller/*.pm; do
     [ -f "$file" ] || continue
     check_controller_forbidden_persistence "$file"
 done
+
+check_os_specific_logic
 
 exit "$status"

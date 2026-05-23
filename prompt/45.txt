@@ -10,6 +10,12 @@ This constitution is mandatory.
 It evolves GPForum from architecture-by-intent into
 architecture-by-verifiable-invariants.
 
+Prompt 49 alignment: OS-level performance rules are engineering invariants.
+Centralized OS detection, persistent Perl processes, no fork-per-request, no
+shell-out in request hot paths, bounded DBIx::Class usage, prepared view models,
+reverse-proxy file delivery, conservative feature flags, and profiling before
+invasive optimization are mechanically reviewable architecture constraints.
+
 It does not replace the existing constitutions. It binds them together with
 mechanically reviewable and testable engineering rules.
 

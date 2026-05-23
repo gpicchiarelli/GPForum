@@ -6,6 +6,13 @@ benchmarks where feasible. OFFSET pagination on hot forum paths is prohibited.
 Performance regressions that break documented budgets are release-blocking
 engineering failures.
 
+Prompt 49 alignment: performance MUST also be OS-aware. macOS, FreeBSD, and
+Linux behavior MUST be detected through `GPForum::OS`, not scattered `$^O`
+checks. Hot paths MUST avoid fork-per-request, blocking I/O, unbounded caches,
+long transactions, repeated parsing, and unnecessary synchronous filesystem
+work. OS-specific optimizations require fallback, feature flags, documentation,
+and profiling evidence.
+
 This document defines the mandatory performance philosophy, scalability architecture, latency discipline, throughput strategy, resource management model, cache hierarchy, backpressure behavior, load-shedding principles, and long-term capacity engineering standards of GPForum.
 
 This specification is foundational and mandatory.

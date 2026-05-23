@@ -15,6 +15,6 @@ plan tests => $EXPECTED_TESTS;
 ok( -x 'script/architecture-check', 'architecture check script is executable' );
 
 is( system('script/architecture-check'),
-    0, 'architecture check passes controller boundary rules' );
+    0, 'architecture check passes boundary and OS portability rules' );
 
 1;

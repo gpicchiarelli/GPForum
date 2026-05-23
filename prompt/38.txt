@@ -6,6 +6,12 @@ readiness checks, rollback stance, and dependency lockfile integrity. Runtime
 process changes MUST not introduce hidden dependencies or unverifiable
 operational behavior.
 
+Prompt 49 alignment: deployment profiles MUST preserve OS-level performance
+discipline. Production deployments SHOULD use persistent Mojolicious prefork
+processes, reverse-proxy static delivery, worker-local database connections,
+explicit resource limits, conservative OS feature flags, and documented
+macOS/FreeBSD/Linux fallbacks.
+
 This document defines the mandatory packaging model, runtime process layout, deployment target expectations, process supervision, web server integration, and production runtime discipline for GPForum.
 
 This specification is mandatory for deployment design.

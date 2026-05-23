@@ -21,7 +21,7 @@ use GPForum::Test::ProjectionLagProbe;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 30;
+const my $EXPECTED_TESTS            => 33;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -119,6 +119,12 @@ is( $metrics->{generated_at},
     '2026-05-23T12:00:00Z', 'metrics snapshot has timestamp' );
 is( $metrics->{runtime}{web_processes},
     $WEB_PROCESSES, 'metrics exposes runtime profile' );
+ok( $metrics->{runtime}{os}{name},  'runtime profile exposes OS name' );
+ok( $metrics->{os}{cpu_count} >= 1, 'metrics exposes OS CPU count' );
+ok(
+    exists $metrics->{os}{supports_reuseport},
+    'metrics exposes OS socket capability'
+);
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
 is( $metrics->{rate_limits}{buckets},

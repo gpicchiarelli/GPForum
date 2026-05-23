@@ -5,11 +5,14 @@ use warnings;
 
 use Mojo::Base -base;
 
+use GPForum::OS;
+
 our $VERSION = '0.001';
 
 has web_processes      => 1;
 has worker_processes   => 1;
 has realtime_processes => 1;
+has os_profile         => sub { return GPForum::OS->detect; };
 
 sub from_config {
     my ( $class, $config ) = @_;
@@ -18,6 +21,7 @@ sub from_config {
         web_processes      => $config->web_processes,
         worker_processes   => $config->worker_processes,
         realtime_processes => $config->realtime_processes,
+        os_profile         => GPForum::OS->detect,
     );
 }
 
@@ -28,6 +32,7 @@ sub as_hash {
         web_processes      => $self->web_processes,
         worker_processes   => $self->worker_processes,
         realtime_processes => $self->realtime_processes,
+        os                 => $self->os_profile->snapshot,
     };
 }
 
