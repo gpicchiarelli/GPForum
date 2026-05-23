@@ -44,6 +44,16 @@ sub register {
         errors   => $result->{errors},
     ) if !$result->{ok};
 
+    my $stored =
+      $self->gp_identity_store->create_registration( $result->{registration} );
+
+    return $self->render(
+        template => 'identity/register',
+        status   => $HTTP_BAD_REQUEST,
+        values   => $result->{values},
+        errors   => $stored->{errors},
+    ) if !$stored->{ok};
+
     return $self->render(
         template     => 'identity/register_accepted',
         status       => $HTTP_ACCEPTED,

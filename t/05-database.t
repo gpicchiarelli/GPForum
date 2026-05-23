@@ -16,12 +16,14 @@ use GPForum::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 29;
+const my $EXPECTED_TESTS => 37;
 
 plan tests => $EXPECTED_TESTS;
 
-my $schema = GPForum::Schema->clone;
-my $source = $schema->source('SchemaVersion');
+my $schema       = GPForum::Schema->clone;
+my $source       = $schema->source('SchemaVersion');
+my $event_source = $schema->source('EventLog');
+my $audit_source = $schema->source('AuditLog');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -31,6 +33,18 @@ ok(
     $source->has_column('applied_at'),
     'schema version records application time'
 );
+
+is( $event_source->from, 'event_log', 'event source maps event log table' );
+is_deeply( [ $event_source->primary_columns ],
+    ['event_id'], 'event log primary key is explicit' );
+ok( $event_source->has_column('event_type'), 'event log stores event type' );
+ok( $event_source->has_column('payload'),    'event log stores payload' );
+
+is( $audit_source->from, 'audit_log', 'audit source maps audit log table' );
+is_deeply( [ $audit_source->primary_columns ],
+    ['audit_id'], 'audit log primary key is explicit' );
+ok( $audit_source->has_column('action'),   'audit log stores action' );
+ok( $audit_source->has_column('metadata'), 'audit log stores metadata' );
 
 my $user_source       = $schema->source('User');
 my $credential_source = $schema->source('Credential');

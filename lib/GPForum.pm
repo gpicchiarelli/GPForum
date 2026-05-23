@@ -8,9 +8,11 @@ use Mojo::Base 'Mojolicious';
 use GPForum::Config;
 use GPForum::Log;
 use GPForum::Runtime;
-use GPForum::Service::Identity::Registration;
+use GPForum::Schema;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Identity::Registration;
+use GPForum::Service::Identity::Store;
 use GPForum::Service::Password;
 use GPForum::Service::SessionToken;
 
@@ -28,8 +30,15 @@ sub startup {
 
     $self->helper( gp_config  => sub { return $config; } );
     $self->helper( gp_runtime => sub { return $runtime; } );
-    $self->helper( gp_clock   => sub { return GPForum::Service::Clock->new; } );
-    $self->helper( gp_id      => sub { return GPForum::Service::Id->new; } );
+    my $schema;
+    $self->helper(
+        gp_schema => sub {
+            $schema ||= GPForum::Schema->connect_from_config($config);
+            return $schema;
+        }
+    );
+    $self->helper( gp_clock => sub { return GPForum::Service::Clock->new; } );
+    $self->helper( gp_id    => sub { return GPForum::Service::Id->new; } );
     $self->helper(
         gp_password => sub { return GPForum::Service::Password->new; } );
     $self->helper(
@@ -37,6 +46,12 @@ sub startup {
     );
     $self->helper( gp_registration =>
           sub { return GPForum::Service::Identity::Registration->new; } );
+    $self->helper(
+        gp_identity_store => sub {
+            return GPForum::Service::Identity::Store->new(
+                schema => shift->gp_schema );
+        }
+    );
 
     GPForum::Log->configure( $self, $config );
 

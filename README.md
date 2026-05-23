@@ -81,6 +81,7 @@ This repository currently contains:
 * Argon2id password hashing and random session token services;
 * server-rendered identity routes for registration, login, logout, and public profiles;
 * CSRF enforcement for state-changing identity requests;
+* registration persistence boundary for users, credentials, events, and audit records;
 * automation scripts in [script](script).
 
 The current implementation step is **Milestone 1: Identity And Sessions** under
