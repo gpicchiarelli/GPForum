@@ -1,0 +1,121 @@
+GPForum - Plugin, Extension & Hook System Constitution
+
+This document defines the optional plugin architecture, extension boundaries, hook model, safety constraints, compatibility rules, and governance requirements for GPForum.
+
+This specification is mandatory if plugins are implemented.
+
+---
+
+Plugin Philosophy
+
+Plugins are optional extension points, not architectural escape hatches.
+
+Plugins MUST:
+
+* respect security policy;
+* respect authorization;
+* remain observable;
+* declare capabilities;
+* avoid hidden global mutation.
+
+Plugins MUST NOT:
+
+* bypass sanitization;
+* bypass authorization;
+* execute arbitrary unsafe templates;
+* become required for core correctness unless promoted to core.
+
+---
+
+Extension Points
+
+Possible extension points MAY include:
+
+* rendered UI fragments;
+* notification channels;
+* moderation classifiers;
+* import/export adapters;
+* webhook integrations;
+* analytics sinks;
+* custom profile fields;
+* admin dashboard panels.
+
+Every extension point MUST define:
+
+* input contract;
+* output contract;
+* permission context;
+* failure behavior.
+
+---
+
+Hook Model
+
+Hooks SHOULD be explicit and named.
+
+Hook execution MUST define:
+
+* order;
+* timeout;
+* error handling;
+* logging;
+* side-effect permissions.
+
+Hooks MUST NOT receive secrets unless explicitly required and authorized.
+
+---
+
+Plugin Metadata
+
+Plugins SHOULD declare:
+
+* name;
+* version;
+* author;
+* compatible GPForum version;
+* required capabilities;
+* required permissions;
+* migrations if any.
+
+Plugin compatibility MUST be checkable before activation.
+
+---
+
+Security
+
+Plugin code MUST be treated as privileged code unless sandboxed.
+
+The platform MUST make this trust boundary explicit.
+
+Plugin-provided templates or HTML MUST pass the same safety rules as core output.
+
+Plugin migrations MUST be reviewed and reversible where feasible.
+
+---
+
+Lifecycle
+
+Plugin lifecycle SHOULD support:
+
+* install;
+* configure;
+* enable;
+* disable;
+* upgrade;
+* uninstall.
+
+Disabling a plugin MUST not corrupt core data.
+
+---
+
+Operational Visibility
+
+Plugin failures SHOULD be visible in:
+
+* logs;
+* metrics;
+* admin console;
+* health checks where critical.
+
+Plugins MUST not hide operational errors.
+

@@ -1,0 +1,133 @@
+GPForum - Bootstrap Implementation Prompt
+
+This document defines the first implementation prompt for generating the initial GPForum codebase.
+
+This specification is mandatory when moving from architecture prompts to code.
+
+---
+
+Bootstrap Goal
+
+Generate the smallest correct GPForum application skeleton that can evolve into the full platform.
+
+The bootstrap MUST produce:
+
+* Mojolicious application;
+* modern Perl module layout;
+* DBIx::Class schema skeleton;
+* PostgreSQL configuration;
+* migration framework;
+* test skeleton;
+* structured logging foundation;
+* health endpoint;
+* local development command;
+* CI-ready project layout.
+
+The bootstrap MUST NOT implement advanced features prematurely.
+
+---
+
+Repository Layout
+
+Initial layout SHOULD be:
+
+* `bin/gpforum`
+* `lib/GPForum.pm`
+* `lib/GPForum/Controller/`
+* `lib/GPForum/Schema.pm`
+* `lib/GPForum/Schema/Result/`
+* `lib/GPForum/Service/`
+* `lib/GPForum/Policy/`
+* `lib/GPForum/Event/`
+* `lib/GPForum/Job/`
+* `templates/`
+* `public/`
+* `etc/`
+* `migrations/`
+* `t/`
+* `script/`
+
+Directory names MUST remain predictable and boring.
+
+---
+
+Initial Modules
+
+The first implementation SHOULD include:
+
+* `GPForum`
+* `GPForum::Controller::Health`
+* `GPForum::Controller::Home`
+* `GPForum::Schema`
+* `GPForum::Config`
+* `GPForum::Log`
+* `GPForum::Service::Clock`
+* `GPForum::Service::Id`
+
+Domain modules SHOULD be added only when their workflow is implemented.
+
+---
+
+First Routes
+
+Initial routes MUST include:
+
+* `GET /`
+* `GET /health`
+* `GET /health/live`
+* `GET /health/ready`
+
+The health routes MUST NOT expose secrets or infrastructure internals.
+
+---
+
+Configuration Bootstrap
+
+The app MUST read configuration from:
+
+* environment variables;
+* environment-specific config files where appropriate.
+
+Secrets MUST NOT be committed.
+
+Configuration loading MUST fail clearly for missing required production values.
+
+---
+
+Database Bootstrap
+
+The initial database layer MUST include:
+
+* DBIx::Class connection setup;
+* migration command placeholder;
+* first migration creating foundational tables where implementation scope allows;
+* test database isolation plan.
+
+The bootstrap SHOULD avoid connecting to production by default.
+
+---
+
+Test Bootstrap
+
+Initial tests MUST include:
+
+* app loads;
+* health route responds;
+* config validation works;
+* basic route rendering works.
+
+Tests MUST be runnable from a single command.
+
+---
+
+Generation Instruction
+
+When using this prompt with an AI code generator, instruct it to:
+
+* read all relevant constitutions first;
+* implement only Milestone 0 from `20.txt`;
+* avoid speculative abstractions;
+* keep code Perl-native;
+* add tests for generated behavior;
+* document local run commands.
+

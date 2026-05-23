@@ -1,0 +1,140 @@
+GPForum - Test Strategy & Quality Verification Constitution
+
+This document defines the mandatory test architecture, quality verification matrix, test data strategy, security regression coverage, and release validation expectations for GPForum.
+
+This specification is mandatory.
+
+---
+
+Testing Philosophy
+
+Tests are executable architecture.
+
+GPForum MUST test:
+
+* domain invariants;
+* authorization;
+* persistence;
+* event workflows;
+* security boundaries;
+* rendering safety;
+* operational commands.
+
+The platform MUST avoid relying on manual confidence for critical behavior.
+
+---
+
+Test Layers
+
+The test suite SHOULD include:
+
+* unit tests;
+* service tests;
+* controller tests;
+* DB integration tests;
+* authorization matrix tests;
+* event consumer tests;
+* worker tests;
+* template rendering tests;
+* browser or HTMX workflow tests;
+* migration tests;
+* load and capacity tests where appropriate.
+
+---
+
+Mandatory Early Tests
+
+Milestone 0 MUST include:
+
+* app loads;
+* health endpoints work;
+* configuration validation works;
+* logging initializes;
+* database connection can be tested safely.
+
+Milestone 1 MUST include:
+
+* registration;
+* login;
+* logout;
+* session revocation;
+* password hashing behavior;
+* CSRF protection.
+
+---
+
+Authorization Tests
+
+Authorization tests MUST cover:
+
+* anonymous access;
+* member access;
+* moderator scope;
+* administrator scope;
+* suspended users;
+* banned users;
+* locked threads;
+* archived categories;
+* hidden and quarantined content.
+
+Authorization regressions are release blockers.
+
+---
+
+Security Tests
+
+Security regression tests SHOULD cover:
+
+* XSS escaping;
+* CSRF enforcement;
+* SQL injection resistance through parameterized paths;
+* unsafe upload rejection;
+* session revocation;
+* rate-limit behavior;
+* password reset token safety.
+
+---
+
+Event Tests
+
+Event tests MUST verify:
+
+* event emission;
+* idempotent consumer behavior;
+* replay safety;
+* no duplicate external side effects on retry;
+* projection rebuild from event history.
+
+---
+
+Test Data
+
+Test data MUST be deterministic.
+
+Factories SHOULD generate:
+
+* users;
+* roles;
+* categories;
+* threads;
+* posts;
+* moderation states.
+
+Tests MUST NOT depend on production data.
+
+---
+
+Release Gates
+
+Release gates SHOULD include:
+
+* formatting;
+* Perl::Critic;
+* unit tests;
+* integration tests;
+* migration validation;
+* security checks;
+* smoke tests.
+
+Failing release gates MUST block production deployment unless explicitly overridden by emergency procedure.
+

@@ -1,0 +1,122 @@
+GPForum - SEO, Public Discovery & Syndication Constitution
+
+This document defines the mandatory public discovery architecture, SEO-safe rendering, canonical URL strategy, sitemap rules, robots behavior, metadata, and syndication feeds for GPForum.
+
+This specification is mandatory for public deployments.
+
+---
+
+Discovery Philosophy
+
+Public content should be discoverable when policy allows.
+
+Private, restricted, deleted, quarantined, or moderated content MUST NOT leak through discovery systems.
+
+SEO MUST never override privacy, security, or governance.
+
+---
+
+Canonical URLs
+
+Canonical URLs SHOULD be stable.
+
+Thread URLs SHOULD include:
+
+* stable id;
+* human-readable slug.
+
+Slug changes MUST not break canonical access.
+
+Redirects SHOULD preserve legacy links where safe.
+
+---
+
+Metadata
+
+Public pages SHOULD include:
+
+* title;
+* description;
+* canonical link;
+* OpenGraph metadata;
+* basic social preview metadata.
+
+Metadata MUST be generated from safe, sanitized content.
+
+Private content MUST NOT appear in public metadata.
+
+---
+
+Sitemaps
+
+The platform SHOULD generate sitemaps for:
+
+* public spaces;
+* public categories;
+* public threads.
+
+Sitemaps MUST exclude:
+
+* hidden content;
+* deleted content;
+* quarantined content;
+* restricted content;
+* user profiles where policy disallows indexing.
+
+Sitemap generation SHOULD be asynchronous and cacheable.
+
+---
+
+Robots
+
+`robots.txt` SHOULD be configurable.
+
+It SHOULD disallow:
+
+* admin routes;
+* moderation routes;
+* login and registration routes;
+* user settings;
+* internal endpoints;
+* search result pages where policy prefers no indexing.
+
+Robots rules MUST NOT be treated as access control.
+
+---
+
+RSS And Atom
+
+Public feeds MAY be exposed as RSS or Atom.
+
+Feeds MUST respect:
+
+* visibility;
+* deletion;
+* moderation;
+* rate limiting;
+* cache safety.
+
+Feeds SHOULD include only safe excerpts unless policy allows full content.
+
+---
+
+Pagination And Indexing
+
+Paginated pages SHOULD expose stable navigation metadata.
+
+The platform MUST avoid generating infinite crawl spaces.
+
+Search result pages SHOULD be noindex unless explicitly designed for public discovery.
+
+---
+
+Abuse Resistance
+
+SEO features MUST resist:
+
+* spam page generation;
+* tag abuse;
+* profile spam;
+* malicious OpenGraph injection;
+* crawler amplification.
+

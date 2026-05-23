@@ -1,0 +1,130 @@
+GPForum - Configuration, Environments & Feature Flags Constitution
+
+This document defines mandatory configuration loading, environment separation, secret handling, feature flag behavior, and runtime configuration discipline for GPForum.
+
+This specification is mandatory.
+
+---
+
+Configuration Philosophy
+
+Configuration is an operational contract.
+
+GPForum MUST support:
+
+* development;
+* test;
+* staging;
+* production.
+
+The platform MUST avoid:
+
+* hardcoded production values;
+* secrets in source control;
+* hidden environment drift;
+* configuration that changes behavior silently.
+
+---
+
+Environment Model
+
+Each environment MUST define:
+
+* database connection;
+* logging level;
+* session secret source;
+* object storage configuration;
+* email configuration;
+* OpenSearch configuration;
+* worker configuration;
+* public base URL;
+* security mode.
+
+Production MUST fail fast when required configuration is missing.
+
+Development MAY provide safe local defaults.
+
+---
+
+Secret Management
+
+Secrets MUST include:
+
+* database credentials;
+* session signing keys;
+* password reset signing keys;
+* object storage credentials;
+* email provider credentials;
+* webhook secrets;
+* API tokens.
+
+Secrets MUST NOT be:
+
+* committed;
+* logged;
+* rendered in error pages;
+* stored in client-side code.
+
+---
+
+Feature Flags
+
+Feature flags MAY control:
+
+* unfinished features;
+* risky rollouts;
+* operational mitigations;
+* beta features;
+* emergency abuse controls.
+
+Feature flags MUST be:
+
+* named clearly;
+* documented;
+* observable where operationally relevant;
+* removable after permanent rollout.
+
+Security fixes MUST NOT rely on feature flags remaining enabled.
+
+---
+
+Configuration Validation
+
+Configuration validation MUST check:
+
+* required keys;
+* valid URL formats;
+* valid numeric ranges;
+* safe production defaults;
+* mutually incompatible options.
+
+Invalid production configuration MUST stop startup.
+
+---
+
+Runtime Changes
+
+Runtime configuration changes SHOULD be:
+
+* audited;
+* scoped;
+* reversible;
+* observable.
+
+Emergency operational toggles MUST have a runbook.
+
+---
+
+Local Development
+
+Local development SHOULD support:
+
+* local PostgreSQL;
+* local test database;
+* fake email delivery;
+* disabled external webhooks;
+* safe logging;
+* deterministic seeds where useful.
+
+Local defaults MUST NOT weaken production defaults.
+

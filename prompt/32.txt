@@ -1,0 +1,130 @@
+GPForum - Content Policy, Community Guidelines & Enforcement Constitution
+
+This document defines the mandatory community policy model, content rule structure, enforcement levels, appeals, policy versioning, and social governance standards for GPForum.
+
+This specification is mandatory for moderation product design.
+
+---
+
+Policy Philosophy
+
+Technical moderation must reflect explicit community policy.
+
+GPForum MUST support:
+
+* clear rules;
+* consistent enforcement;
+* proportional response;
+* appeal paths where appropriate;
+* policy versioning;
+* transparent user-facing explanations.
+
+The platform MUST avoid:
+
+* arbitrary enforcement;
+* hidden rule changes;
+* harassment-enabling ambiguity;
+* engagement incentives that reward abuse.
+
+---
+
+Policy Documents
+
+The platform SHOULD support versioned:
+
+* terms of service;
+* privacy policy;
+* community guidelines;
+* moderation policy;
+* acceptable use policy.
+
+Policy versions SHOULD record:
+
+* title;
+* version;
+* effective_at;
+* body;
+* change summary.
+
+---
+
+Violation Categories
+
+Initial policy categories SHOULD include:
+
+* spam;
+* harassment;
+* threats;
+* hate or abusive conduct;
+* illegal content;
+* malware or malicious links;
+* privacy violation;
+* impersonation;
+* off-topic disruption;
+* evasion of moderation.
+
+Categories MUST be configurable without code changes where feasible.
+
+---
+
+Enforcement Levels
+
+Enforcement SHOULD support:
+
+* no action;
+* note;
+* warning;
+* content hide;
+* content quarantine;
+* temporary suspension;
+* permanent ban;
+* legal escalation;
+* emergency lockdown.
+
+Enforcement MUST be scoped and audited.
+
+---
+
+Appeals
+
+The platform SHOULD support appeals for:
+
+* warnings;
+* suspensions;
+* bans;
+* content removal where policy allows.
+
+Appeals MUST be:
+
+* attributable;
+* status-tracked;
+* reviewable by authorized staff;
+* protected from public disclosure.
+
+---
+
+User Explanations
+
+User-facing enforcement messages MUST:
+
+* identify the action;
+* provide safe reason category;
+* explain next available step where appropriate;
+* avoid exposing reporter identity;
+* avoid exposing internal detection details.
+
+---
+
+Policy And Automation
+
+Automated moderation MAY assist humans.
+
+Automated systems MUST remain:
+
+* explainable;
+* overrideable;
+* auditable;
+* bounded.
+
+Automation MUST NOT become unreviewable authority.
+

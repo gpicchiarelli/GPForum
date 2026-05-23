@@ -1,0 +1,137 @@
+GPForum - Packaging, Deployment & Runtime Process Constitution
+
+This document defines the mandatory packaging model, runtime process layout, deployment target expectations, process supervision, web server integration, and production runtime discipline for GPForum.
+
+This specification is mandatory for deployment design.
+
+---
+
+Deployment Philosophy
+
+Deployment must be boring, reproducible, and observable.
+
+GPForum MUST support:
+
+* deterministic dependency installation;
+* explicit runtime process definitions;
+* safe rolling deploys;
+* worker separation;
+* web server integration;
+* rollback.
+
+The platform MUST avoid:
+
+* manual production patching;
+* hidden runtime state;
+* unpinned critical dependencies;
+* process layouts nobody can explain.
+
+---
+
+Packaging
+
+The project SHOULD define:
+
+* Perl dependency manifest;
+* lockfile or reproducible dependency strategy;
+* application start command;
+* worker start command;
+* migration command;
+* test command.
+
+Packaging MAY use:
+
+* Carton;
+* cpm;
+* system packages;
+* container image;
+* deployment-specific packaging.
+
+The chosen strategy MUST be documented.
+
+---
+
+Runtime Processes
+
+Production runtime SHOULD separate:
+
+* web application processes;
+* worker processes;
+* scheduled job processes;
+* websocket-capable processes if separated;
+* maintenance commands.
+
+Each process type MUST have:
+
+* start command;
+* health behavior;
+* logging behavior;
+* restart policy;
+* resource expectations.
+
+---
+
+Web Server
+
+Nginx or HAProxy SHOULD provide:
+
+* TLS termination where applicable;
+* request buffering;
+* compression;
+* static asset serving;
+* websocket upgrade proxying;
+* request size limits;
+* timeout policy.
+
+Application nodes MUST not depend on local filesystem persistence.
+
+---
+
+Systemd Or Container Runtime
+
+Deployment MAY use systemd, containers, or another supervised runtime.
+
+The runtime MUST provide:
+
+* restart policy;
+* environment injection;
+* log routing;
+* health integration;
+* resource limits where feasible.
+
+---
+
+Migrations During Deploy
+
+Deployment MUST define when migrations run.
+
+Migrations SHOULD be compatible with rolling application deploys where feasible.
+
+Destructive migrations MUST require explicit runbook approval.
+
+---
+
+Assets
+
+Static assets SHOULD be:
+
+* versioned;
+* cacheable;
+* reproducible;
+* served through edge or web server where appropriate.
+
+Asset deployment MUST avoid stale references during rolling deploys.
+
+---
+
+Production Readiness
+
+A production package MUST include:
+
+* version identifier;
+* dependency metadata;
+* migration state;
+* health endpoints;
+* logs and metrics;
+* rollback path.
+
