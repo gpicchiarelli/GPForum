@@ -5,16 +5,17 @@ It is intentionally narrower than the full architectural contract.
 
 ## Available Routes
 
-* `GET /categories` returns visible categories.
-* `GET /c/:category_id` returns one category and a keyset-paginated thread list.
-* `GET /t/:thread_id` returns one visible thread and keyset-paginated posts.
-* `GET /new-thread` returns the thread form shape and a CSRF token.
+* `GET /categories` renders visible categories.
+* `GET /c/:category_id` renders one category and a keyset-paginated thread list.
+* `GET /t/:thread_id` renders one visible thread and keyset-paginated posts.
+* `GET /new-thread` renders the thread form with a CSRF token.
 * `POST /threads` creates a thread for an authenticated session user.
 * `POST /t/:thread_id/replies` creates a reply for an authenticated session user.
-* `GET /search?q=...` queries the PostgreSQL-native search boundary.
+* `GET /search?q=...` renders PostgreSQL-native search results.
 
-The current forum endpoints return JSON. SSR templates can be layered over the
-same controller/service path without changing the command/read boundaries.
+Read endpoints render semantic SSR by default. They also return JSON when the
+client sends `Accept: application/json` or `?format=json`, using the same
+controller/service path without changing the command/read boundaries.
 
 ## What Works
 
@@ -30,6 +31,10 @@ revisions, and counter deltas remain in the existing transaction boundary.
 
 Thread and post lists use keyset pagination through `PageWindow`; no forum route
 uses `OFFSET`.
+
+The SSR forum templates use semantic landmarks, labelled forms, stable post
+anchors, accessible pagination navigation, and no JavaScript requirement for
+core forum reading.
 
 `/health/ready` now performs a real lightweight DB readiness check and verifies
 that event, outbox, and projection resultsets are reachable.

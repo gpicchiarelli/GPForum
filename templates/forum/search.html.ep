@@ -1,0 +1,26 @@
+% layout 'default';
+% title 'Search - GPForum';
+
+<section aria-labelledby="search-heading">
+  <h1 id="search-heading">Search</h1>
+  <form method="get" action="<%= url_for('forum_search') %>" role="search">
+    <label for="search-query">Search query</label>
+    <input id="search-query" name="q" value="<%= $query // q{} %>">
+    <button type="submit">Search</button>
+  </form>
+  % if (defined $status && $status eq 'degraded') {
+    <p role="status">Search is temporarily degraded.</p>
+  % }
+  % if (@{$results}) {
+    <ol aria-label="Search results">
+      % for my $result (@{$results}) {
+        <li>
+          <h2><%= $result->{title} %></h2>
+          <p><%= $result->{body} %></p>
+        </li>
+      % }
+    </ol>
+  % } elsif (defined $query && length $query) {
+    <p>No visible results matched your search.</p>
+  % }
+</section>

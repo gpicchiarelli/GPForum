@@ -1,0 +1,27 @@
+% layout 'default';
+% title 'Start a thread - GPForum';
+
+<section aria-labelledby="new-thread-heading">
+  <p><a href="<%= url_for('categories') %>">Categories</a></p>
+  <h1 id="new-thread-heading">Start a thread</h1>
+  <form method="post" action="<%= url_for('thread_create') %>">
+    <%= csrf_field %>
+    <label for="thread-category">Category</label>
+    <select id="thread-category" name="category_id" required>
+      % for my $category (@{$categories}) {
+        <option value="<%= $category->{category_id} %>"><%= $category->{title} %></option>
+      % }
+    </select>
+    <label for="thread-title">Title</label>
+    <input id="thread-title" name="title" required>
+    <label for="thread-body">Body</label>
+    <textarea id="thread-body" name="body_source" rows="10" required></textarea>
+    <label for="thread-visibility">Visibility</label>
+    <select id="thread-visibility" name="visibility">
+      <option value="public">Public</option>
+      <option value="members">Members</option>
+      <option value="private">Private</option>
+    </select>
+    <button type="submit">Create thread</button>
+  </form>
+</section>

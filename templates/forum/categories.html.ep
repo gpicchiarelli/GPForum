@@ -1,0 +1,28 @@
+% layout 'default';
+% title 'Categories - GPForum';
+
+<section aria-labelledby="categories-heading">
+  <h1 id="categories-heading">Categories</h1>
+  <nav aria-label="Forum actions">
+    <a href="<%= url_for('new_thread') %>">Start a thread</a>
+    <a href="<%= url_for('forum_search') %>">Search</a>
+  </nav>
+  % if (@{$categories}) {
+    <ul>
+      % for my $category (@{$categories}) {
+        <li>
+          <h2>
+            <a href="<%= url_for('category', category_id => $category->{category_id}) %>">
+              <%= $category->{title} %>
+            </a>
+          </h2>
+          % if ($category->{description}) {
+            <p><%= $category->{description} %></p>
+          % }
+        </li>
+      % }
+    </ul>
+  % } else {
+    <p>No categories are visible yet.</p>
+  % }
+</section>

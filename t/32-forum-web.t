@@ -32,29 +32,29 @@ my $test = Test::Mojo->new('GPForum');
 _install_forum_fakes($test);
 _install_test_session_route($test);
 
-$test->get_ok('/categories');
+_get_json_ok( $test, '/categories' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/categories/0/category_id' => 'category-1' );
 
-$test->get_ok('/c/category-1');
+_get_json_ok( $test, '/c/category-1' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/category/category_id' => 'category-1' );
 $test->json_is( '/threads/0/thread_id'  => 'thread-1' );
 $test->json_is( '/next_cursor'          => 'thread-cursor' );
 
-$test->get_ok('/c/missing');
+_get_json_ok( $test, '/c/missing' );
 $test->status_is($HTTP_NOT_FOUND);
 
-$test->get_ok('/t/thread-1');
+_get_json_ok( $test, '/t/thread-1' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/thread/thread_id' => 'thread-1' );
 $test->json_is( '/posts/0/body'     => 'First post' );
 $test->json_is( '/next_cursor'      => 'post-cursor' );
 
-$test->get_ok('/t/missing');
+_get_json_ok( $test, '/t/missing' );
 $test->status_is($HTTP_NOT_FOUND);
 
-$test->get_ok('/new-thread');
+_get_json_ok( $test, '/new-thread' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/fields/0' => 'category_id' );
 
@@ -76,7 +76,7 @@ $test->status_is($HTTP_UNAUTHORIZED);
 
 $test->get_ok('/__test/session/user-1');
 $test->status_is($HTTP_OK);
-$test->get_ok('/new-thread');
+_get_json_ok( $test, '/new-thread' );
 my $session_csrf = _json_value( $test, 'csrf_token' );
 
 $test->post_ok(
@@ -101,17 +101,17 @@ $test->post_ok(
 $test->status_is($HTTP_CREATED);
 $test->json_is( '/post_id' => 'post-created' );
 
-$test->get_ok('/search?q=welcome');
+_get_json_ok( $test, '/search?q=welcome' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/results/0/entity_id' => 'thread-1' );
 
-$test->get_ok('/search');
+_get_json_ok( $test, '/search' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/results' => [] );
 
 $test->app->helper(
     gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
-$test->get_ok('/new-thread');
+_get_json_ok( $test, '/new-thread' );
 my $rate_csrf = _json_value( $test, 'csrf_token' );
 $test->post_ok(
     '/threads' => form => {
@@ -146,6 +146,12 @@ sub _install_forum_fakes {
     }
 
     return;
+}
+
+sub _get_json_ok {
+    my ( $test_object, $path ) = @_;
+
+    return $test_object->get_ok( $path => { Accept => 'application/json' } );
 }
 
 sub _install_test_session_route {

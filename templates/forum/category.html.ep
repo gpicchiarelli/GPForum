@@ -1,0 +1,37 @@
+% layout 'default';
+% title $category->{title} . ' - GPForum';
+
+<section aria-labelledby="category-heading">
+  <p><a href="<%= url_for('categories') %>">Categories</a></p>
+  <h1 id="category-heading"><%= $category->{title} %></h1>
+  % if ($category->{description}) {
+    <p><%= $category->{description} %></p>
+  % }
+  <nav aria-label="Category actions">
+    <a href="<%= url_for('new_thread')->query(category_id => $category->{category_id}) %>">Start a thread</a>
+  </nav>
+  % if (@{$threads}) {
+    <ol>
+      % for my $thread (@{$threads}) {
+        <li>
+          <h2>
+            <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>">
+              <%= $thread->{title} %>
+            </a>
+          </h2>
+          <p>
+            Last activity:
+            <time datetime="<%= $thread->{last_activity_at} // q{} %>"><%= $thread->{last_activity_at} // 'unknown' %></time>
+          </p>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No visible threads are in this category yet.</p>
+  % }
+  % if ($next_cursor) {
+    <nav aria-label="Thread pagination">
+      <a href="<%= url_for('category', category_id => $category->{category_id})->query(after => $next_cursor) %>">Next threads</a>
+    </nav>
+  % }
+</section>

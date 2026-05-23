@@ -125,7 +125,9 @@ for the route surface that is actually traversable today.
 
 ## MVP Web Surface
 
-The current forum MVP exposes these JSON routes:
+The current forum MVP exposes these routes. Read routes render accessible,
+semantic SSR by default and still return JSON when requested with
+`Accept: application/json` or `?format=json`:
 
 * `GET /categories`
 * `GET /c/:category_id`

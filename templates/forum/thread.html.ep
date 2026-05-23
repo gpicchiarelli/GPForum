@@ -1,0 +1,43 @@
+% layout 'default';
+% title $thread->{title} . ' - GPForum';
+
+<article aria-labelledby="thread-heading">
+  <p><a href="<%= url_for('category', category_id => $thread->{category_id}) %>">Back to category</a></p>
+  <h1 id="thread-heading"><%= $thread->{title} %></h1>
+  % if ($thread->{locked_at}) {
+    <p role="status">This thread is locked.</p>
+  % }
+  <section aria-labelledby="posts-heading">
+    <h2 id="posts-heading">Posts</h2>
+    % if (@{$posts}) {
+      <ol>
+        % for my $post (@{$posts}) {
+          <li>
+            <article id="post-<%= $post->{post_id} %>" aria-labelledby="post-<%= $post->{post_id} %>-heading">
+              <h3 id="post-<%= $post->{post_id} %>-heading">Post <%= $post->{position} %></h3>
+              <p><a href="#post-<%= $post->{post_id} %>">Permalink</a></p>
+              <div><%== $post->{body} // q{} %></div>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <p>No visible posts are available.</p>
+    % }
+    % if ($next_cursor) {
+      <nav aria-label="Post pagination">
+        <a href="<%= url_for('thread', thread_id => $thread->{thread_id})->query(after => $next_cursor) %>">Next posts</a>
+      </nav>
+    % }
+  </section>
+  <section aria-labelledby="reply-heading">
+    <h2 id="reply-heading">Reply</h2>
+    <form method="post" action="<%= url_for('reply_create', thread_id => $thread->{thread_id}) %>">
+      <%= csrf_field %>
+      <label for="reply-body">Reply body</label>
+      <textarea id="reply-body" name="body_source" rows="8" required></textarea>
+      <input type="hidden" name="visibility" value="<%= $thread->{visibility} // 'public' %>">
+      <button type="submit">Post reply</button>
+    </form>
+  </section>
+</article>

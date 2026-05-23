@@ -29,11 +29,10 @@ sub categories {
     my $categories =
       $self->gp_category_reader->list_categories(
         { limit => $self->param('limit') } );
+    my $payload =
+      { categories => [ map { _category_hash($_) } @{$categories} ], };
 
-    return $self->render(
-        json => { categories => [ map { _category_hash($_) } @{$categories} ] },
-        status => $HTTP_OK,
-    );
+    return _render_payload( $self, 'forum/categories', $payload, $HTTP_OK );
 }
 
 sub category {
@@ -52,14 +51,13 @@ sub category {
         }
     );
 
-    return $self->render(
-        json => {
-            category    => _category_hash($category),
-            threads     => [ map { _thread_hash($_) } @{ $threads->{items} } ],
-            next_cursor => $threads->{next_cursor},
-        },
-        status => $HTTP_OK,
-    );
+    my $payload = {
+        category    => _category_hash($category),
+        threads     => [ map { _thread_hash($_) } @{ $threads->{items} } ],
+        next_cursor => $threads->{next_cursor},
+    };
+
+    return _render_payload( $self, 'forum/category', $payload, $HTTP_OK );
 }
 
 sub thread {
@@ -75,14 +73,13 @@ sub thread {
 
     return _not_found( $self, 'thread not found' ) if !$page->{ok};
 
-    return $self->render(
-        json => {
-            thread => _thread_hash( $page->{thread} ),
-            posts  => [ map { _post_hash($_) } @{ $page->{posts}{items} } ],
-            next_cursor => $page->{posts}{next_cursor},
-        },
-        status => $HTTP_OK,
-    );
+    my $payload = {
+        thread      => _thread_hash( $page->{thread} ),
+        posts       => [ map { _post_hash($_) } @{ $page->{posts}{items} } ],
+        next_cursor => $page->{posts}{next_cursor},
+    };
+
+    return _render_payload( $self, 'forum/thread', $payload, $HTTP_OK );
 }
 
 sub new_thread_form {
@@ -90,14 +87,13 @@ sub new_thread_form {
 
     my $categories = $self->gp_category_reader->list_categories( {} );
 
-    return $self->render(
-        json => {
-            csrf_token => $self->csrf_token,
-            categories => [ map { _category_hash($_) } @{$categories} ],
-            fields     => [qw(category_id title body_source visibility)],
-        },
-        status => $HTTP_OK,
-    );
+    my $payload = {
+        csrf_token => $self->csrf_token,
+        categories => [ map { _category_hash($_) } @{$categories} ],
+        fields     => [qw(category_id title body_source visibility)],
+    };
+
+    return _render_payload( $self, 'forum/new_thread', $payload, $HTTP_OK );
 }
 
 sub create_thread {
@@ -220,10 +216,10 @@ sub search {
 
     my $query = _trim( $self->param('q') );
 
-    return $self->render(
-        json   => { query => q{}, results => [] },
-        status => $HTTP_OK,
-    ) if !length $query;
+    if ( !length $query ) {
+        return _render_payload( $self, 'forum/search',
+            { query => q{}, results => [] }, $HTTP_OK );
+    }
 
     my $rows = eval {
         return $self->gp_search_service->search(
@@ -234,19 +230,47 @@ sub search {
 
     if ($EVAL_ERROR) {
         $self->app->log->warn("search degraded: $EVAL_ERROR");
-        return $self->render(
-            json   => { query => $query, status => 'degraded', results => [] },
-            status => $HTTP_OK,
-        );
+        return _render_payload( $self, 'forum/search',
+            { query => $query, status => 'degraded', results => [] },
+            $HTTP_OK );
     }
 
-    return $self->render(
-        json => {
+    return _render_payload(
+        $self,
+        'forum/search',
+        {
             query   => $query,
             results => [ map { _search_hash($_) } @{$rows} ],
         },
-        status => $HTTP_OK,
+        $HTTP_OK
     );
+}
+
+sub _render_payload {
+    my ( $controller, $template, $payload, $status ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => $payload,
+            status => $status,
+        );
+    }
+
+    return $controller->render(
+        template => $template,
+        status   => $status,
+        %{$payload},
+    );
+}
+
+sub _wants_json {
+    my ($controller) = @_;
+
+    my $format = $controller->param('format') || q{};
+    return 1 if $format eq 'json';
+
+    my $accept = $controller->req->headers->accept || q{};
+    return $accept =~ m{application/json}msx ? 1 : 0;
 }
 
 sub _store_thread {
