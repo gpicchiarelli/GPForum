@@ -1,5 +1,9 @@
 # GPForum
 
+<p align="center">
+  <img src="assets/img/gpforum-logo.svg" alt="GPForum logo" width="420">
+</p>
+
 ![GPForum hero](assets/img/gpforum-hero.png)
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-a6532f.svg)](LICENSE)
