@@ -1,0 +1,7 @@
+% layout 'default';
+% title 'Logout accepted - GPForum';
+
+<section>
+  <h1>Logout request accepted</h1>
+  <p>Session revocation is ready for persistence-backed identity workflows.</p>
+</section>

@@ -1,0 +1,38 @@
+% layout 'default';
+% title 'Register - GPForum';
+
+<section>
+  <h1>Create account</h1>
+  <form method="post" action="<%= url_for('register_submit') %>">
+    <%= csrf_field %>
+    <label>
+      Username
+      <input name="username" value="<%= $values->{username} // q{} %>" autocomplete="username">
+    </label>
+    % if ($errors->{username}) {
+      <p role="alert"><%= $errors->{username} %></p>
+    % }
+    <label>
+      Display name
+      <input name="display_name" value="<%= $values->{display_name} // q{} %>" autocomplete="name">
+    </label>
+    % if ($errors->{display_name}) {
+      <p role="alert"><%= $errors->{display_name} %></p>
+    % }
+    <label>
+      Email
+      <input name="email" value="<%= $values->{email_normalized} // q{} %>" autocomplete="email">
+    </label>
+    % if ($errors->{email}) {
+      <p role="alert"><%= $errors->{email} %></p>
+    % }
+    <label>
+      Password
+      <input name="password" type="password" autocomplete="new-password">
+    </label>
+    % if ($errors->{password}) {
+      <p role="alert"><%= $errors->{password} %></p>
+    % }
+    <button type="submit">Create account</button>
+  </form>
+</section>

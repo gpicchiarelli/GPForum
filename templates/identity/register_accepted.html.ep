@@ -1,0 +1,7 @@
+% layout 'default';
+% title 'Registration accepted - GPForum';
+
+<section>
+  <h1>Registration accepted</h1>
+  <p>Account <strong><%= $registration->{user}{username} %></strong> is ready for persistence and email verification.</p>
+</section>

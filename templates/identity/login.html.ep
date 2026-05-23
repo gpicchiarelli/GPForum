@@ -1,0 +1,24 @@
+% layout 'default';
+% title 'Login - GPForum';
+
+<section>
+  <h1>Login</h1>
+  <form method="post" action="<%= url_for('login_submit') %>">
+    <%= csrf_field %>
+    <label>
+      Username or email
+      <input name="identifier" value="<%= $values->{identifier} // q{} %>" autocomplete="username">
+    </label>
+    % if ($errors->{identifier}) {
+      <p role="alert"><%= $errors->{identifier} %></p>
+    % }
+    <label>
+      Password
+      <input name="password" type="password" autocomplete="current-password">
+    </label>
+    % if ($errors->{password}) {
+      <p role="alert"><%= $errors->{password} %></p>
+    % }
+    <button type="submit">Login</button>
+  </form>
+</section>

@@ -1,0 +1,7 @@
+% layout 'default';
+% title 'Login accepted - GPForum';
+
+<section>
+  <h1>Login request accepted</h1>
+  <p>Credential verification is ready for persistence-backed identity workflows.</p>
+</section>

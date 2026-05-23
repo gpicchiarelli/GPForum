@@ -6,9 +6,15 @@
     <title><%= title %></title>
   </head>
   <body>
+    <header>
+      <a href="<%= url_for('home') %>">GPForum</a>
+      <nav aria-label="Identity">
+        <a href="<%= url_for('register') %>">Register</a>
+        <a href="<%= url_for('login') %>">Login</a>
+      </nav>
+    </header>
     <main>
       <%= content %>
     </main>
   </body>
 </html>
-

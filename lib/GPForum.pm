@@ -8,6 +8,7 @@ use Mojo::Base 'Mojolicious';
 use GPForum::Config;
 use GPForum::Log;
 use GPForum::Runtime;
+use GPForum::Service::Identity::Registration;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
 use GPForum::Service::Password;
@@ -34,6 +35,8 @@ sub startup {
     $self->helper(
         gp_session_token => sub { return GPForum::Service::SessionToken->new; }
     );
+    $self->helper( gp_registration =>
+          sub { return GPForum::Service::Identity::Registration->new; } );
 
     GPForum::Log->configure( $self, $config );
 
@@ -43,6 +46,14 @@ sub startup {
     $routes->get('/health')->to('Health#summary')->name('health');
     $routes->get('/health/live')->to('Health#live')->name('health_live');
     $routes->get('/health/ready')->to('Health#ready')->name('health_ready');
+    $routes->get('/register')->to('Identity#register_form')->name('register');
+    $routes->post('/register')
+      ->to('Identity#register')
+      ->name('register_submit');
+    $routes->get('/login')->to('Identity#login_form')->name('login');
+    $routes->post('/login')->to('Identity#login')->name('login_submit');
+    $routes->post('/logout')->to('Identity#logout')->name('logout');
+    $routes->get('/u/:username')->to('Identity#profile')->name('profile');
 
     return;
 }
