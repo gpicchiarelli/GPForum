@@ -107,9 +107,10 @@ This repository currently contains:
 * PostgreSQL-native search document building, indexing, rebuild, permission-aware querying, and worker handoff services;
 * process-local realtime websocket boundaries for authenticated connections, authorized channel subscription, thread updates, notification badges, and polling fallback;
 * attachment upload intent, validation, lifecycle persistence, links, variants, scanning hook, and media processing worker boundaries;
+* operations hardening boundaries for rate limiting, metrics snapshots, runbook validation, and runtime sizing;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 8: Attachments** service
+The current implementation has reached **Milestone 9: Operations Hardening** service
 boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture

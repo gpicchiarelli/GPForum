@@ -13,6 +13,8 @@ use GPForum::Service::Clock;
 use GPForum::Service::Id;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Operations::MetricsSnapshot;
+use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Password;
 use GPForum::Service::Realtime::Hub;
 use GPForum::Service::SessionToken;
@@ -60,6 +62,24 @@ sub startup {
             return $realtime_hub;
         }
     );
+    my $rate_limiter;
+    $self->helper(
+        gp_rate_limiter => sub {
+            $rate_limiter ||= GPForum::Service::Operations::RateLimiter->new;
+            return $rate_limiter;
+        }
+    );
+    $self->helper(
+        gp_metrics_snapshot => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Operations::MetricsSnapshot->new(
+                runtime      => $runtime,
+                realtime_hub => $controller->gp_realtime_hub,
+                rate_limiter => $controller->gp_rate_limiter,
+            );
+        }
+    );
 
     GPForum::Log->configure( $self, $config );
 
@@ -69,6 +89,7 @@ sub startup {
     $routes->get('/health')->to('Health#summary')->name('health');
     $routes->get('/health/live')->to('Health#live')->name('health_live');
     $routes->get('/health/ready')->to('Health#ready')->name('health_ready');
+    $routes->get('/metrics')->to('Operations#metrics')->name('metrics');
     $routes->get('/register')->to('Identity#register_form')->name('register');
     $routes->post('/register')
       ->to('Identity#register')

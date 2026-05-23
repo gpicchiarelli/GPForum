@@ -206,6 +206,14 @@ audit_log, and outbox_messages for scanning and media processing. Attachment
 workers MUST use AttachmentScanning and MediaProcessing handlers. Uploads MUST
 remain non-executable, permission-aware, scan-gated, and lifecycle-driven.
 
+Operations hardening MUST use narrow RateLimiter, MetricsSnapshot,
+RunbookValidator, and RuntimeSizing boundaries. RateLimiter MUST provide
+bounded abuse throttling metadata without using canonical business tables as
+ephemeral counters. MetricsSnapshot MUST expose runtime, realtime, rate-limit,
+and projection-lag state without secrets. RunbookValidator MUST reject
+incomplete backup/restore and rollback contracts. RuntimeSizing MUST validate
+process pool settings before deployment.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.

@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 57;
+const my $EXPECTED_TESTS => 61;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -97,6 +97,10 @@ for my $required_term (
     AttachmentScanning
     MediaProcessing
     attachment_links
+    RateLimiter
+    MetricsSnapshot
+    RunbookValidator
+    RuntimeSizing
     SubscriptionStore
     PreferenceStore
     NotificationDispatcher
