@@ -94,7 +94,7 @@ This repository currently contains:
 * server-side session persistence in the canonical `sessions` table;
 * UUIDv7 identifier generation for sortable distributed ids;
 * Argon2id password hashing and random session token services;
-* server-rendered identity routes for registration, login, logout, and public profiles;
+* server-rendered identity routes for registration, login, logout, and public contributor profiles;
 * CSRF enforcement for state-changing identity requests;
 * registration persistence boundary for users, credentials, events, and audit records;
 * transactional outbox rows for forum domain events;
@@ -148,6 +148,7 @@ semantic SSR by default and still return JSON when requested with
 * `GET /notifications`
 * `POST /notifications/:notification_id/read`
 * `GET /mentions`
+* `GET /u/:username`
 * `GET /search?q=...`
 * `GET /robots.txt`
 * `GET /sitemap.xml`
@@ -160,6 +161,10 @@ event log, audit log, outbox, bodies, revisions, and counters stay coherent.
 Thread read progress is stored as compressed per-user read state plus a
 coalescable delta row, preserving continuity without making it authoritative
 forum content.
+Public contributor profiles are backed by `ProfileReader`. They expose a safe
+identity summary, trust snapshot, and keyset-paginated public discussions
+without leaking email, credential, deleted, suspended, private, or moderated
+content.
 Thread bookmarks and follow/mute/unfollow controls are wired through the
 existing community and notification stores. They are idempotent per user/thread,
 SSR-accessible, CSRF-protected, and derived from PostgreSQL rows rather than any

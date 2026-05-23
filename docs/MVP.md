@@ -22,6 +22,7 @@ It is intentionally narrower than the full architectural contract.
 * `GET /notifications` renders the authenticated user's notification inbox.
 * `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /mentions` renders the authenticated user's mention history.
+* `GET /u/:username` renders a public-safe contributor profile.
 * `GET /search?q=...` renders PostgreSQL-native search results.
 * `GET /robots.txt` renders crawler policy.
 * `GET /sitemap.xml` renders public category/thread sitemap XML.
@@ -41,6 +42,12 @@ first unread post anchor, unread count for the current page, and a CSRF-protecte
 form to mark visible posts as read. The read marker model is compressed to one
 row per `(user_id, thread_id)` plus a coalescable delta table for future
 asynchronous consolidation.
+
+Public contributor profiles expose only safe identity and contribution data:
+display name, public username, trust snapshot, and public visible discussion
+links. The profile path uses `ProfileReader`, filters deleted or suspended users,
+and keyset-paginates recent public threads without exposing private account
+fields.
 
 Authenticated thread pages also include community-continuity controls: save
 bookmark, remove bookmark, follow, mute, and unfollow. These controls are

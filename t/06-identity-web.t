@@ -14,17 +14,23 @@ use GPForum::Test::IdentityStore;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 41;
+const my $EXPECTED_TESTS   => 54;
 const my $HTTP_OK          => 200;
 const my $HTTP_ACCEPTED    => 202;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FORBIDDEN   => 403;
+const my $HTTP_NOT_FOUND   => 404;
 
 plan tests => $EXPECTED_TESTS;
 
 my $test = Test::Mojo->new('GPForum');
 $test->app->helper(
     gp_identity_store => sub {
+        return GPForum::Test::IdentityStore->new;
+    }
+);
+$test->app->helper(
+    gp_profile_reader => sub {
         return GPForum::Test::IdentityStore->new;
     }
 );
@@ -117,7 +123,23 @@ $test->text_is( 'h1' => 'Logout request accepted' );
 
 $test->get_ok('/u/giacomo_forum');
 $test->status_is($HTTP_OK);
-$test->text_is( 'h1' => 'giacomo_forum' );
+$test->text_is( 'h1' => 'Giacomo Picchiarelli' );
+$test->content_like(qr/[@]giacomo_forum/msx);
+$test->element_exists('dl[aria-label="Contributor summary"]');
+$test->content_like(qr/Reputation [ ] score/msx);
+$test->element_exists(
+    'ol[aria-label="Public discussions by this contributor"]');
+$test->element_exists('a[href="/t/thread-1"]');
+$test->element_exists('nav[aria-label="Profile activity pagination"]');
+$test->content_unlike(qr/GIACOMO[@]example[.]test/msx);
+
+$test->get_ok('/u/missing');
+$test->status_is($HTTP_NOT_FOUND);
+$test->text_is( 'h1' => 'Profile not found' );
+
+$test->get_ok('/u/missing?format=json');
+$test->status_is($HTTP_NOT_FOUND);
+$test->json_is( '/status' => 'not_found' );
 
 sub _csrf_token {
     my ($test_object) = @_;

@@ -1,0 +1,7 @@
+% layout 'default';
+% title 'Profile not found - GPForum';
+
+<section aria-labelledby="profile-not-found-heading">
+  <h1 id="profile-not-found-heading">Profile not found</h1>
+  <p>The requested public profile is not available.</p>
+</section>

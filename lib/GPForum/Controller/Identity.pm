@@ -11,6 +11,9 @@ our $VERSION = '0.001';
 const my $HTTP_ACCEPTED    => 202;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FORBIDDEN   => 403;
+const my $HTTP_NOT_FOUND   => 404;
+const my $HTTP_OK          => 200;
+const my $PROFILE_THREADS  => 10;
 
 sub register_form {
     my ($self) = @_;
@@ -112,10 +115,60 @@ sub logout {
 sub profile {
     my ($self) = @_;
 
-    return $self->render(
-        template => 'identity/profile',
-        username => $self->param('username'),
+    my $profile = $self->gp_profile_reader->public_profile(
+        $self->param('username'),
+        {
+            limit => $self->param('limit') || $PROFILE_THREADS,
+            after => $self->param('after'),
+        }
     );
+
+    return _profile_not_found($self) if !$profile->{ok};
+
+    return _render_profile( $self, $profile->{profile} );
+}
+
+sub _render_profile {
+    my ( $controller, $profile ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => { profile => $profile },
+            status => $HTTP_OK,
+        );
+    }
+
+    return $controller->render(
+        template => 'identity/profile',
+        profile  => $profile,
+        status   => $HTTP_OK,
+    );
+}
+
+sub _profile_not_found {
+    my ($controller) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => { status => 'not_found', error => 'profile not found' },
+            status => $HTTP_NOT_FOUND,
+        );
+    }
+
+    return $controller->render(
+        template => 'identity/profile_not_found',
+        status   => $HTTP_NOT_FOUND,
+    );
+}
+
+sub _wants_json {
+    my ($controller) = @_;
+
+    my $format = $controller->param('format') || q{};
+    return 1 if $format eq 'json';
+
+    my $accept = $controller->req->headers->accept || q{};
+    return $accept =~ m{application/json}msx ? 1 : 0;
 }
 
 sub _login_errors {

@@ -1,7 +1,44 @@
 % layout 'default';
-% title "$username - GPForum";
+% title $profile->{user}{display_name} . ' - GPForum';
 
-<section>
-  <h1><%= $username %></h1>
-  <p>Public profile surface is reserved for the identity milestone.</p>
+<section aria-labelledby="profile-heading">
+  <h1 id="profile-heading"><%= $profile->{user}{display_name} %></h1>
+  <p><%= $profile->{user}{profile_label} %></p>
+  <dl aria-label="Contributor summary">
+    <dt>Trust level</dt>
+    <dd><%= $profile->{trust}{trust_level} %></dd>
+    <dt>Reputation score</dt>
+    <dd><%= $profile->{trust}{score} %></dd>
+    % if ($profile->{user}{created_at}) {
+      <dt>Joined</dt>
+      <dd><time datetime="<%= $profile->{user}{created_at} %>"><%= $profile->{user}{created_at} %></time></dd>
+    % }
+  </dl>
+</section>
+
+<section aria-labelledby="profile-threads-heading">
+  <h2 id="profile-threads-heading">Public discussions</h2>
+  % if (@{ $profile->{threads}{items} }) {
+    <ol aria-label="Public discussions by this contributor">
+      % for my $thread (@{ $profile->{threads}{items} }) {
+        <li>
+          <article aria-labelledby="profile-thread-<%= $thread->{thread_id} %>-heading">
+            <h3 id="profile-thread-<%= $thread->{thread_id} %>-heading">
+              <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>"><%= $thread->{title} %></a>
+            </h3>
+            % if ($thread->{last_activity_at}) {
+              <p>Last activity <time datetime="<%= $thread->{last_activity_at} %>"><%= $thread->{last_activity_at} %></time></p>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No public discussions yet.</p>
+  % }
+  % if ($profile->{threads}{next_cursor}) {
+    <nav aria-label="Profile activity pagination">
+      <a href="<%= url_for('profile', username => $profile->{user}{username})->query(after => $profile->{threads}{next_cursor}) %>">Older public discussions</a>
+    </nav>
+  % }
 </section>

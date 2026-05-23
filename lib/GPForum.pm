@@ -29,6 +29,7 @@ use GPForum::Service::Forum::ThreadComposer;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Forum::ThreadStore;
+use GPForum::Service::Identity::ProfileReader;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Notification::Dispatcher;
@@ -117,6 +118,14 @@ sub startup {
         gp_identity_store => sub {
             return GPForum::Service::Identity::Store->new(
                 schema => shift->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_profile_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Identity::ProfileReader->new(
+                schema => $controller->gp_schema );
         }
     );
     my $realtime_hub;

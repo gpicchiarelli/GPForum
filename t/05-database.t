@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 379;
-const my $EXPECTED_MIGRATIONS          => 12;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 33;
+const my $EXPECTED_TESTS               => 382;
+const my $EXPECTED_MIGRATIONS          => 13;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 36;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -32,6 +32,7 @@ const my $ADMIN_AUTHORIZATION_INDEX    => 8;
 const my $IMPORT_EXPORT_INDEX          => 9;
 const my $PLUGINS_INDEX                => 10;
 const my $PERSONAL_FEED_INDEX          => 11;
+const my $PUBLIC_PROFILE_INDEX         => 12;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -1269,6 +1270,25 @@ like(
 );
 like( $personal_feed_sql, qr/INCLUDE/msx,
     'personal feed migration covers projection metadata' );
+
+my $public_profile_sql =
+  path( $summary->[$PUBLIC_PROFILE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$PUBLIC_PROFILE_INDEX]->{description},
+    'public profile indexes',
+    'public profile index migration description is parsed'
+);
+like(
+    $public_profile_sql,
+    qr/idx_threads_author_public_activity/msx,
+    'public profile migration indexes author activity'
+);
+like(
+    $public_profile_sql,
+    qr/WHERE [ ] deleted_at [ ] IS [ ] NULL/msx,
+    'public profile migration uses a partial public-thread index'
+);
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;
 my $runner           = GPForum::Migration::Runner->new(
