@@ -8,6 +8,7 @@ use Mojo::Base -base;
 use Try::Tiny;
 
 use GPForum::Service::Clock;
+use GPForum::Service::Outbox::DeadLetterRecorder;
 
 our $VERSION = '0.001';
 
@@ -17,34 +18,57 @@ const my $PENDING_STATUS       => 'pending';
 const my $FAILED_STATUS        => 'failed';
 const my $RUNNING_STATUS       => 'running';
 const my $DONE_STATUS          => 'done';
+const my $CANCELLED_STATUS     => 'cancelled';
 const my $GENERIC_ERROR_CLASS  => 'error';
 const my $FIRST_FAILURE_OFFSET => 1;
+const my $DEFAULT_MAX_ATTEMPTS => 5;
 
-has schema    => undef;
-has transport => undef;
-has clock     => sub { return GPForum::Service::Clock->new; };
-has worker_id => 'worker';
+has schema               => undef;
+has transport            => undef;
+has clock                => sub { return GPForum::Service::Clock->new; };
+has worker_id            => 'worker';
+has max_attempts         => $DEFAULT_MAX_ATTEMPTS;
+has dead_letter_recorder => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Outbox::DeadLetterRecorder->new(
+        schema => $self->schema,
+        clock  => $self->clock,
+    );
+};
 
 sub dispatch_pending {
     my ( $self, $limit ) = @_;
 
     my @messages = $self->_ready_messages( $limit || $DEFAULT_LIMIT );
     my %summary  = (
-        selected   => scalar @messages,
-        dispatched => 0,
-        failed     => 0,
+        selected      => scalar @messages,
+        dispatched    => 0,
+        failed        => 0,
+        dead_lettered => 0,
     );
 
     for my $message (@messages) {
-        if ( $self->_dispatch_one($message) ) {
-            $summary{dispatched} += 1;
-        }
-        else {
-            $summary{failed} += 1;
-        }
+        my $outcome = $self->_dispatch_one($message);
+        _count_outcome( \%summary, $outcome );
     }
 
     return \%summary;
+}
+
+sub _count_outcome {
+    my ( $summary, $outcome ) = @_;
+
+    my %counter_for = (
+        $DONE_STATUS      => 'dispatched',
+        $CANCELLED_STATUS => 'dead_lettered',
+        $FAILED_STATUS    => 'failed',
+    );
+    my $counter = $counter_for{$outcome} || 'failed';
+
+    $summary->{$counter} += 1;
+
+    return;
 }
 
 sub _ready_messages {
@@ -79,20 +103,16 @@ sub _dispatch_one {
 
     $self->_mark_running($message);
 
-    my $is_delivered = try {
+    my $outcome = try {
         $self->transport->dispatch($message);
-        return 1;
+        $self->_mark_done($message);
+        return $DONE_STATUS;
     }
     catch {
-        $self->_mark_failed( $message, $_ );
-        return 0;
+        return $self->_mark_failed( $message, $_ );
     };
 
-    if ($is_delivered) {
-        $self->_mark_done($message);
-    }
-
-    return $is_delivered;
+    return $outcome;
 }
 
 sub _mark_running {
@@ -133,23 +153,37 @@ sub _mark_failed {
 
     my $attempt_count = _next_attempt_count($message);
 
+    my $failure = {
+        attempt_count => $attempt_count,
+        error_class   => ref $exception || $GENERIC_ERROR_CLASS,
+        error_message => "$exception",
+    };
+    my $status =
+        $attempt_count >= $self->max_attempts
+      ? $CANCELLED_STATUS
+      : $FAILED_STATUS;
+
     $message->update(
         {
-            status           => $FAILED_STATUS,
+            status           => $status,
             attempts         => $attempt_count,
             attempt_count    => $attempt_count,
             locked_at        => undef,
             locked_by        => undef,
             locked_until     => undef,
-            last_error       => "$exception",
-            last_error_class => ref $exception || $GENERIC_ERROR_CLASS,
+            last_error       => $failure->{error_message},
+            last_error_class => $failure->{error_class},
             next_attempt_at  => $self->clock->epoch_plus_iso8601(
                 $attempt_count * $LOCK_SECONDS
             ),
         }
     );
 
-    return;
+    if ( $status eq $CANCELLED_STATUS ) {
+        $self->dead_letter_recorder->create_dead_letter( $message, $failure );
+    }
+
+    return $status;
 }
 
 sub _next_attempt_count {

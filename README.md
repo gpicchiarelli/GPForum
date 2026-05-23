@@ -91,6 +91,7 @@ This repository currently contains:
 * registration persistence boundary for users, credentials, events, and audit records;
 * transactional outbox rows for forum domain events;
 * retry-aware outbox dispatcher boundary for future Minion workers;
+* dead-letter preservation for exhausted outbox deliveries;
 * automation scripts in [script](script).
 
 The current implementation step is **Milestone 1: Identity And Sessions** under

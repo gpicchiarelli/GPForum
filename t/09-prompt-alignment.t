@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 28;
+const my $EXPECTED_TESTS => 29;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -64,6 +64,7 @@ for my $required_term (
     PostComposer
     PostStore
     OutboxDispatcher
+    DeadLetterRecorder
     post_bodies
     thread_counters
     thread_counter_shards

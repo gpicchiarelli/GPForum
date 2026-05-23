@@ -130,6 +130,9 @@ Outbox delivery MUST use a narrow OutboxDispatcher contract: select ready
 pending/failed rows, claim them with worker and lock metadata, dispatch through
 an injectable transport, mark successful rows done, and mark failures failed
 with retry metadata.
+Outbox delivery MUST use a narrow DeadLetterRecorder after bounded retries are
+exhausted. Dead-letter creation MUST preserve failed payload, source id,
+technical error class/message, retry count, and first/last failure timestamps.
 
 PermissionEngine:
 

@@ -11,6 +11,7 @@ use lib 't/lib';
 
 use GPForum::Service::Outbox::Dispatcher;
 use GPForum::Test::OutboxClock;
+use GPForum::Test::OutboxCreateResultSet;
 use GPForum::Test::OutboxResultSet;
 use GPForum::Test::OutboxRow;
 use GPForum::Test::OutboxSchema;
@@ -18,7 +19,7 @@ use GPForum::Test::OutboxTransport;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 22;
+const my $EXPECTED_TESTS => 28;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -32,26 +33,33 @@ my $failing = GPForum::Test::OutboxRow->new(
     data => {
         outbox_id     => 'outbox-2',
         attempt_count => 1,
+        payload       => { event_id => 'event-2' },
     }
 );
 
 my $resultset =
   GPForum::Test::OutboxResultSet->new( rows => [ $successful, $failing ], );
-my $schema = GPForum::Test::OutboxSchema->new( outbox_resultset => $resultset );
+my $dead_letters = GPForum::Test::OutboxCreateResultSet->new;
+my $schema       = GPForum::Test::OutboxSchema->new(
+    outbox_resultset      => $resultset,
+    dead_letter_resultset => $dead_letters,
+);
 my $transport =
   GPForum::Test::OutboxTransport->new( fail_ids => { 'outbox-2' => 1 }, );
 my $dispatcher = GPForum::Service::Outbox::Dispatcher->new(
-    schema    => $schema,
-    transport => $transport,
-    clock     => GPForum::Test::OutboxClock->new,
-    worker_id => 'worker-1',
+    schema       => $schema,
+    transport    => $transport,
+    clock        => GPForum::Test::OutboxClock->new,
+    worker_id    => 'worker-1',
+    max_attempts => 2,
 );
 
 my $summary = $dispatcher->dispatch_pending(2);
 
-is( $summary->{selected},   2, 'dispatcher selects ready messages' );
-is( $summary->{dispatched}, 1, 'dispatcher counts delivered messages' );
-is( $summary->{failed},     1, 'dispatcher counts failed messages' );
+is( $summary->{selected},      2, 'dispatcher selects ready messages' );
+is( $summary->{dispatched},    1, 'dispatcher counts delivered messages' );
+is( $summary->{failed},        0, 'dispatcher counts retryable failures' );
+is( $summary->{dead_lettered}, 1, 'dispatcher counts exhausted failures' );
 is_deeply(
     $resultset->last_query->{status}{-in},
     [ 'pending', 'failed' ],
@@ -77,7 +85,7 @@ is_deeply( $transport->delivered, ['outbox-1'],
 is( $failing->updates->[0]{status},
     'running', 'failing message is claimed first' );
 is( $failing->updates->[1]{status},
-    'failed', 'failing message is marked failed' );
+    'cancelled', 'exhausted message is cancelled' );
 is( $failing->updates->[1]{attempt_count},
     2, 'failing message increments attempt count' );
 is( $failing->updates->[1]{attempts},
@@ -98,6 +106,18 @@ ok(
 is( $successful->get_column('status'),
     'done', 'successful row data reflects final status' );
 is( $failing->get_column('status'),
-    'failed', 'failing row data reflects final status' );
+    'cancelled', 'failing row data reflects final status' );
+is( scalar @{ $dead_letters->created }, 1, 'dead letter row is created' );
+is( $dead_letters->created->[0]{source_table},
+    'outbox_messages', 'dead letter stores source table' );
+is( $dead_letters->created->[0]{source_id},
+    'outbox-2', 'dead letter stores source id' );
+is( $dead_letters->created->[0]{retry_count},
+    2, 'dead letter stores retry count' );
+is_deeply(
+    $dead_letters->created->[0]{payload},
+    { event_id => 'event-2' },
+    'dead letter stores failed payload'
+);
 
 1;

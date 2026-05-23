@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 168;
+const my $EXPECTED_TESTS             => 174;
 const my $EXPECTED_MIGRATIONS        => 4;
 const my $EXPECTED_RUNNER_EXECUTIONS => 9;
 const my $FORUM_MIGRATION_INDEX      => 2;
@@ -27,11 +27,12 @@ const my $GOVERNANCE_MIGRATION_INDEX => 3;
 
 plan tests => $EXPECTED_TESTS;
 
-my $schema        = GPForum::Schema->clone;
-my $source        = $schema->source('SchemaVersion');
-my $event_source  = $schema->source('EventLog');
-my $audit_source  = $schema->source('AuditLog');
-my $outbox_source = $schema->source('OutboxMessage');
+my $schema             = GPForum::Schema->clone;
+my $source             = $schema->source('SchemaVersion');
+my $event_source       = $schema->source('EventLog');
+my $audit_source       = $schema->source('AuditLog');
+my $outbox_source      = $schema->source('OutboxMessage');
+my $dead_letter_source = $schema->source('DeadLetter');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -103,6 +104,19 @@ ok( $outbox_source->has_column('queue'),    'outbox stores queue' );
 ok( $outbox_source->has_column('job_type'), 'outbox stores job type' );
 ok( $outbox_source->has_column('next_attempt_at'),
     'outbox stores retry schedule' );
+
+is( $dead_letter_source->from, 'dead_letters',
+    'dead letter source maps dead letters table' );
+is_deeply( [ $dead_letter_source->primary_columns ],
+    ['dead_letter_id'], 'dead letter primary key is explicit' );
+ok( $dead_letter_source->has_column('source_table'),
+    'dead letter stores source table' );
+ok( $dead_letter_source->has_column('source_id'),
+    'dead letter stores source id' );
+ok( $dead_letter_source->has_column('error_class'),
+    'dead letter stores error class' );
+ok( $dead_letter_source->has_column('retry_count'),
+    'dead letter stores retry count' );
 
 my $user_source          = $schema->source('User');
 my $credential_source    = $schema->source('Credential');
