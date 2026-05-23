@@ -9,6 +9,7 @@ use Mojo::Base -base;
 use Time::HiRes qw(time);
 
 use GPForum::Service::Operations::OSPreflight;
+use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
@@ -20,8 +21,10 @@ has schema              => undef;
 has rate_limiter        => undef;
 has realtime_hub        => undef;
 has projection_trackers => sub { return []; };
-has runtime             => undef;
-has started_at          => sub { return time; };
+has query_budget =>
+  sub { return GPForum::Service::Operations::QueryBudget->new; };
+has runtime    => undef;
+has started_at => sub { return time; };
 
 sub collect {
     my ($self) = @_;
@@ -33,17 +36,18 @@ sub collect {
             pid            => $PROCESS_ID,
             uptime_seconds => int( time - $self->started_at ),
         },
-        runtime      => $runtime ? $runtime->as_hash : {},
-        os           => $self->_runtime_os_snapshot,
-        os_features  => $self->_runtime_os_features,
-        os_sockets   => $self->_runtime_os_sockets,
-        os_processes => $self->_runtime_os_processes,
-        os_preflight => $self->_runtime_os_preflight,
-        realtime     => $self->_realtime,
-        rate_limits  => $self->_rate_limits,
-        projections  => $self->_projections,
-        database     => $self->_database,
-        outbox       => $self->_outbox,
+        runtime       => $runtime ? $runtime->as_hash : {},
+        os            => $self->_runtime_os_snapshot,
+        os_features   => $self->_runtime_os_features,
+        os_sockets    => $self->_runtime_os_sockets,
+        os_processes  => $self->_runtime_os_processes,
+        os_preflight  => $self->_runtime_os_preflight,
+        realtime      => $self->_realtime,
+        rate_limits   => $self->_rate_limits,
+        projections   => $self->_projections,
+        query_budgets => $self->_query_budgets,
+        database      => $self->_database,
+        outbox        => $self->_outbox,
     };
 }
 
@@ -126,6 +130,12 @@ sub _projections {
         grep { defined }
         map  { $_->observe_lag } @{ $self->projection_trackers }
     ];
+}
+
+sub _query_budgets {
+    my ($self) = @_;
+
+    return $self->query_budget->snapshot;
 }
 
 sub _database {

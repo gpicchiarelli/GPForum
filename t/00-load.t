@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 141;
+const my $TEST_COUNT => 143;
 
 plan tests => $TEST_COUNT;
 
@@ -42,6 +42,7 @@ use_ok('GPForum::Schema::Result::DeadLetter');
 use_ok('GPForum::Schema::Result::DeletionAction');
 use_ok('GPForum::Schema::Result::DeletionRequest');
 use_ok('GPForum::Schema::Result::ErasureJob');
+use_ok('GPForum::Schema::Result::EndpointQueryBudget');
 use_ok('GPForum::Schema::Result::EventLog');
 use_ok('GPForum::Schema::Result::ExportRequest');
 use_ok('GPForum::Schema::Result::ImportFailure');
@@ -109,6 +110,7 @@ use_ok('GPForum::Service::Notification::PreferenceStore');
 use_ok('GPForum::Service::Notification::SubscriptionStore');
 use_ok('GPForum::Service::Operations::MetricsSnapshot');
 use_ok('GPForum::Service::Operations::OSPreflight');
+use_ok('GPForum::Service::Operations::QueryBudget');
 use_ok('GPForum::Service::Operations::RateLimiter');
 use_ok('GPForum::Service::Operations::Readiness');
 use_ok('GPForum::Service::Operations::RunbookValidator');

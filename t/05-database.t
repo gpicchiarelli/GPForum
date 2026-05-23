@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 354;
+const my $EXPECTED_TESTS               => 356;
 const my $EXPECTED_MIGRATIONS          => 11;
 const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
 const my $FORUM_MIGRATION_INDEX        => 2;
@@ -991,6 +991,14 @@ like(
     $platform_governance_sql,
 qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] endpoint_query_budgets/msx,
     'platform governance migration creates endpoint query budgets'
+);
+my $endpoint_budget_source = $schema->source('EndpointQueryBudget');
+is( $endpoint_budget_source->from,
+    'endpoint_query_budgets',
+    'endpoint query budget source maps governance table' );
+ok(
+    $endpoint_budget_source->has_column('max_queries'),
+    'endpoint query budget source maps max query column'
 );
 like( $platform_governance_sql, qr/gpforum_web/msx,
     'platform governance migration records least-privilege DB role contracts' );

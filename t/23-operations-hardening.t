@@ -13,6 +13,7 @@ use lib 't/lib';
 use GPForum::Runtime;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::OSPreflight;
+use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Operations::RunbookValidator;
 use GPForum::Service::Operations::RuntimeSizing;
@@ -22,7 +23,7 @@ use GPForum::Test::ProjectionLagProbe;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 42;
+const my $EXPECTED_TESTS            => 48;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -40,6 +41,8 @@ const my $EXHAUSTED_ALLOWANCE       => 0;
 const my $BUCKET_COUNT              => 1;
 const my $STRICT_WORKER_THRESHOLD   => 99;
 const my $STRICT_FD_THRESHOLD       => 1;
+const my $THREAD_VIEW_QUERY_BUDGET  => 8;
+const my $EXCESSIVE_QUERY_COUNT     => 9;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -156,6 +159,8 @@ is( $metrics->{rate_limits}{buckets},
     $BUCKET_COUNT, 'metrics exposes limiter snapshot' );
 is( $metrics->{projections}[0]{projection_name},
     'search_documents', 'metrics exposes projection lag' );
+is( $metrics->{query_budgets}{endpoints}{thread_view}{max_queries},
+    $THREAD_VIEW_QUERY_BUDGET, 'metrics exposes thread view query budget' );
 
 my $runbook_validator = GPForum::Service::Operations::RunbookValidator->new;
 my $bad_backup        = $runbook_validator->validate_backup(
@@ -223,6 +228,29 @@ is(
     )->check->{status},
     'degraded',
     'OS preflight degrades above configured file descriptor threshold'
+);
+
+my $query_budget = GPForum::Service::Operations::QueryBudget->new;
+is( $query_budget->budget_for('thread_view')->{max_queries},
+    $THREAD_VIEW_QUERY_BUDGET,
+    'query budget catalog exposes thread view budget' );
+is(
+    $query_budget->observe( 'thread_view',
+        { queries => $THREAD_VIEW_QUERY_BUDGET, transactions => 1 } )->{status},
+    'ok',
+    'query budget accepts observations within budget'
+);
+is(
+    $query_budget->observe( 'thread_view',
+        { queries => $EXCESSIVE_QUERY_COUNT, transactions => 1 } )->{status},
+    'fail',
+    'query budget rejects observations over budget'
+);
+is( $query_budget->observe( 'unknown_endpoint', { queries => 1 } )->{status},
+    'unknown', 'query budget reports unknown endpoints explicitly' );
+ok(
+    exists $query_budget->snapshot->{endpoints}{search},
+    'query budget snapshot includes search endpoint'
 );
 my $bad_runtime = GPForum::Runtime->new(
     web_processes      => $BAD_WEB_PROCESSES,

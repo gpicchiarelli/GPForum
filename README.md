@@ -160,6 +160,8 @@ Known MVP limits: realtime fanout and rate limiting are process-local, search
 depends on PostgreSQL projection rows, and reply position allocation is protected
 by the database uniqueness constraint but should gain advisory locking or a
 dedicated sequence allocator before hot production traffic.
+Endpoint query budgets are now exposed through operational metrics for hot
+paths such as home, category threads, thread view, create workflows, and search.
 
 ## Architecture
 

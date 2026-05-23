@@ -132,6 +132,12 @@ thresholds `GPFORUM_OS_MIN_RECOMMENDED_WORKERS` and
 `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS` let deployments make host-capacity
 expectations explicit without hard-coding OS assumptions.
 
+Endpoint query budgets are represented by
+`GPForum::Service::Operations::QueryBudget` and surfaced through `/metrics`.
+They currently cover home, category lists, category thread pages, thread view,
+thread/reply creation, and search. They are release-gate contracts for future
+instrumented observations rather than runtime query counters.
+
 Start workers after Minion configuration is present:
 
 ```sh
