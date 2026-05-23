@@ -1,0 +1,48 @@
+name: Project Hygiene
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Required project files
+        run: |
+          test -f README.md
+          test -f LICENSE
+          test -f SECURITY.md
+          test -f CONTRIBUTING.md
+          test -f CODE_OF_CONDUCT.md
+          test -f SUPPORT.md
+          test -f GOVERNANCE.md
+          test -f ROADMAP.md
+          test -f CHANGELOG.md
+          test -f .github/CODEOWNERS
+          test -f .github/pull_request_template.md
+          test -f .github/dependabot.yml
+          test -f docs/adr/0000-template.md
+
+      - name: No backup artifacts
+        run: |
+          ! find . -name '*.bak' -print | grep .
+
+      - name: Prompt alignment marker
+        run: |
+          grep -q 'GitHub Project Success Contract' prompt/44.txt
+          grep -q 'GitHub project success surface' README.md
+

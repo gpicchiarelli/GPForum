@@ -1,0 +1,35 @@
+name: Feature request
+description: Propose a user-facing or operational capability.
+title: "feature: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user, operator, or maintainer problem does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: Describe the smallest useful version.
+    validations:
+      required: true
+  - type: textarea
+    id: boundaries
+    attributes:
+      label: Architecture Boundaries
+      description: Which bounded contexts, services, prompts, or ADRs are affected?
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Definition Of Done
+      description: Tests, profiling, migrations, docs, health checks, and rollback needs.
+    validations:
+      required: true
+

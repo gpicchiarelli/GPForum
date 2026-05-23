@@ -1,0 +1,47 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  perl:
+    name: Perl quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpanminus libpq-dev
+          sudo cpanm --notest Carton
+
+      - name: Install Perl dependencies
+        run: script/bootstrap-deps
+
+      - name: Verify dependency lock
+        run: carton check
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Run Perl::Critic
+        run: script/perlcritic
+
+      - name: Run tests
+        run: script/test
+
+      - name: Run coverage gate
+        run: script/coverage
+

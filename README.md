@@ -7,9 +7,15 @@
 ![GPForum hero](assets/img/gpforum-hero.png)
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-a6532f.svg)](LICENSE)
-[![Project Status](https://img.shields.io/badge/status-architecture%20phase-214237.svg)](prompt/20.txt)
+[![CI](https://github.com/gpicchiarelli/GPForum/actions/workflows/ci.yml/badge.svg)](https://github.com/gpicchiarelli/GPForum/actions/workflows/ci.yml)
+[![Project Hygiene](https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml/badge.svg)](https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml)
+[![Project Status](https://img.shields.io/badge/status-active%20development-214237.svg)](prompt/20.txt)
 [![Repository](https://img.shields.io/badge/repository-private-111412.svg)](https://github.com/gpicchiarelli/GPForum)
-[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-43-a6532f.svg)](prompt)
+[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-44-a6532f.svg)](prompt)
+[![GitHub Ready](https://img.shields.io/badge/github-project%20ready-3f5f72.svg)](prompt/44.txt)
+[![Security Policy](https://img.shields.io/badge/security-policy-111412.svg)](SECURITY.md)
+[![Contributing](https://img.shields.io/badge/contributing-guide-63735f.svg)](CONTRIBUTING.md)
+[![ADR](https://img.shields.io/badge/ADR-required-a6532f.svg)](docs/adr)
 
 [![Perl](https://img.shields.io/badge/runtime-Perl%205.38%2B-214237.svg)](cpanfile)
 [![Perl First](https://img.shields.io/badge/application-Perl--first-63735f.svg)](prompt/40.txt)
@@ -69,7 +75,8 @@ This repository currently contains:
 * a public static platform page in [index.html](index.html);
 * visual identity assets in [assets](assets);
 * editable logo source artwork in [assets/source/gpforum-logo-source.svg](assets/source/gpforum-logo-source.svg);
-* 43 architectural prompt constitutions in [prompt](prompt);
+* 44 architectural prompt constitutions in [prompt](prompt);
+* GitHub project success surface in [.github](.github), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [GOVERNANCE.md](GOVERNANCE.md), [SUPPORT.md](SUPPORT.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), and [docs/adr](docs/adr);
 * BSD-3 license in [LICENSE](LICENSE);
 * strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
 * Carton dependency manifests in [cpanfile](cpanfile) and [cpanfile.snapshot](cpanfile.snapshot);
@@ -242,6 +249,7 @@ Implementation and operations:
 * [41](prompt/41.txt) Profiling and coverage automation
 * [42](prompt/42.txt) PostgreSQL-native search
 * [43](prompt/43.txt) Executable architecture contract
+* [44](prompt/44.txt) GitHub project success contract
 
 [prompt/18.txt](prompt/18.txt) is an exploration memo. [prompt/19.txt](prompt/19.txt) and [prompt/42.txt](prompt/42.txt) are authoritative final decisions.
 
@@ -261,6 +269,7 @@ Known final decisions:
 * Perl application runtime is multi-process and process-first.
 * Carton, coverage, profiling, and Perl::Critic are mandatory automation surfaces.
 * Prompt alignment is mandatory for every architecture-changing implementation.
+* GitHub project success surface is mandatory for reviewability, security, contribution, and release discipline.
 
 ## License
 

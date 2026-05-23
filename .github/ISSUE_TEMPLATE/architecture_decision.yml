@@ -1,0 +1,36 @@
+name: Architecture decision
+description: Request or document a deviation from the architecture contract.
+title: "adr: "
+labels:
+  - architecture
+  - adr
+body:
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: What decision is required?
+    validations:
+      required: true
+  - type: textarea
+    id: decision
+    attributes:
+      label: Proposed Decision
+      description: What should change, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: consequences
+    attributes:
+      label: Consequences
+      description: Benefits, costs, risks, migration work, and rollback strategy.
+    validations:
+      required: true
+  - type: input
+    id: prompt
+    attributes:
+      label: Prompt Or ADR Reference
+      description: Link to the prompt, ADR, or pull request that will carry the contract.
+    validations:
+      required: true
+

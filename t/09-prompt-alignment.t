@@ -9,12 +9,13 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 39;
+const my $EXPECTED_TESTS => 42;
 
 plan tests => $EXPECTED_TESTS;
 
 my $prompt_governance = path('prompt/39.txt')->slurp;
 my $architecture      = path('prompt/43.txt')->slurp;
+my $github_success    = path('prompt/44.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -41,6 +42,21 @@ like(
     $readme,
     qr/Prompt [ ] alignment [ ] is [ ] mandatory/msx,
     'README records prompt alignment as a final decision'
+);
+like(
+    $github_success,
+    qr/GitHub [ ] Project [ ] Success [ ] Contract/msx,
+    'GitHub success prompt defines the project contract'
+);
+like(
+    $github_success,
+    qr/CI [ ] for [ ] dependency [ ] installation/msx,
+    'GitHub success prompt requires CI'
+);
+like(
+    $readme,
+    qr/GitHub [ ] project [ ] success [ ] surface [ ] is [ ] mandatory/msx,
+    'README records GitHub success as a final decision'
 );
 
 for my $required_term (

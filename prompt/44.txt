@@ -1,0 +1,52 @@
+# GPForum — GitHub Project Success Contract
+
+GPForum MUST be operated as a serious GitHub project, not only as a code dump.
+
+## Required Repository Surface
+
+The repository MUST include:
+
+- CI for dependency installation, lock verification, whitespace checks,
+  Perl::Critic, tests, and coverage;
+- project hygiene checks for required governance files;
+- Dependabot configuration for GitHub Actions;
+- bug, feature, and architecture decision issue templates;
+- pull request template with architecture, quality, migration, and security
+  gates;
+- CODEOWNERS;
+- security policy;
+- contributing guide;
+- code of conduct;
+- support policy;
+- governance document;
+- roadmap;
+- changelog;
+- ADR directory and ADR template.
+
+## Success Rules
+
+Every pull request MUST make the project easier to review, test, operate, or
+understand.
+
+Architecture-changing pull requests MUST update prompts or ADRs. A pull request
+that changes runtime, persistence, authorization, search, workers, migrations,
+or failure behavior without contract updates is incomplete.
+
+CI MUST remain strict enough to reject style drift, test regressions, missing
+coverage discipline, and repository hygiene drift.
+
+GitHub templates MUST ask for user impact, architecture boundaries, definition
+of done, security impact, migration impact, and verification commands.
+
+The project MUST preserve the maintainer identity as Giacomo Picchiarelli.
+
+## Definition Of Done
+
+A GitHub project surface change is complete only when:
+
+- required community and governance files exist;
+- workflows are present and least-privilege by default;
+- README links to the project success surface;
+- tests verify the required files and prompt alignment;
+- `script/perlcritic`, `script/test`, and `script/coverage` pass.
+
