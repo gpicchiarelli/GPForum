@@ -12,6 +12,7 @@ use lib 't/lib';
 use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Community::FeedProjector;
 use GPForum::Service::Community::MentionExtractor;
+use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Community::ReputationLedger;
 use GPForum::Test::CommunityResultSet;
 use GPForum::Test::CommunitySchema;
@@ -20,7 +21,7 @@ use GPForum::Test::Id;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 44;
+const my $EXPECTED_TESTS       => 57;
 const my $BOOKMARK_LIMIT       => 20;
 const my $MENTION_COUNT        => 2;
 const my $DEFAULT_RANK         => 0;
@@ -57,6 +58,7 @@ is_deeply( $extractor->extract(undef), [], 'empty body has no mentions' );
 
 my $bookmarks         = GPForum::Test::CommunityResultSet->new;
 my $mentions_rows     = GPForum::Test::CommunityResultSet->new;
+my $users             = GPForum::Test::CommunityResultSet->new;
 my $reputation_events = GPForum::Test::CommunityResultSet->new;
 my $trust_snapshots   = GPForum::Test::CommunityResultSet->new;
 my $feed_items        = GPForum::Test::CommunityResultSet->new;
@@ -64,6 +66,7 @@ my $schema            = GPForum::Test::CommunitySchema->new(
     resultsets => {
         Bookmark           => $bookmarks,
         Mention            => $mentions_rows,
+        User               => $users,
         ReputationEvent    => $reputation_events,
         TrustScoreSnapshot => $trust_snapshots,
         UserFeedItem       => $feed_items,
@@ -143,6 +146,78 @@ my $bookmark_page =
 is( scalar @{ $bookmark_page->{items} }, 1, 'bookmark page returns items' );
 is( $bookmark_page->{next_cursor},
     undef, 'bookmark page omits cursor when complete' );
+
+$users->create(
+    {
+        id         => 'user-1',
+        username   => 'giacomo',
+        deleted_at => undef,
+    }
+);
+$users->create(
+    {
+        id         => 'user-2',
+        username   => 'alice',
+        deleted_at => undef,
+    }
+);
+my $mention_store = GPForum::Service::Community::MentionStore->new(
+    schema     => $schema,
+    clock      => $clock,
+    id_service => GPForum::Test::Id->new,
+);
+my $stored_mentions = $mention_store->record_for_source(
+    {
+        source_type => 'post',
+        source_id   => 'post-1',
+        actor_id    => 'user-1',
+        body_source => 'Grazie ' . $AT_SIGN . 'alice e ' . $AT_SIGN . 'ghost',
+    }
+);
+
+ok( $stored_mentions->{ok}, 'mention recording succeeds' );
+is( scalar @{ $stored_mentions->{created} },
+    1, 'mention recording creates resolved users only' );
+is( $stored_mentions->{created}[0]{mentioned_user_id},
+    'user-2', 'mention stores resolved user id' );
+is( $stored_mentions->{created}[0]{mentioned_username},
+    'alice', 'mention stores normalized username' );
+is( scalar @{ $stored_mentions->{skipped} },
+    1, 'mention recording reports skipped unresolved users' );
+is( $stored_mentions->{skipped}[0]{reason},
+    'unknown_user', 'unknown mention skip reason is explicit' );
+is( scalar @{ $mentions_rows->created }, 1, 'mention row is upserted' );
+
+my $duplicate_mentions = $mention_store->record_for_source(
+    {
+        source_type => 'post',
+        source_id   => 'post-1',
+        actor_id    => 'user-1',
+        body_source => $AT_SIGN . 'alice',
+    }
+);
+is( scalar @{ $duplicate_mentions->{created} },
+    0, 'duplicate mention recording is idempotent' );
+is( scalar @{ $duplicate_mentions->{skipped} },
+    0, 'duplicate mentions do not report user-facing skips' );
+is( scalar @{ $mentions_rows->created },
+    1, 'duplicate mention does not add rows' );
+
+my $self_mention = $mention_store->record_for_source(
+    {
+        source_type => 'post',
+        source_id   => 'post-2',
+        actor_id    => 'user-1',
+        body_source => $AT_SIGN . 'giacomo',
+    }
+);
+
+is( scalar @{ $self_mention->{created} },
+    0, 'self mention does not create rows' );
+is( $self_mention->{skipped}[0]{reason},
+    'self_mention', 'self mention skip reason is explicit' );
+is( scalar @{ $mentions_rows->created },
+    1, 'self mention does not add mention rows' );
 
 my $reputation = GPForum::Service::Community::ReputationLedger->new(
     schema     => $schema,

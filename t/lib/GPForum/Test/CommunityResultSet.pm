@@ -69,8 +69,10 @@ sub _row_keys {
             qw(
               bookmark_id
               mention_id
+              id
               reputation_event_id
               user_id
+              username
             )
         },
         _composite_key($row),
@@ -80,9 +82,12 @@ sub _row_keys {
 sub _composite_key {
     my ($row) = @_;
 
-    return join q{:},
-      grep { defined }
-      @{$row}{qw(user_id target_type target_id item_type item_id)};
+    return join q{:}, grep { defined } @{$row}{
+        qw(
+          user_id target_type target_id item_type item_id
+          source_type source_id mentioned_user_id
+        )
+    };
 }
 
 1;

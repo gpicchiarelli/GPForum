@@ -61,7 +61,11 @@ sub fanout_to_subscribers {
         $input->{target_id}, );
     my @created;
 
+    my $attempted = 0;
     for my $recipient_user_id (@recipients) {
+        next if _excluded_recipient( $recipient_user_id, $input );
+
+        $attempted++;
         my $result = $self->create_notification(
             {
                 %{$input}, recipient_user_id => $recipient_user_id,
@@ -72,7 +76,7 @@ sub fanout_to_subscribers {
         }
     }
 
-    return { ok => 1, attempted => scalar @recipients, created => \@created };
+    return { ok => 1, attempted => $attempted, created => \@created };
 }
 
 sub list_for_user {
@@ -164,6 +168,14 @@ sub _search_for_user {
             rows => $options->{limit} || $DEFAULT_LIMIT,
         }
     );
+}
+
+sub _excluded_recipient {
+    my ( $recipient_user_id, $input ) = @_;
+
+    return 0 if !defined $input->{excluded_recipient_user_id};
+
+    return $recipient_user_id eq $input->{excluded_recipient_user_id} ? 1 : 0;
 }
 
 sub _rows {

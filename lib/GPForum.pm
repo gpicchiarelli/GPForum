@@ -11,6 +11,7 @@ use GPForum::Runtime;
 use GPForum::Schema;
 use GPForum::Service::Clock;
 use GPForum::Service::Community::BookmarkStore;
+use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Id;
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::PostComposer;
@@ -213,6 +214,14 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Community::BookmarkStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_mention_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Community::MentionStore->new(
                 schema => $controller->gp_schema );
         }
     );

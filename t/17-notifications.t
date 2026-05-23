@@ -20,7 +20,7 @@ use GPForum::Test::PermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 61;
+const my $EXPECTED_TESTS => 64;
 const my $LIST_LIMIT     => 10;
 
 plan tests => $EXPECTED_TESTS;
@@ -258,6 +258,24 @@ is( $fanout->{attempted},           1, 'fanout attempts subscribed users' );
 is( scalar @{ $fanout->{created} }, 1, 'fanout creates notifications' );
 is( scalar @{ $notifications->created },
     2, 'fanout inserts another notification row' );
+
+my $excluded_fanout = $dispatcher->fanout_to_subscribers(
+    {
+        target_type                => 'thread',
+        target_id                  => 'thread-1',
+        source_type                => 'post',
+        source_id                  => 'post-4',
+        notification_type          => 'reply',
+        excluded_recipient_user_id => 'user-1',
+        payload                    => { thread_id => 'thread-1' },
+    }
+);
+
+ok( $excluded_fanout->{ok}, 'fanout with excluded actor succeeds' );
+is( $excluded_fanout->{attempted},
+    0, 'fanout excludes the actor from attempts' );
+is( scalar @{ $excluded_fanout->{created} },
+    0, 'fanout does not notify excluded actor' );
 
 my $listed = $dispatcher->list_for_user( 'user-1', $LIST_LIMIT );
 

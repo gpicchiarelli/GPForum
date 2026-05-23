@@ -15,6 +15,7 @@ use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Test::IdempotencyStore;
 use GPForum::Test::Minion;
 use GPForum::Test::MinionJob;
+use GPForum::Test::NotificationDispatcher;
 use GPForum::Test::OutboxDispatcher;
 use GPForum::Test::OutboxPayloadRow;
 use GPForum::Test::WorkerSink;
@@ -28,7 +29,7 @@ use GPForum::Worker::MinionRegistrar;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 45;
+const my $EXPECTED_TESTS => 51;
 const my $OUTBOX_LIMIT   => 7;
 const my $POST_HANDLERS  => 3;
 
@@ -92,6 +93,33 @@ is_deeply(
 );
 is( $cache->snapshot->{entries},
     0, 'cache handler invalidates matching local cache entries' );
+
+my $notification_dispatcher = GPForum::Test::NotificationDispatcher->new;
+my $notification_handler = GPForum::Worker::Handler::NotificationDispatch->new(
+    dispatcher => $notification_dispatcher, );
+my $notification_result = $notification_handler->handle(
+    {
+        event_id       => 'event-mention-1',
+        event_type     => 'post.created',
+        aggregate_type => 'post',
+        aggregate_id   => 'post-9',
+        actor_id       => 'user-author',
+        domain_payload => { thread_id => 'thread-9' },
+    }
+);
+
+is( $notification_result->{thread_id},
+    'thread-9', 'notification handler reads thread id from domain payload' );
+is( $notification_result->{fanout}{attempted},
+    1, 'notification handler invokes fanout' );
+is( scalar @{ $notification_dispatcher->calls },
+    1, 'notification dispatcher receives one call' );
+is( $notification_dispatcher->calls->[0]{excluded_recipient_user_id},
+    'user-author', 'notification fanout excludes post author' );
+is( $notification_dispatcher->calls->[0]{payload}{post_id},
+    'post-9', 'notification fanout payload includes post id' );
+is( $notification_dispatcher->calls->[0]{payload}{thread_id},
+    'thread-9', 'notification fanout payload includes thread id' );
 
 my $thread_message = GPForum::Test::OutboxPayloadRow->new(
     data => {

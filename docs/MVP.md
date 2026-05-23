@@ -48,6 +48,13 @@ model over SSR/JSON. Mark-read is CSRF-protected and writes through
 `Notification::Dispatcher`, preserving the notification read projection rather
 than inventing process-local UI state.
 
+Thread and reply creation record resolved `@username` mentions as derived
+community state. The canonical post/thread transaction remains authoritative;
+mention recording runs through `MentionStore`, skips unknown/self mentions
+explicitly, and degrades with a logged warning instead of corrupting the write
+path. Outbox-dispatched `post.created` events can fan out reply notifications
+to thread subscribers while excluding the post author.
+
 ## What Works
 
 The HTTP forum path now follows:

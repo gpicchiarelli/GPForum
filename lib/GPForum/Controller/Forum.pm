@@ -126,6 +126,8 @@ sub create_thread {
 
     return _system_failure($self) if !$stored->{ok};
 
+    _record_post_mentions( $self, $stored, $prepared->{command} );
+
     return _created_thread_response( $self, $stored );
 }
 
@@ -387,7 +389,35 @@ sub _post_creation_response {
 
     return _system_failure($controller) if !$stored->{ok};
 
+    _record_post_mentions( $controller, $stored, $prepared->{command} );
+
     return _created_post_response( $controller, $stored );
+}
+
+sub _record_post_mentions {
+    my ( $controller, $stored, $command ) = @_;
+
+    my $post_id  = _column( $stored->{post}, 'post_id' );
+    my $actor_id = _column( $stored->{post}, 'author_user_id' )
+      || $command->{post}{author_user_id};
+
+    my $result = eval {
+        return $controller->gp_mention_store->record_for_source(
+            {
+                source_type => 'post',
+                source_id   => $post_id,
+                actor_id    => $actor_id,
+                body_source => $command->{body}{body_source},
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        $controller->app->log->warn("mention recording degraded: $EVAL_ERROR");
+        return;
+    }
+
+    return $result;
 }
 
 sub _reading_summary {

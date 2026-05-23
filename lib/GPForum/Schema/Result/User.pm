@@ -109,6 +109,14 @@ __PACKAGE__->has_many(
     subscriptions => 'GPForum::Schema::Result::Subscription',
     'user_id'
 );
+__PACKAGE__->has_many(
+    authored_mentions => 'GPForum::Schema::Result::Mention',
+    'actor_id'
+);
+__PACKAGE__->has_many(
+    mentions => 'GPForum::Schema::Result::Mention',
+    'mentioned_user_id'
+);
 
 1;
 

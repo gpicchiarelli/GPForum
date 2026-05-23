@@ -122,9 +122,9 @@ sub _install_forum_fakes {
         qw(
         gp_category_reader gp_thread_reader gp_thread_detail_reader
         gp_thread_composer gp_thread_store gp_post_composer gp_post_store
-        gp_post_position gp_thread_read_state gp_bookmark_store
-        gp_subscription_store gp_notification_dispatcher gp_search_service
-        gp_rate_limiter
+        gp_post_position gp_thread_read_state gp_mention_store
+        gp_bookmark_store gp_subscription_store gp_notification_dispatcher
+        gp_search_service gp_rate_limiter
         )
       )
     {

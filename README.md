@@ -110,6 +110,7 @@ This repository currently contains:
 * operations hardening boundaries for rate limiting, metrics snapshots, runbook validation, and runtime sizing;
 * advanced community boundaries for mentions, bookmarks, reputation, trust snapshots, and user feed projection;
 * HTTP bookmark and thread-follow controls backed by idempotent community/notification stores;
+* mention extraction and persistence on thread/reply creation as derived social continuity state;
 * moderation review boundaries for reports, reversible moderation actions, suspensions, and admin audit review;
 * admin authorization boundaries for role catalogs, scoped role bindings, permission review, and audit-backed role changes;
 * import/export portability boundaries for manifest validation, dry-run import jobs, legacy id mapping, failure reporting, and privacy-aware export manifests;
@@ -161,6 +162,12 @@ process-local state.
 The notification inbox is also traversable over HTTP. It uses the existing
 notification dispatcher read model, keyset pagination, and a CSRF-protected
 mark-read workflow so realtime badge updates have an SSR fallback.
+Thread and reply creation now record resolved `@username` mentions after the
+canonical write path completes. Mention recording is PostgreSQL-backed,
+idempotent at the service boundary, and treated as derived social signal: a
+mention failure is logged and does not corrupt the authoritative post/thread
+transaction. Reply events dispatched through the outbox can fan out
+notifications to thread subscribers while excluding the post author.
 SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,

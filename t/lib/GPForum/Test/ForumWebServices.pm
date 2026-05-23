@@ -184,6 +184,22 @@ sub mark_read {
     };
 }
 
+sub record_for_source {
+    my ( $self, $input ) = @_;
+
+    return {
+        ok      => 1,
+        created => [
+            {
+                source_type => $input->{source_type},
+                source_id   => $input->{source_id},
+                actor_id    => $input->{actor_id},
+            },
+        ],
+        skipped => [],
+    };
+}
+
 sub save_bookmark {
     my ( $self, $input ) = @_;
 
