@@ -43,6 +43,41 @@ sub list_category_threads {
     );
 }
 
+sub list_public_threads {
+    my ( $self, $request ) = @_;
+
+    my $plan  = $self->page_window->plan($request);
+    my $query = {
+        deleted_at       => undef,
+        moderation_state => 'visible',
+        visibility       => 'public',
+    };
+    if ( $plan->{after} ) {
+        $query->{-or} = _thread_cursor_clause( $plan->{after} );
+    }
+
+    my $search = $self->schema->resultset('Thread')->search(
+        $query,
+        {
+            columns => [
+                qw(
+                  thread_id category_id author_user_id title slug pinned
+                  visibility moderation_state last_activity_at created_at
+                  deleted_at hidden_at
+                )
+            ],
+            order_by =>
+              [ { -desc => 'last_activity_at' }, { -desc => 'thread_id' }, ],
+            rows => $plan->{fetch_rows},
+        }
+    );
+
+    return $self->page_window->page(
+        [ _rows($search) ],
+        $plan->{limit}, [ 'last_activity_at', 'thread_id' ],
+    );
+}
+
 sub _thread_cursor_clause {
     my ($after) = @_;
 

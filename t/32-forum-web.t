@@ -17,7 +17,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 90;
+const my $EXPECTED_TESTS       => 103;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_UNAUTHORIZED    => 401;
@@ -35,6 +35,23 @@ _install_test_session_route($test);
 _get_json_ok( $test, '/categories' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/categories/0/category_id' => 'category-1' );
+
+$test->get_ok('/robots.txt');
+$test->status_is($HTTP_OK);
+$test->content_like(qr/User-agent: [ ] [*]/msx);
+$test->content_like(qr/Disallow: [ ] \/search/msx);
+
+$test->get_ok('/sitemap.xml');
+$test->status_is($HTTP_OK);
+$test->content_like(qr/<urlset/msx);
+$test->content_like(qr/\/t\/thread-1\/welcome/msx);
+
+$test->get_ok('/feed.atom');
+$test->status_is($HTTP_OK);
+$test->content_like(
+    qr/<feed [^>]+ xmlns="http:\/\/www[.]w3[.]org\/2005\/Atom"/msx);
+$test->content_like(qr/First [ ] public [ ] post/msx);
+$test->content_unlike(qr/private [ ] text [ ] must [ ] not [ ] leak/msx);
 
 _get_json_ok( $test, '/c/category-1' );
 $test->status_is($HTTP_OK);

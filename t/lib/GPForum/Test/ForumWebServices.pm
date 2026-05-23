@@ -48,6 +48,44 @@ sub list_category_threads {
     };
 }
 
+sub list_public_threads {
+    return {
+        items => [
+            {
+                thread_id        => 'thread-1',
+                category_id      => 'category-1',
+                author_user_id   => 'user-1',
+                title            => 'Welcome',
+                slug             => 'welcome',
+                pinned           => 0,
+                visibility       => 'public',
+                moderation_state => 'visible',
+                deleted_at       => undef,
+                hidden_at        => undef,
+                last_activity_at => '2026-05-23T12:00:00Z',
+                created_at       => '2026-05-23T11:00:00Z',
+                safe_excerpt     => 'First public post',
+            },
+            {
+                thread_id        => 'thread-hidden',
+                category_id      => 'category-1',
+                author_user_id   => 'user-1',
+                title            => 'Hidden',
+                slug             => 'hidden',
+                pinned           => 0,
+                visibility       => 'public',
+                moderation_state => 'hidden',
+                deleted_at       => undef,
+                hidden_at        => '2026-05-23T12:00:00Z',
+                last_activity_at => '2026-05-23T12:00:00Z',
+                created_at       => '2026-05-23T11:00:00Z',
+                safe_excerpt     => 'private text must not leak',
+            },
+        ],
+        next_cursor => undef,
+    };
+}
+
 sub find_thread {
     my ( $self, $thread_id ) = @_;
 

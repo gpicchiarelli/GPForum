@@ -148,6 +148,9 @@ semantic SSR by default and still return JSON when requested with
 * `POST /notifications/:notification_id/read`
 * `GET /mentions`
 * `GET /search?q=...`
+* `GET /robots.txt`
+* `GET /sitemap.xml`
+* `GET /feed.atom`
 
 State-changing forum routes require CSRF and an authenticated session user. Read
 paths use keyset pagination and never `OFFSET`. Thread and reply creation remain
@@ -174,6 +177,11 @@ authenticated `/mentions` page exposes a keyset-paginated mention history.
 The notification inbox includes joined source/type/payload data so a mention
 can link back into the discussion without making realtime delivery
 authoritative.
+Public discovery is also wired over HTTP. `/robots.txt`, `/sitemap.xml`, and
+`/feed.atom` are generated from the existing discovery services, canonical URL
+configuration, and public thread/category readers. They are permission-safe,
+moderation-aware, and derived from PostgreSQL-backed read paths; private,
+hidden, or deleted content is not emitted.
 SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,

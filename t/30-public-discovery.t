@@ -17,7 +17,7 @@ use GPForum::Service::Discovery::VisibilityPolicy;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 32;
+const my $EXPECTED_TESTS       => 36;
 const my $VISIBLE_THREAD_COUNT => 1;
 const my $ROBOT_RULE_COUNT     => 6;
 
@@ -226,5 +226,34 @@ is(
 );
 ok( !defined $items->[0]{full_body},
     'feed does not expose full body by default' );
+my $atom = $feed->render_atom(
+    {
+        id      => 'https://forum.gp/feed.atom',
+        title   => 'GPForum public discussions',
+        url     => 'https://forum.gp/feed.atom',
+        updated => '2026-05-23T12:00:00Z',
+        items   => $items,
+    }
+);
+like(
+    $atom,
+    qr/<feed [^>]+ xmlns="http:\/\/www[.]w3[.]org\/2005\/Atom"/msx,
+    'feed renders atom root'
+);
+like(
+    $atom,
+    qr/<title>Welcome<\/title>/msx,
+    'feed renders public thread title'
+);
+like(
+    $atom,
+    qr/Hello [ ] safe [ ] public [ ] world/msx,
+    'feed renders public safe excerpt'
+);
+unlike(
+    $atom,
+    qr/secret|private [ ] text/msx,
+    'feed does not render non-public content'
+);
 
 1;

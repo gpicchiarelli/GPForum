@@ -22,6 +22,9 @@ It is intentionally narrower than the full architectural contract.
 * `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /mentions` renders the authenticated user's mention history.
 * `GET /search?q=...` renders PostgreSQL-native search results.
+* `GET /robots.txt` renders crawler policy.
+* `GET /sitemap.xml` renders public category/thread sitemap XML.
+* `GET /feed.atom` renders a public Atom feed.
 
 Read endpoints render semantic SSR by default. They also return JSON when the
 client sends `Accept: application/json` or `?format=json`, using the same
@@ -59,6 +62,13 @@ path. Outbox-dispatched `post.created` events can fan out reply notifications
 to thread subscribers while excluding the post author. `MentionStore` also
 creates mention notifications for resolved mentions, and `/mentions` exposes a
 keyset-paginated SSR/JSON history for authenticated users.
+
+Public discovery routes are now traversable. They use `CanonicalUrl`,
+`RobotsPolicy`, `SitemapBuilder`, `FeedBuilder`, `CategoryReader`, and
+`ThreadReader` rather than controller-local discovery logic. Sitemap and Atom
+feed output include only public, visible, non-deleted resources and render safe
+excerpts only; search remains disallowed in robots policy to avoid indexing
+query result pages.
 
 ## What Works
 

@@ -13,6 +13,10 @@ use GPForum::Service::Clock;
 use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Community::MentionReader;
 use GPForum::Service::Community::MentionStore;
+use GPForum::Service::Discovery::CanonicalUrl;
+use GPForum::Service::Discovery::FeedBuilder;
+use GPForum::Service::Discovery::RobotsPolicy;
+use GPForum::Service::Discovery::SitemapBuilder;
 use GPForum::Service::Id;
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::PostComposer;
@@ -60,6 +64,37 @@ sub startup {
     );
     $self->helper( gp_clock => sub { return GPForum::Service::Clock->new; } );
     $self->helper( gp_id    => sub { return GPForum::Service::Id->new; } );
+    $self->helper(
+        gp_canonical_url => sub {
+            return GPForum::Service::Discovery::CanonicalUrl->new(
+                base_url => $config->public_base_url );
+        }
+    );
+    $self->helper(
+        gp_feed_builder => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Discovery::FeedBuilder->new(
+                canonical_url => $controller->gp_canonical_url );
+        }
+    );
+    $self->helper(
+        gp_sitemap_builder => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Discovery::SitemapBuilder->new(
+                canonical_url => $controller->gp_canonical_url );
+        }
+    );
+    $self->helper(
+        gp_robots_policy => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Discovery::RobotsPolicy->new(
+                sitemap_url => $controller->gp_canonical_url->base_url
+                  . '/sitemap.xml', );
+        }
+    );
     $self->helper(
         gp_password => sub { return GPForum::Service::Password->new; } );
     $self->helper(
@@ -269,6 +304,9 @@ sub startup {
     my $routes = $self->routes;
 
     $routes->get($root_path)->to('Home#show')->name('home');
+    $routes->get('/robots.txt')->to('Discovery#robots')->name('robots');
+    $routes->get('/sitemap.xml')->to('Discovery#sitemap')->name('sitemap');
+    $routes->get('/feed.atom')->to('Discovery#feed')->name('public_feed');
     $routes->get('/health')->to('Health#summary')->name('health');
     $routes->get('/health/live')->to('Health#live')->name('health_live');
     $routes->get('/health/ready')->to('Health#ready')->name('health_ready');
