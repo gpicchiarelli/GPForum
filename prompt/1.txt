@@ -88,6 +88,34 @@ Application nodes MUST:
 * avoid local sessions;
 * avoid local authoritative caches.
 
+Application root classes MUST remain composition roots only.
+
+They MUST NOT become god class applications.
+
+The application root MAY:
+
+* load configuration;
+* register routes;
+* register helpers;
+* wire dependency boundaries;
+* attach middleware;
+* start observability hooks.
+
+The application root MUST NOT:
+
+* contain business logic;
+* contain authorization policy logic;
+* contain persistence orchestration;
+* contain search orchestration;
+* contain queue workflow logic;
+* contain websocket workflow logic;
+* contain moderation workflow logic;
+* directly implement domain use cases.
+
+If the application root grows beyond wiring, the behavior MUST be moved into
+controllers, application services, domain services, infrastructure adapters, or
+runtime modules with explicit ownership.
+
 Shared state MUST reside in:
 
 * PostgreSQL;

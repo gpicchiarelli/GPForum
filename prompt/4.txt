@@ -368,6 +368,34 @@ Threads are optional acceleration tools, not the foundation of correctness.
 
 ⸻
 
+Application Root Discipline
+
+The Mojolicious application class MUST remain a small composition root.
+
+It MAY:
+
+* load validated configuration;
+* build runtime objects;
+* register routes;
+* register helpers;
+* attach middleware;
+* initialize logging and observability.
+
+It MUST NOT become:
+
+* a god class application;
+* a business logic container;
+* a persistence orchestration layer;
+* a search orchestration layer;
+* a queue workflow layer;
+* a websocket workflow layer;
+* a moderation policy container.
+
+Any non-wiring behavior MUST be extracted into explicit modules with clear
+ownership, tests, profiling visibility, and Perl::Critic compliance.
+
+⸻
+
 Realtime Discipline
 
 Realtime handlers MUST:

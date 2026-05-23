@@ -182,6 +182,11 @@ Application services MUST NOT:
 * become giant god services;
 * absorb unrelated workflows.
 
+Application root classes MUST NOT compensate by becoming god class
+applications.
+
+The root application class MUST wire application services, not replace them.
+
 ⸻
 
 Thin Controller Rule
