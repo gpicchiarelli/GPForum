@@ -17,9 +17,10 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 109;
+const my $EXPECTED_TESTS       => 125;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
+const my $HTTP_BAD_REQUEST     => 400;
 const my $HTTP_UNAUTHORIZED    => 401;
 const my $HTTP_FORBIDDEN       => 403;
 const my $HTTP_NOT_FOUND       => 404;
@@ -87,6 +88,8 @@ _get_json_ok( $test, '/mentions' );
 $test->status_is($HTTP_UNAUTHORIZED);
 
 $test->post_ok('/threads');
+$test->status_is($HTTP_FORBIDDEN);
+$test->post_ok('/t/thread-1/report');
 $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
@@ -216,6 +219,46 @@ $test->post_ok(
 $test->status_is($HTTP_OK);
 $test->json_is( '/status' => 'unsubscribed' );
 
+$test->post_ok(
+    '/t/thread-1/report' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        reason     => 'spam',
+        details    => 'Thread report',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'             => 'reported' );
+$test->json_is( '/report/target_type' => 'thread' );
+
+$test->post_ok(
+    '/p/post-1/report' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        reason     => 'abuse',
+        details    => 'Post report',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'             => 'reported' );
+$test->json_is( '/report/target_type' => 'post' );
+$test->json_is( '/report/target_id'   => 'post-1' );
+
+$test->post_ok(
+    '/t/thread-1/report' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        reason     => q{},
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/reason' => 'reason is required' );
+
+$test->post_ok(
+    '/p/missing/report' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        reason     => 'spam',
+    }
+);
+$test->status_is($HTTP_NOT_FOUND);
+
 _get_json_ok( $test, '/search?q=welcome' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/results/0/entity_id' => 'thread-1' );
@@ -252,10 +295,11 @@ sub _install_forum_fakes {
     for my $helper (
         qw(
         gp_category_reader gp_thread_reader gp_thread_detail_reader
-        gp_thread_composer gp_thread_store gp_post_composer gp_post_store
-        gp_post_position gp_thread_read_state gp_mention_store
+        gp_thread_composer gp_thread_store gp_post_reader gp_post_composer
+        gp_post_store gp_post_position gp_thread_read_state gp_mention_store
         gp_mention_reader gp_bookmark_store gp_subscription_store
-        gp_notification_dispatcher gp_search_service gp_rate_limiter
+        gp_notification_dispatcher gp_report_store gp_search_service
+        gp_rate_limiter
         )
       )
     {

@@ -33,6 +33,7 @@ use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Identity::ProfileReader;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Moderation::ReportStore;
 use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Operations::LocalCache;
@@ -320,6 +321,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_report_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Moderation::ReportStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_search_service => sub {
             my ($controller) = @_;
 
@@ -370,6 +379,12 @@ sub startup {
     $routes->post('/t/:thread_id/subscribe/remove')
       ->to('Forum#unsubscribe_thread')
       ->name('thread_unsubscribe');
+    $routes->post('/t/:thread_id/report')
+      ->to('Forum#report_thread')
+      ->name('thread_report');
+    $routes->post('/p/:post_id/report')
+      ->to('Forum#report_post')
+      ->name('post_report');
     $routes->get('/notifications')
       ->to('Notifications#inbox')
       ->name('notifications');

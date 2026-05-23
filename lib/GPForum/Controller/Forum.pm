@@ -19,7 +19,11 @@ const my $HTTP_NOT_FOUND     => 404;
 const my $HTTP_TOO_MANY      => 429;
 const my $HTTP_SERVER_ERROR  => 500;
 const my $DEFAULT_PAGE_LIMIT => 25;
+const my $REPORT_DETAILS_MAX => 2_000;
+const my $REPORT_REASON_MAX  => 80;
 const my $SEARCH_LIMIT       => 20;
+const my $TARGET_POST        => 'post';
+const my $TARGET_THREAD      => 'thread';
 const my $WRITE_RATE_LIMIT   => 20;
 const my $WRITE_RATE_WINDOW  => 60;
 
@@ -344,6 +348,59 @@ sub unsubscribe_thread {
     return _subscription_action_response( $self, 'unsubscribed', $revoked );
 }
 
+sub report_thread {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'report.create' );
+    return if !$user_id;
+
+    my $thread = _visible_thread($self);
+    return if !$thread;
+
+    return _report_response(
+        $self,
+        _create_report(
+            $self,
+            {
+                reporter_user_id => $user_id,
+                target_type      => $TARGET_THREAD,
+                target_id        => _column( $thread, 'thread_id' ),
+            }
+        ),
+        _column( $thread, 'thread_id' ),
+        undef,
+    );
+}
+
+sub report_post {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'report.create' );
+    return if !$user_id;
+
+    my $post =
+      $self->gp_post_reader->find_visible_post( $self->param('post_id') );
+    return _not_found( $self, 'post not found' ) if !$post;
+
+    my $thread_id = _column( $post, 'thread_id' );
+    return _not_found( $self, 'post not found' )
+      if !$self->gp_thread_detail_reader->find_thread($thread_id);
+
+    return _report_response(
+        $self,
+        _create_report(
+            $self,
+            {
+                reporter_user_id => $user_id,
+                target_type      => $TARGET_POST,
+                target_id        => _column( $post, 'post_id' ),
+            }
+        ),
+        $thread_id,
+        _column( $post, 'post_id' ),
+    );
+}
+
 sub _visible_thread {
     my ($controller) = @_;
 
@@ -487,6 +544,100 @@ sub _engagement_summary {
     }
 
     return $summary;
+}
+
+sub _create_report {
+    my ( $controller, $input ) = @_;
+
+    my $prepared = _report_input( $controller, $input );
+    return $prepared if !$prepared->{ok};
+
+    my $report = eval {
+        return $controller->gp_report_store->create_report(
+            $prepared->{report} );
+    };
+
+    if ($EVAL_ERROR) {
+        $controller->app->log->error("report create failed: $EVAL_ERROR");
+        return { ok => 0, system_error => 1 };
+    }
+
+    return { ok => 1, report => $report };
+}
+
+sub _report_input {
+    my ( $controller, $input ) = @_;
+
+    my $reason  = _trim( $controller->param('reason') );
+    my $details = _trim( $controller->param('details') );
+    my %errors;
+
+    if ( !length $reason ) {
+        $errors{reason} = 'reason is required';
+    }
+    elsif ( length $reason > $REPORT_REASON_MAX ) {
+        $errors{reason} = 'reason is too long';
+    }
+
+    if ( length $details > $REPORT_DETAILS_MAX ) {
+        $errors{details} = 'details are too long';
+    }
+
+    return { ok => 0, errors => \%errors } if %errors;
+
+    return {
+        ok     => 1,
+        report => {
+            reporter_user_id => $input->{reporter_user_id},
+            target_type      => $input->{target_type},
+            target_id        => $input->{target_id},
+            reason           => $reason,
+            details          => $details,
+        },
+    };
+}
+
+sub _report_response {
+    my ( $controller, $result, $thread_id, $post_id ) = @_;
+
+    return _report_error_response( $controller, $result ) if !$result->{ok};
+
+    if ( _wants_json($controller) ) {
+        return _report_json_response( $controller, $result );
+    }
+
+    return _report_redirect( $controller, $thread_id, $post_id );
+}
+
+sub _report_error_response {
+    my ( $controller, $result ) = @_;
+
+    return _system_failure($controller) if $result->{system_error};
+
+    return _bad_request( $controller, $result->{errors} );
+}
+
+sub _report_json_response {
+    my ( $controller, $result ) = @_;
+
+    return $controller->render(
+        json => {
+            status => 'reported',
+            report => _report_hash( $result->{report} ),
+        },
+        status => $HTTP_OK,
+    );
+}
+
+sub _report_redirect {
+    my ( $controller, $thread_id, $post_id ) = @_;
+
+    my $url = $controller->url_for( 'thread', thread_id => $thread_id );
+    if ($post_id) {
+        $url->fragment( 'post-' . $post_id );
+    }
+
+    return $controller->redirect_to($url);
 }
 
 sub _created_thread_response {
@@ -810,6 +961,20 @@ sub _feed_item_hash {
         rank_score         => _column( $row, 'rank_score' ),
         visibility_version => _column( $row, 'visibility_version' ),
         permission_version => _column( $row, 'permission_version' ),
+    };
+}
+
+sub _report_hash {
+    my ($row) = @_;
+
+    return {
+        report_id        => _column( $row, 'report_id' ),
+        reporter_user_id => _column( $row, 'reporter_user_id' ),
+        target_type      => _column( $row, 'target_type' ),
+        target_id        => _column( $row, 'target_id' ),
+        reason           => _column( $row, 'reason' ),
+        status           => _column( $row, 'status' ),
+        created_at       => _column( $row, 'created_at' ),
     };
 }
 

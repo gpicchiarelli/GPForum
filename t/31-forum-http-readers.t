@@ -12,6 +12,7 @@ use lib 't/lib';
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::HomePageReader;
 use GPForum::Service::Forum::PostPosition;
+use GPForum::Service::Forum::PostReader;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Test::ForumReadResultSet;
@@ -20,7 +21,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 28;
+const my $EXPECTED_TESTS         => 31;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -142,6 +143,33 @@ ok(
 );
 is( $schema->resultset('Thread')->last_attrs->{columns}[0],
     'thread_id', 'home page reader uses explicit thread columns' );
+
+my $visible_post_schema = GPForum::Test::ForumReadSchema->new(
+    resultsets => {
+        Post => GPForum::Test::ForumReadResultSet->new(
+            rows => [
+                _row(
+                    {
+                        post_id          => 'post-visible',
+                        thread_id        => 'thread-1',
+                        position         => 3,
+                        deleted_at       => undef,
+                        moderation_state => 'visible',
+                    }
+                ),
+            ],
+        ),
+    },
+);
+my $post_reader =
+  GPForum::Service::Forum::PostReader->new( schema => $visible_post_schema );
+my $visible_post = $post_reader->find_visible_post('post-visible');
+is( $visible_post->get_column('post_id'),
+    'post-visible', 'post reader finds visible post by id' );
+is( $visible_post_schema->resultset('Post')->last_query->{post_id},
+    'post-visible', 'post lookup filters by post id' );
+is( $visible_post_schema->resultset('Post')->last_query->{moderation_state},
+    'visible', 'post lookup filters visible moderation state' );
 
 my $detail_reader =
   GPForum::Service::Forum::ThreadDetailReader->new( schema => $schema );

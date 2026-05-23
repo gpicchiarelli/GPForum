@@ -58,6 +58,19 @@
           <button type="submit">Follow thread</button>
         </form>
       % }
+      <form method="post" action="<%= url_for('thread_report', thread_id => $thread->{thread_id}) %>">
+        <%= csrf_field %>
+        <label for="thread-report-reason">Report thread</label>
+        <select id="thread-report-reason" name="reason" required>
+          <option value="spam">Spam</option>
+          <option value="abuse">Abuse</option>
+          <option value="privacy">Privacy</option>
+          <option value="other">Other</option>
+        </select>
+        <label for="thread-report-details">Details</label>
+        <textarea id="thread-report-details" name="details" rows="3"></textarea>
+        <button type="submit">Submit report</button>
+      </form>
     </section>
   % }
   <section aria-labelledby="posts-heading">
@@ -70,6 +83,21 @@
               <h3 id="post-<%= $post->{post_id} %>-heading">Post <%= $post->{position} %></h3>
               <p><a href="#post-<%= $post->{post_id} %>">Permalink</a></p>
               <div><%== $post->{body} // q{} %></div>
+              % if ($engagement && $engagement->{authenticated}) {
+                <form method="post" action="<%= url_for('post_report', post_id => $post->{post_id}) %>">
+                  <%= csrf_field %>
+                  <label for="post-<%= $post->{post_id} %>-report-reason">Report post</label>
+                  <select id="post-<%= $post->{post_id} %>-report-reason" name="reason" required>
+                    <option value="spam">Spam</option>
+                    <option value="abuse">Abuse</option>
+                    <option value="privacy">Privacy</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <label for="post-<%= $post->{post_id} %>-report-details">Details</label>
+                  <textarea id="post-<%= $post->{post_id} %>-report-details" name="details" rows="3"></textarea>
+                  <button type="submit">Submit report</button>
+                </form>
+              % }
             </article>
           </li>
         % }

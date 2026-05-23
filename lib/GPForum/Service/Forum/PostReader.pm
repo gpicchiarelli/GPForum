@@ -40,6 +40,23 @@ sub list_thread_posts {
     );
 }
 
+sub find_visible_post {
+    my ( $self, $post_id ) = @_;
+
+    return if !defined $post_id || !length $post_id;
+
+    my $search = $self->schema->resultset('Post')->search(
+        {
+            post_id          => $post_id,
+            deleted_at       => undef,
+            moderation_state => 'visible',
+        },
+        { rows => 1, }
+    );
+
+    return $search->single;
+}
+
 sub _post_cursor_clause {
     my ($after) = @_;
 

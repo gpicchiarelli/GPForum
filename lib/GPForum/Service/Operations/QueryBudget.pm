@@ -35,6 +35,10 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 6,
         notes       => 'single canonical transaction plus position allocation',
     },
+    report_create => {
+        max_queries => 5,
+        notes       => 'visible target check plus report event/audit/outbox',
+    },
     search => {
         max_queries => 2,
         notes       => 'permission-aware search projection lookup',

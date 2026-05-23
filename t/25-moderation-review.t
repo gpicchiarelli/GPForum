@@ -19,16 +19,19 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 49;
+const my $EXPECTED_TESTS      => 55;
 const my $QUEUE_LIMIT         => 25;
 const my $AUDIT_LIMIT         => 10;
 const my $CREATED_REPORTS     => 1;
+const my $CREATED_EVENTS      => 1;
+const my $CREATED_OUTBOX_ROWS => 1;
 const my $CREATED_ACTIONS     => 3;
-const my $CREATED_AUDIT_ROWS  => 3;
+const my $CREATED_AUDIT_ROWS  => 4;
 const my $FIRST_ACTION_INDEX  => 0;
 const my $SECOND_ACTION_INDEX => 1;
 const my $THIRD_ACTION_INDEX  => 2;
 const my $FIRST_AUDIT_INDEX   => 0;
+const my $SECOND_AUDIT_INDEX  => 1;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -37,6 +40,8 @@ my $moderation_actions = GPForum::Test::ModerationResultSet->new;
 my $posts              = GPForum::Test::ModerationResultSet->new;
 my $threads            = GPForum::Test::ModerationResultSet->new;
 my $audit_log          = GPForum::Test::ModerationResultSet->new;
+my $event_log          = GPForum::Test::ModerationResultSet->new;
+my $outbox_messages    = GPForum::Test::ModerationResultSet->new;
 my $schema             = GPForum::Test::ModerationSchema->new(
     resultsets => {
         Report           => $reports,
@@ -44,6 +49,8 @@ my $schema             = GPForum::Test::ModerationSchema->new(
         Post             => $posts,
         Thread           => $threads,
         AuditLog         => $audit_log,
+        EventLog         => $event_log,
+        OutboxMessage    => $outbox_messages,
     },
 );
 my $clock = GPForum::Test::FixedClock->new;
@@ -87,6 +94,18 @@ is( $report->{status},           'open',        'report starts open' );
 is( $report->{created_at},
     '2026-05-23T12:00:00Z', 'report stores creation time' );
 is( scalar @{ $reports->created }, $CREATED_REPORTS, 'report row is inserted' );
+is( scalar @{ $event_log->created },
+    $CREATED_EVENTS, 'report creation records a domain event' );
+is( $event_log->created->[$FIRST_AUDIT_INDEX]{event_type},
+    'report.created', 'report event type is explicit' );
+is( scalar @{ $outbox_messages->created },
+    $CREATED_OUTBOX_ROWS, 'report creation records outbox handoff' );
+is( $outbox_messages->created->[$FIRST_AUDIT_INDEX]{event_id},
+    'generated-3', 'report outbox points to report event' );
+is( $audit_log->created->[$FIRST_AUDIT_INDEX]{action},
+    'report.created', 'report creation records audit row' );
+is( $audit_log->created->[$FIRST_AUDIT_INDEX]{metadata}{report_id},
+    'generated-1', 'report audit stores report id' );
 
 my $assigned = $report_store->assign_report( 'generated-1', 'moderator-1' );
 is( $assigned->{report_id}, 'generated-1', 'assignment returns report id' );
@@ -172,9 +191,9 @@ is( $moderation_actions->created->[$THIRD_ACTION_INDEX]{action_type},
     'thread.locked', 'third action is lock' );
 is( scalar @{ $audit_log->created },
     $CREATED_AUDIT_ROWS, 'moderation actions create audit rows' );
-is( $audit_log->created->[$FIRST_AUDIT_INDEX]{action},
+is( $audit_log->created->[$SECOND_AUDIT_INDEX]{action},
     'post.hidden', 'audit row stores action' );
-is( $audit_log->created->[$FIRST_AUDIT_INDEX]{metadata}{reason},
+is( $audit_log->created->[$SECOND_AUDIT_INDEX]{metadata}{reason},
     'spam', 'audit row stores reason metadata' );
 
 my $reversed = $action_store->reverse_action( 'generated-1', 'moderator-2' );

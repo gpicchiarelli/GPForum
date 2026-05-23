@@ -10,17 +10,19 @@ use GPForum::Test::ModerationSearch;
 
 our $VERSION = '0.001';
 
-has created       => sub { return []; };
-has rows          => sub { return {}; };
-has last_query    => sub { return {}; };
-has last_attrs    => sub { return {}; };
-has filter_search => 0;
+has created         => sub { return []; };
+has created_objects => sub { return []; };
+has rows            => sub { return {}; };
+has last_query      => sub { return {}; };
+has last_attrs      => sub { return {}; };
+has filter_search   => 0;
 
 sub create {
     my ( $self, $row ) = @_;
 
     my $object = GPForum::Test::ModerationRow->new( data => $row );
-    push @{ $self->created }, $row;
+    push @{ $self->created },         $row;
+    push @{ $self->created_objects }, $object;
     $self->_store_row( $row, $object );
 
     return $object;
@@ -46,8 +48,12 @@ sub search {
     $self->last_query($query);
     $self->last_attrs( $attrs || {} );
 
+    my @candidate_rows =
+        @{ $self->created_objects }
+      ? @{ $self->created_objects }
+      : values %{ $self->rows };
     my %seen;
-    my @rows = grep { !$seen{ 0 + $_ }++ } values %{ $self->rows };
+    my @rows = grep { !$seen{ 0 + $_ }++ } @candidate_rows;
     if ( $self->filter_search ) {
         @rows = grep { _matches_query( $_, $query ) } @rows;
     }
@@ -72,6 +78,8 @@ sub _row_keys {
         @{$row}{
             qw(
               report_id
+              event_id
+              outbox_id
               moderation_action_id
               suspension_id
               audit_id

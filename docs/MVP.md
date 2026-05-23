@@ -20,6 +20,8 @@ It is intentionally narrower than the full architectural contract.
 * `POST /t/:thread_id/subscribe` follows a thread for notifications.
 * `POST /t/:thread_id/subscribe/mute` mutes a followed thread.
 * `POST /t/:thread_id/subscribe/remove` unfollows a thread.
+* `POST /t/:thread_id/report` creates a moderation report for a visible thread.
+* `POST /p/:post_id/report` creates a moderation report for a visible post.
 * `GET /notifications` renders the authenticated user's notification inbox.
 * `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /mentions` renders the authenticated user's mention history.
@@ -60,6 +62,12 @@ bookmark, remove bookmark, follow, mute, and unfollow. These controls are
 server-rendered, keyboard-accessible, CSRF-protected, and backed by existing
 `BookmarkStore` and `SubscriptionStore` service boundaries. Bookmark listing
 uses keyset pagination and no `OFFSET`.
+
+Authenticated users can report visible threads and posts directly from the
+thread page. Report creation is CSRF-protected, rate-limited, and backed by
+`ReportStore`. The store persists the report and emits append-only event, audit,
+and outbox rows so moderation intake is observable and asynchronously
+projectable without making UI state authoritative.
 
 Authenticated personal feeds expose the existing `user_feed_items` projection
 through `FeedReader`. The route is SSR/JSON, keyset-paginated, and deliberately

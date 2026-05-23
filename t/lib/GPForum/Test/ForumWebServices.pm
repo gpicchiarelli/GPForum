@@ -158,6 +158,22 @@ sub thread_page {
     };
 }
 
+sub find_visible_post {
+    my ( $self, $post_id ) = @_;
+
+    return if $post_id ne 'post-1';
+
+    return {
+        post_id          => 'post-1',
+        thread_id        => 'thread-1',
+        author_user_id   => 'user-1',
+        position         => 1,
+        visibility       => 'public',
+        moderation_state => 'visible',
+        deleted_at       => undef,
+    };
+}
+
 sub prepare {
     my ( $self, $input ) = @_;
 
@@ -176,6 +192,21 @@ sub create_thread {
 
 sub create_post {
     return { ok => 1, post => { post_id => 'post-created' } };
+}
+
+sub create_report {
+    my ( $self, $input ) = @_;
+
+    return {
+        report_id        => 'report-created',
+        reporter_user_id => $input->{reporter_user_id},
+        target_type      => $input->{target_type},
+        target_id        => $input->{target_id},
+        reason           => $input->{reason},
+        details          => $input->{details},
+        status           => 'open',
+        created_at       => '2026-05-23T12:00:00Z',
+    };
 }
 
 sub summary_for_page {

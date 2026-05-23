@@ -146,6 +146,8 @@ semantic SSR by default and still return JSON when requested with
 * `POST /t/:thread_id/subscribe`
 * `POST /t/:thread_id/subscribe/mute`
 * `POST /t/:thread_id/subscribe/remove`
+* `POST /t/:thread_id/report`
+* `POST /p/:post_id/report`
 * `GET /notifications`
 * `POST /notifications/:notification_id/read`
 * `GET /mentions`
@@ -175,6 +177,10 @@ Thread bookmarks and follow/mute/unfollow controls are wired through the
 existing community and notification stores. They are idempotent per user/thread,
 SSR-accessible, CSRF-protected, and derived from PostgreSQL rows rather than any
 process-local state.
+Thread and post reports are now traversable from the thread page. They require
+an authenticated session, CSRF, and rate limiting, then write through
+`ReportStore`, which records the report, append-only domain event, audit row,
+and transactional outbox handoff.
 The authenticated `/feed` route exposes the existing `user_feed_items`
 projection as a keyset-paginated personal continuity feed. It is derived,
 rebuildable, and non-authoritative: it stores only item references and version

@@ -18,4 +18,10 @@ sub resultset {
     croak 'unexpected resultset';
 }
 
+sub txn_do {
+    my ( $self, $callback ) = @_;
+
+    return $callback->();
+}
+
 1;

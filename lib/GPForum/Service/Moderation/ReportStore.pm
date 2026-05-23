@@ -8,21 +8,41 @@ use Mojo::Base -base;
 
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
 const my $DEFAULT_QUEUE_LIMIT => 50;
+const my $REPORT_AGGREGATE    => 'report';
+const my $SCHEMA_VERSION      => 1;
 const my $STATUS_OPEN         => 'open';
 const my $STATUS_RESOLVED     => 'resolved';
 
-has clock      => sub { return GPForum::Service::Clock->new; };
-has id_service => sub { return GPForum::Service::Id->new; };
-has schema     => undef;
+has clock          => sub { return GPForum::Service::Clock->new; };
+has id_service     => sub { return GPForum::Service::Id->new; };
+has outbox_builder => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Outbox::MessageBuilder->new(
+        id_service => $self->id_service, );
+};
+has schema => undef;
 
 sub create_report {
     my ( $self, $input ) = @_;
 
-    my $report = {
+    return $self->schema->txn_do(
+        sub {
+            return $self->_insert_report($input);
+        }
+    );
+}
+
+sub _insert_report {
+    my ( $self, $input ) = @_;
+
+    my $created_at = $self->clock->now_iso8601;
+    my $report     = {
         report_id                  => $self->id_service->uuid,
         reporter_user_id           => $input->{reporter_user_id},
         target_type                => $input->{target_type},
@@ -31,12 +51,13 @@ sub create_report {
         details                    => $input->{details} || q{},
         status                     => $STATUS_OPEN,
         assigned_moderator_user_id => undef,
-        created_at                 => $self->clock->now_iso8601,
+        created_at                 => $created_at,
         resolved_at                => undef,
         resolution                 => undef,
     };
 
     $self->schema->resultset('Report')->create($report);
+    $self->_record_event_and_audit($report);
 
     return $report;
 }
@@ -80,6 +101,65 @@ sub list_queue {
     );
 
     return [ _rows($search) ];
+}
+
+sub _record_event_and_audit {
+    my ( $self, $report ) = @_;
+
+    my $correlation_id = $self->id_service->uuid;
+    my $event_id       = $self->id_service->uuid;
+    my $event          = {
+        event_id          => $event_id,
+        event_type        => 'report.created',
+        schema_version    => $SCHEMA_VERSION,
+        aggregate_type    => $REPORT_AGGREGATE,
+        aggregate_id      => $report->{report_id},
+        aggregate_version => $SCHEMA_VERSION,
+        actor_id          => $report->{reporter_user_id},
+        correlation_id    => $correlation_id,
+        causation_id      => undef,
+        idempotency_key => join( q{:}, 'report.created', $report->{report_id} ),
+        payload         => {
+            report_id   => $report->{report_id},
+            target_type => $report->{target_type},
+            target_id   => $report->{target_id},
+            reason      => $report->{reason},
+        },
+        metadata   => {},
+        created_at => $report->{created_at},
+    };
+
+    $self->schema->resultset('EventLog')->create($event);
+    $self->schema->resultset('OutboxMessage')
+      ->create( $self->outbox_builder->for_event($event) );
+    $self->_record_audit( $report, $correlation_id );
+
+    return;
+}
+
+sub _record_audit {
+    my ( $self, $report, $correlation_id ) = @_;
+
+    $self->schema->resultset('AuditLog')->create(
+        {
+            audit_id       => $self->id_service->uuid,
+            action         => 'report.created',
+            schema_version => $SCHEMA_VERSION,
+            actor_id       => $report->{reporter_user_id},
+            target_type    => $report->{target_type},
+            target_id      => $report->{target_id},
+            correlation_id => $correlation_id,
+            previous_hash  => undef,
+            record_hash    => q{},
+            metadata       => {
+                reason    => $report->{reason},
+                report_id => $report->{report_id},
+            },
+            created_at => $report->{created_at},
+        }
+    );
+
+    return;
 }
 
 sub _rows {
