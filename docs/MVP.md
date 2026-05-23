@@ -23,6 +23,8 @@ It is intentionally narrower than the full architectural contract.
 * `POST /t/:thread_id/report` creates a moderation report for a visible thread.
 * `POST /p/:post_id/report` creates a moderation report for a visible post.
 * `GET /moderation/reports` renders the authorized moderation report queue.
+* `GET /moderation/actions` renders keyset-paginated moderation action history.
+* `GET /moderation/suspensions` renders active or historical suspension rows.
 * `POST /moderation/reports/:report_id/assign` assigns a report to the current moderator.
 * `POST /moderation/reports/:report_id/resolve` resolves a report with an explicit resolution.
 * `POST /moderation/posts/:post_id/hide` hides a post through `ActionStore`.
@@ -84,6 +86,11 @@ queue, assign reports, and resolve reports. The moderation controller uses
 `PermissionGate`, which checks PostgreSQL role bindings and permissions rather
 than trusting a session flag. Report assignment and resolution are CSRF-protected
 and emit append-only transition events, audit rows, and outbox handoffs.
+Moderation review now includes read-only history pages. `/moderation/actions`
+uses `ReviewReader` to expose a keyset-paginated action ledger with optional
+target filters, and `/moderation/suspensions` exposes active or all suspension
+rows with user filtering. These pages are permission-gated, SSR/JSON capable,
+and never become authoritative outside PostgreSQL.
 
 Moderation actions are now wired as real HTTP write workflows. Authorized staff
 can hide/restore posts, lock/unlock threads, and reverse moderation actions

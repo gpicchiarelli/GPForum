@@ -149,6 +149,8 @@ semantic SSR by default and still return JSON when requested with
 * `POST /t/:thread_id/report`
 * `POST /p/:post_id/report`
 * `GET /moderation/reports`
+* `GET /moderation/actions`
+* `GET /moderation/suspensions`
 * `POST /moderation/reports/:report_id/assign`
 * `POST /moderation/reports/:report_id/resolve`
 * `POST /moderation/posts/:post_id/hide`
@@ -195,6 +197,11 @@ The moderation report queue is also traversable for authorized staff. Access is
 checked by `PermissionGate` against PostgreSQL role bindings and permissions;
 assignment and resolution remain CSRF-protected and emit report transition
 events, audit rows, and outbox handoffs.
+Staff review is now traversable beyond the queue itself: `/moderation/actions`
+exposes a keyset-paginated moderation action history and
+`/moderation/suspensions` exposes active or historical suspension rows. Both
+routes stay read-only, permission-gated, SSR/JSON capable, and backed by
+PostgreSQL rather than process-local state.
 Moderators can now execute reversible content actions from the same HTTP
 boundary. Post hide/restore, thread lock/unlock, and moderation action reversal
 delegate to `ActionStore`; each action runs in a PostgreSQL transaction and

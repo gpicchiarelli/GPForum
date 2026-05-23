@@ -1,0 +1,61 @@
+% layout 'default';
+% title 'Moderation actions - GPForum';
+
+<section aria-labelledby="moderation-actions-heading">
+  <h1 id="moderation-actions-heading">Moderation actions</h1>
+  <form method="get" action="<%= url_for('moderation_actions') %>">
+    <label for="action-target-type">Target type</label>
+    <select id="action-target-type" name="target_type">
+      <option value="" <%= !$target_type ? 'selected' : '' %>>Any</option>
+      <option value="post" <%= $target_type && $target_type eq 'post' ? 'selected' : '' %>>Post</option>
+      <option value="thread" <%= $target_type && $target_type eq 'thread' ? 'selected' : '' %>>Thread</option>
+      <option value="user" <%= $target_type && $target_type eq 'user' ? 'selected' : '' %>>User</option>
+    </select>
+    <label for="action-target-id">Target id</label>
+    <input id="action-target-id" name="target_id" value="<%= $target_id || '' %>">
+    <button type="submit">Filter</button>
+  </form>
+
+  % if (@{$actions}) {
+    <ol aria-label="Moderation action history">
+      % for my $action (@{$actions}) {
+        <li>
+          <article aria-labelledby="action-<%= $action->{moderation_action_id} %>-heading">
+            <h2 id="action-<%= $action->{moderation_action_id} %>-heading">
+              <%= $action->{action_type} %>
+            </h2>
+            <dl>
+              <dt>Target</dt>
+              <dd><%= $action->{target_type} %>: <%= $action->{target_id} %></dd>
+              <dt>Reason</dt>
+              <dd><%= $action->{reason} %></dd>
+              <dt>Actor</dt>
+              <dd><%= $action->{actor_user_id} %></dd>
+              <dt>Created</dt>
+              <dd><time datetime="<%= $action->{created_at} %>"><%= $action->{created_at} %></time></dd>
+              <dt>Reversed</dt>
+              <dd>
+                % if ($action->{reversed_at}) {
+                  <time datetime="<%= $action->{reversed_at} %>"><%= $action->{reversed_at} %></time>
+                % } else {
+                  No
+                % }
+              </dd>
+            </dl>
+            % if (!$action->{reversed_at}) {
+              <form method="post" action="<%= url_for('moderation_action_reverse', action_id => $action->{moderation_action_id}) %>">
+                <%= csrf_field %>
+                <button type="submit">Reverse action</button>
+              </form>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+    % if ($next_cursor) {
+      <p><a href="<%= url_for('moderation_actions')->query(after => $next_cursor, target_type => $target_type, target_id => $target_id) %>">Next actions</a></p>
+    % }
+  % } else {
+    <p>No moderation actions match this view.</p>
+  % }
+</section>

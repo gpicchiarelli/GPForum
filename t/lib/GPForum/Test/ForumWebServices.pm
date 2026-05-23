@@ -231,6 +231,44 @@ sub list_queue {
     ];
 }
 
+sub list_actions {
+    return {
+        items => [
+            {
+                moderation_action_id => 'action-post-hide',
+                actor_user_id        => 'moderator-1',
+                action_type          => 'post.hidden',
+                target_type          => 'post',
+                target_id            => 'post-1',
+                reason               => 'spam',
+                metadata             => {},
+                created_at           => '2026-05-23T12:00:00Z',
+                reversed_at          => undef,
+                reversed_by_user_id  => undef,
+            },
+        ],
+        next_cursor => 'action-cursor',
+    };
+}
+
+sub list_suspensions {
+    return {
+        items => [
+            {
+                suspension_id => 'suspension-1',
+                user_id       => 'user-2',
+                actor_user_id => 'moderator-1',
+                reason        => 'abuse campaign',
+                valid_from    => '2026-05-23T12:00:00Z',
+                valid_to      => '2026-05-24T12:00:00Z',
+                revoked_at    => undef,
+                metadata      => {},
+            },
+        ],
+        next_cursor => 'suspension-cursor',
+    };
+}
+
 sub assign_report {
     my ( $self, $report_id, $moderator_user_id ) = @_;
 

@@ -36,6 +36,7 @@ use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
+use GPForum::Service::Moderation::ReviewReader;
 use GPForum::Service::Moderation::SuspensionStore;
 use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Notification::SubscriptionStore;
@@ -348,6 +349,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_moderation_review_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Moderation::ReviewReader->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_permission_gate => sub {
             my ($controller) = @_;
 
@@ -415,6 +424,12 @@ sub startup {
     $routes->get('/moderation/reports')
       ->to('Moderation#reports')
       ->name('moderation_reports');
+    $routes->get('/moderation/actions')
+      ->to('Moderation#actions')
+      ->name('moderation_actions');
+    $routes->get('/moderation/suspensions')
+      ->to('Moderation#suspensions')
+      ->name('moderation_suspensions');
     $routes->post('/moderation/reports/:report_id/assign')
       ->to('Moderation#assign_report')
       ->name('moderation_report_assign');

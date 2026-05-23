@@ -1,0 +1,65 @@
+% layout 'default';
+% title 'Suspensions - GPForum';
+
+<section aria-labelledby="moderation-suspensions-heading">
+  <h1 id="moderation-suspensions-heading">Suspensions</h1>
+  <form method="get" action="<%= url_for('moderation_suspensions') %>">
+    <label for="suspension-status">Status</label>
+    <select id="suspension-status" name="status">
+      <option value="active" <%= $status eq 'active' ? 'selected' : '' %>>Active</option>
+      <option value="all" <%= $status eq 'all' ? 'selected' : '' %>>All</option>
+    </select>
+    <label for="suspension-user-id">User id</label>
+    <input id="suspension-user-id" name="user_id" value="<%= $user_id || '' %>">
+    <button type="submit">Filter</button>
+  </form>
+
+  % if (@{$suspensions}) {
+    <ol aria-label="Active suspension list">
+      % for my $suspension (@{$suspensions}) {
+        <li>
+          <article aria-labelledby="suspension-<%= $suspension->{suspension_id} %>-heading">
+            <h2 id="suspension-<%= $suspension->{suspension_id} %>-heading">
+              User <%= $suspension->{user_id} %>
+            </h2>
+            <dl>
+              <dt>Reason</dt>
+              <dd><%= $suspension->{reason} %></dd>
+              <dt>Actor</dt>
+              <dd><%= $suspension->{actor_user_id} %></dd>
+              <dt>Valid from</dt>
+              <dd><time datetime="<%= $suspension->{valid_from} %>"><%= $suspension->{valid_from} %></time></dd>
+              <dt>Valid to</dt>
+              <dd>
+                % if ($suspension->{valid_to}) {
+                  <time datetime="<%= $suspension->{valid_to} %>"><%= $suspension->{valid_to} %></time>
+                % } else {
+                  Indefinite
+                % }
+              </dd>
+              <dt>Revoked</dt>
+              <dd>
+                % if ($suspension->{revoked_at}) {
+                  <time datetime="<%= $suspension->{revoked_at} %>"><%= $suspension->{revoked_at} %></time>
+                % } else {
+                  No
+                % }
+              </dd>
+            </dl>
+            % if (!$suspension->{revoked_at}) {
+              <form method="post" action="<%= url_for('moderation_suspension_revoke', suspension_id => $suspension->{suspension_id}) %>">
+                <%= csrf_field %>
+                <button type="submit">Revoke suspension</button>
+              </form>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+    % if ($next_cursor) {
+      <p><a href="<%= url_for('moderation_suspensions')->query(after => $next_cursor, status => $status, user_id => $user_id) %>">Next suspensions</a></p>
+    % }
+  % } else {
+    <p>No suspensions match this view.</p>
+  % }
+</section>

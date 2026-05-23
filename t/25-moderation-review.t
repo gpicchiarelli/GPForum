@@ -12,6 +12,7 @@ use lib 't/lib';
 use GPForum::Service::Admin::AuditReview;
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
+use GPForum::Service::Moderation::ReviewReader;
 use GPForum::Service::Moderation::SuspensionStore;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
@@ -20,7 +21,7 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 94;
+const my $EXPECTED_TESTS      => 108;
 const my $QUEUE_LIMIT         => 25;
 const my $AUDIT_LIMIT         => 10;
 const my $CREATED_REPORTS     => 1;
@@ -36,6 +37,7 @@ const my $CREATED_AUDIT_ROWS  => 7;
 const my $FIRST_ACTION_INDEX  => 0;
 const my $SECOND_ACTION_INDEX => 1;
 const my $THIRD_ACTION_INDEX  => 2;
+const my $ACTION_FETCH_ROWS   => 3;
 const my $FIRST_AUDIT_INDEX   => 0;
 const my $SECOND_AUDIT_INDEX  => 1;
 const my $THIRD_AUDIT_INDEX   => 2;
@@ -403,5 +405,143 @@ ok(
 );
 is( $suspension_store->active_for_user('missing-user'),
     undef, 'missing user has no active suspension' );
+
+my $review_actions = GPForum::Test::ModerationResultSet->new;
+$review_actions->create(
+    {
+        moderation_action_id => 'action-a',
+        actor_user_id        => 'moderator-1',
+        action_type          => 'post.hidden',
+        target_type          => 'post',
+        target_id            => 'post-1',
+        reason               => 'spam',
+        metadata             => {},
+        created_at           => '2026-05-23T12:00:00Z',
+        reversed_at          => undef,
+        reversed_by_user_id  => undef,
+    }
+);
+$review_actions->create(
+    {
+        moderation_action_id => 'action-b',
+        actor_user_id        => 'moderator-1',
+        action_type          => 'thread.locked',
+        target_type          => 'thread',
+        target_id            => 'thread-1',
+        reason               => 'heated discussion',
+        metadata             => {},
+        created_at           => '2026-05-23T11:00:00Z',
+        reversed_at          => undef,
+        reversed_by_user_id  => undef,
+    }
+);
+$review_actions->create(
+    {
+        moderation_action_id => 'action-c',
+        actor_user_id        => 'moderator-2',
+        action_type          => 'post.restored',
+        target_type          => 'post',
+        target_id            => 'post-2',
+        reason               => 'appeal',
+        metadata             => {},
+        created_at           => '2026-05-23T10:00:00Z',
+        reversed_at          => undef,
+        reversed_by_user_id  => undef,
+    }
+);
+my $review_schema = GPForum::Test::ModerationSchema->new(
+    resultsets => { ModerationAction => $review_actions } );
+my $review_reader =
+  GPForum::Service::Moderation::ReviewReader->new( schema => $review_schema );
+my $action_page = $review_reader->list_actions(
+    {
+        limit       => 2,
+        target_id   => 'post-1',
+        target_type => 'post',
+    }
+);
+is( scalar @{ $action_page->{items} },
+    2, 'moderation action history applies keyset page size' );
+ok( $action_page->{next_cursor}, 'moderation action history exposes cursor' );
+is( $review_actions->last_attrs->{rows},
+    $ACTION_FETCH_ROWS, 'moderation action history fetches one extra row' );
+is( $review_actions->last_query->{target_type},
+    'post', 'moderation action history filters target type' );
+is( $review_actions->last_query->{target_id},
+    'post-1', 'moderation action history filters target id' );
+
+$review_reader->list_actions(
+    {
+        after => $action_page->{next_cursor},
+        limit => 2,
+    }
+);
+is(
+    $review_actions->last_query->{-or}->[1]{-and}
+      ->[1]{moderation_action_id}{q{<}},
+    'action-b', 'moderation action history uses descending cursor predicate'
+);
+
+my $review_suspensions = GPForum::Test::ModerationResultSet->new;
+$review_suspensions->create(
+    {
+        suspension_id => 'suspension-a',
+        user_id       => 'user-2',
+        actor_user_id => 'moderator-1',
+        reason        => 'abuse campaign',
+        valid_from    => '2026-05-23T12:00:00Z',
+        valid_to      => undef,
+        revoked_at    => undef,
+        metadata      => {},
+    }
+);
+$review_suspensions->create(
+    {
+        suspension_id => 'suspension-b',
+        user_id       => 'user-3',
+        actor_user_id => 'moderator-2',
+        reason        => 'spam campaign',
+        valid_from    => '2026-05-23T11:00:00Z',
+        valid_to      => undef,
+        revoked_at    => '2026-05-23T11:30:00Z',
+        metadata      => {},
+    }
+);
+my $suspension_review_schema = GPForum::Test::ModerationSchema->new(
+    resultsets => { Suspension => $review_suspensions } );
+my $suspension_reader = GPForum::Service::Moderation::ReviewReader->new(
+    clock  => $clock,
+    schema => $suspension_review_schema
+);
+my $suspension_page = $suspension_reader->list_suspensions(
+    {
+        limit   => 1,
+        user_id => 'user-2',
+    }
+);
+is( scalar @{ $suspension_page->{items} },
+    1, 'suspension review applies keyset page size' );
+ok( $suspension_page->{next_cursor}, 'suspension review exposes cursor' );
+is( $review_suspensions->last_attrs->{rows},
+    2, 'suspension review fetches one extra row' );
+is( $review_suspensions->last_query->{revoked_at},
+    undef, 'suspension review defaults to active rows' );
+is( $review_suspensions->last_query->{user_id},
+    'user-2', 'suspension review filters user' );
+is( $review_suspensions->last_query->{-and}->[0]{-or}->[1]{valid_to}{q{>=}},
+    '2026-05-23T12:00:00Z', 'suspension review excludes expired rows' );
+
+$suspension_reader->list_suspensions(
+    {
+        limit  => 1,
+        status => 'all',
+    }
+);
+ok(
+    !exists $review_suspensions->last_query->{revoked_at},
+    'suspension review can include revoked rows'
+);
+is( $review_suspensions->last_attrs->{order_by}->[0]{-desc},
+    'valid_from', 'suspension review sorts newest first' );
 
 1;

@@ -19,6 +19,7 @@ const my $HTTP_SERVER_ERROR   => 500;
 const my $MODERATION_RESOURCE => 'moderation_action';
 const my $POST_RESOURCE       => 'post';
 const my $REPORT_RESOURCE     => 'report';
+const my $SUSPENSION_RESOURCE => 'suspension';
 const my $THREAD_RESOURCE     => 'thread';
 const my $USER_RESOURCE       => 'user';
 const my $ACTION_ASSIGN       => 'assign';
@@ -26,6 +27,7 @@ const my $ACTION_MODERATE     => 'moderate';
 const my $ACTION_REVERSE      => 'reverse';
 const my $ACTION_RESOLVE      => 'resolve';
 const my $ACTION_SUSPEND      => 'suspend';
+const my $ACTION_VIEW         => 'view';
 const my $ACTION_VIEW_QUEUE   => 'view_queue';
 
 sub reports {
@@ -56,6 +58,82 @@ sub reports {
             csrf_token => $self->csrf_token,
             reports    => [ map { _report_hash($_) } @{$rows} ],
             status     => $status,
+        },
+        $HTTP_OK,
+    );
+}
+
+sub actions {
+    my ($self) = @_;
+
+    my $user_id =
+      _authorized_user_id( $self, $MODERATION_RESOURCE, $ACTION_VIEW );
+    return if !$user_id;
+
+    my $page = eval {
+        return $self->gp_moderation_review_reader->list_actions(
+            {
+                after       => _optional_param( $self, 'after' ),
+                limit       => $self->param('limit') || $DEFAULT_QUEUE_LIMIT,
+                target_id   => _optional_param( $self, 'target_id' ),
+                target_type => _optional_param( $self, 'target_type' ),
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        $self->app->log->error("moderation action history failed: $EVAL_ERROR");
+        return _system_failure($self);
+    }
+
+    return _render_payload(
+        $self,
+        'moderation/actions',
+        {
+            actions =>
+              [ map { _moderation_action_hash($_) } @{ $page->{items} } ],
+            csrf_token  => $self->csrf_token,
+            next_cursor => $page->{next_cursor},
+            target_id   => _optional_param( $self, 'target_id' ),
+            target_type => _optional_param( $self, 'target_type' ),
+        },
+        $HTTP_OK,
+    );
+}
+
+sub suspensions {
+    my ($self) = @_;
+
+    my $user_id =
+      _authorized_user_id( $self, $SUSPENSION_RESOURCE, $ACTION_VIEW );
+    return if !$user_id;
+
+    my $status = _suspension_status_param($self);
+    my $page   = eval {
+        return $self->gp_moderation_review_reader->list_suspensions(
+            {
+                after   => _optional_param( $self, 'after' ),
+                limit   => $self->param('limit') || $DEFAULT_QUEUE_LIMIT,
+                status  => $status,
+                user_id => _optional_param( $self, 'user_id' ),
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        $self->app->log->error("moderation suspensions failed: $EVAL_ERROR");
+        return _system_failure($self);
+    }
+
+    return _render_payload(
+        $self,
+        'moderation/suspensions',
+        {
+            csrf_token  => $self->csrf_token,
+            next_cursor => $page->{next_cursor},
+            status      => $status,
+            suspensions => [ map { _suspension_hash($_) } @{ $page->{items} } ],
+            user_id     => _optional_param( $self, 'user_id' ),
         },
         $HTTP_OK,
     );
@@ -417,6 +495,7 @@ sub _suspension_hash {
         valid_from    => _column( $suspension, 'valid_from' ),
         valid_to      => _column( $suspension, 'valid_to' ),
         revoked_at    => _column( $suspension, 'revoked_at' ),
+        metadata      => _column( $suspension, 'metadata' ),
     };
 }
 
@@ -430,10 +509,13 @@ sub _moderation_action_hash {
 
     return {
         moderation_action_id => _column( $action, 'moderation_action_id' ),
+        actor_user_id        => _column( $action, 'actor_user_id' ),
         action_type          => _column( $action, 'action_type' ),
         target_type          => _column( $action, 'target_type' ),
         target_id            => _column( $action, 'target_id' ),
         reason               => _column( $action, 'reason' ),
+        metadata             => _column( $action, 'metadata' ),
+        created_at           => _column( $action, 'created_at' ),
         reversed_at          => _column( $action, 'reversed_at' ),
         reversed_by_user_id  => _column( $action, 'reversed_by_user_id' ),
     };
@@ -471,6 +553,13 @@ sub _status_param {
 
     my $status = _trim( $controller->param('status') );
     return length $status ? $status : 'open';
+}
+
+sub _suspension_status_param {
+    my ($controller) = @_;
+
+    my $status = _trim( $controller->param('status') );
+    return $status eq 'all' ? 'all' : 'active';
 }
 
 sub _reason_param {

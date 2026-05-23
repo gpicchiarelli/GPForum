@@ -16,7 +16,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 68;
+const my $EXPECTED_TESTS    => 85;
 const my $HTTP_OK           => 200;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
@@ -46,6 +46,28 @@ $test->get_ok('/moderation/reports');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Moderation report queue"]});
 $test->element_exists(q{form[action="/moderation/posts/post-1/hide"]});
+
+_get_json_ok( $test, '/moderation/actions' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/actions/0/moderation_action_id' => 'action-post-hide' );
+$test->json_is( '/actions/0/action_type'          => 'post.hidden' );
+$test->json_is( '/next_cursor'                    => 'action-cursor' );
+
+$test->get_ok('/moderation/actions');
+$test->status_is($HTTP_OK);
+$test->element_exists(q{ol[aria-label="Moderation action history"]});
+$test->element_exists(
+    q{form[action="/moderation/actions/action-post-hide/reverse"]});
+
+_get_json_ok( $test, '/moderation/suspensions' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/suspensions/0/suspension_id' => 'suspension-1' );
+$test->json_is( '/suspensions/0/user_id'       => 'user-2' );
+$test->json_is( '/next_cursor'                 => 'suspension-cursor' );
+
+$test->get_ok('/moderation/suspensions');
+$test->status_is($HTTP_OK);
+$test->element_exists(q{ol[aria-label="Active suspension list"]});
 
 $test->post_ok('/moderation/posts/post-1/hide');
 $test->status_is($HTTP_FORBIDDEN);
@@ -222,6 +244,8 @@ sub _install_moderation_fakes {
         gp_moderation_action_store => sub { return $services; } );
     $test_object->app->helper(
         gp_suspension_store => sub { return $services; } );
+    $test_object->app->helper(
+        gp_moderation_review_reader => sub { return $services; } );
     $test_object->app->helper(
         gp_permission_gate => sub {
             return GPForum::Test::AllowPermissionGate->new;

@@ -43,6 +43,14 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 5,
         notes       => 'authorized moderation report queue read',
     },
+    moderation_actions => {
+        max_queries => 5,
+        notes       => 'authorized moderation action history read',
+    },
+    moderation_suspensions => {
+        max_queries => 5,
+        notes       => 'authorized user suspension review read',
+    },
     report_update => {
         max_queries => 5,
         notes       => 'authorized report assignment or resolution workflow',
