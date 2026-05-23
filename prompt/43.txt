@@ -161,6 +161,14 @@ SearchIndexer:
 * rebuild($scope)
 * observe_lag()
 
+Search indexing MUST use narrow DocumentBuilder, SearchIndexer, and Searcher
+boundaries. DocumentBuilder MUST translate visible thread/post rows into
+rebuildable search_documents payloads without loading unrelated workflow state.
+SearchIndexer MUST upsert thread and post documents, remove hidden/deleted post
+documents, rebuild scoped indexes, and expose projection lag. Searcher MUST
+apply permission-aware visibility scopes before querying and MUST filter results
+again before rendering.
+
 NotificationDispatcher:
 
 * create_notification($recipient_id, $type, $payload)

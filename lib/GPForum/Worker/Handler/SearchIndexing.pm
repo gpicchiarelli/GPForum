@@ -11,7 +11,8 @@ our $VERSION = '0.001';
 const my $THREAD_CREATED => 'thread.created';
 const my $POST_CREATED   => 'post.created';
 
-has sink => undef;
+has sink    => undef;
+has indexer => undef;
 
 sub supports {
     my ( $self, $event ) = @_;
@@ -34,7 +35,23 @@ sub handle {
         $self->sink->capture($task);
     }
 
+    if ( $self->indexer ) {
+        $task->{indexed} = $self->_index_event($event);
+    }
+
     return $task;
+}
+
+sub _index_event {
+    my ( $self, $event ) = @_;
+
+    return $self->indexer->index_thread( $event->{aggregate_id} )
+      if $event->{aggregate_type} eq 'thread';
+
+    return $self->indexer->index_post( $event->{aggregate_id} )
+      if $event->{aggregate_type} eq 'post';
+
+    return;
 }
 
 1;

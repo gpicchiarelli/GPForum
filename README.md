@@ -103,10 +103,11 @@ This repository currently contains:
 * projection generation management for blue/green read-model rebuilds;
 * Minion registration, idempotent job runner, and worker placeholders for search, notification, and cache invalidation;
 * notification subscriptions, preferences, inbox creation, read state, and fanout services;
+* PostgreSQL-native search document building, indexing, rebuild, permission-aware querying, and worker handoff services;
 * automation scripts in [script](script).
 
-The current implementation step is **Milestone 1: Identity And Sessions** under
-the constraints in [prompt/20.txt](prompt/20.txt).
+The current implementation has reached **Milestone 6: Search** service
+boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture
 
