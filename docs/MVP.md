@@ -126,7 +126,8 @@ Socket and process behavior is centralized in `GPForum::OS::Socket` and
 `GPForum::OS::Process`. `/health`, `/metrics`, and `script/system-preflight`
 surface reuseport/sendfile posture, process-class scheduling recommendations,
 event backend, and recommended worker count without making OS-specific tuning
-mandatory.
+mandatory. `GPForum::Service::Operations::OSPreflight` converts that posture
+into ok/degraded/fail checks for readiness and operational metrics.
 
 Start workers after Minion configuration is present:
 

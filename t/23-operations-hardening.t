@@ -12,6 +12,7 @@ use lib 't/lib';
 
 use GPForum::Runtime;
 use GPForum::Service::Operations::MetricsSnapshot;
+use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Operations::RunbookValidator;
 use GPForum::Service::Operations::RuntimeSizing;
@@ -21,7 +22,7 @@ use GPForum::Test::ProjectionLagProbe;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 37;
+const my $EXPECTED_TESTS            => 40;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -139,6 +140,14 @@ ok(
     exists $metrics->{os_processes}{classes}{web_worker},
     'metrics exposes OS process class policy'
 );
+ok(
+    exists $metrics->{os_preflight}{status},
+    'metrics exposes OS preflight status'
+);
+ok(
+    exists $metrics->{os_preflight}{checks},
+    'metrics exposes OS preflight checks'
+);
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
 is( $metrics->{rate_limits}{buckets},
@@ -192,6 +201,11 @@ ok( $good_rollback->{ok}, 'complete rollback runbook is accepted' );
 
 my $sizing = GPForum::Service::Operations::RuntimeSizing->new;
 ok( $sizing->validate($runtime)->{ok}, 'balanced runtime sizing is accepted' );
+ok(
+    GPForum::Service::Operations::OSPreflight->new( runtime => $runtime )
+      ->check->{status},
+    'OS preflight returns a status for balanced runtime'
+);
 my $bad_runtime = GPForum::Runtime->new(
     web_processes      => $BAD_WEB_PROCESSES,
     worker_processes   => $BAD_WORKER_PROCESSES,

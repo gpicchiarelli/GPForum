@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 140;
+const my $TEST_COUNT => 141;
 
 plan tests => $TEST_COUNT;
 
@@ -108,6 +108,7 @@ use_ok('GPForum::Service::Notification::Dispatcher');
 use_ok('GPForum::Service::Notification::PreferenceStore');
 use_ok('GPForum::Service::Notification::SubscriptionStore');
 use_ok('GPForum::Service::Operations::MetricsSnapshot');
+use_ok('GPForum::Service::Operations::OSPreflight');
 use_ok('GPForum::Service::Operations::RateLimiter');
 use_ok('GPForum::Service::Operations::Readiness');
 use_ok('GPForum::Service::Operations::RunbookValidator');

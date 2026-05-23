@@ -8,6 +8,7 @@ use English qw(-no_match_vars);
 use Mojo::Base -base;
 use Time::HiRes qw(time);
 
+use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
@@ -37,6 +38,7 @@ sub collect {
         os_features  => $self->_runtime_os_features,
         os_sockets   => $self->_runtime_os_sockets,
         os_processes => $self->_runtime_os_processes,
+        os_preflight => $self->_runtime_os_preflight,
         realtime     => $self->_realtime,
         rate_limits  => $self->_rate_limits,
         projections  => $self->_projections,
@@ -78,6 +80,15 @@ sub _runtime_os_processes {
 
     return $self->runtime->os_profile->process_snapshot(
         $self->runtime->os_feature_settings );
+}
+
+sub _runtime_os_preflight {
+    my ($self) = @_;
+
+    return {} if !$self->runtime;
+
+    return GPForum::Service::Operations::OSPreflight->new(
+        runtime => $self->runtime )->check;
 }
 
 sub _realtime {

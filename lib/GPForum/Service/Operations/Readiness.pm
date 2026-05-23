@@ -9,6 +9,7 @@ use Time::HiRes qw(time);
 use Mojo::Base -base;
 
 use GPForum::Service::Clock;
+use GPForum::Service::Operations::OSPreflight;
 
 our $VERSION = '0.001';
 
@@ -27,6 +28,7 @@ sub check {
     my @checks  = (
         $self->_db_check,
         $self->_runtime_check,
+        $self->_os_preflight_check,
         $self->_resultset_check('EventLog'),
         $self->_resultset_check('OutboxMessage'),
         $self->_resultset_check('ProjectionGeneration'),
@@ -72,6 +74,21 @@ sub _db_check {
     return _ok_check( 'database', $started );
 }
 
+sub _os_preflight_check {
+    my ($self) = @_;
+
+    my $started   = time;
+    my $preflight = GPForum::Service::Operations::OSPreflight->new(
+        runtime => $self->runtime )->check;
+
+    return {
+        name       => 'os_preflight',
+        status     => $preflight->{status},
+        latency_ms => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
+        checks     => $preflight->{checks},
+    };
+}
+
 sub _resultset_check {
     my ( $self, $name ) = @_;
 
@@ -112,6 +129,10 @@ sub _overall_status {
 
     for my $check ( @{$checks} ) {
         return 'fail' if $check->{status} eq 'fail';
+    }
+
+    for my $check ( @{$checks} ) {
+        return 'degraded' if $check->{status} eq 'degraded';
     }
 
     return 'ok';

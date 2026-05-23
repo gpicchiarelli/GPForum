@@ -147,7 +147,10 @@ OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,
 `GPFORUM_OS_SENDFILE`, and `GPFORUM_OS_AFFINITY` are validated at config load
 and exposed in health/metrics output. Runtime snapshots also expose socket
 policy and process-class priority posture, so deployment tuning stays visible
-without scattering OS checks through application code.
+without scattering OS checks through application code. `/health/ready`,
+`/metrics`, and `script/system-preflight` include OS preflight status so unknown
+or degraded host capabilities are visible before production traffic depends on
+them.
 Local generated files have a dedicated atomic-write helper under
 `GPForum::OS::Filesystem`.
 
