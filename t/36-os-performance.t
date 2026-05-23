@@ -10,15 +10,18 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::OS;
+use GPForum::OS::Process;
 use GPForum::OS::Resource;
+use GPForum::OS::Socket;
 use GPForum::Runtime;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Test::OperationsClock;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 36;
-const my $WEB_PROCESSES  => 2;
+const my $EXPECTED_TESTS         => 54;
+const my $WEB_PROCESSES          => 2;
+const my $MAINTENANCE_NICE_DELTA => 10;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -34,6 +37,14 @@ ok(
 ok(
     exists $detected->snapshot->{resources},
     'OS snapshot includes resource snapshot'
+);
+ok(
+    exists $detected->snapshot->{sockets},
+    'OS snapshot includes socket policy snapshot'
+);
+ok(
+    exists $detected->snapshot->{processes},
+    'OS snapshot includes process policy snapshot'
 );
 
 my $unknown = GPForum::OS->from_name('plan9');
@@ -74,6 +85,12 @@ ok(
 );
 ok( $unknown_features->{affinity}{enabled},
     'manual affinity is exposed as enabled deployment control' );
+ok(
+    !$unknown->socket_snapshot( { reuseport => 'on' } )->{reuseport}{enabled},
+    'unknown OS does not enable unsupported reuseport socket'
+);
+ok( $unknown->socket_snapshot( { reuseport => 'on' } )->{reuseport}{degraded},
+    'unsupported explicit socket feature is marked degraded' );
 
 my $darwin = GPForum::OS->from_name('darwin');
 is( $darwin->name,          'darwin', 'Darwin profile is selectable' );
@@ -112,6 +129,14 @@ is( $runtime_hash->{os}{event_backend},
     'epoll', 'runtime hash includes event backend' );
 is( $runtime_hash->{os_features}{sendfile}{setting},
     'off', 'runtime hash includes OS feature setting' );
+ok(
+    exists $runtime_hash->{os_sockets}{reuseaddr},
+    'runtime hash includes socket policy'
+);
+ok( exists $runtime_hash->{os_processes}{classes}{web_worker},
+    'runtime hash includes process class policy' );
+is( $runtime_hash->{os_processes}{classes}{maintenance_worker}{action},
+    'observe', 'disabled worker priority remains descriptive' );
 
 my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
     clock   => GPForum::Test::OperationsClock->new,
@@ -127,11 +152,55 @@ ok(
     exists $metrics->{os}{resources}{open_file_descriptors},
     'metrics expose open file descriptor count key'
 );
+ok(
+    exists $metrics->{os_sockets}{tcp_nodelay},
+    'metrics expose socket policy snapshot'
+);
+ok( exists $metrics->{os_processes}{classes}{projection_worker},
+    'metrics expose process class policy' );
 
 my $resources = GPForum::OS::Resource->new->snapshot;
 ok(
     exists $resources->{open_file_descriptors},
     'resource probe returns file descriptor key'
 );
+
+my $socket_policy = GPForum::OS::Socket->new->snapshot(
+    $linux,
+    {
+        reuseport => { enabled => 1 },
+        sendfile  => { enabled => 1 },
+    }
+);
+ok( $socket_policy->{reuseaddr}{enabled}, 'socket policy enables reuseaddr' );
+ok(
+    $socket_policy->{reuseport}{enabled},
+    'socket policy enables supported reuseport'
+);
+ok( $socket_policy->{keepalive}{enabled}, 'socket policy enables keepalive' );
+ok(
+    $socket_policy->{tcp_nodelay}{enabled},
+    'socket policy enables tcp_nodelay'
+);
+ok(
+    $socket_policy->{sendfile}{enabled},
+    'socket policy enables supported sendfile'
+);
+
+my $process_policy = GPForum::OS::Process->new;
+my $process_plan   = $process_policy->priority_plan( 'maintenance_worker',
+    { worker_priority => { enabled => 1 } } );
+is( $process_plan->{nice_delta},
+    $MAINTENANCE_NICE_DELTA,
+    'maintenance worker receives lower scheduling priority plan' );
+is( $process_plan->{action},
+    'setpriority-if-permitted',
+    'enabled worker priority plans setpriority action' );
+my $unknown_process_plan = $process_policy->priority_plan( 'custom_worker',
+    { worker_priority => { enabled => 0 } } );
+ok( !$unknown_process_plan->{known},
+    'unknown process class is reported explicitly' );
+is( $unknown_process_plan->{nice_delta},
+    0, 'unknown process class uses neutral nice delta' );
 
 1;

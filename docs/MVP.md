@@ -122,6 +122,12 @@ Local generated files and disposable cache artifacts should use
 `GPForum::OS::Filesystem->write_atomic`, which writes a temporary file in the
 same filesystem and promotes it with `rename`.
 
+Socket and process behavior is centralized in `GPForum::OS::Socket` and
+`GPForum::OS::Process`. `/health`, `/metrics`, and `script/system-preflight`
+surface reuseport/sendfile posture, process-class scheduling recommendations,
+event backend, and recommended worker count without making OS-specific tuning
+mandatory.
+
 Start workers after Minion configuration is present:
 
 ```sh

@@ -9,7 +9,9 @@ use Mojo::Base -base;
 use POSIX qw(sysconf);
 
 use GPForum::OS::Filesystem;
+use GPForum::OS::Process;
 use GPForum::OS::Resource;
+use GPForum::OS::Socket;
 
 our $VERSION = '0.001';
 
@@ -23,7 +25,9 @@ const my $NPROCESSORS_CONSTANT => '_SC_NPROCESSORS_ONLN';
 
 has name           => 'unknown';
 has filesystem     => sub { return GPForum::OS::Filesystem->new; };
+has process_policy => sub { return GPForum::OS::Process->new; };
 has resource_probe => sub { return GPForum::OS::Resource->new; };
+has socket_policy  => sub { return GPForum::OS::Socket->new; };
 
 sub supports_reuseport {
     return 0;
@@ -118,7 +122,24 @@ sub snapshot {
         supports_reuseport       => $self->supports_reuseport ? 1 : 0,
         supports_sendfile        => $self->supports_sendfile  ? 1 : 0,
         resources                => $self->resource_probe->snapshot,
+        sockets                  => $self->socket_snapshot( {} ),
+        processes                => $self->process_snapshot( {} ),
     };
+}
+
+sub socket_snapshot {
+    my ( $self, $settings ) = @_;
+
+    return $self->socket_policy->snapshot( $self,
+        $self->feature_snapshot($settings),
+    );
+}
+
+sub process_snapshot {
+    my ( $self, $settings ) = @_;
+
+    return $self->process_policy->snapshot( $self->feature_snapshot($settings),
+    );
 }
 
 sub _feature_entry {

@@ -50,6 +50,12 @@ sub summary {
             os_features => $self->gp_runtime->os_profile->feature_snapshot(
                 $self->gp_runtime->os_feature_settings
             ),
+            os_sockets => $self->gp_runtime->os_profile->socket_snapshot(
+                $self->gp_runtime->os_feature_settings
+            ),
+            os_processes => $self->gp_runtime->os_profile->process_snapshot(
+                $self->gp_runtime->os_feature_settings
+            ),
             time => $self->gp_clock->now_iso8601,
         },
     );

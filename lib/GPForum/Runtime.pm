@@ -37,6 +37,10 @@ sub as_hash {
         os                 => $self->os_profile->snapshot,
         os_features        =>
           $self->os_profile->feature_snapshot( $self->os_feature_settings ),
+        os_sockets =>
+          $self->os_profile->socket_snapshot( $self->os_feature_settings ),
+        os_processes =>
+          $self->os_profile->process_snapshot( $self->os_feature_settings ),
     };
 }
 

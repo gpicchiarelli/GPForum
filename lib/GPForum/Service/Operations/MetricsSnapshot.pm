@@ -24,6 +24,7 @@ has started_at          => sub { return time; };
 
 sub collect {
     my ($self) = @_;
+    my $runtime = $self->runtime;
 
     return {
         generated_at => $self->clock->now_iso8601,
@@ -31,19 +32,52 @@ sub collect {
             pid            => $PROCESS_ID,
             uptime_seconds => int( time - $self->started_at ),
         },
-        runtime => $self->runtime ? $self->runtime->as_hash              : {},
-        os      => $self->runtime ? $self->runtime->os_profile->snapshot : {},
-        os_features => $self->runtime
-        ? $self->runtime->os_profile->feature_snapshot(
-            $self->runtime->os_feature_settings
-          )
-        : {},
-        realtime    => $self->_realtime,
-        rate_limits => $self->_rate_limits,
-        projections => $self->_projections,
-        database    => $self->_database,
-        outbox      => $self->_outbox,
+        runtime      => $runtime ? $runtime->as_hash : {},
+        os           => $self->_runtime_os_snapshot,
+        os_features  => $self->_runtime_os_features,
+        os_sockets   => $self->_runtime_os_sockets,
+        os_processes => $self->_runtime_os_processes,
+        realtime     => $self->_realtime,
+        rate_limits  => $self->_rate_limits,
+        projections  => $self->_projections,
+        database     => $self->_database,
+        outbox       => $self->_outbox,
     };
+}
+
+sub _runtime_os_snapshot {
+    my ($self) = @_;
+
+    return {} if !$self->runtime;
+
+    return $self->runtime->os_profile->snapshot;
+}
+
+sub _runtime_os_features {
+    my ($self) = @_;
+
+    return {} if !$self->runtime;
+
+    return $self->runtime->os_profile->feature_snapshot(
+        $self->runtime->os_feature_settings );
+}
+
+sub _runtime_os_sockets {
+    my ($self) = @_;
+
+    return {} if !$self->runtime;
+
+    return $self->runtime->os_profile->socket_snapshot(
+        $self->runtime->os_feature_settings );
+}
+
+sub _runtime_os_processes {
+    my ($self) = @_;
+
+    return {} if !$self->runtime;
+
+    return $self->runtime->os_profile->process_snapshot(
+        $self->runtime->os_feature_settings );
 }
 
 sub _realtime {

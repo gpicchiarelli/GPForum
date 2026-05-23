@@ -145,7 +145,9 @@ SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,
 `GPFORUM_OS_SENDFILE`, and `GPFORUM_OS_AFFINITY` are validated at config load
-and exposed in health/metrics output.
+and exposed in health/metrics output. Runtime snapshots also expose socket
+policy and process-class priority posture, so deployment tuning stays visible
+without scattering OS checks through application code.
 Local generated files have a dedicated atomic-write helper under
 `GPForum::OS::Filesystem`.
 

@@ -16,6 +16,10 @@ need perl
 need carton
 need perlcritic
 
+if command -v carton >/dev/null 2>&1; then
+    carton exec perl -Ilib -MGPForum::OS -e 'my $os = GPForum::OS->detect; print "ok: gpforum_os -> ", $os->name, "\n"; print "ok: gpforum_event_backend -> ", $os->event_backend, "\n"; print "ok: gpforum_workers -> ", $os->recommended_worker_count, "\n";'
+fi
+
 if ! command -v pg_config >/dev/null 2>&1; then
     echo "missing: pg_config"
     echo "Install PostgreSQL client development files before enabling the cpanfile postgres feature."

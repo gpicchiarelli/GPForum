@@ -21,7 +21,7 @@ use GPForum::Test::ProjectionLagProbe;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 35;
+const my $EXPECTED_TESTS            => 37;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -132,6 +132,12 @@ ok(
 ok(
     exists $metrics->{os_features}{reuseport}{enabled},
     'metrics exposes effective OS feature flags'
+);
+ok( exists $metrics->{os_sockets}{reuseaddr}{enabled},
+    'metrics exposes OS socket policy' );
+ok(
+    exists $metrics->{os_processes}{classes}{web_worker},
+    'metrics exposes OS process class policy'
 );
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
