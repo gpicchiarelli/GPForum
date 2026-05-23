@@ -17,7 +17,7 @@ use GPForum::Test::OperationsClock;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 30;
+const my $EXPECTED_TESTS => 36;
 const my $WEB_PROCESSES  => 2;
 
 plan tests => $EXPECTED_TESTS;
@@ -51,6 +51,29 @@ ok( $unknown->feature_enabled( 'reuseport', 'on' ),
     'explicit on enables feature flag' );
 ok( !$unknown->feature_enabled( 'reuseport', 'off' ),
     'explicit off disables feature flag' );
+my $unknown_features = $unknown->feature_snapshot(
+    {
+        reuseport        => 'on',
+        sendfile         => 'off',
+        worker_priority  => 'auto',
+        static_xsendfile => 'auto',
+        affinity         => 'manual',
+    }
+);
+ok(
+    $unknown_features->{reuseport}{enabled},
+    'explicit reuseport on enables effective feature'
+);
+ok(
+    !$unknown_features->{sendfile}{enabled},
+    'explicit sendfile off disables effective feature'
+);
+ok(
+    !$unknown_features->{worker_priority}{enabled},
+    'unknown OS does not enable worker priority automatically'
+);
+ok( $unknown_features->{affinity}{enabled},
+    'manual affinity is exposed as enabled deployment control' );
 
 my $darwin = GPForum::OS->from_name('darwin');
 is( $darwin->name,          'darwin', 'Darwin profile is selectable' );
@@ -71,15 +94,24 @@ ok( $linux->supports_reuseport, 'Linux profile supports reuseport' );
 ok( $linux->supports_sendfile,  'Linux profile supports sendfile' );
 
 my $runtime = GPForum::Runtime->new(
-    web_processes      => $WEB_PROCESSES,
-    worker_processes   => 1,
-    realtime_processes => 1,
-    os_profile         => $linux,
+    web_processes       => $WEB_PROCESSES,
+    worker_processes    => 1,
+    realtime_processes  => 1,
+    os_profile          => $linux,
+    os_feature_settings => {
+        reuseport        => 'auto',
+        sendfile         => 'off',
+        worker_priority  => 'off',
+        static_xsendfile => 'auto',
+        affinity         => 'off',
+    },
 );
 my $runtime_hash = $runtime->as_hash;
 is( $runtime_hash->{os}{name}, 'linux', 'runtime hash includes OS profile' );
 is( $runtime_hash->{os}{event_backend},
     'epoll', 'runtime hash includes event backend' );
+is( $runtime_hash->{os_features}{sendfile}{setting},
+    'off', 'runtime hash includes OS feature setting' );
 
 my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
     clock   => GPForum::Test::OperationsClock->new,
@@ -89,6 +121,8 @@ is( $metrics->{os}{name}, 'linux', 'metrics expose OS profile' );
 is( $metrics->{os}{supports_sendfile},
     1, 'metrics expose OS sendfile capability' );
 ok( exists $metrics->{os}{resources}, 'metrics expose OS resource snapshot' );
+is( $metrics->{os_features}{sendfile}{enabled},
+    0, 'metrics expose effective OS feature state' );
 ok(
     exists $metrics->{os}{resources}{open_file_descriptors},
     'metrics expose open file descriptor count key'

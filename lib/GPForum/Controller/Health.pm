@@ -47,7 +47,10 @@ sub summary {
             environment => $self->gp_config->environment,
             runtime     => $self->gp_runtime->as_hash,
             os          => $self->gp_runtime->os_profile->snapshot,
-            time        => $self->gp_clock->now_iso8601,
+            os_features => $self->gp_runtime->os_profile->feature_snapshot(
+                $self->gp_runtime->os_feature_settings
+            ),
+            time => $self->gp_clock->now_iso8601,
         },
     );
 }

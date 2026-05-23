@@ -33,6 +33,11 @@ sub collect {
         },
         runtime => $self->runtime ? $self->runtime->as_hash              : {},
         os      => $self->runtime ? $self->runtime->os_profile->snapshot : {},
+        os_features => $self->runtime
+        ? $self->runtime->os_profile->feature_snapshot(
+            $self->runtime->os_feature_settings
+          )
+        : {},
         realtime    => $self->_realtime,
         rate_limits => $self->_rate_limits,
         projections => $self->_projections,

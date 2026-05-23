@@ -143,6 +143,9 @@ inside the existing `ThreadStore` and `PostStore` transaction boundaries, so
 event log, audit log, outbox, bodies, revisions, and counters stay coherent.
 SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
+OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,
+`GPFORUM_OS_SENDFILE`, and `GPFORUM_OS_AFFINITY` are validated at config load
+and exposed in health/metrics output.
 
 Known MVP limits: realtime fanout and rate limiting are process-local, search
 depends on PostgreSQL projection rows, and reply position allocation is protected

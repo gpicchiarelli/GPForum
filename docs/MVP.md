@@ -107,6 +107,17 @@ Start the app:
 carton exec morbo bin/gpforum
 ```
 
+OS-level tuning flags default to conservative `auto` and are observable through
+`/health` and `/metrics`:
+
+```sh
+GPFORUM_OS_REUSEPORT=auto
+GPFORUM_OS_SENDFILE=auto
+GPFORUM_OS_WORKER_PRIORITY=auto
+GPFORUM_OS_STATIC_XSENDFILE=auto
+GPFORUM_OS_AFFINITY=off
+```
+
 Start workers after Minion configuration is present:
 
 ```sh

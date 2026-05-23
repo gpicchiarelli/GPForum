@@ -21,7 +21,7 @@ use GPForum::Test::ProjectionLagProbe;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 34;
+const my $EXPECTED_TESTS            => 35;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -128,6 +128,10 @@ ok(
 ok(
     exists $metrics->{os}{resources}{open_file_descriptors},
     'metrics exposes file descriptor resource posture'
+);
+ok(
+    exists $metrics->{os_features}{reuseport}{enabled},
+    'metrics exposes effective OS feature flags'
 );
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );

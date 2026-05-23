@@ -14,7 +14,7 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 16;
+const my $EXPECTED_TESTS            => 23;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
@@ -23,16 +23,21 @@ const my $TOO_MANY_PROCESSES        => 513;
 plan tests => $EXPECTED_TESTS;
 
 my %environment = (
-    GPFORUM_ENV                => 'test',
-    GPFORUM_LOG_LEVEL          => 'info',
-    GPFORUM_PUBLIC_BASE_URL    => 'http://example.test',
-    GPFORUM_SESSION_SECRET     => 'test-secret',
-    GPFORUM_DATABASE_DSN       => 'dbi:Pg:dbname=gpforum_test',
-    GPFORUM_DATABASE_USER      => 'gpforum_test',
-    GPFORUM_DATABASE_PASSWORD  => 'database-secret',
-    GPFORUM_WEB_PROCESSES      => $CUSTOM_WEB_PROCESSES,
-    GPFORUM_WORKER_PROCESSES   => $CUSTOM_WORKER_PROCESSES,
-    GPFORUM_REALTIME_PROCESSES => $CUSTOM_REALTIME_PROCESSES,
+    GPFORUM_ENV                 => 'test',
+    GPFORUM_LOG_LEVEL           => 'info',
+    GPFORUM_PUBLIC_BASE_URL     => 'http://example.test',
+    GPFORUM_SESSION_SECRET      => 'test-secret',
+    GPFORUM_DATABASE_DSN        => 'dbi:Pg:dbname=gpforum_test',
+    GPFORUM_DATABASE_USER       => 'gpforum_test',
+    GPFORUM_DATABASE_PASSWORD   => 'database-secret',
+    GPFORUM_WEB_PROCESSES       => $CUSTOM_WEB_PROCESSES,
+    GPFORUM_WORKER_PROCESSES    => $CUSTOM_WORKER_PROCESSES,
+    GPFORUM_REALTIME_PROCESSES  => $CUSTOM_REALTIME_PROCESSES,
+    GPFORUM_OS_REUSEPORT        => 'off',
+    GPFORUM_OS_SENDFILE         => 'on',
+    GPFORUM_OS_WORKER_PRIORITY  => 'auto',
+    GPFORUM_OS_STATIC_XSENDFILE => 'off',
+    GPFORUM_OS_AFFINITY         => 'manual',
 );
 
 my $config  = GPForum::Config->from_environment( \%environment );
@@ -55,6 +60,14 @@ is( $config->realtime_processes,
     $CUSTOM_REALTIME_PROCESSES, 'realtime process count loads from env' );
 is( $runtime->as_hash->{web_processes},
     $CUSTOM_WEB_PROCESSES, 'runtime mirrors web process count' );
+is( $config->os_reuseport, 'off', 'OS reuseport flag loads from env' );
+is( $config->os_sendfile,  'on',  'OS sendfile flag loads from env' );
+is( $config->os_worker_priority,
+    'auto', 'OS worker priority flag loads from env' );
+is( $config->os_static_xsendfile, 'off', 'OS xsendfile flag loads from env' );
+is( $config->os_affinity,         'manual', 'OS affinity flag loads from env' );
+is( $runtime->as_hash->{os_features}{reuseport}{setting},
+    'off', 'runtime exposes OS feature settings' );
 
 my @connect_info = $config->database_connect_info;
 is( $connect_info[0], $config->database_dsn,
@@ -67,6 +80,14 @@ throws_ok(
     },
     qr/\A GPFORUM_WEB_PROCESSES [ ] must [ ] be [ ] an [ ] integer/msx,
     'non-integer process count fails validation',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( os_reuseport => 'maybe' )->validate;
+    },
+    qr/\A os_reuseport [ ] must [ ] be [ ] auto, [ ] on, [ ] or [ ] off/msx,
+    'invalid OS feature flag fails validation',
 );
 
 throws_ok(

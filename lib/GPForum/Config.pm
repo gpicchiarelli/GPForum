@@ -20,19 +20,28 @@ const my $DEFAULT_DATABASE_PASSWORD  => q{};
 const my $DEFAULT_WEB_PROCESSES      => 4;
 const my $DEFAULT_WORKER_PROCESSES   => 2;
 const my $DEFAULT_REALTIME_PROCESSES => 1;
+const my $DEFAULT_OS_FEATURE_SETTING => 'auto';
+const my $DEFAULT_OS_AFFINITY        => 'off';
 const my $MINIMUM_PROCESS_COUNT      => 1;
 const my $MAXIMUM_PROCESS_COUNT      => 512;
+const my %VALID_OS_FEATURE_SETTING   => map { $_ => 1 } qw(auto on off);
+const my %VALID_OS_AFFINITY          => map { $_ => 1 } qw(off manual);
 
-has environment        => sub { return $DEFAULT_ENVIRONMENT; };
-has log_level          => sub { return $DEFAULT_LOG_LEVEL; };
-has public_base_url    => sub { return $DEFAULT_PUBLIC_BASE_URL; };
-has session_secret     => sub { return $DEFAULT_SESSION_SECRET; };
-has database_dsn       => sub { return $DEFAULT_DATABASE_DSN; };
-has database_user      => sub { return $DEFAULT_DATABASE_USER; };
-has database_password  => sub { return $DEFAULT_DATABASE_PASSWORD; };
-has web_processes      => sub { return $DEFAULT_WEB_PROCESSES; };
-has worker_processes   => sub { return $DEFAULT_WORKER_PROCESSES; };
-has realtime_processes => sub { return $DEFAULT_REALTIME_PROCESSES; };
+has environment         => sub { return $DEFAULT_ENVIRONMENT; };
+has log_level           => sub { return $DEFAULT_LOG_LEVEL; };
+has public_base_url     => sub { return $DEFAULT_PUBLIC_BASE_URL; };
+has session_secret      => sub { return $DEFAULT_SESSION_SECRET; };
+has database_dsn        => sub { return $DEFAULT_DATABASE_DSN; };
+has database_user       => sub { return $DEFAULT_DATABASE_USER; };
+has database_password   => sub { return $DEFAULT_DATABASE_PASSWORD; };
+has web_processes       => sub { return $DEFAULT_WEB_PROCESSES; };
+has worker_processes    => sub { return $DEFAULT_WORKER_PROCESSES; };
+has realtime_processes  => sub { return $DEFAULT_REALTIME_PROCESSES; };
+has os_reuseport        => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_sendfile         => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_worker_priority  => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_static_xsendfile => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_affinity         => sub { return $DEFAULT_OS_AFFINITY; };
 
 sub from_environment {
     my ( $class, $environment ) = @_;
@@ -73,6 +82,25 @@ sub from_environment {
             $environment, 'GPFORUM_REALTIME_PROCESSES',
             $DEFAULT_REALTIME_PROCESSES
         ),
+        os_reuseport => _env_value(
+            $environment, 'GPFORUM_OS_REUSEPORT',
+            $DEFAULT_OS_FEATURE_SETTING
+        ),
+        os_sendfile => _env_value(
+            $environment, 'GPFORUM_OS_SENDFILE',
+            $DEFAULT_OS_FEATURE_SETTING
+        ),
+        os_worker_priority => _env_value(
+            $environment, 'GPFORUM_OS_WORKER_PRIORITY',
+            $DEFAULT_OS_FEATURE_SETTING
+        ),
+        os_static_xsendfile => _env_value(
+            $environment, 'GPFORUM_OS_STATIC_XSENDFILE',
+            $DEFAULT_OS_FEATURE_SETTING
+        ),
+        os_affinity => _env_value(
+            $environment, 'GPFORUM_OS_AFFINITY', $DEFAULT_OS_AFFINITY
+        ),
     );
 
     $self->validate;
@@ -92,6 +120,13 @@ sub validate {
     _require_process_count( 'web_processes',      $self->web_processes );
     _require_process_count( 'worker_processes',   $self->worker_processes );
     _require_process_count( 'realtime_processes', $self->realtime_processes );
+    _require_os_feature_setting( 'os_reuseport', $self->os_reuseport );
+    _require_os_feature_setting( 'os_sendfile',  $self->os_sendfile );
+    _require_os_feature_setting( 'os_worker_priority',
+        $self->os_worker_priority );
+    _require_os_feature_setting( 'os_static_xsendfile',
+        $self->os_static_xsendfile );
+    _require_os_affinity( $self->os_affinity );
 
     if (   $self->environment eq 'production'
         && $self->session_secret eq $DEFAULT_SESSION_SECRET )
@@ -100,6 +135,18 @@ sub validate {
     }
 
     return $self;
+}
+
+sub os_feature_settings {
+    my ($self) = @_;
+
+    return {
+        reuseport        => $self->os_reuseport,
+        sendfile         => $self->os_sendfile,
+        worker_priority  => $self->os_worker_priority,
+        static_xsendfile => $self->os_static_xsendfile,
+        affinity         => $self->os_affinity,
+    };
 }
 
 sub database_connect_info {
@@ -155,6 +202,24 @@ sub _require_process_count {
 
     croak "$name must be <= $MAXIMUM_PROCESS_COUNT"
       if $value > $MAXIMUM_PROCESS_COUNT;
+
+    return;
+}
+
+sub _require_os_feature_setting {
+    my ( $name, $value ) = @_;
+
+    croak "$name must be auto, on, or off"
+      if !exists $VALID_OS_FEATURE_SETTING{$value};
+
+    return;
+}
+
+sub _require_os_affinity {
+    my ($value) = @_;
+
+    croak 'os_affinity must be off or manual'
+      if !exists $VALID_OS_AFFINITY{$value};
 
     return;
 }
