@@ -1,0 +1,25 @@
+# GPForum Perl::Critic profile.
+#
+# Intent: be deliberately severe. This profile is meant to make architecture
+# drift, clever Perl, unsafe shortcuts, and unreviewed complexity painful early.
+
+severity = brutal
+force = 1
+allow-unsafe = 0
+profile-strictness = fatal
+verbose = [%p] %m at %f line %l, column %c. Severity: %s. %e. %r\n
+
+[Subroutines::ProhibitExcessComplexity]
+max_mccabe = 5
+
+[Subroutines::ProhibitManyArgs]
+max_arguments = 4
+
+[Modules::ProhibitExcessMainComplexity]
+max_mccabe = 5
+
+[Modules::RequireVersionVar]
+
+[TestingAndDebugging::RequireUseStrict]
+
+[TestingAndDebugging::RequireUseWarnings]

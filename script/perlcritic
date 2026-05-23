@@ -1,0 +1,20 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -gt 0 ]; then
+    exec perlcritic --profile .perlcriticrc "$@"
+fi
+
+tmp_file="${TMPDIR:-/tmp}/gpforum-perlcritic-files.$$"
+trap 'rm -f "$tmp_file"' EXIT HUP INT TERM
+
+find bin lib script t \
+    -type f \( -name '*.pm' -o -name '*.pl' -o -name '*.t' \) \
+    > "$tmp_file" 2>/dev/null || true
+
+if [ ! -s "$tmp_file" ]; then
+    echo "No Perl files found."
+    exit 0
+fi
+
+exec xargs perlcritic --profile .perlcriticrc < "$tmp_file"
