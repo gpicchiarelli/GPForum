@@ -141,6 +141,8 @@ State-changing forum routes require CSRF and an authenticated session user. Read
 paths use keyset pagination and never `OFFSET`. Thread and reply creation remain
 inside the existing `ThreadStore` and `PostStore` transaction boundaries, so
 event log, audit log, outbox, bodies, revisions, and counters stay coherent.
+SSR form submissions redirect back into the discussion flow; JSON clients keep
+the explicit `201 Created` payload by sending `Accept: application/json`.
 
 Known MVP limits: realtime fanout and rate limiting are process-local, search
 depends on PostgreSQL projection rows, and reply position allocation is protected

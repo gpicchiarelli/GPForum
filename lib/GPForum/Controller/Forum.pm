@@ -124,13 +124,7 @@ sub create_thread {
 
     return _system_failure($self) if !$stored->{ok};
 
-    return $self->render(
-        json => {
-            status    => 'created',
-            thread_id => _column( $stored->{thread}, 'thread_id' ),
-        },
-        status => $HTTP_CREATED,
-    );
+    return _created_thread_response( $self, $stored );
 }
 
 sub create_reply {
@@ -202,13 +196,46 @@ sub _post_creation_response {
 
     return _system_failure($controller) if !$stored->{ok};
 
-    return $controller->render(
-        json => {
-            status  => 'created',
-            post_id => _column( $stored->{post}, 'post_id' ),
-        },
-        status => $HTTP_CREATED,
-    );
+    return _created_post_response( $controller, $stored );
+}
+
+sub _created_thread_response {
+    my ( $controller, $stored ) = @_;
+
+    my $thread_id = _column( $stored->{thread}, 'thread_id' );
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                status    => 'created',
+                thread_id => $thread_id,
+            },
+            status => $HTTP_CREATED,
+        );
+    }
+
+    return $controller->redirect_to( 'thread', thread_id => $thread_id );
+}
+
+sub _created_post_response {
+    my ( $controller, $stored ) = @_;
+
+    my $thread_id = $controller->param('thread_id');
+    my $post_id   = _column( $stored->{post}, 'post_id' );
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                status  => 'created',
+                post_id => $post_id,
+            },
+            status => $HTTP_CREATED,
+        );
+    }
+
+    return $controller->redirect_to(
+        $controller->url_for( 'thread', thread_id => $thread_id )
+          ->fragment( 'post-' . $post_id ) );
 }
 
 sub search {
@@ -258,8 +285,8 @@ sub _render_payload {
 
     return $controller->render(
         template => $template,
-        status   => $status,
         %{$payload},
+        status => $status,
     );
 }
 
@@ -271,6 +298,23 @@ sub _wants_json {
 
     my $accept = $controller->req->headers->accept || q{};
     return $accept =~ m{application/json}msx ? 1 : 0;
+}
+
+sub _render_error {
+    my ( $controller, $status, $payload ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => $payload,
+            status => $status,
+        );
+    }
+
+    return $controller->render(
+        template => 'forum/error',
+        %{$payload},
+        status => $status,
+    );
 }
 
 sub _store_thread {
@@ -446,64 +490,99 @@ sub _trim {
 sub _bad_request {
     my ( $controller, $errors ) = @_;
 
-    return $controller->render(
-        json   => { status => 'invalid', errors => $errors },
-        status => $HTTP_BAD_REQUEST,
+    return _render_error(
+        $controller,
+        $HTTP_BAD_REQUEST,
+        {
+            status => 'invalid',
+            title  => 'Invalid request',
+            error  => 'The submitted forum request was invalid.',
+            errors => $errors,
+        }
     );
 }
 
 sub _csrf_failure {
     my ($controller) = @_;
 
-    return $controller->render(
-        json   => { status => 'forbidden', error => 'Bad CSRF token' },
-        status => $HTTP_FORBIDDEN,
+    return _render_error(
+        $controller,
+        $HTTP_FORBIDDEN,
+        {
+            status => 'forbidden',
+            title  => 'Forbidden',
+            error  => 'Bad CSRF token',
+        }
     );
 }
 
 sub _unauthorized {
     my ($controller) = @_;
 
-    return $controller->render(
-        json =>
-          { status => 'unauthorized', error => 'authentication required' },
-        status => $HTTP_UNAUTHORIZED,
+    return _render_error(
+        $controller,
+        $HTTP_UNAUTHORIZED,
+        {
+            status => 'unauthorized',
+            title  => 'Authentication required',
+            error  => 'authentication required',
+        }
     );
 }
 
 sub _forbidden {
     my ( $controller, $error ) = @_;
 
-    return $controller->render(
-        json   => { status => 'forbidden', error => $error },
-        status => $HTTP_FORBIDDEN,
+    return _render_error(
+        $controller,
+        $HTTP_FORBIDDEN,
+        {
+            status => 'forbidden',
+            title  => 'Forbidden',
+            error  => $error,
+        }
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return $controller->render(
-        json   => { status => 'not_found', error => $error },
-        status => $HTTP_NOT_FOUND,
+    return _render_error(
+        $controller,
+        $HTTP_NOT_FOUND,
+        {
+            status => 'not_found',
+            title  => 'Not found',
+            error  => $error,
+        }
     );
 }
 
 sub _rate_limited {
     my ($controller) = @_;
 
-    return $controller->render(
-        json   => { status => 'rate_limited', error => 'too many requests' },
-        status => $HTTP_TOO_MANY,
+    return _render_error(
+        $controller,
+        $HTTP_TOO_MANY,
+        {
+            status => 'rate_limited',
+            title  => 'Too many requests',
+            error  => 'too many requests',
+        }
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return $controller->render(
-        json   => { status => 'error', error => 'internal error' },
-        status => $HTTP_SERVER_ERROR,
+    return _render_error(
+        $controller,
+        $HTTP_SERVER_ERROR,
+        {
+            status => 'error',
+            title  => 'Internal error',
+            error  => 'internal error',
+        }
     );
 }
 

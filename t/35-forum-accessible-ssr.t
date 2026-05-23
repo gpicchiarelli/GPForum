@@ -14,13 +14,15 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 41;
+const my $EXPECTED_TESTS => 50;
+const my $HTTP_FOUND     => 302;
 const my $HTTP_OK        => 200;
 
 plan tests => $EXPECTED_TESTS;
 
 my $test = Test::Mojo->new('GPForum');
 _install_forum_fakes($test);
+_install_test_session_route($test);
 
 $test->get_ok('/categories');
 $test->status_is($HTTP_OK);
@@ -68,6 +70,32 @@ $test->element_exists('label[for="search-query"]');
 $test->element_exists('input[id="search-query"][name="q"]');
 $test->element_exists('ol[aria-label="Search results"]');
 
+$test->get_ok('/__test/session/user-1');
+$test->status_is($HTTP_OK);
+$test->get_ok('/new-thread');
+my $csrf_token = _csrf_token($test);
+$test->post_ok(
+    '/threads' => form => {
+        csrf_token  => $csrf_token,
+        category_id => 'category-1',
+        title       => 'A real thread',
+        body_source => 'Opening post',
+        visibility  => 'public',
+    }
+);
+$test->status_is($HTTP_FOUND);
+$test->header_like( Location => qr{/t/thread-created\z}msx );
+
+$test->post_ok(
+    '/t/thread-1/replies' => form => {
+        csrf_token  => $csrf_token,
+        body_source => 'A reply',
+        visibility  => 'public',
+    }
+);
+$test->status_is($HTTP_FOUND);
+$test->header_like( Location => qr{/t/thread-1\#post-post-created\z}msx );
+
 sub _install_forum_fakes {
     my ($test_object) = @_;
 
@@ -75,7 +103,8 @@ sub _install_forum_fakes {
     for my $helper (
         qw(
         gp_category_reader gp_thread_reader gp_thread_detail_reader
-        gp_search_service gp_rate_limiter
+        gp_thread_composer gp_thread_store gp_post_composer gp_post_store
+        gp_post_position gp_search_service gp_rate_limiter
         )
       )
     {
@@ -83,6 +112,32 @@ sub _install_forum_fakes {
     }
 
     return;
+}
+
+sub _install_test_session_route {
+    my ($test_object) = @_;
+
+    my $routes = $test_object->app->routes;
+    my $route  = $routes->get('/__test/session/:user_id');
+    $route->to(
+        cb => sub {
+            my ($controller) = @_;
+
+            $controller->session( user_id => $controller->param('user_id') );
+            return $controller->render( json => { ok => 1 } );
+        }
+    );
+
+    return;
+}
+
+sub _csrf_token {
+    my ($test_object) = @_;
+
+    my $body = $test_object->tx->res->body;
+    my ($token) = $body =~ /name="csrf_token" [^>]+ value="([^"]+)"/msx;
+
+    return $token;
 }
 
 1;

@@ -1,0 +1,16 @@
+% layout 'default';
+% title (($title // 'Forum error') . ' - GPForum');
+% my $field_errors = stash('errors') || {};
+
+<section aria-labelledby="forum-error-heading">
+  <h1 id="forum-error-heading"><%= $title // 'Forum error' %></h1>
+  <p role="alert"><%= $error // 'The request could not be completed.' %></p>
+  % if (ref $field_errors eq 'HASH' && keys %{$field_errors}) {
+    <ul aria-label="Validation errors">
+      % for my $field (sort keys %{$field_errors}) {
+        <li><%= $field %>: <%= $field_errors->{$field} %></li>
+      % }
+    </ul>
+  % }
+  <p><a href="<%= url_for('categories') %>">Back to categories</a></p>
+</section>

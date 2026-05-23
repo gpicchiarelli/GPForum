@@ -80,7 +80,7 @@ _get_json_ok( $test, '/new-thread' );
 my $session_csrf = _json_value( $test, 'csrf_token' );
 
 $test->post_ok(
-    '/threads' => form => {
+    '/threads' => { Accept => 'application/json' } => form => {
         csrf_token  => $session_csrf,
         category_id => 'category-1',
         title       => 'A real thread',
@@ -92,7 +92,7 @@ $test->status_is($HTTP_CREATED);
 $test->json_is( '/thread_id' => 'thread-created' );
 
 $test->post_ok(
-    '/t/thread-1/replies' => form => {
+    '/t/thread-1/replies' => { Accept => 'application/json' } => form => {
         csrf_token  => $session_csrf,
         body_source => 'A reply',
         visibility  => 'public',

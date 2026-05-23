@@ -17,6 +17,11 @@ Read endpoints render semantic SSR by default. They also return JSON when the
 client sends `Accept: application/json` or `?format=json`, using the same
 controller/service path without changing the command/read boundaries.
 
+Forum form submissions are SSR-friendly: successful thread creation redirects
+to the new thread, and successful reply creation redirects to the created post
+anchor. API-style clients still receive JSON by sending `Accept:
+application/json`.
+
 ## What Works
 
 The HTTP forum path now follows:
