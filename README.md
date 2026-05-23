@@ -11,7 +11,7 @@
 [![Project Hygiene](https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml/badge.svg)](https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml)
 [![Project Status](https://img.shields.io/badge/status-active%20development-214237.svg)](prompt/20.txt)
 [![Repository](https://img.shields.io/badge/repository-private-111412.svg)](https://github.com/gpicchiarelli/GPForum)
-[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-48-a6532f.svg)](prompt)
+[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-50-a6532f.svg)](prompt)
 [![GitHub Ready](https://img.shields.io/badge/github-project%20ready-3f5f72.svg)](prompt/44.txt)
 [![Security Policy](https://img.shields.io/badge/security-policy-111412.svg)](SECURITY.md)
 [![Contributing](https://img.shields.io/badge/contributing-guide-63735f.svg)](CONTRIBUTING.md)
@@ -75,7 +75,7 @@ This repository currently contains:
 * a public static platform page in [index.html](index.html);
 * visual identity assets in [assets](assets);
 * editable logo source artwork in [assets/source/gpforum-logo-source.svg](assets/source/gpforum-logo-source.svg);
-* 49 architectural prompt constitutions in [prompt](prompt);
+* 50 architectural prompt constitutions in [prompt](prompt);
 * GitHub project success surface in [.github](.github), [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), [GOVERNANCE.md](GOVERNANCE.md), [SUPPORT.md](SUPPORT.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), and [docs/adr](docs/adr);
 * BSD-3 license in [LICENSE](LICENSE);
 * strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
@@ -436,6 +436,7 @@ Implementation and operations:
 * [47](prompt/47.txt) Human-centered community lifecycle
 * [48](prompt/48.txt) Core boundary and architectural discipline
 * [49](prompt/49.txt) OS-level performance
+* [50](prompt/50.txt) Execution constitution for operational integrity
 
 [prompt/18.txt](prompt/18.txt) is an exploration memo. [prompt/19.txt](prompt/19.txt) and [prompt/42.txt](prompt/42.txt) are authoritative final decisions.
 
@@ -461,6 +462,7 @@ Known final decisions:
 * Human-centered community lifecycle design is mandatory for durable participation without dark patterns.
 * Core boundary discipline is mandatory: small stable core, capability-scoped plugins, no controller business logic, and no cache/projection authority.
 * OS-level performance discipline is mandatory: persistent Perl processes, centralized OS abstraction, bounded hot paths, reverse-proxy file delivery, PostgreSQL coordination, and profiling before invasive optimization.
+* Execution constitution is mandatory: every workflow change must identify canonical state, event emission, projection impact, audit record, indexes, permissions, failure mode, rebuildability, replayability, and operational scaling.
 
 ## License
 

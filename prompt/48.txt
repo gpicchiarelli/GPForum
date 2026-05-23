@@ -1,5 +1,10 @@
 GPForum - Core Boundary And Architectural Discipline Constitution
 
+Prompt 50 alignment: core boundary work MUST follow the execution constitution.
+New behavior is incomplete unless it identifies canonical state, emitted event,
+projection impact, audit record, affected indexes, enforced permissions,
+failure modes, rebuildability, replayability, and operational scaling.
+
 This document defines mandatory hard architectural discipline for GPForum core,
 subsystems, plugins, capabilities, and feature growth.
 

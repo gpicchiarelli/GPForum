@@ -16,6 +16,11 @@ shell-out in request hot paths, bounded DBIx::Class usage, prepared view models,
 reverse-proxy file delivery, conservative feature flags, and profiling before
 invasive optimization are mechanically reviewable architecture constraints.
 
+Prompt 50 alignment: execution discipline is an engineering invariant. Every
+workflow change MUST preserve canonical state classification, event discipline,
+auditability, permission safety, projection rebuildability, transaction
+determinism, failure-mode clarity, replayability, and operational scaling.
+
 It does not replace the existing constitutions. It binds them together with
 mechanically reviewable and testable engineering rules.
 

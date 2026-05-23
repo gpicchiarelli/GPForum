@@ -1,5 +1,10 @@
 GPForum - Test Strategy & Quality Verification Constitution
 
+Prompt 50 alignment: tests MUST verify execution discipline, not only feature
+presence. Critical workflow tests SHOULD prove canonical state, event emission,
+audit emission, permission enforcement, projection behavior, failure mapping,
+rebuildability, replayability, and operational scaling assumptions.
+
 This document defines the mandatory test architecture, quality verification matrix, test data strategy, security regression coverage, and release validation expectations for GPForum.
 
 This specification is mandatory.

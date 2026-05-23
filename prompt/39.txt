@@ -55,6 +55,11 @@ Major additions SHOULD update `README.md`.
 
 Renaming prompts SHOULD be avoided unless the index is updated.
 
+Prompt 50 alignment: architecture-changing work MUST consult the execution
+constitution before code generation. Prompt alignment tests SHOULD include
+prompt/50.txt whenever workflow, persistence, projection, audit, permission,
+transaction, or operational execution rules change.
+
 ---
 
 Conflict Resolution

@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 166;
+const my $EXPECTED_TESTS => 185;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -21,6 +21,7 @@ my $accessibility     = path('prompt/46.txt')->slurp;
 my $community         = path('prompt/47.txt')->slurp;
 my $discipline        = path('prompt/48.txt')->slurp;
 my $os_performance    = path('prompt/49.txt')->slurp;
+my $execution         = path('prompt/50.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -92,7 +93,7 @@ like(
 );
 like(
     $readme,
-    qr/49 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/50 [ ] architectural [ ] prompt [ ] constitutions/msx,
 'README counts the verifiable, accessibility, community, and discipline constitutions'
 );
 like(
@@ -132,7 +133,7 @@ like(
 );
 like(
     $readme,
-    qr/49 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/50 [ ] architectural [ ] prompt [ ] constitutions/msx,
     'README counts the accessibility constitution'
 );
 like(
@@ -275,6 +276,99 @@ ok(
     index( $engineering,
         'OS-level performance rules are engineering invariants' ) >= 0,
     'engineering invariants prompt aligns with OS performance constitution'
+);
+
+like(
+    $execution,
+    qr/Execution [ ] Constitution [ ] For [ ] Operational [ ] Integrity/msx,
+    'execution prompt defines the new constitution'
+);
+like(
+    $execution,
+    qr/core [ ] operational [ ] architecture [ ] stabilization/msx,
+    'execution prompt names the current stabilization phase'
+);
+ok(
+    index( $execution,
+        'The existing GPForum repository is authoritative reality' ) >= 0,
+    'execution prompt treats repository reality as authoritative'
+);
+like(
+    $execution,
+    qr/Controllers [ ] MUST [ ] remain [ ] thin/msx,
+    'execution prompt preserves thin controllers'
+);
+like(
+    $execution,
+    qr/bypass [ ] event [ ] generation/msx,
+    'execution prompt forbids bypassing events'
+);
+like(
+    $execution,
+    qr/bypass [ ] audit [ ] generation/msx,
+    'execution prompt forbids bypassing audit'
+);
+like(
+    $execution,
+    qr/Projection [ ] tables [ ] remain [ ] derived/msx,
+    'execution prompt preserves derived projections'
+);
+like(
+    $execution,
+    qr/Private, [ ] moderated, [ ] hidden, [ ] suspended, [ ] deleted/msx,
+    'execution prompt forbids restricted content leakage'
+);
+like(
+    $execution,
+    qr/Transactions [ ] MUST [ ] remain [ ] short [ ] and [ ] deterministic/msx,
+    'execution prompt preserves transaction discipline'
+);
+like(
+    $execution,
+    qr/What [ ] is [ ] canonical [ ] state[?]/msx,
+    'execution prompt requires canonical-state review'
+);
+like(
+    $execution,
+    qr/Can [ ] this [ ] be [ ] rebuilt[?]/msx,
+    'execution prompt requires rebuildability review'
+);
+like(
+    $execution,
+    qr/Can [ ] this [ ] be [ ] replayed[?]/msx,
+    'execution prompt requires replayability review'
+);
+like(
+    $readme,
+    qr/Execution [ ] constitution [ ] is [ ] mandatory/msx,
+    'README records execution constitution as a final decision'
+);
+like(
+    $prompt_governance,
+    qr/Prompt [ ] 50 [ ] alignment/msx,
+    'prompt governance aligns with execution constitution'
+);
+like( $architecture, qr/prompt\/50[.]txt/msx,
+    'executable architecture contract aligns with execution constitution' );
+like(
+    $engineering,
+    qr/Prompt [ ] 50 [ ] alignment/msx,
+    'engineering invariants prompt aligns with execution constitution'
+);
+like(
+    $discipline,
+    qr/Prompt [ ] 50 [ ] alignment/msx,
+    'core discipline prompt aligns with execution constitution'
+);
+like(
+    path('prompt/36.txt')->slurp,
+    qr/Prompt [ ] 50 [ ] alignment/msx,
+    'test strategy prompt aligns with execution constitution'
+);
+like(
+    path('prompt/16.txt')->slurp,
+    qr/Prompt [ ] 50 [ ] alignment/msx,
+    'software engineering prompt aligns with execution constitution'
 );
 
 for my $required_term (

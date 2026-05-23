@@ -15,6 +15,11 @@ requires verifiable invariants, contract tests, classified errors, release
 gates, dependency governance, migration metadata, replay validation, and
 observable operational guarantees.
 
+This contract is further constrained by prompt/50.txt. Executable architecture
+now requires every workflow change to answer the execution checklist for
+canonical state, events, projections, audit, indexes, permissions, failure
+modes, rebuildability, replayability, and operational scaling.
+
 ---
 
 Contract Purpose

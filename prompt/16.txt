@@ -12,6 +12,12 @@ subsystems. Controllers MUST validate, authorize, dispatch, and render only.
 Plugin capability boundaries, cache disposability, PostgreSQL authority, and
 moderation-as-core are mandatory architectural discipline.
 
+Prompt 50 alignment: GPForum implementation MUST now preserve core operational
+integrity on every change. Each workflow change MUST identify canonical state,
+emitted events, projection effects, audit records, affected indexes, enforced
+permissions, failure modes, rebuildability, replayability, and operational
+scaling before it is accepted.
+
 This document defines the mandatory software engineering philosophy, architectural governance model, engineering discipline, repository organization, code ownership principles, refactoring rules, review standards, documentation expectations, and long-term maintainability strategy of GPForum.
 
 This specification is foundational and mandatory.
