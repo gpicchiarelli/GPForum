@@ -112,6 +112,12 @@ CommandHandler:
 * execute($command)
 * emit_events($result)
 
+Forum command workflows MUST be split into preparation and persistence
+boundaries. Thread creation MUST use explicit modules equivalent to
+ThreadComposer and ThreadStore: one validates/normalizes command input and one
+persists thread, first post, body, revision, projection seed, event records, and
+audit records in one transaction.
+
 PermissionEngine:
 
 * can($actor, $action, $resource, $context)
@@ -339,6 +345,9 @@ post.created:
 * schema_version: 1
 * idempotency_key: command id
 * payload: post_id, thread_id, author_user_id, revision_id
+
+Thread creation MUST emit thread.created and post.created with the same
+correlation id. post.created MUST be causally linked to thread.created.
 
 post.edited:
 
