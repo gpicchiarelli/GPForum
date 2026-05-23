@@ -337,6 +337,16 @@ All high-volume queries MUST:
 * use explicit ordering;
 * use selective columns.
 
+Queries over partitioned append-only tables MUST include the partitioning key
+where possible. event_log, audit_log, notifications, and rebuild/search
+maintenance queries SHOULD include created_at bounds to preserve partition
+pruning.
+
+Hot user paths MUST prefer partial and covering indexes. Visible-content paths
+SHOULD use partial indexes that exclude deleted or hidden rows. Append-only
+logs SHOULD use BRIN indexes on created_at when scale makes B-tree indexes too
+large.
+
 ⸻
 
 ORM Discipline
@@ -378,6 +388,10 @@ Canonical tables and projection tables MUST be separated. Ordinary UI screens
 MUST read query-specific projections such as thread_counters, category_stats,
 notification_inbox, user_feed_items, and search_documents instead of scanning
 event_log.
+
+Materialized views MUST be reserved for admin, moderation, reporting, trend, or
+daily statistics workloads. They MUST NOT be placed on a hot user path if they
+require heavy refresh.
 
 ⸻
 

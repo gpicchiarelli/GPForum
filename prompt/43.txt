@@ -159,6 +159,7 @@ The canonical minimum database schema MUST include:
 * categories
 * threads
 * posts
+* post_bodies
 * post_revisions
 * event_log
 * audit_log
@@ -180,9 +181,25 @@ The minimum projection set SHOULD include:
 * notification_inbox
 * user_feed_items
 
+Forum content MUST use a head/body/revision split:
+
+* posts stores metadata, position, current body pointer, current revision
+  pointer, visibility, moderation state, and version fields;
+* post_bodies stores heavy text and rendered safe body data;
+* post_revisions stores append-only revision history.
+
+Hot content and cold content MUST have an explicit lifecycle. The preferred
+initial implementation is a hot posts table plus posts_archive or equivalent
+time-based retention partitions. Ordinary thread lists MUST read post/thread
+metadata without loading large body text.
+
 Derived counters such as reply_count, last_post_id, last_activity_at, and
 thread_count MUST live in projection tables unless an ADR approves a
 transactional projection column on a canonical table.
+
+Searchable or cacheable resources MUST carry version, visibility_version, and
+permission_version where applicable so projections can be invalidated by
+explicit snapshots instead of fragile inference.
 
 The canonical minimum schema SHOULD include:
 
@@ -488,8 +505,8 @@ Minion failure:
 
 Outbox failure:
 
-* canonical write, event append, idempotency key insert, and outbox insert MUST
-  be in the same PostgreSQL transaction;
+* canonical write, event append, command idempotency key insert, and
+  outbox_messages insert MUST be in the same PostgreSQL transaction;
 * consumers MUST tolerate duplicate delivery;
 * pending outbox lag MUST be observable;
 * no workflow may accept "row written but event lost" as a valid state.

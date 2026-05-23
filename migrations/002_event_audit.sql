@@ -32,12 +32,29 @@ CREATE INDEX IF NOT EXISTS idx_event_log_correlation
 CREATE INDEX IF NOT EXISTS idx_event_log_idempotency_key
     ON event_log (idempotency_key);
 
+CREATE INDEX IF NOT EXISTS idx_event_log_created_at_brin
+    ON event_log USING BRIN (created_at);
+
 CREATE TABLE IF NOT EXISTS event_idempotency_keys (
     idempotency_key text NOT NULL,
     event_id uuid NOT NULL,
     created_at timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT event_idempotency_keys_pkey PRIMARY KEY (idempotency_key)
 );
+
+CREATE TABLE IF NOT EXISTS idempotency_keys (
+    key text NOT NULL,
+    actor_id uuid,
+    command_type text NOT NULL,
+    response_hash text,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz NOT NULL,
+    CONSTRAINT idempotency_keys_pkey PRIMARY KEY (key),
+    CONSTRAINT idempotency_keys_expires_after_created_check CHECK (expires_at > created_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_idempotency_keys_actor_command
+    ON idempotency_keys (actor_id, command_type, created_at);
 
 CREATE TABLE IF NOT EXISTS audit_log (
     audit_id uuid NOT NULL,
@@ -68,7 +85,10 @@ CREATE INDEX IF NOT EXISTS idx_audit_log_target_created_at
 CREATE INDEX IF NOT EXISTS idx_audit_log_correlation
     ON audit_log (correlation_id);
 
-CREATE TABLE IF NOT EXISTS outbox_jobs (
+CREATE INDEX IF NOT EXISTS idx_audit_log_created_at_brin
+    ON audit_log USING BRIN (created_at);
+
+CREATE TABLE IF NOT EXISTS outbox_messages (
     outbox_id uuid NOT NULL,
     event_id uuid NOT NULL,
     queue text NOT NULL,
@@ -81,13 +101,13 @@ CREATE TABLE IF NOT EXISTS outbox_jobs (
     attempts integer NOT NULL DEFAULT 0,
     status text NOT NULL DEFAULT 'pending',
     last_error text,
-    CONSTRAINT outbox_jobs_pkey PRIMARY KEY (outbox_id),
-    CONSTRAINT outbox_jobs_idempotency_key_key UNIQUE (idempotency_key),
-    CONSTRAINT outbox_jobs_attempts_check CHECK (attempts >= 0),
-    CONSTRAINT outbox_jobs_status_check CHECK (status IN ('pending', 'running', 'done', 'failed', 'cancelled'))
+    CONSTRAINT outbox_messages_pkey PRIMARY KEY (outbox_id),
+    CONSTRAINT outbox_messages_idempotency_key_key UNIQUE (idempotency_key),
+    CONSTRAINT outbox_messages_attempts_check CHECK (attempts >= 0),
+    CONSTRAINT outbox_messages_status_check CHECK (status IN ('pending', 'running', 'done', 'failed', 'cancelled'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_outbox_jobs_dispatch
-    ON outbox_jobs (status, available_at, created_at);
+CREATE INDEX IF NOT EXISTS idx_outbox_messages_dispatch
+    ON outbox_messages (status, available_at, created_at);
 
 COMMIT;

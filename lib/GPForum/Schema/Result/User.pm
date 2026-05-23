@@ -40,6 +40,16 @@ __PACKAGE__->add_columns(
         default_value => 0,
         is_nullable   => 0,
     },
+    version => {
+        data_type     => 'bigint',
+        default_value => 1,
+        is_nullable   => 0,
+    },
+    permission_version => {
+        data_type     => 'bigint',
+        default_value => 1,
+        is_nullable   => 0,
+    },
     email_verified_at => {
         data_type   => 'timestamp with time zone',
         is_nullable => 1,

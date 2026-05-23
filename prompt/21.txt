@@ -46,6 +46,8 @@ users:
 * password_hash
 * status
 * trust_level
+* version
+* permission_version
 * created_at
 * updated_at
 * deleted_at
@@ -106,10 +108,11 @@ threads:
 * author_user_id
 * title
 * slug
-* state
 * visibility
-* reply_count
-* last_post_id
+* moderation_state
+* version
+* visibility_version
+* permission_version
 * last_activity_at
 * created_at
 * updated_at
@@ -121,12 +124,29 @@ posts:
 * id
 * thread_id
 * author_user_id
+* current_body_id
 * current_revision_id
-* state
 * visibility
+* moderation_state
+* version
+* visibility_version
+* permission_version
+* position
 * created_at
 * updated_at
+* hidden_at
+* locked_at
 * deleted_at
+
+post_bodies:
+
+* id
+* post_id
+* body_format
+* body_source
+* body_rendered_safe
+* source_hash
+* created_at
 
 post_revisions:
 
@@ -138,6 +158,12 @@ post_revisions:
 * body_rendered_safe
 * edit_reason
 * created_at
+
+Thread lists MUST NOT load post body text. Lists read heads and projections;
+detail pages load bodies explicitly.
+
+Derived counters MUST live in thread_counters and category_stats projections
+unless an ADR accepts a transactional projection column.
 
 ---
 

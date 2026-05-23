@@ -16,7 +16,8 @@ use GPForum::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 51;
+const my $EXPECTED_TESTS      => 76;
+const my $EXPECTED_MIGRATIONS => 3;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -87,6 +88,11 @@ ok(
     $user_source->has_column('email_verified_at'),
     'user supports email verification placeholder'
 );
+ok( $user_source->has_column('version'), 'user supports optimistic locking' );
+ok(
+    $user_source->has_column('permission_version'),
+    'user supports permission cache invalidation'
+);
 ok(
     $user_source->has_relationship('credentials'),
     'user has credentials relationship'
@@ -125,8 +131,8 @@ is( $connected_schema->storage->connect_info->[0],
 my $plan    = GPForum::Migration::Plan->new;
 my $summary = $plan->summary;
 
-is( scalar @{$summary},       2,     'two migrations are planned' );
-is( $summary->[0]->{version}, '001', 'migration version is parsed' );
+is( scalar @{$summary}, $EXPECTED_MIGRATIONS, 'three migrations are planned' );
+is( $summary->[0]->{version}, '001',          'migration version is parsed' );
 is(
     $summary->[0]->{description},
     'core identity',
@@ -192,13 +198,123 @@ qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] event_idempotency_keys/msx,
 );
 like(
     $event_audit_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] idempotency_keys/msx,
+    'event audit migration creates command idempotency table'
+);
+like(
+    $event_audit_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] audit_log/msx,
     'event audit migration creates audit log table'
 );
 like(
     $event_audit_sql,
-    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] outbox_jobs/msx,
-    'event audit migration creates outbox jobs table'
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] outbox_messages/msx,
+    'event audit migration creates outbox messages table'
+);
+like(
+    $event_audit_sql,
+    qr/USING [ ] BRIN [ ] [(] created_at [)]/msx,
+    'event audit migration creates BRIN indexes for append logs'
+);
+
+my $forum_projection_sql = path( $summary->[2]->{file} )->slurp;
+
+is(
+    $summary->[2]->{description},
+    'forum projection',
+    'forum projection migration description is parsed'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] spaces/msx,
+    'forum projection migration creates spaces table'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] categories/msx,
+    'forum projection migration creates categories table'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] threads/msx,
+    'forum projection migration creates threads table'
+);
+like(
+    $forum_projection_sql,
+    qr/INCLUDE [ ] [(] title, [ ] author_user_id [)]/msx,
+    'forum projection migration uses a covering thread list index'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] posts/msx,
+    'forum projection migration creates posts metadata table'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] posts_archive/msx,
+    'forum projection migration creates post archive table'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] post_bodies/msx,
+    'forum projection migration separates post body storage'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] post_revisions/msx,
+    'forum projection migration creates append revision table'
+);
+like(
+    $forum_projection_sql,
+    qr/WHERE [ ] deleted_at [ ] IS [ ] NULL [ ] AND [ ] moderation_state/msx,
+    'forum projection migration creates visible-content partial indexes'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] thread_counters/msx,
+    'forum projection migration creates thread counters projection'
+);
+like(
+    $forum_projection_sql,
+    qr/WITH [ ] [(] fillfactor [ ] = [ ] 80 [)]/msx,
+    'forum projection migration tunes fillfactor for hot projections'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] search_documents/msx,
+    'forum projection migration creates rebuildable search documents'
+);
+like( $forum_projection_sql, qr/visibility_version/msx,
+    'forum projection migration stores visibility snapshot versions' );
+like( $forum_projection_sql, qr/permission_version/msx,
+    'forum projection migration stores permission snapshot versions' );
+like(
+    $forum_projection_sql,
+    qr/USING [ ] GIN [ ] [(] search_vector [)]/msx,
+    'forum projection migration indexes search vectors'
+);
+like( $forum_projection_sql, qr/gin_trgm_ops/msx,
+    'forum projection migration indexes normalized search titles with trigram'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] notifications/msx,
+    'forum projection migration creates notifications table'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] notification_reads/msx,
+    'forum projection migration separates notification reads'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] notification_inbox/msx,
+    'forum projection migration creates notification inbox projection'
+);
+like(
+    $forum_projection_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] user_feed_items/msx,
+    'forum projection migration creates user feed projection'
 );
 
 throws_ok(

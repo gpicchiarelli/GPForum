@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash text NOT NULL,
     status text NOT NULL DEFAULT 'pending',
     trust_level integer NOT NULL DEFAULT 0,
+    version bigint NOT NULL DEFAULT 1,
+    permission_version bigint NOT NULL DEFAULT 1,
     email_verified_at timestamptz,
     created_at timestamptz NOT NULL DEFAULT now(),
     updated_at timestamptz NOT NULL DEFAULT now(),
@@ -24,7 +26,9 @@ CREATE TABLE IF NOT EXISTS users (
     CONSTRAINT users_username_key UNIQUE (username),
     CONSTRAINT users_email_normalized_key UNIQUE (email_normalized),
     CONSTRAINT users_status_check CHECK (status IN ('pending', 'active', 'suspended', 'deleted')),
-    CONSTRAINT users_trust_level_check CHECK (trust_level >= 0)
+    CONSTRAINT users_trust_level_check CHECK (trust_level >= 0),
+    CONSTRAINT users_version_check CHECK (version > 0),
+    CONSTRAINT users_permission_version_check CHECK (permission_version > 0)
 );
 
 CREATE INDEX IF NOT EXISTS idx_users_status_created_at
@@ -39,7 +43,8 @@ CREATE TABLE IF NOT EXISTS credentials (
     revoked_at timestamptz,
     CONSTRAINT credentials_pkey PRIMARY KEY (id),
     CONSTRAINT credentials_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id),
-    CONSTRAINT credentials_type_check CHECK (type IN ('password', 'totp', 'webauthn'))
+    CONSTRAINT credentials_type_check CHECK (type IN ('password', 'totp', 'webauthn')),
+    CONSTRAINT credentials_revoked_after_created_check CHECK (revoked_at IS NULL OR revoked_at >= created_at)
 );
 
 CREATE INDEX IF NOT EXISTS idx_credentials_user_type_active
@@ -58,14 +63,20 @@ CREATE TABLE IF NOT EXISTS sessions (
     user_agent_hash text,
     CONSTRAINT sessions_pkey PRIMARY KEY (session_id),
     CONSTRAINT sessions_session_hash_key UNIQUE (session_hash),
-    CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id)
-);
+    CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users (id),
+    CONSTRAINT sessions_revoked_after_created_check CHECK (revoked_at IS NULL OR revoked_at >= created_at),
+    CONSTRAINT sessions_expires_after_created_check CHECK (expires_at > created_at)
+) WITH (fillfactor = 90);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user_revoked_expires
     ON sessions (user_id, revoked_at, expires_at);
 
 CREATE INDEX IF NOT EXISTS idx_sessions_lookup
     ON sessions (session_id, expires_at, revoked_at);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_active
+    ON sessions (session_id)
+    WHERE revoked_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS roles (
     role_id uuid NOT NULL,

@@ -80,6 +80,10 @@ Search projections MUST remain rebuildable from canonical persistence.
 Search documents are never authoritative. A hidden post MUST be removed from or
 filtered out of search before it can be shown to ordinary users.
 
+Search projection rows MUST include source_version, visibility_version, and
+permission_version. Rebuild jobs MUST compare these versions before publishing
+results or cache invalidations.
+
 ---
 
 Indexing Workflow
