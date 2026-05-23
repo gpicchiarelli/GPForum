@@ -19,12 +19,13 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 203;
-const my $EXPECTED_MIGRATIONS          => 5;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 12;
+const my $EXPECTED_TESTS               => 221;
+const my $EXPECTED_MIGRATIONS          => 6;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 15;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
+const my $ATTACHMENT_MIGRATION_INDEX   => 5;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -38,6 +39,9 @@ my $notification_source            = $schema->source('Notification');
 my $notification_inbox_source      = $schema->source('NotificationInbox');
 my $notification_preference_source = $schema->source('NotificationPreference');
 my $notification_read_source       = $schema->source('NotificationRead');
+my $attachment_source              = $schema->source('Attachment');
+my $attachment_link_source         = $schema->source('AttachmentLink');
+my $attachment_variant_source      = $schema->source('AttachmentVariant');
 my $projection_offset_source       = $schema->source('ProjectionOffset');
 my $projection_generation_source   = $schema->source('ProjectionGeneration');
 
@@ -171,6 +175,36 @@ ok(
 );
 ok( $notification_preference_source->has_relationship('user'),
     'notification preference belongs to user' );
+
+is( $attachment_source->from, 'attachments', 'attachment source maps table' );
+is_deeply( [ $attachment_source->primary_columns ],
+    ['attachment_id'], 'attachment primary key is explicit' );
+ok( $attachment_source->has_column('owner_user_id'),
+    'attachment stores owner' );
+ok( $attachment_source->has_column('object_key'),
+    'attachment stores object key' );
+ok(
+    $attachment_source->has_column('state'),
+    'attachment stores lifecycle state'
+);
+ok( $attachment_source->has_column('scan_status'),
+    'attachment stores scan status' );
+is( $attachment_link_source->from,
+    'attachment_links', 'attachment link source maps table' );
+is_deeply( [ $attachment_link_source->primary_columns ],
+    ['attachment_link_id'], 'attachment link primary key is explicit' );
+ok( $attachment_link_source->has_column('target_type'),
+    'attachment link stores target type' );
+ok( $attachment_link_source->has_column('target_id'),
+    'attachment link stores target id' );
+is( $attachment_variant_source->from,
+    'attachment_variants', 'attachment variant source maps table' );
+is_deeply( [ $attachment_variant_source->primary_columns ],
+    ['attachment_variant_id'], 'attachment variant primary key is explicit' );
+ok( $attachment_variant_source->has_column('variant_type'),
+    'attachment variant stores variant type' );
+ok( $attachment_variant_source->has_column('object_key'),
+    'attachment variant stores object key' );
 
 is( $projection_offset_source->from,
     'projection_offsets',
@@ -723,6 +757,21 @@ like(
     qr/notification_preferences/msx,
     'notifications migration creates notification preferences table'
 );
+
+my $attachment_sql =
+  path( $summary->[$ATTACHMENT_MIGRATION_INDEX]->{file} )->slurp;
+
+is( $summary->[$ATTACHMENT_MIGRATION_INDEX]->{description},
+    'attachments', 'attachments migration description is parsed' );
+like(
+    $attachment_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] attachments/msx,
+    'attachments migration creates attachments table'
+);
+like( $attachment_sql, qr/attachment_links/msx,
+    'attachments migration creates attachment links table' );
+like( $attachment_sql, qr/attachment_variants/msx,
+    'attachments migration creates attachment variants table' );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;
 my $runner           = GPForum::Migration::Runner->new(

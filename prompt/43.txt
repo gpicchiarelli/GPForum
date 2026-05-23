@@ -196,6 +196,16 @@ RealtimeHub MUST broadcast thread updates and notification badge updates to
 authorized subscribers while exposing explicit polling fallback state. Realtime
 MUST remain optional and MUST NOT become authoritative for core forum behavior.
 
+Attachment workflows MUST use narrow AttachmentValidator,
+AttachmentIntentBuilder, and AttachmentStore boundaries. AttachmentValidator
+MUST reject executable uploads, unsupported media types, and oversized files.
+AttachmentIntentBuilder MUST create upload intents with object storage keys
+without persisting bytes in Perl application state. AttachmentStore MUST persist
+attachment lifecycle records, attachment_links, attachment_variants, event_log,
+audit_log, and outbox_messages for scanning and media processing. Attachment
+workers MUST use AttachmentScanning and MediaProcessing handlers. Uploads MUST
+remain non-executable, permission-aware, scan-gated, and lifecycle-driven.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.
@@ -234,6 +244,7 @@ The minimum projection set SHOULD include:
 * search_documents
 * notification_inbox
 * user_feed_items
+* attachment_links
 
 Forum content MUST use a head/body/revision split:
 

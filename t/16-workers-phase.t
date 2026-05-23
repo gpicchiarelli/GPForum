@@ -17,7 +17,9 @@ use GPForum::Test::MinionJob;
 use GPForum::Test::OutboxDispatcher;
 use GPForum::Test::OutboxPayloadRow;
 use GPForum::Test::WorkerSink;
+use GPForum::Worker::Handler::AttachmentScanning;
 use GPForum::Worker::Handler::CacheInvalidation;
+use GPForum::Worker::Handler::MediaProcessing;
 use GPForum::Worker::Handler::NotificationDispatch;
 use GPForum::Worker::Handler::SearchIndexing;
 use GPForum::Worker::IdempotentJobRunner;
@@ -25,7 +27,7 @@ use GPForum::Worker::MinionRegistrar;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 34;
+const my $EXPECTED_TESTS => 42;
 const my $OUTBOX_LIMIT   => 7;
 const my $POST_HANDLERS  => 3;
 
@@ -37,6 +39,8 @@ my $transport = GPForum::Service::Outbox::DomainEventTransport->new(
         GPForum::Worker::Handler::SearchIndexing->new( sink => $sink ),
         GPForum::Worker::Handler::NotificationDispatch->new( sink => $sink ),
         GPForum::Worker::Handler::CacheInvalidation->new( sink => $sink ),
+        GPForum::Worker::Handler::AttachmentScanning->new( sink => $sink ),
+        GPForum::Worker::Handler::MediaProcessing->new( sink => $sink ),
     ],
 );
 my $message = GPForum::Test::OutboxPayloadRow->new(
@@ -102,6 +106,41 @@ my $unknown_dispatch = $transport->dispatch($unknown_message);
 ok( $unknown_dispatch->{ok}, 'unknown event still dispatches successfully' );
 is( $unknown_dispatch->{handlers}, 0, 'unknown event has no handlers' );
 
+my $attachment_message = GPForum::Test::OutboxPayloadRow->new(
+    data => {
+        payload => {
+            event_id       => 'event-4',
+            event_type     => 'attachment.uploaded',
+            aggregate_type => 'attachment',
+            aggregate_id   => 'attachment-1',
+        },
+    },
+);
+my $attachment_dispatch = $transport->dispatch($attachment_message);
+
+is( $attachment_dispatch->{handlers},
+    1, 'attachment upload dispatches to scanning handler' );
+is( $sink->records->[-1]{action},
+    'attachment.scan', 'attachment scan action is recorded' );
+
+my $media_message = GPForum::Test::OutboxPayloadRow->new(
+    data => {
+        payload => {
+            event_id       => 'event-5',
+            event_type     => 'attachment.scanned',
+            aggregate_type => 'attachment',
+            aggregate_id   => 'attachment-1',
+            scan_status    => 'clean',
+        },
+    },
+);
+my $media_dispatch = $transport->dispatch($media_message);
+
+is( $media_dispatch->{handlers},
+    1, 'clean scanned attachment dispatches to media handler' );
+is( $sink->records->[-1]{action},
+    'media.process', 'media processing action is recorded' );
+
 my $idempotency_store = GPForum::Test::IdempotencyStore->new;
 my $runner =
   GPForum::Worker::IdempotentJobRunner->new( store => $idempotency_store );
@@ -166,6 +205,14 @@ ok(
 );
 ok( $minion->tasks->{'gpforum.cache_invalidation.placeholder'},
     'registrar installs cache placeholder task' );
+ok(
+    $minion->tasks->{'gpforum.attachment_scan.placeholder'},
+    'registrar installs attachment scan placeholder task'
+);
+ok(
+    $minion->tasks->{'gpforum.media_processing.placeholder'},
+    'registrar installs media processing placeholder task'
+);
 
 my $outbox_job = GPForum::Test::MinionJob->new;
 my $outbox_result =
@@ -184,5 +231,13 @@ is( $placeholder->{placeholder},
     'search', 'placeholder task identifies workload' );
 is( $placeholder_job->finished->{placeholder},
     'search', 'placeholder task finishes job' );
+
+my $media_job = GPForum::Test::MinionJob->new;
+my $media_placeholder =
+  $minion->tasks->{'gpforum.media_processing.placeholder'}->($media_job);
+
+ok( $media_placeholder->{ok}, 'media placeholder task succeeds' );
+is( $media_placeholder->{placeholder},
+    'media_processing', 'media placeholder identifies workload' );
 
 1;

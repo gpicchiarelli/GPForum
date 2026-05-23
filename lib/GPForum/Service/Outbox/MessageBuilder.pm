@@ -48,6 +48,7 @@ sub _payload {
         correlation_id    => $event->{correlation_id},
         causation_id      => $event->{causation_id},
         schema_version    => $event->{schema_version},
+        domain_payload    => $event->{payload} || {},
     };
 }
 

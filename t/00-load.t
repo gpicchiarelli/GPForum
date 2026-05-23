@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 69;
+const my $TEST_COUNT => 77;
 
 plan tests => $TEST_COUNT;
 
@@ -26,6 +26,9 @@ use_ok('GPForum::Schema');
 use_ok('GPForum::Schema::Result::SchemaVersion');
 use_ok('GPForum::Migration::Plan');
 use_ok('GPForum::Migration::Runner');
+use_ok('GPForum::Schema::Result::Attachment');
+use_ok('GPForum::Schema::Result::AttachmentLink');
+use_ok('GPForum::Schema::Result::AttachmentVariant');
 use_ok('GPForum::Schema::Result::AuditLog');
 use_ok('GPForum::Schema::Result::Category');
 use_ok('GPForum::Schema::Result::CategoryStat');
@@ -52,6 +55,9 @@ use_ok('GPForum::Schema::Result::ThreadCounterShard');
 use_ok('GPForum::Schema::Result::User');
 use_ok('GPForum::Service::Password');
 use_ok('GPForum::Service::SessionToken');
+use_ok('GPForum::Service::Attachment::IntentBuilder');
+use_ok('GPForum::Service::Attachment::Store');
+use_ok('GPForum::Service::Attachment::Validator');
 use_ok('GPForum::Service::Identity::Registration');
 use_ok('GPForum::Service::Identity::Store');
 use_ok('GPForum::Service::Notification::Dispatcher');
@@ -77,6 +83,8 @@ use_ok('GPForum::Service::Search::DocumentBuilder');
 use_ok('GPForum::Service::Search::Indexer');
 use_ok('GPForum::Service::Search::Searcher');
 use_ok('GPForum::Worker::Handler::CacheInvalidation');
+use_ok('GPForum::Worker::Handler::AttachmentScanning');
+use_ok('GPForum::Worker::Handler::MediaProcessing');
 use_ok('GPForum::Worker::Handler::NotificationDispatch');
 use_ok('GPForum::Worker::Handler::SearchIndexing');
 use_ok('GPForum::Worker::IdempotentJobRunner');

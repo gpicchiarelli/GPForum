@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added attachment upload intent, validation, lifecycle persistence, links,
+  variants, scanning hook, media processing hook, and PostgreSQL migration.
 - Added bounded keyset pagination contracts for category thread lists and
   thread post lists, including limit-plus-one fetching, stable cursors, and
   pagination metadata.
