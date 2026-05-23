@@ -20,6 +20,7 @@ It is intentionally narrower than the full architectural contract.
 * `POST /t/:thread_id/subscribe/remove` unfollows a thread.
 * `GET /notifications` renders the authenticated user's notification inbox.
 * `POST /notifications/:notification_id/read` marks one notification as read.
+* `GET /mentions` renders the authenticated user's mention history.
 * `GET /search?q=...` renders PostgreSQL-native search results.
 
 Read endpoints render semantic SSR by default. They also return JSON when the
@@ -46,14 +47,18 @@ uses keyset pagination and no `OFFSET`.
 Authenticated notification pages expose the existing notification inbox read
 model over SSR/JSON. Mark-read is CSRF-protected and writes through
 `Notification::Dispatcher`, preserving the notification read projection rather
-than inventing process-local UI state.
+than inventing process-local UI state. Inbox entries include joined
+notification source/type/payload data so SSR pages and JSON clients can link
+back to a related discussion when the dispatcher has that context.
 
 Thread and reply creation record resolved `@username` mentions as derived
 community state. The canonical post/thread transaction remains authoritative;
 mention recording runs through `MentionStore`, skips unknown/self mentions
 explicitly, and degrades with a logged warning instead of corrupting the write
 path. Outbox-dispatched `post.created` events can fan out reply notifications
-to thread subscribers while excluding the post author.
+to thread subscribers while excluding the post author. `MentionStore` also
+creates mention notifications for resolved mentions, and `/mentions` exposes a
+keyset-paginated SSR/JSON history for authenticated users.
 
 ## What Works
 

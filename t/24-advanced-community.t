@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use MIME::Base64 qw(encode_base64url);
 use Test::More;
 
 use lib 'lib';
@@ -12,16 +13,18 @@ use lib 't/lib';
 use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Community::FeedProjector;
 use GPForum::Service::Community::MentionExtractor;
+use GPForum::Service::Community::MentionReader;
 use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Community::ReputationLedger;
 use GPForum::Test::CommunityResultSet;
 use GPForum::Test::CommunitySchema;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
+use GPForum::Test::NotificationDispatcher;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 57;
+const my $EXPECTED_TESTS       => 69;
 const my $BOOKMARK_LIMIT       => 20;
 const my $MENTION_COUNT        => 2;
 const my $DEFAULT_RANK         => 0;
@@ -33,6 +36,8 @@ const my $FEED_USER_COUNT      => 2;
 const my $DEFAULT_VERSION      => 1;
 const my $AT_CODE              => 64;
 const my $AT_SIGN              => chr $AT_CODE;
+const my $MENTION_READER_LIMIT => 10;
+const my $MENTION_FETCH_ROWS   => $MENTION_READER_LIMIT + 1;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -161,10 +166,12 @@ $users->create(
         deleted_at => undef,
     }
 );
-my $mention_store = GPForum::Service::Community::MentionStore->new(
-    schema     => $schema,
-    clock      => $clock,
-    id_service => GPForum::Test::Id->new,
+my $mention_dispatcher = GPForum::Test::NotificationDispatcher->new;
+my $mention_store      = GPForum::Service::Community::MentionStore->new(
+    schema                  => $schema,
+    clock                   => $clock,
+    id_service              => GPForum::Test::Id->new,
+    notification_dispatcher => $mention_dispatcher,
 );
 my $stored_mentions = $mention_store->record_for_source(
     {
@@ -187,6 +194,14 @@ is( scalar @{ $stored_mentions->{skipped} },
 is( $stored_mentions->{skipped}[0]{reason},
     'unknown_user', 'unknown mention skip reason is explicit' );
 is( scalar @{ $mentions_rows->created }, 1, 'mention row is upserted' );
+is( scalar @{ $stored_mentions->{notifications} },
+    1, 'mention recording creates mention notification' );
+is( $mention_dispatcher->notifications->[0]{recipient_user_id},
+    'user-2', 'mention notification targets mentioned user' );
+is( $mention_dispatcher->notifications->[0]{notification_type},
+    'mention', 'mention notification has explicit type' );
+is( $mention_dispatcher->notifications->[0]{payload}{post_id},
+    'post-1', 'mention notification links source post' );
 
 my $duplicate_mentions = $mention_store->record_for_source(
     {
@@ -200,6 +215,8 @@ is( scalar @{ $duplicate_mentions->{created} },
     0, 'duplicate mention recording is idempotent' );
 is( scalar @{ $duplicate_mentions->{skipped} },
     0, 'duplicate mentions do not report user-facing skips' );
+is( scalar @{ $duplicate_mentions->{notifications} },
+    0, 'duplicate mention creates no notification' );
 is( scalar @{ $mentions_rows->created },
     1, 'duplicate mention does not add rows' );
 
@@ -218,6 +235,37 @@ is( $self_mention->{skipped}[0]{reason},
     'self_mention', 'self mention skip reason is explicit' );
 is( scalar @{ $mentions_rows->created },
     1, 'self mention does not add mention rows' );
+
+my $mention_reader =
+  GPForum::Service::Community::MentionReader->new( schema => $schema );
+my $mention_page =
+  $mention_reader->list_page_for_recipient( 'user-2',
+    { limit => $MENTION_READER_LIMIT } );
+is( scalar @{ $mention_page->{items} }, 1, 'mention reader returns mentions' );
+is( $mention_page->{items}[0]->get_column('mention_id'),
+    'generated-1', 'mention reader preserves mention rows' );
+is( $mentions_rows->last_query->{mentioned_user_id},
+    'user-2', 'mention reader filters recipient' );
+is( $mentions_rows->last_attrs->{rows},
+    $MENTION_FETCH_ROWS, 'mention reader fetches one extra keyset row' );
+ok(
+    !exists $mentions_rows->last_attrs->{offset},
+    'mention reader does not use offset'
+);
+is( $mention_page->{next_cursor}, undef, 'mention reader omits empty cursor' );
+
+my $mention_cursor = encode_base64url('2026-05-23T12:00:00Z|generated-1');
+$mention_reader->list_page_for_recipient(
+    'user-2',
+    {
+        limit => $MENTION_READER_LIMIT,
+        after => $mention_cursor,
+    }
+);
+ok(
+    exists $mentions_rows->last_query->{-or},
+    'mention reader applies keyset cursor predicate'
+);
 
 my $reputation = GPForum::Service::Community::ReputationLedger->new(
     schema     => $schema,

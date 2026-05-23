@@ -11,6 +11,7 @@ use GPForum::Runtime;
 use GPForum::Schema;
 use GPForum::Service::Clock;
 use GPForum::Service::Community::BookmarkStore;
+use GPForum::Service::Community::MentionReader;
 use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Id;
 use GPForum::Service::Forum::CategoryReader;
@@ -222,6 +223,17 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Community::MentionStore->new(
+                notification_dispatcher =>
+                  $controller->gp_notification_dispatcher,
+                schema => $controller->gp_schema,
+            );
+        }
+    );
+    $self->helper(
+        gp_mention_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Community::MentionReader->new(
                 schema => $controller->gp_schema );
         }
     );
@@ -296,6 +308,7 @@ sub startup {
     $routes->post('/notifications/:notification_id/read')
       ->to('Notifications#mark_read')
       ->name('notification_read');
+    $routes->get('/mentions')->to('Notifications#mentions')->name('mentions');
     $routes->get('/search')->to('Forum#search')->name('forum_search');
     $routes->get('/register')->to('Identity#register_form')->name('register');
     $routes->post('/register')

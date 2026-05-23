@@ -26,5 +26,12 @@ __PACKAGE__->belongs_to(
     recipient => 'GPForum::Schema::Result::User',
     'recipient_user_id'
 );
+__PACKAGE__->belongs_to(
+    notification => 'GPForum::Schema::Result::Notification',
+    {
+        'foreign.notification_id' => 'self.notification_id',
+        'foreign.created_at'      => 'self.created_at',
+    }
+);
 
 1;

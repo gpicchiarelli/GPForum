@@ -74,6 +74,35 @@ sub mark_read {
     return $self->redirect_to('notifications');
 }
 
+sub mentions {
+    my ($self) = @_;
+
+    my $user_id = _current_user_id($self);
+    return _unauthorized($self) if !$user_id;
+
+    my $page = eval {
+        return $self->gp_mention_reader->list_page_for_recipient(
+            $user_id,
+            {
+                limit => $self->param('limit') || $DEFAULT_LIMIT,
+                after => $self->param('after'),
+            }
+        );
+    };
+
+    return _system_failure($self) if $EVAL_ERROR;
+
+    return _render_payload(
+        $self,
+        'notifications/mentions',
+        {
+            mentions    => [ map { _mention_hash($_) } @{ $page->{items} } ],
+            next_cursor => $page->{next_cursor},
+        },
+        $HTTP_OK
+    );
+}
+
 sub _render_payload {
     my ( $controller, $template, $payload, $status ) = @_;
 
@@ -132,13 +161,58 @@ sub _allowed {
 sub _notification_hash {
     my ($row) = @_;
 
+    my $notification = _related_notification($row);
+
     return {
-        notification_id   => _column( $row, 'notification_id' ),
-        recipient_user_id => _column( $row, 'recipient_user_id' ),
-        created_at        => _column( $row, 'created_at' ),
-        read_at           => _column( $row, 'read_at' ),
-        rank_score        => _column( $row, 'rank_score' ),
+        notification_id   => _column( $row,          'notification_id' ),
+        recipient_user_id => _column( $row,          'recipient_user_id' ),
+        created_at        => _column( $row,          'created_at' ),
+        read_at           => _column( $row,          'read_at' ),
+        rank_score        => _column( $row,          'rank_score' ),
+        source_type       => _column( $notification, 'source_type' ),
+        source_id         => _column( $notification, 'source_id' ),
+        notification_type => _column( $notification, 'notification_type' ),
+        payload           => _column( $notification, 'payload' ) || {},
     };
+}
+
+sub _mention_hash {
+    my ($row) = @_;
+
+    return {
+        mention_id         => _column( $row, 'mention_id' ),
+        source_type        => _column( $row, 'source_type' ),
+        source_id          => _column( $row, 'source_id' ),
+        actor_id           => _column( $row, 'actor_id' ),
+        mentioned_user_id  => _column( $row, 'mentioned_user_id' ),
+        mentioned_username => _column( $row, 'mentioned_username' ),
+        created_at         => _column( $row, 'created_at' ),
+    };
+}
+
+sub _related_notification {
+    my ($row) = @_;
+
+    return $row if _hash_includes_notification($row);
+    return      if _cannot_load_notification($row);
+
+    return $row->notification;
+}
+
+sub _hash_includes_notification {
+    my ($row) = @_;
+
+    return ref $row eq 'HASH' && exists $row->{notification_type};
+}
+
+sub _cannot_load_notification {
+    my ($row) = @_;
+
+    return 1 if !$row;
+    return 1 if ref $row eq 'HASH';
+    return 1 if !$row->can('notification');
+
+    return 0;
 }
 
 sub _column {

@@ -408,6 +408,7 @@ sub _record_post_mentions {
                 source_id   => $post_id,
                 actor_id    => $actor_id,
                 body_source => $command->{body}{body_source},
+                thread_id   => $command->{post}{thread_id},
             }
         );
     };

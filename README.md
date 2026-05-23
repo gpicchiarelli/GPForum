@@ -146,6 +146,7 @@ semantic SSR by default and still return JSON when requested with
 * `POST /t/:thread_id/subscribe/remove`
 * `GET /notifications`
 * `POST /notifications/:notification_id/read`
+* `GET /mentions`
 * `GET /search?q=...`
 
 State-changing forum routes require CSRF and an authenticated session user. Read
@@ -168,6 +169,11 @@ idempotent at the service boundary, and treated as derived social signal: a
 mention failure is logged and does not corrupt the authoritative post/thread
 transaction. Reply events dispatched through the outbox can fan out
 notifications to thread subscribers while excluding the post author.
+Mention notifications are now created by the mention boundary itself and the
+authenticated `/mentions` page exposes a keyset-paginated mention history.
+The notification inbox includes joined source/type/payload data so a mention
+can link back into the discussion without making realtime delivery
+authoritative.
 SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,

@@ -20,7 +20,7 @@ use GPForum::Test::PermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 64;
+const my $EXPECTED_TESTS => 65;
 const my $LIST_LIMIT     => 10;
 
 plan tests => $EXPECTED_TESTS;
@@ -284,6 +284,8 @@ is( $inbox->last_query->{recipient_user_id},
     'user-1', 'notification list filters recipient' );
 is( $inbox->last_attrs->{rows}, $LIST_LIMIT,
     'notification list applies limit' );
+is( $inbox->last_attrs->{prefetch},
+    'notification', 'notification list prefetches payload row' );
 
 my $notification_page =
   $dispatcher->list_page_for_user( 'user-1', { limit => $LIST_LIMIT } );

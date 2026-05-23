@@ -165,7 +165,8 @@ sub _search_for_user {
         {
             order_by =>
               [ { -desc => 'created_at' }, { -desc => 'notification_id' } ],
-            rows => $options->{limit} || $DEFAULT_LIMIT,
+            prefetch => 'notification',
+            rows     => $options->{limit} || $DEFAULT_LIMIT,
         }
     );
 }

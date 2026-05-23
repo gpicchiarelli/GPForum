@@ -1,0 +1,35 @@
+% layout 'default';
+% title 'Mentions - GPForum';
+
+<main aria-labelledby="mentions-heading">
+  <h1 id="mentions-heading">Mentions</h1>
+  % if (@{$mentions}) {
+    <ol aria-label="Mention list">
+      % for my $mention (@{$mentions}) {
+        <li>
+          <article aria-labelledby="mention-<%= $mention->{mention_id} %>-heading">
+            <h2 id="mention-<%= $mention->{mention_id} %>-heading">
+              Mention by <%= $mention->{actor_id} %>
+            </h2>
+            % if (($mention->{source_type} || q{}) eq 'thread') {
+              <p><a href="<%= url_for('thread', thread_id => $mention->{source_id}) %>">Open discussion</a></p>
+            % } else {
+              <p>Source <%= $mention->{source_type} %> <%= $mention->{source_id} %></p>
+            % }
+            <p>
+              Mentioned at
+              <time datetime="<%= $mention->{created_at} %>"><%= $mention->{created_at} %></time>
+            </p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No mentions yet.</p>
+  % }
+  % if ($next_cursor) {
+    <nav aria-label="Mention pagination">
+      <a href="<%= url_for('mentions')->query(after => $next_cursor) %>">Older mentions</a>
+    </nav>
+  % }
+</main>

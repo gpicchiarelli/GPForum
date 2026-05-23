@@ -9,8 +9,15 @@
         <li>
           <article aria-labelledby="notification-<%= $notification->{notification_id} %>-heading">
             <h2 id="notification-<%= $notification->{notification_id} %>-heading">
-              Notification <%= $notification->{notification_id} %>
+              <%= $notification->{notification_type} || 'Notification' %>
             </h2>
+            % if ($notification->{payload}{thread_id}) {
+              <p>
+                <a href="<%= url_for('thread', thread_id => $notification->{payload}{thread_id}) %><%= $notification->{payload}{post_id} ? '#post-' . $notification->{payload}{post_id} : q{} %>">
+                  Open discussion
+                </a>
+              </p>
+            % }
             <p>
               Received at
               <time datetime="<%= $notification->{created_at} %>"><%= $notification->{created_at} %></time>

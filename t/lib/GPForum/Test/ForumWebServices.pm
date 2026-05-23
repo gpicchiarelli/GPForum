@@ -152,6 +152,13 @@ sub list_page_for_user {
                     created_at        => '2026-05-23T12:00:00Z',
                     read_at           => undef,
                     rank_score        => 0,
+                    source_type       => 'post',
+                    source_id         => 'post-1',
+                    notification_type => 'mention',
+                    payload           => {
+                        thread_id => 'thread-1',
+                        post_id   => 'post-1',
+                    },
                 },
             ],
             next_cursor => 'notification-cursor',
@@ -171,6 +178,25 @@ sub list_page_for_user {
             },
         ],
         next_cursor => 'bookmark-cursor',
+    };
+}
+
+sub list_page_for_recipient {
+    my ( $self, $user_id, $options ) = @_;
+
+    return {
+        items => [
+            {
+                mention_id         => 'mention-1',
+                source_type        => 'post',
+                source_id          => 'post-1',
+                actor_id           => 'user-2',
+                mentioned_user_id  => $user_id,
+                mentioned_username => 'giacomo',
+                created_at         => '2026-05-23T12:00:00Z',
+            },
+        ],
+        next_cursor => 'mention-cursor',
     };
 }
 

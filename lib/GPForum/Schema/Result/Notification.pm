@@ -28,5 +28,12 @@ __PACKAGE__->belongs_to(
     recipient => 'GPForum::Schema::Result::User',
     'recipient_user_id'
 );
+__PACKAGE__->has_many(
+    inbox_entries => 'GPForum::Schema::Result::NotificationInbox',
+    {
+        'foreign.notification_id' => 'self.notification_id',
+        'foreign.created_at'      => 'self.created_at',
+    }
+);
 
 1;

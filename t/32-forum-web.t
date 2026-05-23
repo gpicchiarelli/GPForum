@@ -17,7 +17,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 82;
+const my $EXPECTED_TESTS       => 90;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_UNAUTHORIZED    => 401;
@@ -63,6 +63,8 @@ my $csrf_token = _json_value( $test, 'csrf_token' );
 _get_json_ok( $test, '/bookmarks' );
 $test->status_is($HTTP_UNAUTHORIZED);
 _get_json_ok( $test, '/notifications' );
+$test->status_is($HTTP_UNAUTHORIZED);
+_get_json_ok( $test, '/mentions' );
 $test->status_is($HTTP_UNAUTHORIZED);
 
 $test->post_ok('/threads');
@@ -122,8 +124,15 @@ $test->json_is( '/next_cursor'           => 'bookmark-cursor' );
 
 _get_json_ok( $test, '/notifications' );
 $test->status_is($HTTP_OK);
-$test->json_is( '/notifications/0/notification_id' => 'notification-1' );
-$test->json_is( '/next_cursor'                     => 'notification-cursor' );
+$test->json_is( '/notifications/0/notification_id'   => 'notification-1' );
+$test->json_is( '/notifications/0/notification_type' => 'mention' );
+$test->json_is( '/notifications/0/payload/thread_id' => 'thread-1' );
+$test->json_is( '/next_cursor'                       => 'notification-cursor' );
+
+_get_json_ok( $test, '/mentions' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/mentions/0/mention_id' => 'mention-1' );
+$test->json_is( '/next_cursor'           => 'mention-cursor' );
 
 $test->post_ok(
     '/notifications/notification-1/read' => { Accept => 'application/json' } =>
@@ -221,8 +230,8 @@ sub _install_forum_fakes {
         gp_category_reader gp_thread_reader gp_thread_detail_reader
         gp_thread_composer gp_thread_store gp_post_composer gp_post_store
         gp_post_position gp_thread_read_state gp_mention_store
-        gp_bookmark_store gp_subscription_store gp_notification_dispatcher
-        gp_search_service gp_rate_limiter
+        gp_mention_reader gp_bookmark_store gp_subscription_store
+        gp_notification_dispatcher gp_search_service gp_rate_limiter
         )
       )
     {

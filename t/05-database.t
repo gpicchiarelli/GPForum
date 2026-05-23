@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 374;
+const my $EXPECTED_TESTS               => 376;
 const my $EXPECTED_MIGRATIONS          => 11;
 const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
 const my $FORUM_MIGRATION_INDEX        => 2;
@@ -171,6 +171,10 @@ ok( $notification_source->has_column('payload'),
     'notification stores payload' );
 ok( $notification_source->has_relationship('recipient'),
     'notification belongs to recipient' );
+ok(
+    $notification_source->has_relationship('inbox_entries'),
+    'notification has inbox projection entries'
+);
 
 is( $notification_read_source->from,
     'notification_reads', 'notification read source maps reads table' );
@@ -223,6 +227,10 @@ is_deeply(
 );
 ok( $notification_inbox_source->has_column('rank_score'),
     'notification inbox stores rank score' );
+ok(
+    $notification_inbox_source->has_relationship('notification'),
+    'notification inbox belongs to notification payload'
+);
 
 is( $notification_preference_source->from,
     'notification_preferences',

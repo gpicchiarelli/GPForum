@@ -14,8 +14,9 @@ our $VERSION = '0.001';
 has clock => sub { return GPForum::Service::Clock->new; };
 has extractor =>
   sub { return GPForum::Service::Community::MentionExtractor->new; };
-has id_service => sub { return GPForum::Service::Id->new; };
-has schema     => undef;
+has id_service              => sub { return GPForum::Service::Id->new; };
+has notification_dispatcher => undef;
+has schema                  => undef;
 
 sub record_for_source {
     my ( $self, $input ) = @_;
@@ -68,11 +69,53 @@ sub _insert_mentions {
         push @created, $row;
     }
 
+    my @notifications = $self->_notify_mentions( $input, \@created );
+
     return {
-        ok      => 1,
-        created => \@created,
-        skipped => \@skipped,
+        ok            => 1,
+        created       => \@created,
+        notifications => \@notifications,
+        skipped       => \@skipped,
     };
+}
+
+sub _notify_mentions {
+    my ( $self, $input, $mentions ) = @_;
+
+    return if !$self->notification_dispatcher;
+
+    my @notifications;
+    for my $mention ( @{$mentions} ) {
+        my $result = $self->notification_dispatcher->create_notification(
+            {
+                recipient_user_id => $mention->{mentioned_user_id},
+                source_type       => $input->{source_type},
+                source_id         => $input->{source_id},
+                notification_type => 'mention',
+                payload           => {
+                    actor_id           => $input->{actor_id},
+                    mentioned_username => $mention->{mentioned_username},
+                    source_type        => $input->{source_type},
+                    source_id          => $input->{source_id},
+                    thread_id          => $input->{thread_id},
+                    post_id            => _payload_post_id($input),
+                },
+            }
+        );
+        if ( $result->{ok} ) {
+            push @notifications, $result;
+        }
+    }
+
+    return @notifications;
+}
+
+sub _payload_post_id {
+    my ($input) = @_;
+
+    return $input->{source_id} if $input->{source_type} eq 'post';
+
+    return;
 }
 
 sub _existing_mention {
@@ -113,9 +156,10 @@ sub _resolve_users {
 
 sub _empty_result {
     return {
-        ok      => 1,
-        created => [],
-        skipped => [],
+        ok            => 1,
+        created       => [],
+        notifications => [],
+        skipped       => [],
     };
 }
 
