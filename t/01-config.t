@@ -14,12 +14,14 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 27;
+const my $EXPECTED_TESTS            => 31;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
 const my $CUSTOM_MIN_OS_WORKERS     => 2;
 const my $CUSTOM_MAX_OPEN_FDS       => 128;
+const my $CUSTOM_CACHE_MAX_ENTRIES  => 64;
+const my $CUSTOM_CATEGORY_CACHE_TTL => 45;
 const my $TOO_MANY_PROCESSES        => 513;
 
 plan tests => $EXPECTED_TESTS;
@@ -42,6 +44,8 @@ my %environment = (
     GPFORUM_OS_AFFINITY                  => 'manual',
     GPFORUM_OS_MIN_RECOMMENDED_WORKERS   => $CUSTOM_MIN_OS_WORKERS,
     GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS => $CUSTOM_MAX_OPEN_FDS,
+    GPFORUM_LOCAL_CACHE_MAX_ENTRIES      => $CUSTOM_CACHE_MAX_ENTRIES,
+    GPFORUM_CATEGORY_CACHE_TTL_SECONDS   => $CUSTOM_CATEGORY_CACHE_TTL,
 );
 
 my $config  = GPForum::Config->from_environment( \%environment );
@@ -74,6 +78,10 @@ is( $config->os_min_recommended_workers,
     $CUSTOM_MIN_OS_WORKERS, 'OS minimum worker threshold loads from env' );
 is( $config->os_max_open_file_descriptors,
     $CUSTOM_MAX_OPEN_FDS, 'OS file descriptor threshold loads from env' );
+is( $config->local_cache_max_entries,
+    $CUSTOM_CACHE_MAX_ENTRIES, 'local cache max entries loads from env' );
+is( $config->category_cache_ttl_seconds,
+    $CUSTOM_CATEGORY_CACHE_TTL, 'category cache TTL loads from env' );
 is( $runtime->as_hash->{os_features}{reuseport}{setting},
     'off', 'runtime exposes OS feature settings' );
 is( $runtime->as_hash->{os_preflight_settings}{min_recommended_workers},
@@ -145,6 +153,22 @@ throws_ok(
     },
     qr/\A os_max_open_file_descriptors [ ] must [ ] be [ ] >= [ ] 1/msx,
     'OS preflight thresholds require positive values',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( local_cache_max_entries => 0 )->validate;
+    },
+    qr/\A local_cache_max_entries [ ] must [ ] be [ ] >= [ ] 1/msx,
+    'local cache max entries require positive values',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( category_cache_ttl_seconds => 0 )->validate;
+    },
+    qr/\A category_cache_ttl_seconds [ ] must [ ] be [ ] >= [ ] 1/msx,
+    'category cache TTL requires positive values',
 );
 
 1;

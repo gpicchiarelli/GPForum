@@ -9,9 +9,10 @@ use GPForum::Test::ForumReadSearch;
 
 our $VERSION = '0.001';
 
-has last_attrs => undef;
-has last_query => undef;
-has rows       => sub { return []; };
+has last_attrs   => undef;
+has last_query   => undef;
+has rows         => sub { return []; };
+has search_count => 0;
 
 sub find {
     my ( $self, $id ) = @_;
@@ -29,6 +30,7 @@ sub find {
 sub search {
     my ( $self, $query, $attrs ) = @_;
 
+    $self->search_count( $self->search_count + 1 );
     $self->last_query($query);
     $self->last_attrs($attrs);
 

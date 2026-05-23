@@ -52,6 +52,12 @@ needs PostgreSQL `LISTEN/NOTIFY` or outbox polling.
 The rate limiter remains process-local. It is acceptable as a fallback and test
 boundary, but a PostgreSQL-backed limiter is the next production-grade step.
 
+The local cache remains process-local and disposable. It is TTL bounded,
+max-entry bounded, namespace-aware, tag-invalidatable, and visible through
+`/metrics`. It is currently used only for read-mostly category lists. Cache
+invalidation workers derive tags from authoritative domain events; cached data
+is never authoritative and is safe to discard.
+
 Reply position allocation currently uses the latest visible database position
 and increments it. The unique `(thread_id, position)` constraint protects data
 integrity, but a hot production thread should move to advisory locking or a

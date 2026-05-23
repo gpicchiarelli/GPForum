@@ -15,20 +15,22 @@ const my $DEFAULT_PUBLIC_BASE_URL => 'http://127.0.0.1:3000';
 const my $DEFAULT_SESSION_SECRET  => 'gpforum-development-secret-change-me';
 const my $DEFAULT_DATABASE_DSN =>
   'dbi:Pg:dbname=gpforum;host=127.0.0.1;port=5432';
-const my $DEFAULT_DATABASE_USER      => 'gpforum';
-const my $DEFAULT_DATABASE_PASSWORD  => q{};
-const my $DEFAULT_WEB_PROCESSES      => 4;
-const my $DEFAULT_WORKER_PROCESSES   => 2;
-const my $DEFAULT_REALTIME_PROCESSES => 1;
-const my $DEFAULT_OS_FEATURE_SETTING => 'auto';
-const my $DEFAULT_OS_AFFINITY        => 'off';
-const my $DEFAULT_OS_MIN_WORKERS     => 1;
-const my $DEFAULT_OS_MAX_OPEN_FDS    => 1024;
-const my $MINIMUM_PROCESS_COUNT      => 1;
-const my $MAXIMUM_PROCESS_COUNT      => 512;
-const my $MINIMUM_OS_THRESHOLD       => 1;
-const my %VALID_OS_FEATURE_SETTING   => map { $_ => 1 } qw(auto on off);
-const my %VALID_OS_AFFINITY          => map { $_ => 1 } qw(off manual);
+const my $DEFAULT_DATABASE_USER           => 'gpforum';
+const my $DEFAULT_DATABASE_PASSWORD       => q{};
+const my $DEFAULT_WEB_PROCESSES           => 4;
+const my $DEFAULT_WORKER_PROCESSES        => 2;
+const my $DEFAULT_REALTIME_PROCESSES      => 1;
+const my $DEFAULT_OS_FEATURE_SETTING      => 'auto';
+const my $DEFAULT_OS_AFFINITY             => 'off';
+const my $DEFAULT_OS_MIN_WORKERS          => 1;
+const my $DEFAULT_OS_MAX_OPEN_FDS         => 1024;
+const my $DEFAULT_LOCAL_CACHE_MAX_ENTRIES => 512;
+const my $DEFAULT_CATEGORY_CACHE_TTL      => 30;
+const my $MINIMUM_PROCESS_COUNT           => 1;
+const my $MAXIMUM_PROCESS_COUNT           => 512;
+const my $MINIMUM_OS_THRESHOLD            => 1;
+const my %VALID_OS_FEATURE_SETTING        => map { $_ => 1 } qw(auto on off);
+const my %VALID_OS_AFFINITY               => map { $_ => 1 } qw(off manual);
 
 has environment                  => sub { return $DEFAULT_ENVIRONMENT; };
 has log_level                    => sub { return $DEFAULT_LOG_LEVEL; };
@@ -47,6 +49,8 @@ has os_static_xsendfile          => sub { return $DEFAULT_OS_FEATURE_SETTING; };
 has os_affinity                  => sub { return $DEFAULT_OS_AFFINITY; };
 has os_min_recommended_workers   => sub { return $DEFAULT_OS_MIN_WORKERS; };
 has os_max_open_file_descriptors => sub { return $DEFAULT_OS_MAX_OPEN_FDS; };
+has local_cache_max_entries => sub { return $DEFAULT_LOCAL_CACHE_MAX_ENTRIES; };
+has category_cache_ttl_seconds => sub { return $DEFAULT_CATEGORY_CACHE_TTL; };
 
 sub from_environment {
     my ( $class, $environment ) = @_;
@@ -114,6 +118,15 @@ sub from_environment {
             $environment, 'GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS',
             $DEFAULT_OS_MAX_OPEN_FDS
         ),
+        local_cache_max_entries => _env_integer(
+            $environment,
+            'GPFORUM_LOCAL_CACHE_MAX_ENTRIES',
+            $DEFAULT_LOCAL_CACHE_MAX_ENTRIES
+        ),
+        category_cache_ttl_seconds => _env_integer(
+            $environment, 'GPFORUM_CATEGORY_CACHE_TTL_SECONDS',
+            $DEFAULT_CATEGORY_CACHE_TTL
+        ),
     );
 
     $self->validate;
@@ -144,6 +157,10 @@ sub validate {
         $self->os_min_recommended_workers );
     _require_os_threshold( 'os_max_open_file_descriptors',
         $self->os_max_open_file_descriptors );
+    _require_positive_integer( 'local_cache_max_entries',
+        $self->local_cache_max_entries );
+    _require_positive_integer( 'category_cache_ttl_seconds',
+        $self->category_cache_ttl_seconds );
 
     if (   $self->environment eq 'production'
         && $self->session_secret eq $DEFAULT_SESSION_SECRET )
@@ -255,6 +272,15 @@ sub _require_os_threshold {
 
     croak "$name must be >= $MINIMUM_OS_THRESHOLD"
       if $value < $MINIMUM_OS_THRESHOLD;
+
+    return;
+}
+
+sub _require_positive_integer {
+    my ( $name, $value ) = @_;
+
+    croak "$name must be >= 1"
+      if $value < 1;
 
     return;
 }

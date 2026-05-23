@@ -17,6 +17,7 @@ our $VERSION = '0.001';
 const my $MILLISECONDS_PER_SECOND => 1000;
 
 has clock               => sub { return GPForum::Service::Clock->new; };
+has local_caches        => sub { return []; };
 has schema              => undef;
 has rate_limiter        => undef;
 has realtime_hub        => undef;
@@ -42,6 +43,7 @@ sub collect {
         os_sockets         => $self->_runtime_os_sockets,
         os_processes       => $self->_runtime_os_processes,
         os_preflight       => $self->_runtime_os_preflight,
+        local_caches       => $self->_local_caches,
         realtime           => $self->_realtime,
         rate_limits        => $self->_rate_limits,
         projections        => $self->_projections,
@@ -114,6 +116,15 @@ sub _realtime {
     return {} if !$self->realtime_hub;
 
     return $self->realtime_hub->snapshot;
+}
+
+sub _local_caches {
+    my ($self) = @_;
+
+    return [
+        grep { defined }
+        map  { $_->snapshot } @{ $self->local_caches }
+    ];
 }
 
 sub _rate_limits {

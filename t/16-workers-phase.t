@@ -10,6 +10,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Test::IdempotencyStore;
 use GPForum::Test::Minion;
@@ -27,18 +28,27 @@ use GPForum::Worker::MinionRegistrar;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 42;
+const my $EXPECTED_TESTS => 45;
 const my $OUTBOX_LIMIT   => 7;
 const my $POST_HANDLERS  => 3;
 
 plan tests => $EXPECTED_TESTS;
 
-my $sink      = GPForum::Test::WorkerSink->new;
+my $sink  = GPForum::Test::WorkerSink->new;
+my $cache = GPForum::Service::Operations::LocalCache->new;
+$cache->put(
+    'thread-page:thread-1',
+    { cached => 1 },
+    { tags   => ['thread:thread-1'] }
+);
 my $transport = GPForum::Service::Outbox::DomainEventTransport->new(
     handlers => [
         GPForum::Worker::Handler::SearchIndexing->new( sink => $sink ),
         GPForum::Worker::Handler::NotificationDispatch->new( sink => $sink ),
-        GPForum::Worker::Handler::CacheInvalidation->new( sink => $sink ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            cache => $cache,
+            sink  => $sink,
+        ),
         GPForum::Worker::Handler::AttachmentScanning->new( sink => $sink ),
         GPForum::Worker::Handler::MediaProcessing->new( sink => $sink ),
     ],
@@ -75,6 +85,13 @@ is( $sink->records->[2]{action},
     'cache.invalidate', 'cache handler records invalidation action' );
 is( $sink->records->[2]{aggregate_id},
     'post-1', 'cache handler records aggregate id' );
+is_deeply(
+    $sink->records->[2]{tags},
+    [ 'posts', 'post:post-1', 'thread:thread-1' ],
+    'cache handler records invalidation tags'
+);
+is( $cache->snapshot->{entries},
+    0, 'cache handler invalidates matching local cache entries' );
 
 my $thread_message = GPForum::Test::OutboxPayloadRow->new(
     data => {
@@ -90,6 +107,11 @@ my $thread_dispatch = $transport->dispatch($thread_message);
 
 is( $thread_dispatch->{handlers},
     2, 'thread event dispatches to search and cache handlers' );
+is_deeply(
+    $sink->records->[-1]{tags},
+    [ 'threads', 'forum-index', 'thread:thread-1' ],
+    'thread cache invalidation records thread tags'
+);
 
 my $unknown_message = GPForum::Test::OutboxPayloadRow->new(
     data => {

@@ -12,13 +12,14 @@ use lib 't/lib';
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::PostPosition;
 use GPForum::Service::Forum::ThreadDetailReader;
+use GPForum::Service::Operations::LocalCache;
 use GPForum::Test::ForumReadResultSet;
 use GPForum::Test::ForumReadRow;
 use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 16;
+const my $EXPECTED_TESTS      => 19;
 const my $NEXT_REPLY_POSITION => 3;
 
 plan tests => $EXPECTED_TESTS;
@@ -72,6 +73,21 @@ is( $category_reader->find_category('category-1')->get_column('title'),
     'General', 'category reader finds visible category' );
 is( $category_reader->find_category('missing'),
     undef, 'missing category is undef' );
+
+my $cached_category_reader = GPForum::Service::Forum::CategoryReader->new(
+    cache  => GPForum::Service::Operations::LocalCache->new,
+    schema => $schema,
+);
+my $cached_categories =
+  $cached_category_reader->list_categories( { limit => 10 } );
+my $after_cache_miss_count = $schema->resultset('Category')->search_count;
+$cached_category_reader->list_categories( { limit => 10 } );
+is( scalar @{$cached_categories},
+    1, 'cached category reader returns categories' );
+is( $after_cache_miss_count, 2,
+    'cached category reader queries on first cache miss' );
+is( $schema->resultset('Category')->search_count,
+    2, 'cached category reader avoids second query' );
 
 my $detail_reader =
   GPForum::Service::Forum::ThreadDetailReader->new( schema => $schema );

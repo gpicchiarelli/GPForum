@@ -153,6 +153,11 @@ or degraded host capabilities are visible before production traffic depends on
 them. `GPFORUM_OS_MIN_RECOMMENDED_WORKERS` and
 `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS` provide conservative readiness thresholds
 for host capacity posture.
+The process-local disposable cache is implemented in pure Perl with namespace,
+TTL, max-entry, key invalidation, tag invalidation, and metrics. It is wired
+only into read-mostly category lists by default through
+`GPFORUM_LOCAL_CACHE_MAX_ENTRIES` and `GPFORUM_CATEGORY_CACHE_TTL_SECONDS`;
+worker cache invalidation consumes domain events and invalidates matching tags.
 Local generated files have a dedicated atomic-write helper under
 `GPForum::OS::Filesystem`.
 

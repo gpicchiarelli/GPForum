@@ -11,6 +11,7 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Runtime;
+use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::QueryBudget;
@@ -25,7 +26,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 55;
+const my $EXPECTED_TESTS            => 59;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -45,6 +46,7 @@ const my $STRICT_WORKER_THRESHOLD   => 99;
 const my $STRICT_FD_THRESHOLD       => 1;
 const my $THREAD_VIEW_QUERY_BUDGET  => 8;
 const my $EXCESSIVE_QUERY_COUNT     => 9;
+const my $CACHE_ENTRIES             => 1;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -115,8 +117,14 @@ my $runtime = GPForum::Runtime->new(
 );
 my $hub = GPForum::Service::Realtime::Hub->new;
 $hub->register_connection( 'connection-1', { user_id => 'user-1' }, undef );
+my $local_cache = GPForum::Service::Operations::LocalCache->new(
+    clock     => $clock,
+    namespace => 'metrics-cache',
+);
+$local_cache->put( 'categories:list', [] );
 my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
     clock               => $clock,
+    local_caches        => [$local_cache],
     runtime             => $runtime,
     realtime_hub        => $hub,
     rate_limiter        => $limiter,
@@ -155,6 +163,12 @@ ok(
     exists $metrics->{os_preflight}{checks},
     'metrics exposes OS preflight checks'
 );
+is( $metrics->{local_caches}[0]{namespace},
+    'metrics-cache', 'metrics exposes local cache namespace' );
+is( $metrics->{local_caches}[0]{entries},
+    $CACHE_ENTRIES, 'metrics exposes local cache entry count' );
+is( $metrics->{local_caches}[0]{stats}{writes},
+    $CACHE_ENTRIES, 'metrics exposes local cache writes' );
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
 is( $metrics->{rate_limits}{buckets},
@@ -308,6 +322,7 @@ my $test = Test::Mojo->new('GPForum');
 $test->get_ok('/metrics');
 $test->status_is($HTTP_OK);
 $test->json_has('/runtime/web_processes');
+$test->json_has('/local_caches/0/namespace');
 $test->json_is( '/rate_limits/buckets'  => $EXHAUSTED_ALLOWANCE );
 $test->json_is( '/realtime/connections' => $EXHAUSTED_ALLOWANCE );
 

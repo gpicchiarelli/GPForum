@@ -22,6 +22,7 @@ use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Operations::Readiness;
@@ -58,6 +59,16 @@ sub startup {
     $self->helper(
         gp_session_token => sub { return GPForum::Service::SessionToken->new; }
     );
+    my $local_cache;
+    $self->helper(
+        gp_local_cache => sub {
+            $local_cache ||= GPForum::Service::Operations::LocalCache->new(
+                max_entries => $config->local_cache_max_entries,
+                namespace   => 'gpforum',
+            );
+            return $local_cache;
+        }
+    );
     $self->helper( gp_registration =>
           sub { return GPForum::Service::Identity::Registration->new; } );
     $self->helper(
@@ -89,6 +100,7 @@ sub startup {
                 schema       => $controller->gp_schema,
                 realtime_hub => $controller->gp_realtime_hub,
                 rate_limiter => $controller->gp_rate_limiter,
+                local_caches => [ $controller->gp_local_cache ],
             );
         }
     );
@@ -108,7 +120,10 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Forum::CategoryReader->new(
-                schema => $controller->gp_schema );
+                cache             => $controller->gp_local_cache,
+                cache_ttl_seconds => $config->category_cache_ttl_seconds,
+                schema            => $controller->gp_schema,
+            );
         }
     );
     $self->helper(

@@ -8,28 +8,23 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_LIMIT => 100;
-const my $MAX_LIMIT     => 200;
+const my $DEFAULT_LIMIT             => 100;
+const my $MAX_LIMIT                 => 200;
+const my $DEFAULT_CACHE_TTL_SECONDS => 30;
 
-has schema => undef;
+has cache             => undef;
+has cache_ttl_seconds => sub { return $DEFAULT_CACHE_TTL_SECONDS; };
+has schema            => undef;
 
 sub list_categories {
     my ( $self, $request ) = @_;
 
-    my $limit  = _bounded_limit( $request ? $request->{limit} : undef );
-    my $search = $self->schema->resultset('Category')->search(
-        { deleted_at => undef },
-        {
-            order_by => [
-                { -asc => 'position' },
-                { -asc => 'title' },
-                { -asc => 'category_id' },
-            ],
-            rows => $limit,
-        }
-    );
+    my $limit = _bounded_limit( $request ? $request->{limit} : undef );
 
-    return [ _rows($search) ];
+    return $self->_cached_categories($limit)
+      if $self->cache;
+
+    return $self->_list_categories($limit);
 }
 
 sub find_category {
@@ -43,6 +38,41 @@ sub find_category {
     return if defined $row->get_column('deleted_at');
 
     return $row;
+}
+
+sub _cached_categories {
+    my ( $self, $limit ) = @_;
+
+    my $key = join q{:}, 'categories', 'list', $limit;
+
+    return $self->cache->get_or_set(
+        $key,
+        sub {
+            return $self->_list_categories($limit);
+        },
+        {
+            tags        => [ 'categories', 'forum-index' ],
+            ttl_seconds => $self->cache_ttl_seconds,
+        }
+    );
+}
+
+sub _list_categories {
+    my ( $self, $limit ) = @_;
+
+    my $search = $self->schema->resultset('Category')->search(
+        { deleted_at => undef },
+        {
+            order_by => [
+                { -asc => 'position' },
+                { -asc => 'title' },
+                { -asc => 'category_id' },
+            ],
+            rows => $limit,
+        }
+    );
+
+    return [ _rows($search) ];
 }
 
 sub _bounded_limit {
