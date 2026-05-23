@@ -19,15 +19,16 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 269;
-const my $EXPECTED_MIGRATIONS          => 8;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 21;
+const my $EXPECTED_TESTS               => 297;
+const my $EXPECTED_MIGRATIONS          => 9;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 24;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
 const my $ATTACHMENT_MIGRATION_INDEX   => 5;
 const my $ADVANCED_COMMUNITY_INDEX     => 6;
 const my $MODERATION_REVIEW_INDEX      => 7;
+const my $ADMIN_AUTHORIZATION_INDEX    => 8;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -52,6 +53,11 @@ my $user_feed_item_source          = $schema->source('UserFeedItem');
 my $report_source                  = $schema->source('Report');
 my $moderation_action_source       = $schema->source('ModerationAction');
 my $suspension_source              = $schema->source('Suspension');
+my $role_source                    = $schema->source('Role');
+my $permission_source              = $schema->source('Permission');
+my $role_permission_source         = $schema->source('RolePermission');
+my $role_binding_source            = $schema->source('RoleBinding');
+my $resource_acl_source            = $schema->source('ResourceAcl');
 my $projection_offset_source       = $schema->source('ProjectionOffset');
 my $projection_generation_source   = $schema->source('ProjectionGeneration');
 
@@ -291,6 +297,55 @@ ok( $suspension_source->has_column('revoked_at'),
     'suspension supports revocation' );
 ok( $suspension_source->has_relationship('user'),
     'suspension belongs to user' );
+
+is( $role_source->from, 'roles', 'role source maps table' );
+is_deeply( [ $role_source->primary_columns ],
+    ['role_id'], 'role primary key is explicit' );
+ok( $role_source->has_column('name'), 'role stores name' );
+ok( $role_source->has_relationship('role_permissions'),
+    'role has role permissions' );
+ok( $role_source->has_relationship('role_bindings'), 'role has role bindings' );
+
+is( $permission_source->from, 'permissions', 'permission source maps table' );
+is_deeply( [ $permission_source->primary_columns ],
+    ['permission_id'], 'permission primary key is explicit' );
+ok( $permission_source->has_column('resource_type'),
+    'permission stores resource type' );
+ok( $permission_source->has_column('action'), 'permission stores action' );
+ok( $permission_source->has_relationship('role_permissions'),
+    'permission has role permissions' );
+
+is( $role_permission_source->from,
+    'role_permissions', 'role permission source maps table' );
+is_deeply(
+    [ $role_permission_source->primary_columns ],
+    [ 'role_id', 'permission_id' ],
+    'role permission primary key is explicit'
+);
+ok( $role_permission_source->has_relationship('role'),
+    'role permission belongs to role' );
+ok( $role_permission_source->has_relationship('permission'),
+    'role permission belongs to permission' );
+
+is( $role_binding_source->from,
+    'role_bindings', 'role binding source maps table' );
+is_deeply( [ $role_binding_source->primary_columns ],
+    ['binding_id'], 'role binding primary key is explicit' );
+ok( $role_binding_source->has_column('created_by_user_id'),
+    'role binding stores creator' );
+ok( $role_binding_source->has_relationship('user'),
+    'role binding belongs to user' );
+ok( $role_binding_source->has_relationship('role'),
+    'role binding belongs to role' );
+
+is( $resource_acl_source->from,
+    'resource_acl', 'resource acl source maps table' );
+is_deeply( [ $resource_acl_source->primary_columns ],
+    ['acl_id'], 'resource acl primary key is explicit' );
+ok( $resource_acl_source->has_column('permission_id'),
+    'resource acl stores permission' );
+ok( $resource_acl_source->has_relationship('permission'),
+    'resource acl belongs to permission' );
 
 is( $projection_offset_source->from,
     'projection_offsets',
@@ -918,6 +973,30 @@ like(
 );
 like( $moderation_review_sql, qr/idx_reports_queue/msx,
     'moderation review migration indexes report queue' );
+
+my $admin_authorization_sql =
+  path( $summary->[$ADMIN_AUTHORIZATION_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$ADMIN_AUTHORIZATION_INDEX]->{description},
+    'admin authorization',
+    'admin authorization migration description is parsed'
+);
+like(
+    $admin_authorization_sql,
+    qr/ALTER [ ] TABLE [ ] role_bindings/msx,
+    'admin authorization migration extends role bindings'
+);
+like( $admin_authorization_sql, qr/created_by_user_id/msx,
+    'admin authorization migration records role binding creator' );
+my $admin_role_audit_table = qr/admin_role_audit_projection/msx;
+like( $admin_authorization_sql, $admin_role_audit_table,
+    'admin authorization migration creates role audit projection' );
+like(
+    $admin_authorization_sql,
+    qr/idx_admin_role_audit_projection_actor/msx,
+    'admin authorization migration indexes role audit projection'
+);
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;
 my $runner           = GPForum::Migration::Runner->new(

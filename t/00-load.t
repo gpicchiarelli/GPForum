@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 97;
+const my $TEST_COUNT => 105;
 
 plan tests => $TEST_COUNT;
 
@@ -44,6 +44,7 @@ use_ok('GPForum::Schema::Result::NotificationInbox');
 use_ok('GPForum::Schema::Result::NotificationPreference');
 use_ok('GPForum::Schema::Result::NotificationRead');
 use_ok('GPForum::Schema::Result::OutboxMessage');
+use_ok('GPForum::Schema::Result::Permission');
 use_ok('GPForum::Schema::Result::Post');
 use_ok('GPForum::Schema::Result::PostBody');
 use_ok('GPForum::Schema::Result::PostRevision');
@@ -51,6 +52,10 @@ use_ok('GPForum::Schema::Result::ProjectionGeneration');
 use_ok('GPForum::Schema::Result::ProjectionOffset');
 use_ok('GPForum::Schema::Result::ReputationEvent');
 use_ok('GPForum::Schema::Result::Report');
+use_ok('GPForum::Schema::Result::ResourceAcl');
+use_ok('GPForum::Schema::Result::Role');
+use_ok('GPForum::Schema::Result::RoleBinding');
+use_ok('GPForum::Schema::Result::RolePermission');
 use_ok('GPForum::Schema::Result::SearchDocument');
 use_ok('GPForum::Schema::Result::Session');
 use_ok('GPForum::Schema::Result::Space');
@@ -72,6 +77,9 @@ use_ok('GPForum::Service::Community::FeedProjector');
 use_ok('GPForum::Service::Community::MentionExtractor');
 use_ok('GPForum::Service::Community::ReputationLedger');
 use_ok('GPForum::Service::Admin::AuditReview');
+use_ok('GPForum::Service::Admin::PermissionReview');
+use_ok('GPForum::Service::Admin::RoleBindingStore');
+use_ok('GPForum::Service::Admin::RoleCatalog');
 use_ok('GPForum::Service::Identity::Registration');
 use_ok('GPForum::Service::Identity::Store');
 use_ok('GPForum::Service::Moderation::ActionStore');

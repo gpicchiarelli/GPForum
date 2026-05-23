@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added admin authorization management boundaries for role catalogs, scoped role
+  bindings, permission review, and audit-backed role changes.
 - Added moderation review boundaries for reports, reversible moderation actions,
   suspensions, audit-backed moderation changes, and admin audit browsing.
 - Added advanced community feature boundaries for mention extraction,

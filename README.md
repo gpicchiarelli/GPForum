@@ -110,9 +110,10 @@ This repository currently contains:
 * operations hardening boundaries for rate limiting, metrics snapshots, runbook validation, and runtime sizing;
 * advanced community boundaries for mentions, bookmarks, reputation, trust snapshots, and user feed projection;
 * moderation review boundaries for reports, reversible moderation actions, suspensions, and admin audit review;
+* admin authorization boundaries for role catalogs, scoped role bindings, permission review, and audit-backed role changes;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 11: Moderation Review** service
+The current implementation has reached **Milestone 12: Admin Authorization Management** service
 boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture

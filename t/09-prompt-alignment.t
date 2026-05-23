@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 76;
+const my $EXPECTED_TESTS => 85;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -116,6 +116,15 @@ for my $required_term (
     reports
     moderation_actions
     suspensions
+    RoleCatalog
+    RoleBindingStore
+    PermissionReview
+    roles
+    permissions
+    role_permissions
+    role_bindings
+    resource_acl
+    admin_role_audit_projection
     SubscriptionStore
     PreferenceStore
     NotificationDispatcher

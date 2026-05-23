@@ -71,6 +71,10 @@ sub _row_keys {
               moderation_action_id
               suspension_id
               audit_id
+              role_id
+              permission_id
+              binding_id
+              acl_id
               post_id
               thread_id
             )

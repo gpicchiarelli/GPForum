@@ -230,6 +230,14 @@ moderation actions to posts and threads while creating moderation_actions and
 audit_log records. AuditReview MUST expose read-only admin audit browsing.
 reports, moderation_actions, and suspensions MUST remain explicit tables.
 
+Admin authorization management MUST use narrow RoleCatalog, RoleBindingStore,
+and PermissionReview boundaries. RoleCatalog MUST manage roles, permissions, and
+role_permissions without evaluating runtime access. RoleBindingStore MUST create
+and revoke scoped role_bindings while writing audit_log records. PermissionReview
+MUST expose read-only role and permission review paths. roles, permissions,
+role_permissions, role_bindings, resource_acl, and
+admin_role_audit_projection MUST remain explicit tables/projections.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.
