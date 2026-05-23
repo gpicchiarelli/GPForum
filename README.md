@@ -3,11 +3,40 @@
 ![GPForum hero](assets/img/gpforum-hero.png)
 
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-a6532f.svg)](LICENSE)
-[![Perl](https://img.shields.io/badge/runtime-Perl-214237.svg)](cpanfile)
+[![Project Status](https://img.shields.io/badge/status-architecture%20phase-214237.svg)](prompt/20.txt)
+[![Repository](https://img.shields.io/badge/repository-private-111412.svg)](https://github.com/gpicchiarelli/GPForum)
+[![Prompt Constitutions](https://img.shields.io/badge/prompt%20constitutions-42-a6532f.svg)](prompt)
+
+[![Perl](https://img.shields.io/badge/runtime-Perl%205.38%2B-214237.svg)](cpanfile)
+[![Perl First](https://img.shields.io/badge/application-Perl--first-63735f.svg)](prompt/40.txt)
+[![Multi Process](https://img.shields.io/badge/scaling-multi--process%20Perl-3f5f72.svg)](prompt/40.txt)
 [![Mojolicious](https://img.shields.io/badge/web-Mojolicious-c9835a.svg)](https://mojolicious.org/)
+[![DBIx::Class](https://img.shields.io/badge/ORM-DBIx::Class-3f5f72.svg)](https://metacpan.org/pod/DBIx::Class)
+[![Minion](https://img.shields.io/badge/workers-Minion-a6532f.svg)](https://metacpan.org/pod/Minion)
+
+[![PostgreSQL](https://img.shields.io/badge/database-PostgreSQL-214237.svg)](prompt/3.txt)
 [![PostgreSQL Native Search](https://img.shields.io/badge/search-PostgreSQL%20FTS-3f5f72.svg)](prompt/42.txt)
+[![pg_trgm](https://img.shields.io/badge/search-pg__trgm-63735f.svg)](prompt/42.txt)
+[![OpenSearch](https://img.shields.io/badge/OpenSearch-optional%20only-c9835a.svg)](prompt/42.txt)
+[![Redis](https://img.shields.io/badge/Redis%2FKeyDB-optional%20acceleration-c9835a.svg)](prompt/19.txt)
+
 [![Carton](https://img.shields.io/badge/deps-Carton-63735f.svg)](cpanfile.snapshot)
+[![Lockfile](https://img.shields.io/badge/deps-locked-214237.svg)](cpanfile.snapshot)
 [![Perl::Critic](https://img.shields.io/badge/critic-brutal-111412.svg)](.perlcriticrc)
+[![Coverage](https://img.shields.io/badge/coverage-mandatory-a6532f.svg)](prompt/41.txt)
+[![Profiling](https://img.shields.io/badge/profiling-Devel::NYTProf-3f5f72.svg)](script/profile)
+[![Devel::Cover](https://img.shields.io/badge/coverage-Devel::Cover-63735f.svg)](script/coverage)
+
+[![Rendering](https://img.shields.io/badge/rendering-SSR%20first-214237.svg)](prompt/6.txt)
+[![Security](https://img.shields.io/badge/security-defense--in--depth-111412.svg)](prompt/5.txt)
+[![Authorization](https://img.shields.io/badge/authz-RBAC%20%2B%20ABAC-a6532f.svg)](prompt/22.txt)
+[![Privacy](https://img.shields.io/badge/privacy-GDPR--ready-3f5f72.svg)](prompt/26.txt)
+[![Governance](https://img.shields.io/badge/governance-explicit-63735f.svg)](prompt/32.txt)
+
+[![Debian](https://img.shields.io/badge/os-Debian-214237.svg)](prompt/38.txt)
+[![FreeBSD](https://img.shields.io/badge/os-FreeBSD-a6532f.svg)](prompt/38.txt)
+[![Nginx or HAProxy](https://img.shields.io/badge/edge-Nginx%20%7C%20HAProxy-3f5f72.svg)](prompt/2.txt)
+[![BSD-3 Compatible](https://img.shields.io/badge/license-compatible%20with%20commercial%20use-63735f.svg)](LICENSE)
 
 **GPForum is an independent, Perl-native community platform for durable forums, explicit governance, serious moderation, and long-term operational clarity.**
 
@@ -197,4 +226,3 @@ Known final decisions:
 ## License
 
 BSD-3-Clause. See [LICENSE](LICENSE).
-
