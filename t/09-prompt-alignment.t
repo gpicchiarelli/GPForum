@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 110;
+const my $EXPECTED_TESTS => 122;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -163,6 +163,18 @@ for my $required_term (
     account_deletion
     data_rights
     legal_hold
+    CanonicalUrl
+    MetadataBuilder
+    RobotsPolicy
+    SitemapBuilder
+    FeedBuilder
+    VisibilityPolicy
+    canonical_url
+    robots_txt
+    sitemap
+    public_feed
+    noindex
+    public_discovery
     )
   )
 {

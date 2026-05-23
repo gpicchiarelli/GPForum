@@ -684,6 +684,36 @@ retention jobs MUST be authenticated, audited, rate-limited, and abuse-aware.
 
 ---
 
+Public Discovery And Syndication Contract
+
+Public discovery MUST improve discoverability only where policy allows. SEO MUST
+never override privacy, security, moderation state, deletion state, or
+authorization.
+
+Discovery workflows MUST use narrow public_discovery modules:
+
+* CanonicalUrl for canonical_url generation and safe legacy redirects;
+* MetadataBuilder for title, description, canonical link, noindex, and safe
+  snippets;
+* RobotsPolicy for robots_txt output and explicit disallow rules;
+* SitemapBuilder for sitemap entries and XML rendering;
+* FeedBuilder for public_feed items with safe excerpts;
+* VisibilityPolicy for shared public discovery visibility checks.
+
+Private, hidden, deleted, quarantined, restricted, or moderated content MUST NOT
+appear in metadata descriptions, sitemap entries, public feeds, robots-driven
+discovery hints, snippets, counts, or autocomplete.
+
+Canonical thread URLs MUST include stable id plus human-readable slug. Slug
+changes MUST NOT break canonical access. Legacy redirects MUST preserve old URLs
+only when the target remains safe to expose.
+
+Search result pages SHOULD be noindex unless explicitly designed for public
+discovery. Feeds MUST expose safe excerpts by default and MUST NOT expose full
+body content unless a reviewed policy allows it.
+
+---
+
 Milestone Definition Of Done
 
 Every milestone MUST include:

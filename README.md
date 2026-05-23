@@ -114,9 +114,10 @@ This repository currently contains:
 * import/export portability boundaries for manifest validation, dry-run import jobs, legacy id mapping, failure reporting, and privacy-aware export manifests;
 * plugin extension boundaries for manifest validation, plugin registry lifecycle, named hook dispatch, and observable plugin failures;
 * privacy rights boundaries for account deletion requests, erasure jobs, retention legal holds, and staff data-rights review;
+* public discovery boundaries for canonical URLs, no-leak metadata, robots rules, sitemaps, and safe public feeds;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 15: Privacy Rights Operations** service
+The current implementation has reached **Milestone 16: Public Discovery And Syndication** service
 boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture

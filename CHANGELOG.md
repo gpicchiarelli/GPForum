@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added public discovery and syndication boundaries for canonical URLs, safe
+  metadata, robots.txt rules, sitemap entries, feed items, and prompt alignment.
 - Added privacy rights operation boundaries for deletion requests, erasure jobs,
   retention legal holds, staff review, and DBIx::Class mapping coverage for the
   existing platform governance tables.
