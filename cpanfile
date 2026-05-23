@@ -15,6 +15,7 @@ requires 'UUID::Tiny';
 requires 'Crypt::Argon2';
 requires 'Email::Sender';
 requires 'Email::MIME';
+requires 'Const::Fast';
 
 on develop => sub {
     requires 'Perl::Critic';

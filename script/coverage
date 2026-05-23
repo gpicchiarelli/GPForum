@@ -8,5 +8,4 @@ fi
 
 rm -rf cover_db
 HARNESS_PERL_SWITCHES=-MDevel::Cover carton exec prove -lr t "$@"
-exec carton exec cover
-
+exec carton exec -- cover -select_re '^(lib/GPForum|t)/'

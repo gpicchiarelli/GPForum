@@ -15,7 +15,7 @@ tmp_file="${TMPDIR:-/tmp}/gpforum-perlcritic-files.$$"
 trap 'rm -f "$tmp_file"' EXIT HUP INT TERM
 
 find bin lib script t \
-    -type f \( -name '*.pm' -o -name '*.pl' -o -name '*.t' \) \
+    -type f \( -path 'bin/*' -o -name '*.pm' -o -name '*.pl' -o -name '*.t' \) \
     > "$tmp_file" 2>/dev/null || true
 
 if [ ! -s "$tmp_file" ]; then

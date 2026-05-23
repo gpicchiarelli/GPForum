@@ -1,0 +1,16 @@
+% layout 'default';
+% title 'GPForum';
+
+<section>
+  <h1>GPForum</h1>
+  <p>Milestone zero application skeleton is running.</p>
+  <dl>
+    <dt>Web processes</dt>
+    <dd><%= $runtime->{web_processes} %></dd>
+    <dt>Worker processes</dt>
+    <dd><%= $runtime->{worker_processes} %></dd>
+    <dt>Realtime processes</dt>
+    <dd><%= $runtime->{realtime_processes} %></dd>
+  </dl>
+</section>
+
