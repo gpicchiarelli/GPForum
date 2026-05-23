@@ -1,149 +1,200 @@
 # GPForum
 
-GPForum is an independent, Perl-native community platform project for durable forums, explicit governance, serious moderation, and long-term operational clarity.
+![GPForum hero](assets/img/gpforum-hero.png)
 
-The repository currently contains:
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-a6532f.svg)](LICENSE)
+[![Perl](https://img.shields.io/badge/runtime-Perl-214237.svg)](cpanfile)
+[![Mojolicious](https://img.shields.io/badge/web-Mojolicious-c9835a.svg)](https://mojolicious.org/)
+[![PostgreSQL Native Search](https://img.shields.io/badge/search-PostgreSQL%20FTS-3f5f72.svg)](prompt/42.txt)
+[![Carton](https://img.shields.io/badge/deps-Carton-63735f.svg)](cpanfile.snapshot)
+[![Perl::Critic](https://img.shields.io/badge/critic-brutal-111412.svg)](.perlcriticrc)
 
-* a static public platform page in `index.html`;
-* visual assets under `assets/`;
-* architectural prompt constitutions under `prompt/`;
-* a strict Perl::Critic profile for future implementation.
+**GPForum is an independent, Perl-native community platform for durable forums, explicit governance, serious moderation, and long-term operational clarity.**
 
-Open `index.html` directly in a browser to preview the public platform page.
+It is designed as a PostgreSQL-centric, multi-process Perl system: Mojolicious for the web layer, DBIx::Class for persistence, Minion for asynchronous work, PostgreSQL full-text search for retrieval, Carton for reproducible dependencies, and strict profiling/coverage discipline from the first implementation milestone.
 
-## Prompt Architecture
+## About
 
-GPForum is a Perl-native, PostgreSQL-centric, distributed forum architecture described through mandatory prompt constitutions.
+GPForum starts from an architectural constitution rather than a pile of incidental code. The repository defines how the platform should behave, scale, test, profile, govern itself, and evolve before the first production subsystem is generated.
 
-These prompts are not casual notes. They are the architectural contract for future AI-assisted implementation, review, and long-term project governance.
+The goal is not to clone legacy forum software. GPForum is intended to become a modern independent platform for communities that need:
 
-## Reading Order
+* durable public discussion;
+* transparent moderation and appeals;
+* scoped authorization;
+* server-rendered speed;
+* PostgreSQL-native search;
+* Perl-first operational simplicity;
+* reproducible builds;
+* profiling and coverage as release gates;
+* long-term maintainability.
 
-Read the prompts in this order:
+## Current Status
 
-1. `prompt/1.txt` - foundational architecture constitution
-2. `prompt/2.txt` through `prompt/16.txt` - core technical constitutions
-3. `prompt/17.txt` - community/product operations
-4. `prompt/19.txt` - final cache and Redis decision
-5. `prompt/20.txt` through `prompt/27.txt` - implementation bridge, schema, workflows, UX, privacy, operations
-6. `prompt/28.txt` through `prompt/39.txt` - bootstrap, environment, communication, admin, policy, import/export, SEO, plugins, testing, contracts, deployment, and prompt governance
-7. `prompt/40.txt` - authoritative Perl multi-process and threading scalability model
-8. `prompt/41.txt` - profiling, coverage, Carton, and Perl automation model
+This repository currently contains:
 
-`prompt/18.txt` is an architectural exploration memo. It is useful context, but `prompt/19.txt` is the authoritative decision.
+* a public static platform page in [index.html](index.html);
+* visual identity assets in [assets](assets);
+* 42 architectural prompt constitutions in [prompt](prompt);
+* BSD-3 license in [LICENSE](LICENSE);
+* strict Perl::Critic configuration in [.perlcriticrc](.perlcriticrc);
+* Carton dependency manifests in [cpanfile](cpanfile) and [cpanfile.snapshot](cpanfile.snapshot);
+* PostgreSQL-specific dependency manifest in [cpanfile.postgres](cpanfile.postgres);
+* automation scripts in [script](script).
 
-## Prompt Categories
+The next implementation step is **Milestone 0**: generate the Mojolicious application skeleton under the constraints in [prompt/28.txt](prompt/28.txt).
 
-Foundational:
+## Architecture
 
-* `1.txt`
-* `2.txt`
-* `3.txt`
-* `4.txt`
-* `5.txt`
-* `6.txt`
-* `7.txt`
-* `8.txt`
-* `9.txt`
-* `10.txt`
-* `11.txt`
-* `12.txt`
-* `13.txt`
-* `14.txt`
-* `15.txt`
-* `16.txt`
+```text
+Nginx or HAProxy
+  -> multi-process Mojolicious application nodes
+  -> DBIx::Class domain/persistence layer
+  -> PostgreSQL authoritative storage
+  -> PostgreSQL FTS / pg_trgm search projections
+  -> Minion worker pools
+  -> local disposable caches
+  -> optional Redis/KeyDB acceleration
+```
 
-Product and implementation bridge:
+The application runtime is Perl-first and process-first. Threads are allowed only for bounded, reviewed workloads. Search is PostgreSQL-native by default; external search engines require an ADR and remain optional derived acceleration.
 
-* `17.txt`
-* `20.txt`
-* `21.txt`
-* `22.txt`
-* `23.txt`
-* `24.txt`
-* `25.txt`
-* `26.txt`
-* `27.txt`
+## Core Decisions
 
-Final architecture decisions:
+* **Language:** modern Perl.
+* **Web:** Mojolicious, server-rendered first.
+* **Persistence:** PostgreSQL as authoritative system of record.
+* **Search:** PostgreSQL full-text search, `tsvector`, GIN, `pg_trgm`, Perl orchestration.
+* **Async:** Minion workers.
+* **Caching:** local disposable caches, Redis/KeyDB optional.
+* **Dependencies:** Carton.
+* **Profiling:** Devel::NYTProf.
+* **Coverage:** Devel::Cover.
+* **License:** BSD-3-Clause.
 
-* `19.txt`
+## Quick Start
 
-Implementation execution prompts:
+Install base Perl dependencies:
 
-* `28.txt`
-* `29.txt`
-* `30.txt`
-* `31.txt`
-* `32.txt`
-* `33.txt`
-* `34.txt`
-* `35.txt`
-* `36.txt`
-* `37.txt`
-* `38.txt`
-* `39.txt`
-* `40.txt`
-* `41.txt`
+```sh
+script/bootstrap-deps
+```
 
-## Precedence Rules
+Check system prerequisites:
 
-When prompts conflict:
+```sh
+script/system-preflight
+```
+
+Run quality commands:
+
+```sh
+script/perlcritic
+script/test
+script/coverage
+script/profile -e 'print qq(profile ok\n)'
+```
+
+Enable PostgreSQL-specific Perl modules after installing system PostgreSQL client development files:
+
+```sh
+script/bootstrap-deps --postgres
+```
+
+On Debian/Ubuntu:
+
+```sh
+sudo apt install libpq-dev
+```
+
+On FreeBSD:
+
+```sh
+sudo pkg install postgresql16-client
+```
+
+## Public Page
+
+Preview the platform page locally:
+
+```sh
+python3 -m http.server 8000
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000/index.html
+```
+
+## Prompt Map
+
+Foundational architecture:
+
+* [1](prompt/1.txt) Foundation
+* [2](prompt/2.txt) Infrastructure
+* [3](prompt/3.txt) Database
+* [4](prompt/4.txt) Perl engineering
+* [5](prompt/5.txt) Security
+* [6](prompt/6.txt) Frontend
+* [7](prompt/7.txt) Realtime
+* [8](prompt/8.txt) Workers
+* [9](prompt/9.txt) Authorization and governance
+* [10](prompt/10.txt) Observability
+* [11](prompt/11.txt) CI/CD
+* [12](prompt/12.txt) APIs
+* [13](prompt/13.txt) Domain model
+* [14](prompt/14.txt) Search
+* [15](prompt/15.txt) Performance
+* [16](prompt/16.txt) Software engineering
+
+Implementation and operations:
+
+* [17](prompt/17.txt) Community operations
+* [19](prompt/19.txt) Cache and Redis decision
+* [20](prompt/20.txt) MVP roadmap
+* [21](prompt/21.txt) Initial schema
+* [22](prompt/22.txt) Permission matrix
+* [23](prompt/23.txt) Event catalog
+* [24](prompt/24.txt) HTTP workflows
+* [25](prompt/25.txt) UX
+* [26](prompt/26.txt) Privacy
+* [27](prompt/27.txt) Runbooks
+* [28](prompt/28.txt) Bootstrap implementation
+* [29](prompt/29.txt) Configuration
+* [30](prompt/30.txt) Email
+* [31](prompt/31.txt) Admin console
+* [32](prompt/32.txt) Content policy
+* [33](prompt/33.txt) Import/export
+* [34](prompt/34.txt) SEO and syndication
+* [35](prompt/35.txt) Plugins
+* [36](prompt/36.txt) Test strategy
+* [37](prompt/37.txt) API contracts
+* [38](prompt/38.txt) Packaging and deployment
+* [39](prompt/39.txt) Prompt governance
+* [40](prompt/40.txt) Perl multi-process scaling
+* [41](prompt/41.txt) Profiling and coverage automation
+* [42](prompt/42.txt) PostgreSQL-native search
+
+[prompt/18.txt](prompt/18.txt) is an exploration memo. [prompt/19.txt](prompt/19.txt) and [prompt/42.txt](prompt/42.txt) are authoritative final decisions.
+
+## Precedence
+
+When documents conflict:
 
 1. Security and privacy constraints win.
-2. Authoritative final-decision prompts win over exploratory memos.
-3. More specific prompts win over general prompts within their domain.
-4. Later implementation prompts may refine, but must not silently violate, earlier constitutions.
-5. Any intentional architectural change requires an ADR.
+2. Final-decision prompts win over exploration memos.
+3. More specific domain prompts win over broad philosophy.
+4. Intentional architecture changes require ADRs.
 
-Known precedence:
+Known final decisions:
 
-* `19.txt` supersedes any interpretation that makes Redis or KeyDB mandatory for correctness.
-* `21.txt` is a starting schema blueprint, not a complete migration history.
-* `28.txt` is the canonical first-code bootstrap prompt.
+* Redis/KeyDB is optional acceleration, not correctness infrastructure.
+* OpenSearch is no longer default; PostgreSQL-native search is authoritative.
+* Perl application runtime is multi-process and process-first.
+* Carton, coverage, profiling, and Perl::Critic are mandatory automation surfaces.
 
-## How To Use With AI
+## License
 
-For architecture review, provide the relevant constitution plus this README.
+BSD-3-Clause. See [LICENSE](LICENSE).
 
-For implementation, provide:
-
-* `1.txt`
-* the domain-specific prompt
-* `20.txt`
-* `21.txt`
-* `22.txt`
-* `23.txt`
-* `24.txt`
-* `28.txt`
-* `36.txt`
-
-For production readiness, provide:
-
-* `10.txt`
-* `11.txt`
-* `15.txt`
-* `26.txt`
-* `27.txt`
-* `38.txt`
-* `40.txt`
-* `41.txt`
-
-AI-generated code MUST preserve the constraints in these prompt constitutions.
-
-## Perl Automation
-
-Carton is the mandatory Perl dependency manager for GPForum.
-
-Standard commands:
-
-* `script/bootstrap-deps`
-* `script/bootstrap-deps --postgres`
-* `script/system-preflight`
-* `script/perlcritic`
-* `script/test`
-* `script/coverage`
-* `script/profile -- <perl-program> [args...]`
-
-The base Carton install is reproducible through `cpanfile.snapshot`.
-PostgreSQL-specific Perl modules live in `cpanfile.postgres` and require system PostgreSQL client development files, including `pg_config`.

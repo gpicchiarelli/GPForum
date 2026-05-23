@@ -355,8 +355,8 @@ Search Scalability
 
 Search infrastructure MUST support:
 
-* distributed indexing;
-* shard-aware scaling;
+* worker-distributed indexing;
+* partition-aware PostgreSQL scaling;
 * asynchronous ingestion;
 * rebuild workflows.
 

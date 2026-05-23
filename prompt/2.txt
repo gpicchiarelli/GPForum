@@ -45,7 +45,6 @@ Workers / Search / Realtime
 Shared infrastructure includes:
 
 * PostgreSQL;
-* OpenSearch;
 * object storage;
 * Minion backend.
 
@@ -268,11 +267,15 @@ Redis or KeyDB MUST NOT be required for correctness.
 
 Search Infrastructure
 
-Search infrastructure MUST remain separated from the relational database.
+Search MUST be PostgreSQL-native by default.
 
-Preferred technology:
+Preferred technologies:
 
-* OpenSearch.
+* PostgreSQL full-text search;
+* tsvector;
+* GIN indexes;
+* pg_trgm;
+* Perl indexing and ranking orchestration.
 
 Search indexing MUST operate asynchronously.
 

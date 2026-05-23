@@ -19,7 +19,7 @@ The canonical coordination model is:
 * PostgreSQL LISTEN/NOTIFY for lightweight signaling;
 * Minion for durable asynchronous jobs;
 * local in-memory caches for per-node acceleration;
-* OpenSearch for derived search projections.
+* PostgreSQL-native search projections orchestrated by Perl.
 
 Redis or KeyDB MAY be introduced only as ephemeral acceleration when the operational value justifies the additional moving part.
 
@@ -27,7 +27,7 @@ Redis or KeyDB MAY be introduced only as ephemeral acceleration when the operati
 
 Non-Negotiable Rule
 
-No business-critical state may exist only in Redis, KeyDB, process memory, websocket memory, or OpenSearch.
+No business-critical state may exist only in Redis, KeyDB, process memory, websocket memory, or optional external search systems.
 
 All critical state MUST be recoverable from PostgreSQL.
 
@@ -206,4 +206,3 @@ The preferred architecture is:
 * Redis-optional.
 
 This decision supersedes any interpretation that makes Redis/KeyDB mandatory for correctness.
-

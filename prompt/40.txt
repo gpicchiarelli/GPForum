@@ -12,7 +12,7 @@ GPForum is Perl-first, not Perl-single-process.
 
 Application runtime code MUST remain Perl-only unless an ADR explicitly approves an exception.
 
-External infrastructure such as PostgreSQL, Nginx or HAProxy, OpenSearch, object storage, and operating-system supervisors MAY be used because they are infrastructure components, not application runtime languages.
+External infrastructure such as PostgreSQL, Nginx or HAProxy, object storage, and operating-system supervisors MAY be used because they are infrastructure components, not application runtime languages.
 
 The platform MUST scale the application tier through:
 
@@ -182,7 +182,7 @@ Examples:
 * digest workers;
 * import workers.
 
-Worker concurrency MUST be tuned against PostgreSQL, object storage, and OpenSearch capacity.
+Worker concurrency MUST be tuned against PostgreSQL, object storage, and search-indexing capacity.
 
 ---
 

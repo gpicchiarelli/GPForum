@@ -139,7 +139,8 @@ Milestone 6 - Search
 
 Milestone 6 MUST deliver:
 
-* OpenSearch integration;
+* PostgreSQL full-text search integration;
+* pg_trgm-backed autocomplete where appropriate;
 * indexing worker;
 * rebuild command;
 * permission-aware search filtering;

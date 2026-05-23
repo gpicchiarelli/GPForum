@@ -156,7 +156,8 @@ Examples:
 
 * database access
 * optional Redis/KeyDB access
-* OpenSearch integration
+* PostgreSQL-native search integration
+* optional external search integration
 * filesystem integration
 * object storage integration
 

@@ -57,7 +57,6 @@ Mandatory stack:
 * DBIx::Class
 * PostgreSQL
 * Minion
-* OpenSearch
 * Nginx or HAProxy
 
 Optional acceleration infrastructure:
@@ -92,8 +91,11 @@ Application nodes MUST:
 Shared state MUST reside in:
 
 * PostgreSQL;
-* object storage;
-* OpenSearch.
+* object storage.
+
+Search MUST be PostgreSQL-native by default through full-text search, trigram indexes, and Perl orchestration.
+
+External search engines MAY be added only as optional acceleration through ADR.
 
 Redis/KeyDB MAY be used only as optional ephemeral acceleration.
 

@@ -37,16 +37,35 @@ Search Architecture
 
 Preferred search technology:
 
-* OpenSearch.
+* PostgreSQL full-text search.
+
+Preferred supporting PostgreSQL features:
+
+* tsvector;
+* tsquery;
+* GIN indexes;
+* pg_trgm;
+* unaccent where appropriate;
+* language-aware text search configurations.
+
+Perl MUST own:
+
+* indexing orchestration;
+* query normalization;
+* ranking policy;
+* rebuild workflows;
+* authorization-aware filtering.
 
 The search subsystem MUST remain:
 
-* distributed;
+* PostgreSQL-native by default;
 * asynchronously synchronized;
-* independently scalable;
+* process-scalable through Perl workers;
 * operationally observable.
 
-Search infrastructure MUST remain separated from:
+External search engines MAY be added only as optional acceleration.
+
+External search engines MUST remain separated from:
 
 * transactional persistence;
 * request-critical workflows.

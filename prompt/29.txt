@@ -35,7 +35,7 @@ Each environment MUST define:
 * session secret source;
 * object storage configuration;
 * email configuration;
-* OpenSearch configuration;
+* PostgreSQL search configuration;
 * worker configuration;
 * public base URL;
 * security mode.
@@ -127,4 +127,3 @@ Local development SHOULD support:
 * deterministic seeds where useful.
 
 Local defaults MUST NOT weaken production defaults.
-

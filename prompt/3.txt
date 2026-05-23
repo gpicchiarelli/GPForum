@@ -374,9 +374,11 @@ Read models MAY include:
 
 Search Separation
 
-Search workloads MUST remain separated from relational persistence.
+Search projection workloads MUST remain separated from canonical transactional tables.
 
-The relational database MUST NOT become the primary global search engine.
+PostgreSQL MAY provide the primary search engine through full-text search and dedicated projection tables.
+
+Canonical business tables MUST NOT be abused as ad hoc search indexes.
 
 Search indexing MUST occur asynchronously.
 

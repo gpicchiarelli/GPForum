@@ -157,9 +157,9 @@ Search Rebuild Runbook
 Search rebuild MUST define:
 
 * source tables;
-* index version naming;
+* projection version naming;
 * rebuild job execution;
-* alias swap;
+* projection swap or refresh strategy;
 * validation checks;
 * rollback strategy.
 
@@ -211,4 +211,3 @@ A feature is not production-ready until its failure mode has:
 * alerts where appropriate;
 * rollback or mitigation;
 * runbook coverage.
-
