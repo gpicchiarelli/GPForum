@@ -37,6 +37,7 @@ GPForum MUST scale:
 
 * horizontally;
 * incrementally;
+* through multi-process Perl capacity;
 * operationally predictably.
 
 The architecture MUST assume:
@@ -50,6 +51,8 @@ The architecture MUST assume:
 The platform MUST prioritize:
 
 * stateless application nodes;
+* multiple Perl processes per node;
+* dynamic worker and web process counts;
 * asynchronous processing;
 * partition-aware persistence;
 * cache efficiency.
@@ -119,6 +122,8 @@ All workloads MUST maintain:
 
 * bounded memory usage;
 * bounded concurrency;
+* bounded process counts;
+* bounded thread counts where threads are used;
 * bounded queue growth;
 * bounded connection usage.
 
@@ -136,7 +141,8 @@ Application nodes MUST remain:
 
 * stateless;
 * disposable;
-* horizontally scalable.
+* horizontally scalable;
+* vertically scalable through process multiplicity.
 
 The architecture MUST support:
 

@@ -86,6 +86,7 @@ Application nodes MUST be:
 * stateless;
 * disposable;
 * horizontally scalable;
+* multi-process capable;
 * immutable when deployed.
 
 Application nodes MUST NOT:
@@ -100,7 +101,12 @@ Application nodes MUST support:
 * rolling deployment;
 * graceful restart;
 * rapid autoscaling;
+* dynamic Perl process pool resizing;
 * distributed operation.
+
+Each application node SHOULD run multiple independent Perl worker processes.
+
+The process count MUST be configurable per workload class and per deployment environment.
 
 ⸻
 
@@ -128,7 +134,8 @@ HTTP nodes MUST:
 * prioritize low request latency;
 * avoid long-running operations;
 * avoid blocking operations;
-* offload asynchronous work to workers.
+* offload asynchronous work to workers;
+* scale through multiple Perl HTTP processes.
 
 HTTP nodes MUST:
 
@@ -357,6 +364,7 @@ The deployment architecture MUST support:
 * rolling updates;
 * blue/green deployment when possible;
 * horizontal scaling;
+* vertical process scaling inside each node;
 * rapid node replacement.
 
 Containers MAY be used.

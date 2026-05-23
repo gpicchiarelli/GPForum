@@ -189,6 +189,7 @@ HTTP and websocket workloads MAY be separated operationally.
 The system MUST support:
 
 * distributed websocket clusters;
+* multiple Perl realtime processes per realtime node;
 * rolling node replacement;
 * graceful disconnect recovery.
 

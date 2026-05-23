@@ -27,6 +27,7 @@ Read the prompts in this order:
 4. `prompt/19.txt` - final cache and Redis decision
 5. `prompt/20.txt` through `prompt/27.txt` - implementation bridge, schema, workflows, UX, privacy, operations
 6. `prompt/28.txt` through `prompt/39.txt` - bootstrap, environment, communication, admin, policy, import/export, SEO, plugins, testing, contracts, deployment, and prompt governance
+7. `prompt/40.txt` - authoritative Perl multi-process and threading scalability model
 
 `prompt/18.txt` is an architectural exploration memo. It is useful context, but `prompt/19.txt` is the authoritative decision.
 
@@ -81,6 +82,7 @@ Implementation execution prompts:
 * `37.txt`
 * `38.txt`
 * `39.txt`
+* `40.txt`
 
 ## Precedence Rules
 
@@ -122,5 +124,6 @@ For production readiness, provide:
 * `26.txt`
 * `27.txt`
 * `38.txt`
+* `40.txt`
 
 AI-generated code MUST preserve the constraints in these prompt constitutions.

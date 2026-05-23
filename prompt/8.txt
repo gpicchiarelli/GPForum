@@ -43,6 +43,7 @@ Workers MUST remain:
 
 * stateless;
 * horizontally scalable;
+* multi-process scalable;
 * restart-safe;
 * replay-tolerant.
 
@@ -67,7 +68,8 @@ All slow or high-latency operations SHOULD execute through:
 
 * queued jobs;
 * asynchronous workflows;
-* distributed workers.
+* distributed workers;
+* dynamically sized Perl worker pools.
 
 ⸻
 
@@ -257,6 +259,7 @@ Long-running workloads MUST:
 * remain isolated;
 * support cancellation;
 * support timeout policies;
+* scale by process count first;
 * avoid blocking worker pools indefinitely.
 
 The architecture MUST avoid:

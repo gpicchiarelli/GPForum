@@ -350,11 +350,21 @@ Preferred runtime model:
 
 * Mojolicious event loop;
 * Mojo::IOLoop;
+* multiple independent Perl processes;
 * async workflows.
 
-The platform SHOULD avoid:
+Perl interpreter threads MAY be used only for isolated, bounded, explicitly reviewed workloads.
 
-* Perl thread-heavy architectures.
+The platform MUST avoid:
+
+* shared-state thread correctness dependencies;
+* unbounded thread creation;
+* thread pools required for request correctness;
+* thread-heavy architectures that bypass the process model.
+
+The primary concurrency unit is the Perl process.
+
+Threads are optional acceleration tools, not the foundation of correctness.
 
 ⸻
 

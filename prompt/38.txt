@@ -67,7 +67,20 @@ Each process type MUST have:
 * health behavior;
 * logging behavior;
 * restart policy;
-* resource expectations.
+* resource expectations;
+* configured process count;
+* scaling bounds.
+
+Perl runtime deployment MUST support:
+
+* multiple web processes per node;
+* multiple worker processes per node;
+* separate realtime process pools where needed;
+* process-level graceful restart;
+* dynamic resizing by configuration or supervisor;
+* explicit per-process memory and connection budgets.
+
+Perl threads MAY be enabled only for bounded internal workloads with documented safety rules.
 
 ---
 
@@ -134,4 +147,3 @@ A production package MUST include:
 * health endpoints;
 * logs and metrics;
 * rollback path.
-

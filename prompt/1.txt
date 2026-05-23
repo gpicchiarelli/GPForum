@@ -76,6 +76,7 @@ The system MUST be implemented as:
 
 * distributed modular monolith;
 * stateless application nodes;
+* multi-process Perl runtime;
 * event-driven internal workflows;
 * append-oriented persistence strategy.
 
@@ -83,6 +84,7 @@ Application nodes MUST:
 
 * be disposable;
 * support horizontal scaling;
+* support dynamic process scaling per node;
 * avoid local persistent state;
 * avoid local sessions;
 * avoid local authoritative caches.
@@ -284,6 +286,8 @@ Scaling Philosophy
 Scaling MUST prioritize:
 
 * horizontal scalability;
+* Perl process multiplicity;
+* dynamic worker pool sizing;
 * cache efficiency;
 * asynchronous processing;
 * read/write separation;
@@ -294,6 +298,13 @@ The architecture MUST assume:
 * millions of users;
 * distributed deployments;
 * multi-node synchronization.
+
+The application tier MUST scale by increasing:
+
+* Perl web processes;
+* Perl worker processes;
+* Perl realtime processes;
+* application nodes.
 
 ⸻
 

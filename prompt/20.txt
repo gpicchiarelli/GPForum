@@ -26,6 +26,7 @@ Milestone 0 - Project Skeleton
 Milestone 0 MUST deliver:
 
 * Mojolicious application skeleton;
+* configurable multi-process runtime profile;
 * DBIx::Class schema structure;
 * PostgreSQL connection;
 * migration framework;
@@ -185,6 +186,8 @@ Milestone 9 MUST deliver:
 * deployment rollback validation;
 * metrics dashboards;
 * alert rules;
+* process pool sizing validation;
+* worker concurrency validation;
 * rate limiting;
 * abuse mitigation;
 * retention jobs;
@@ -220,4 +223,3 @@ Every milestone MUST preserve:
 * testability;
 * migration safety;
 * operational visibility.
-

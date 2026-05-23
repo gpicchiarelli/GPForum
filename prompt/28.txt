@@ -13,6 +13,7 @@ Generate the smallest correct GPForum application skeleton that can evolve into 
 The bootstrap MUST produce:
 
 * Mojolicious application;
+* configurable multi-process launch profile;
 * modern Perl module layout;
 * DBIx::Class schema skeleton;
 * PostgreSQL configuration;
@@ -114,6 +115,7 @@ Initial tests MUST include:
 * app loads;
 * health route responds;
 * config validation works;
+* process/runtime configuration validates;
 * basic route rendering works.
 
 Tests MUST be runnable from a single command.
@@ -130,4 +132,3 @@ When using this prompt with an AI code generator, instruct it to:
 * keep code Perl-native;
 * add tests for generated behavior;
 * document local run commands.
-
