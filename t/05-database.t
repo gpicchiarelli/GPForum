@@ -19,22 +19,27 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 182;
-const my $EXPECTED_MIGRATIONS        => 4;
-const my $EXPECTED_RUNNER_EXECUTIONS => 9;
-const my $FORUM_MIGRATION_INDEX      => 2;
-const my $GOVERNANCE_MIGRATION_INDEX => 3;
+const my $EXPECTED_TESTS               => 203;
+const my $EXPECTED_MIGRATIONS          => 5;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 12;
+const my $FORUM_MIGRATION_INDEX        => 2;
+const my $GOVERNANCE_MIGRATION_INDEX   => 3;
+const my $NOTIFICATION_MIGRATION_INDEX => 4;
 
 plan tests => $EXPECTED_TESTS;
 
-my $schema                       = GPForum::Schema->clone;
-my $source                       = $schema->source('SchemaVersion');
-my $event_source                 = $schema->source('EventLog');
-my $audit_source                 = $schema->source('AuditLog');
-my $outbox_source                = $schema->source('OutboxMessage');
-my $dead_letter_source           = $schema->source('DeadLetter');
-my $projection_offset_source     = $schema->source('ProjectionOffset');
-my $projection_generation_source = $schema->source('ProjectionGeneration');
+my $schema                         = GPForum::Schema->clone;
+my $source                         = $schema->source('SchemaVersion');
+my $event_source                   = $schema->source('EventLog');
+my $audit_source                   = $schema->source('AuditLog');
+my $outbox_source                  = $schema->source('OutboxMessage');
+my $dead_letter_source             = $schema->source('DeadLetter');
+my $notification_source            = $schema->source('Notification');
+my $notification_inbox_source      = $schema->source('NotificationInbox');
+my $notification_preference_source = $schema->source('NotificationPreference');
+my $notification_read_source       = $schema->source('NotificationRead');
+my $projection_offset_source       = $schema->source('ProjectionOffset');
+my $projection_generation_source   = $schema->source('ProjectionGeneration');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -120,6 +125,53 @@ ok( $dead_letter_source->has_column('error_class'),
 ok( $dead_letter_source->has_column('retry_count'),
     'dead letter stores retry count' );
 
+is( $notification_source->from,
+    'notifications', 'notification source maps notifications table' );
+is_deeply(
+    [ $notification_source->primary_columns ],
+    [ 'notification_id', 'created_at' ],
+    'notification primary key is partition-safe'
+);
+ok( $notification_source->has_column('payload'),
+    'notification stores payload' );
+ok( $notification_source->has_relationship('recipient'),
+    'notification belongs to recipient' );
+
+is( $notification_read_source->from,
+    'notification_reads', 'notification read source maps reads table' );
+is_deeply(
+    [ $notification_read_source->primary_columns ],
+    [ 'notification_id', 'recipient_user_id' ],
+    'notification read primary key is explicit'
+);
+ok( $notification_read_source->has_column('read_at'),
+    'notification read stores timestamp' );
+
+is( $notification_inbox_source->from,
+    'notification_inbox', 'notification inbox source maps inbox table' );
+is_deeply(
+    [ $notification_inbox_source->primary_columns ],
+    [ 'recipient_user_id', 'notification_id' ],
+    'notification inbox primary key is explicit'
+);
+ok( $notification_inbox_source->has_column('rank_score'),
+    'notification inbox stores rank score' );
+
+is( $notification_preference_source->from,
+    'notification_preferences',
+    'notification preference source maps preferences table' );
+is_deeply(
+    [ $notification_preference_source->primary_columns ],
+    [ 'user_id', 'channel' ],
+    'notification preference primary key is explicit'
+);
+ok(
+    $notification_preference_source->has_column('digest_frequency'),
+    'notification preference stores digest frequency'
+);
+ok( $notification_preference_source->has_relationship('user'),
+    'notification preference belongs to user' );
+
 is( $projection_offset_source->from,
     'projection_offsets',
     'projection offset source maps projection offsets table' );
@@ -146,6 +198,7 @@ my $user_source          = $schema->source('User');
 my $credential_source    = $schema->source('Credential');
 my $session_source       = $schema->source('Session');
 my $space_source         = $schema->source('Space');
+my $subscription_source  = $schema->source('Subscription');
 my $category_source      = $schema->source('Category');
 my $thread_source        = $schema->source('Thread');
 my $post_source          = $schema->source('Post');
@@ -200,6 +253,15 @@ ok(
     $space_source->has_relationship('categories'),
     'space has categories relationship'
 );
+
+is( $subscription_source->from,
+    'subscriptions', 'subscription source maps subscriptions table' );
+is_deeply( [ $subscription_source->primary_columns ],
+    ['subscription_id'], 'subscription primary key is explicit' );
+ok( $subscription_source->has_column('preference'),
+    'subscription stores preference' );
+ok( $subscription_source->has_relationship('user'),
+    'subscription belongs to user' );
 
 is( $category_source->from, 'categories',
     'category source maps categories table' );
@@ -641,6 +703,25 @@ like(
     $platform_governance_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] migration_safety/msx,
     'platform governance migration creates migration safety table'
+);
+
+my $notification_sql =
+  path( $summary->[$NOTIFICATION_MIGRATION_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$NOTIFICATION_MIGRATION_INDEX]->{description},
+    'notifications subscriptions',
+    'notifications migration description is parsed'
+);
+like(
+    $notification_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] subscriptions/msx,
+    'notifications migration creates subscriptions table'
+);
+like(
+    $notification_sql,
+    qr/notification_preferences/msx,
+    'notifications migration creates notification preferences table'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

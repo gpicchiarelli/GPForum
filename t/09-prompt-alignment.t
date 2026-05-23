@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 36;
+const my $EXPECTED_TESTS => 39;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -72,6 +72,9 @@ for my $required_term (
     MinionRegistrar
     SearchIndexing
     CacheInvalidation
+    SubscriptionStore
+    PreferenceStore
+    NotificationDispatcher
     post_bodies
     thread_counters
     thread_counter_shards

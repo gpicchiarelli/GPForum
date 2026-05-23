@@ -14,7 +14,7 @@ use GPForum::Command::Migrate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 4;
+const my $EXPECTED_TESTS => 5;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -41,6 +41,11 @@ like(
     $output,
     qr/004 [ ] platform [ ] governance/msx,
     'plan command prints governance migration'
+);
+like(
+    $output,
+    qr/005 [ ] notifications [ ] subscriptions/msx,
+    'plan command prints notifications migration'
 );
 
 throws_ok(

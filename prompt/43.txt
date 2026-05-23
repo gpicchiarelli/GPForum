@@ -168,6 +168,12 @@ NotificationDispatcher:
 * mark_read($notification_id, $user_id)
 * suppress_for_policy($notification, $policy)
 
+Notification and subscription writes MUST use narrow SubscriptionStore,
+PreferenceStore, and NotificationDispatcher boundaries. NotificationDispatcher
+MUST create notifications and inbox projection rows together, respect an
+injectable permission engine at creation time, support fanout from active
+subscriptions, list inbox rows by recipient, and persist read state separately.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.

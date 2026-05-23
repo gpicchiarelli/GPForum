@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 51;
+const my $TEST_COUNT => 59;
 
 plan tests => $TEST_COUNT;
 
@@ -31,6 +31,10 @@ use_ok('GPForum::Schema::Result::CategoryStat');
 use_ok('GPForum::Schema::Result::Credential');
 use_ok('GPForum::Schema::Result::DeadLetter');
 use_ok('GPForum::Schema::Result::EventLog');
+use_ok('GPForum::Schema::Result::Notification');
+use_ok('GPForum::Schema::Result::NotificationInbox');
+use_ok('GPForum::Schema::Result::NotificationPreference');
+use_ok('GPForum::Schema::Result::NotificationRead');
 use_ok('GPForum::Schema::Result::OutboxMessage');
 use_ok('GPForum::Schema::Result::Post');
 use_ok('GPForum::Schema::Result::PostBody');
@@ -40,6 +44,7 @@ use_ok('GPForum::Schema::Result::ProjectionOffset');
 use_ok('GPForum::Schema::Result::SearchDocument');
 use_ok('GPForum::Schema::Result::Session');
 use_ok('GPForum::Schema::Result::Space');
+use_ok('GPForum::Schema::Result::Subscription');
 use_ok('GPForum::Schema::Result::Thread');
 use_ok('GPForum::Schema::Result::ThreadCounter');
 use_ok('GPForum::Schema::Result::ThreadCounterShard');
@@ -48,6 +53,9 @@ use_ok('GPForum::Service::Password');
 use_ok('GPForum::Service::SessionToken');
 use_ok('GPForum::Service::Identity::Registration');
 use_ok('GPForum::Service::Identity::Store');
+use_ok('GPForum::Service::Notification::Dispatcher');
+use_ok('GPForum::Service::Notification::PreferenceStore');
+use_ok('GPForum::Service::Notification::SubscriptionStore');
 use_ok('GPForum::Service::Forum::ThreadComposer');
 use_ok('GPForum::Service::Forum::ThreadStore');
 use_ok('GPForum::Service::Forum::PostComposer');
