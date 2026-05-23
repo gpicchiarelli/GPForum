@@ -1,4 +1,17 @@
-# GPForum Prompt Architecture
+# GPForum
+
+GPForum is an independent, Perl-native community platform project for durable forums, explicit governance, serious moderation, and long-term operational clarity.
+
+The repository currently contains:
+
+* a static public platform page in `index.html`;
+* visual assets under `assets/`;
+* architectural prompt constitutions under `prompt/`;
+* a strict Perl::Critic profile for future implementation.
+
+Open `index.html` directly in a browser to preview the public platform page.
+
+## Prompt Architecture
 
 GPForum is a Perl-native, PostgreSQL-centric, distributed forum architecture described through mandatory prompt constitutions.
 
@@ -111,4 +124,3 @@ For production readiness, provide:
 * `38.txt`
 
 AI-generated code MUST preserve the constraints in these prompt constitutions.
-
