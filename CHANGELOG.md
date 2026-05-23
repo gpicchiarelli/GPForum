@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added process-local realtime websocket boundaries for authenticated
+  connections, authorized channel subscriptions, thread updates, notification
+  badge broadcasts, and explicit polling fallback.
 - Added PostgreSQL-native search service boundaries for document building,
   indexing, rebuild, permission-aware querying, autocomplete, lag observation,
   and worker handoff.

@@ -14,6 +14,7 @@ use GPForum::Service::Id;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Password;
+use GPForum::Service::Realtime::Hub;
 use GPForum::Service::SessionToken;
 
 our $VERSION = '0.001';
@@ -52,6 +53,13 @@ sub startup {
                 schema => shift->gp_schema );
         }
     );
+    my $realtime_hub;
+    $self->helper(
+        gp_realtime_hub => sub {
+            $realtime_hub ||= GPForum::Service::Realtime::Hub->new;
+            return $realtime_hub;
+        }
+    );
 
     GPForum::Log->configure( $self, $config );
 
@@ -69,6 +77,7 @@ sub startup {
     $routes->post('/login')->to('Identity#login')->name('login_submit');
     $routes->post('/logout')->to('Identity#logout')->name('logout');
     $routes->get('/u/:username')->to('Identity#profile')->name('profile');
+    $routes->websocket('/realtime')->to('Realtime#stream')->name('realtime');
 
     return;
 }

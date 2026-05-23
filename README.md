@@ -104,9 +104,10 @@ This repository currently contains:
 * Minion registration, idempotent job runner, and worker placeholders for search, notification, and cache invalidation;
 * notification subscriptions, preferences, inbox creation, read state, and fanout services;
 * PostgreSQL-native search document building, indexing, rebuild, permission-aware querying, and worker handoff services;
+* process-local realtime websocket boundaries for authenticated connections, authorized channel subscription, thread updates, notification badges, and polling fallback;
 * automation scripts in [script](script).
 
-The current implementation has reached **Milestone 6: Search** service
+The current implementation has reached **Milestone 7: Realtime** service
 boundaries under the constraints in [prompt/20.txt](prompt/20.txt).
 
 ## Architecture

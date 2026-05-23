@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 45;
+const my $EXPECTED_TESTS => 48;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -94,6 +94,9 @@ for my $required_term (
     DocumentBuilder
     SearchIndexer
     Searcher
+    ChannelAuthorizer
+    ConnectionRegistry
+    RealtimeHub
     post_bodies
     thread_counters
     thread_counter_shards

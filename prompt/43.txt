@@ -182,6 +182,14 @@ MUST create notifications and inbox projection rows together, respect an
 injectable permission engine at creation time, support fanout from active
 subscriptions, list inbox rows by recipient, and persist read state separately.
 
+Realtime websocket behavior MUST use narrow ChannelAuthorizer,
+ConnectionRegistry, and RealtimeHub boundaries. ChannelAuthorizer MUST parse and
+authorize channel subscription requests. ConnectionRegistry MUST track
+process-local authenticated connections and their channel subscriptions.
+RealtimeHub MUST broadcast thread updates and notification badge updates to
+authorized subscribers while exposing explicit polling fallback state. Realtime
+MUST remain optional and MUST NOT become authoritative for core forum behavior.
+
 Implementations MAY add narrower methods.
 
 Implementations MUST NOT remove these contract methods without an ADR.
