@@ -118,6 +118,10 @@ GPFORUM_OS_STATIC_XSENDFILE=auto
 GPFORUM_OS_AFFINITY=off
 ```
 
+Local generated files and disposable cache artifacts should use
+`GPForum::OS::Filesystem->write_atomic`, which writes a temporary file in the
+same filesystem and promotes it with `rename`.
+
 Start workers after Minion configuration is present:
 
 ```sh

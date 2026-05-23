@@ -146,6 +146,8 @@ the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,
 `GPFORUM_OS_SENDFILE`, and `GPFORUM_OS_AFFINITY` are validated at config load
 and exposed in health/metrics output.
+Local generated files have a dedicated atomic-write helper under
+`GPForum::OS::Filesystem`.
 
 Known MVP limits: realtime fanout and rate limiting are process-local, search
 depends on PostgreSQL projection rows, and reply position allocation is protected

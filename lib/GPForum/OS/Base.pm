@@ -8,6 +8,7 @@ use English qw(-no_match_vars);
 use Mojo::Base -base;
 use POSIX qw(sysconf);
 
+use GPForum::OS::Filesystem;
 use GPForum::OS::Resource;
 
 our $VERSION = '0.001';
@@ -21,6 +22,7 @@ const my $FEATURE_OFF          => 'off';
 const my $NPROCESSORS_CONSTANT => '_SC_NPROCESSORS_ONLN';
 
 has name           => 'unknown';
+has filesystem     => sub { return GPForum::OS::Filesystem->new; };
 has resource_probe => sub { return GPForum::OS::Resource->new; };
 
 sub supports_reuseport {
