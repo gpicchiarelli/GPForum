@@ -650,6 +650,40 @@ core code.
 
 ---
 
+Privacy Rights Operations Contract
+
+Privacy and legal workflows MUST remain explicit operational workflows, not
+implicit user-table mutations.
+
+Account deletion, anonymization, hard-purge, retention, and legal-hold
+workflows MUST use narrow modules:
+
+* DeletionWorkflow for account_deletion and data_rights requests, approval,
+  erasure_jobs scheduling, and completion state;
+* RetentionHoldStore for legal_hold and retention_holds creation and active hold
+  lookup;
+* DataRightsReview for staff review of deletion_requests and erasure_jobs.
+
+The required persistence tables are:
+
+* deletion_requests;
+* deletion_actions;
+* erasure_jobs;
+* retention_holds.
+
+Deletion requests MUST distinguish soft delete, anonymization, and hard purge.
+Deletion actions MUST be append-only operational facts. Erasure jobs MUST be
+observable, retryable, and reviewable by status.
+
+Retention holds MUST prevent privacy automation from pretending that a legal or
+moderation hold does not exist. A held resource MUST require explicit staff
+review before purge or anonymization workflows continue.
+
+User data exports, account_deletion, data_rights, consent, legal_hold, and
+retention jobs MUST be authenticated, audited, rate-limited, and abuse-aware.
+
+---
+
 Milestone Definition Of Done
 
 Every milestone MUST include:

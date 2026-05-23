@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 338;
+const my $EXPECTED_TESTS               => 354;
 const my $EXPECTED_MIGRATIONS          => 11;
 const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
 const my $FORUM_MIGRATION_INDEX        => 2;
@@ -47,6 +47,10 @@ my $notification_read_source       = $schema->source('NotificationRead');
 my $attachment_source              = $schema->source('Attachment');
 my $attachment_link_source         = $schema->source('AttachmentLink');
 my $attachment_variant_source      = $schema->source('AttachmentVariant');
+my $deletion_request_source        = $schema->source('DeletionRequest');
+my $deletion_action_source         = $schema->source('DeletionAction');
+my $erasure_job_source             = $schema->source('ErasureJob');
+my $retention_hold_source          = $schema->source('RetentionHold');
 my $bookmark_source                = $schema->source('Bookmark');
 my $mention_source                 = $schema->source('Mention');
 my $reputation_event_source        = $schema->source('ReputationEvent');
@@ -230,6 +234,44 @@ ok( $attachment_variant_source->has_column('variant_type'),
     'attachment variant stores variant type' );
 ok( $attachment_variant_source->has_column('object_key'),
     'attachment variant stores object key' );
+
+is( $deletion_request_source->from,
+    'deletion_requests', 'deletion request source maps table' );
+is_deeply( [ $deletion_request_source->primary_columns ],
+    ['deletion_request_id'], 'deletion request primary key is explicit' );
+ok( $deletion_request_source->has_column('request_type'),
+    'deletion request stores request type' );
+ok( $deletion_request_source->has_relationship('actions'),
+    'deletion request has actions' );
+ok( $deletion_request_source->has_relationship('erasure_jobs'),
+    'deletion request has erasure jobs' );
+
+is( $deletion_action_source->from,
+    'deletion_actions', 'deletion action source maps table' );
+is_deeply( [ $deletion_action_source->primary_columns ],
+    ['deletion_action_id'], 'deletion action primary key is explicit' );
+ok( $deletion_action_source->has_column('action_type'),
+    'deletion action stores action type' );
+ok( $deletion_action_source->has_relationship('deletion_request'),
+    'deletion action belongs to deletion request' );
+
+is( $erasure_job_source->from,
+    'erasure_jobs', 'erasure job source maps table' );
+is_deeply( [ $erasure_job_source->primary_columns ],
+    ['erasure_job_id'], 'erasure job primary key is explicit' );
+ok( $erasure_job_source->has_column('last_error'),
+    'erasure job stores last error' );
+ok( $erasure_job_source->has_relationship('deletion_request'),
+    'erasure job belongs to deletion request' );
+
+is( $retention_hold_source->from,
+    'retention_holds', 'retention hold source maps table' );
+is_deeply( [ $retention_hold_source->primary_columns ],
+    ['retention_hold_id'], 'retention hold primary key is explicit' );
+ok(
+    $retention_hold_source->has_column('ends_at'),
+    'retention hold stores end timestamp'
+);
 
 is( $bookmark_source->from, 'bookmarks', 'bookmark source maps table' );
 is_deeply( [ $bookmark_source->primary_columns ],

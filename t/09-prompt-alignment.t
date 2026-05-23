@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 100;
+const my $EXPECTED_TESTS => 110;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -153,6 +153,16 @@ for my $required_term (
     plugins
     plugin_hooks
     plugin_failures
+    DeletionWorkflow
+    RetentionHoldStore
+    DataRightsReview
+    deletion_requests
+    deletion_actions
+    erasure_jobs
+    retention_holds
+    account_deletion
+    data_rights
+    legal_hold
     )
   )
 {

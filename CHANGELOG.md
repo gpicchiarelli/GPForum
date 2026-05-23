@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added privacy rights operation boundaries for deletion requests, erasure jobs,
+  retention legal holds, staff review, and DBIx::Class mapping coverage for the
+  existing platform governance tables.
 - Added plugin extension boundaries for manifest validation, registry
   lifecycle, named hook dispatch, observable failure recording, and PostgreSQL
   migration coverage.

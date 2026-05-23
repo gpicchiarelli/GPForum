@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 120;
+const my $TEST_COUNT => 127;
 
 plan tests => $TEST_COUNT;
 
@@ -36,6 +36,9 @@ use_ok('GPForum::Schema::Result::Category');
 use_ok('GPForum::Schema::Result::CategoryStat');
 use_ok('GPForum::Schema::Result::Credential');
 use_ok('GPForum::Schema::Result::DeadLetter');
+use_ok('GPForum::Schema::Result::DeletionAction');
+use_ok('GPForum::Schema::Result::DeletionRequest');
+use_ok('GPForum::Schema::Result::ErasureJob');
 use_ok('GPForum::Schema::Result::EventLog');
 use_ok('GPForum::Schema::Result::ExportRequest');
 use_ok('GPForum::Schema::Result::ImportFailure');
@@ -59,6 +62,7 @@ use_ok('GPForum::Schema::Result::ProjectionGeneration');
 use_ok('GPForum::Schema::Result::ProjectionOffset');
 use_ok('GPForum::Schema::Result::ReputationEvent');
 use_ok('GPForum::Schema::Result::Report');
+use_ok('GPForum::Schema::Result::RetentionHold');
 use_ok('GPForum::Schema::Result::ResourceAcl');
 use_ok('GPForum::Schema::Result::Role');
 use_ok('GPForum::Schema::Result::RoleBinding');
@@ -106,6 +110,9 @@ use_ok('GPForum::Service::Plugin::FailureRecorder');
 use_ok('GPForum::Service::Plugin::HookDispatcher');
 use_ok('GPForum::Service::Plugin::ManifestValidator');
 use_ok('GPForum::Service::Plugin::Registry');
+use_ok('GPForum::Service::Privacy::DataRightsReview');
+use_ok('GPForum::Service::Privacy::DeletionWorkflow');
+use_ok('GPForum::Service::Privacy::RetentionHoldStore');
 use_ok('GPForum::Service::Forum::ThreadComposer');
 use_ok('GPForum::Service::Forum::ThreadStore');
 use_ok('GPForum::Service::Forum::PageWindow');

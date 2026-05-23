@@ -48,8 +48,9 @@ sub search {
 
     my %seen;
     my @rows = grep { !$seen{ 0 + $_ }++ } values %{ $self->rows };
-    @rows = grep { _matches_query( $_, $query ) } @rows
-      if $self->filter_search;
+    if ( $self->filter_search ) {
+        @rows = grep { _matches_query( $_, $query ) } @rows;
+    }
 
     return GPForum::Test::ModerationSearch->new( rows => \@rows );
 }
@@ -87,6 +88,10 @@ sub _row_keys {
               plugin_id
               hook_id
               plugin_failure_id
+              deletion_request_id
+              deletion_action_id
+              erasure_job_id
+              retention_hold_id
             )
         },
         _composite_key($row),
@@ -125,6 +130,8 @@ sub _matches_field {
     my ( $row, $field, $expected ) = @_;
 
     my $actual = $row->get_column($field);
+
+    return !defined $actual if !defined $expected;
 
     return defined $actual && $actual eq $expected;
 }
