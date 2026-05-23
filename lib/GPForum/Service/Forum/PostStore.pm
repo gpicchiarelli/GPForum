@@ -7,14 +7,21 @@ use Const::Fast;
 use Mojo::Base -base;
 
 use GPForum::Service::Id;
+use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
 const my $SCHEMA_VERSION => 1;
 const my $POST_AGGREGATE => 'post';
 
-has schema     => undef;
-has id_service => sub { return GPForum::Service::Id->new; };
+has schema         => undef;
+has id_service     => sub { return GPForum::Service::Id->new; };
+has outbox_builder => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Outbox::MessageBuilder->new(
+        id_service => $self->id_service, );
+};
 
 sub create_post {
     my ( $self, $command ) = @_;
@@ -49,28 +56,30 @@ sub _insert_post {
 sub _record_post_event {
     my ( $self, $command, $correlation_id ) = @_;
 
-    $self->schema->resultset('EventLog')->create(
-        {
-            event_id          => $self->id_service->uuid,
-            event_type        => 'post.created',
-            schema_version    => $SCHEMA_VERSION,
-            aggregate_type    => $POST_AGGREGATE,
-            aggregate_id      => $command->{post}{post_id},
-            aggregate_version => $SCHEMA_VERSION,
-            actor_id          => $command->{post}{author_user_id},
-            correlation_id    => $correlation_id,
-            causation_id      => undef,
-            idempotency_key   =>
-              _idempotency_key( 'post.created', $command->{post}{post_id} ),
-            payload => {
-                post_id        => $command->{post}{post_id},
-                thread_id      => $command->{post}{thread_id},
-                author_user_id => $command->{post}{author_user_id},
-                revision_id    => $command->{revision}{revision_id},
-            },
-            metadata => {},
-        }
-    );
+    my $event = {
+        event_id          => $self->id_service->uuid,
+        event_type        => 'post.created',
+        schema_version    => $SCHEMA_VERSION,
+        aggregate_type    => $POST_AGGREGATE,
+        aggregate_id      => $command->{post}{post_id},
+        aggregate_version => $SCHEMA_VERSION,
+        actor_id          => $command->{post}{author_user_id},
+        correlation_id    => $correlation_id,
+        causation_id      => undef,
+        idempotency_key   =>
+          _idempotency_key( 'post.created', $command->{post}{post_id} ),
+        payload => {
+            post_id        => $command->{post}{post_id},
+            thread_id      => $command->{post}{thread_id},
+            author_user_id => $command->{post}{author_user_id},
+            revision_id    => $command->{revision}{revision_id},
+        },
+        metadata => {},
+    };
+
+    $self->schema->resultset('EventLog')->create($event);
+    $self->schema->resultset('OutboxMessage')
+      ->create( $self->outbox_builder->for_event($event) );
 
     return;
 }

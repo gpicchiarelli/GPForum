@@ -7,6 +7,7 @@ use Const::Fast;
 use Mojo::Base -base;
 
 use GPForum::Service::Id;
+use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
@@ -14,8 +15,14 @@ const my $SCHEMA_VERSION   => 1;
 const my $THREAD_AGGREGATE => 'thread';
 const my $POST_AGGREGATE   => 'post';
 
-has schema     => undef;
-has id_service => sub { return GPForum::Service::Id->new; };
+has schema         => undef;
+has id_service     => sub { return GPForum::Service::Id->new; };
+has outbox_builder => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Outbox::MessageBuilder->new(
+        id_service => $self->id_service, );
+};
 
 sub create_thread {
     my ( $self, $command ) = @_;
@@ -129,13 +136,15 @@ sub _record_audit {
 sub _create_event {
     my ( $self, $event ) = @_;
 
-    $self->schema->resultset('EventLog')->create(
-        {
-            %{$event},
-            schema_version => $SCHEMA_VERSION,
-            metadata       => {},
-        }
-    );
+    my $event_record = {
+        %{$event},
+        schema_version => $SCHEMA_VERSION,
+        metadata       => {},
+    };
+
+    $self->schema->resultset('EventLog')->create($event_record);
+    $self->schema->resultset('OutboxMessage')
+      ->create( $self->outbox_builder->for_event($event_record) );
 
     return;
 }

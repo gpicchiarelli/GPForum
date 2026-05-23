@@ -16,7 +16,7 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 32;
+const my $EXPECTED_TESTS => 36;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -114,12 +114,26 @@ is( scalar @{ $schema->created_for('PostRevision') }, 1,
 is( scalar @{ $schema->created_for('ThreadCounter') },
     1, 'counter projection is created' );
 is( scalar @{ $schema->created_for('EventLog') }, 2, 'events are created' );
+is( scalar @{ $schema->created_for('OutboxMessage') },
+    2, 'outbox messages are created' );
 is( scalar @{ $schema->created_for('AuditLog') }, 1, 'audit is created' );
 is( $schema->transaction_count, 1, 'thread persistence uses one transaction' );
 is( $schema->created_for('EventLog')->[0]{event_type},
     'thread.created', 'thread creation event is recorded' );
 is( $schema->created_for('EventLog')->[1]{event_type},
     'post.created', 'post creation event is recorded' );
+is(
+    $schema->created_for('OutboxMessage')->[0]{event_id},
+    $schema->created_for('EventLog')->[0]{event_id},
+    'thread outbox message points at thread event'
+);
+is(
+    $schema->created_for('OutboxMessage')->[1]{event_id},
+    $schema->created_for('EventLog')->[1]{event_id},
+    'post outbox message points at post event'
+);
+is( $schema->created_for('OutboxMessage')->[0]{job_type},
+    'domain_event.dispatch', 'outbox uses event dispatch job type' );
 is(
     $schema->created_for('EventLog')->[1]{causation_id},
     $schema->created_for('EventLog')->[0]{event_id},

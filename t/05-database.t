@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 162;
+const my $EXPECTED_TESTS             => 168;
 const my $EXPECTED_MIGRATIONS        => 4;
 const my $EXPECTED_RUNNER_EXECUTIONS => 9;
 const my $FORUM_MIGRATION_INDEX      => 2;
@@ -27,10 +27,11 @@ const my $GOVERNANCE_MIGRATION_INDEX => 3;
 
 plan tests => $EXPECTED_TESTS;
 
-my $schema       = GPForum::Schema->clone;
-my $source       = $schema->source('SchemaVersion');
-my $event_source = $schema->source('EventLog');
-my $audit_source = $schema->source('AuditLog');
+my $schema        = GPForum::Schema->clone;
+my $source        = $schema->source('SchemaVersion');
+my $event_source  = $schema->source('EventLog');
+my $audit_source  = $schema->source('AuditLog');
+my $outbox_source = $schema->source('OutboxMessage');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -92,6 +93,16 @@ ok(
     'audit log supports hash chain record hash'
 );
 ok( $audit_source->has_column('metadata'), 'audit log stores metadata' );
+
+is( $outbox_source->from, 'outbox_messages',
+    'outbox source maps outbox messages table' );
+is_deeply( [ $outbox_source->primary_columns ],
+    ['outbox_id'], 'outbox primary key is explicit' );
+ok( $outbox_source->has_column('event_id'), 'outbox links to event id' );
+ok( $outbox_source->has_column('queue'),    'outbox stores queue' );
+ok( $outbox_source->has_column('job_type'), 'outbox stores job type' );
+ok( $outbox_source->has_column('next_attempt_at'),
+    'outbox stores retry schedule' );
 
 my $user_source          = $schema->source('User');
 my $credential_source    = $schema->source('Credential');

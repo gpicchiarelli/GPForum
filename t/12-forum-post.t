@@ -16,7 +16,7 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 31;
+const my $EXPECTED_TESTS => 34;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -115,10 +115,19 @@ is( scalar @{ $schema->created_for('PostRevision') }, 1,
 is( scalar @{ $schema->created_for('ThreadCounterShard') },
     1, 'counter shard delta is created' );
 is( scalar @{ $schema->created_for('EventLog') }, 1, 'event is created' );
+is( scalar @{ $schema->created_for('OutboxMessage') },
+    1, 'outbox message is created' );
 is( scalar @{ $schema->created_for('AuditLog') }, 1, 'audit is created' );
 is( $schema->transaction_count, 1, 'post persistence uses one transaction' );
 is( $schema->created_for('EventLog')->[0]{event_type},
     'post.created', 'post creation event is recorded' );
+is(
+    $schema->created_for('OutboxMessage')->[0]{event_id},
+    $schema->created_for('EventLog')->[0]{event_id},
+    'outbox message points at post event'
+);
+is( $schema->created_for('OutboxMessage')->[0]{queue},
+    'events', 'outbox message uses event queue' );
 is( $schema->created_for('AuditLog')->[0]{action},
     'post.created', 'post audit is recorded' );
 is(
