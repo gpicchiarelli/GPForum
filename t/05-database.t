@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 115;
+const my $EXPECTED_TESTS             => 158;
 const my $EXPECTED_MIGRATIONS        => 4;
 const my $EXPECTED_RUNNER_EXECUTIONS => 9;
 const my $FORUM_MIGRATION_INDEX      => 2;
@@ -96,6 +96,15 @@ ok( $audit_source->has_column('metadata'), 'audit log stores metadata' );
 my $user_source       = $schema->source('User');
 my $credential_source = $schema->source('Credential');
 my $session_source    = $schema->source('Session');
+my $space_source      = $schema->source('Space');
+my $category_source   = $schema->source('Category');
+my $thread_source     = $schema->source('Thread');
+my $post_source       = $schema->source('Post');
+my $body_source       = $schema->source('PostBody');
+my $revision_source   = $schema->source('PostRevision');
+my $counter_source    = $schema->source('ThreadCounter');
+my $stat_source       = $schema->source('CategoryStat');
+my $search_source     = $schema->source('SearchDocument');
 
 is( $user_source->from, 'users', 'user source maps users table' );
 is_deeply( [ $user_source->primary_columns ],
@@ -133,6 +142,113 @@ is_deeply( [ $session_source->primary_columns ],
 ok( $session_source->has_column('session_hash'), 'session stores token hash' );
 ok( $session_source->has_column('revoked_at'), 'session supports revocation' );
 ok( $session_source->has_relationship('user'), 'session belongs to user' );
+
+is( $space_source->from, 'spaces', 'space source maps spaces table' );
+is_deeply( [ $space_source->primary_columns ],
+    ['space_id'], 'space primary key is explicit' );
+ok(
+    $space_source->has_relationship('categories'),
+    'space has categories relationship'
+);
+
+is( $category_source->from, 'categories',
+    'category source maps categories table' );
+is_deeply( [ $category_source->primary_columns ],
+    ['category_id'], 'category primary key is explicit' );
+ok( $category_source->has_relationship('space'), 'category belongs to space' );
+ok(
+    $category_source->has_relationship('threads'),
+    'category has threads relationship'
+);
+ok(
+    $category_source->has_relationship('stats'),
+    'category has stats projection relationship'
+);
+
+is( $thread_source->from, 'threads', 'thread source maps threads table' );
+is_deeply( [ $thread_source->primary_columns ],
+    ['thread_id'], 'thread primary key is explicit' );
+ok( $thread_source->has_column('visibility_version'),
+    'thread stores visibility version' );
+ok( $thread_source->has_column('permission_version'),
+    'thread stores permission version' );
+ok( $thread_source->has_relationship('category'),
+    'thread belongs to category' );
+ok( $thread_source->has_relationship('author'), 'thread belongs to author' );
+ok( $thread_source->has_relationship('posts'),
+    'thread has posts relationship' );
+ok(
+    $thread_source->has_relationship('counters'),
+    'thread has counters projection relationship'
+);
+
+is( $post_source->from, 'posts', 'post source maps posts table' );
+is_deeply( [ $post_source->primary_columns ],
+    ['post_id'], 'post primary key is explicit' );
+ok(
+    $post_source->has_column('current_body_id'),
+    'post stores current body pointer'
+);
+ok(
+    $post_source->has_column('current_revision_id'),
+    'post stores current revision pointer'
+);
+ok( $post_source->has_column('position'),     'post stores thread position' );
+ok( $post_source->has_relationship('thread'), 'post belongs to thread' );
+ok( $post_source->has_relationship('author'), 'post belongs to author' );
+ok( $post_source->has_relationship('bodies'), 'post has bodies' );
+ok( $post_source->has_relationship('revisions'), 'post has revisions' );
+ok(
+    $post_source->has_relationship('current_body'),
+    'post has current body relationship'
+);
+ok(
+    $post_source->has_relationship('current_revision'),
+    'post has current revision relationship'
+);
+
+is( $body_source->from, 'post_bodies',
+    'post body source maps post bodies table' );
+is_deeply( [ $body_source->primary_columns ],
+    ['body_id'], 'post body primary key is explicit' );
+ok( $body_source->has_column('source_hash'), 'post body stores content hash' );
+ok( $body_source->has_relationship('post'),  'post body belongs to post' );
+
+is( $revision_source->from, 'post_revisions',
+    'post revision source maps revisions table' );
+is_deeply( [ $revision_source->primary_columns ],
+    ['revision_id'], 'post revision primary key is explicit' );
+ok( $revision_source->has_relationship('post'),
+    'post revision belongs to post' );
+ok( $revision_source->has_relationship('body'),
+    'post revision belongs to body' );
+ok( $revision_source->has_relationship('editor'),
+    'post revision belongs to editor' );
+
+is( $counter_source->from, 'thread_counters',
+    'thread counter source maps projection table' );
+ok(
+    $counter_source->has_relationship('thread'),
+    'thread counter belongs to thread'
+);
+
+is( $stat_source->from, 'category_stats',
+    'category stat source maps projection table' );
+ok(
+    $stat_source->has_relationship('category'),
+    'category stat belongs to category'
+);
+
+is( $search_source->from, 'search_documents',
+    'search document source maps search projection table' );
+ok(
+    $search_source->has_column('search_vector'),
+    'search document stores search vector'
+);
+ok(
+    $search_source->has_column('source_version'),
+    'search document stores source version'
+);
 
 my $config = GPForum::Config->from_environment(
     {

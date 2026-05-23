@@ -80,6 +80,7 @@ This repository currently contains:
 * forum hot-path/projection migration with post head/body/revision split;
 * platform governance migration for command log, ledgers, projection lag, partition registry, dead letters, and query budgets;
 * partial, BRIN, covering, trigram, and projection-oriented indexes;
+* DBIx::Class mappings for core forum heads, bodies, revisions, counters, stats, and search projections;
 * server-side session persistence in the canonical `sessions` table;
 * UUIDv7 identifier generation for sortable distributed ids;
 * Argon2id password hashing and random session token services;

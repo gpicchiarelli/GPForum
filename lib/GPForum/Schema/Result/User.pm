@@ -81,6 +81,18 @@ __PACKAGE__->has_many(
     sessions => 'GPForum::Schema::Result::Session',
     'user_id'
 );
+__PACKAGE__->has_many(
+    authored_threads => 'GPForum::Schema::Result::Thread',
+    'author_user_id'
+);
+__PACKAGE__->has_many(
+    authored_posts => 'GPForum::Schema::Result::Post',
+    'author_user_id'
+);
+__PACKAGE__->has_many(
+    post_revisions => 'GPForum::Schema::Result::PostRevision',
+    'editor_user_id'
+);
 
 1;
 
