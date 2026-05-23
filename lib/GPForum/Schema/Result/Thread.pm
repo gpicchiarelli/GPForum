@@ -108,5 +108,9 @@ __PACKAGE__->might_have(
     counters => 'GPForum::Schema::Result::ThreadCounter',
     'thread_id'
 );
+__PACKAGE__->has_many(
+    counter_shards => 'GPForum::Schema::Result::ThreadCounterShard',
+    'thread_id'
+);
 
 1;

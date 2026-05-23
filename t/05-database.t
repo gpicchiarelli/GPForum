@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 158;
+const my $EXPECTED_TESTS             => 162;
 const my $EXPECTED_MIGRATIONS        => 4;
 const my $EXPECTED_RUNNER_EXECUTIONS => 9;
 const my $FORUM_MIGRATION_INDEX      => 2;
@@ -93,18 +93,19 @@ ok(
 );
 ok( $audit_source->has_column('metadata'), 'audit log stores metadata' );
 
-my $user_source       = $schema->source('User');
-my $credential_source = $schema->source('Credential');
-my $session_source    = $schema->source('Session');
-my $space_source      = $schema->source('Space');
-my $category_source   = $schema->source('Category');
-my $thread_source     = $schema->source('Thread');
-my $post_source       = $schema->source('Post');
-my $body_source       = $schema->source('PostBody');
-my $revision_source   = $schema->source('PostRevision');
-my $counter_source    = $schema->source('ThreadCounter');
-my $stat_source       = $schema->source('CategoryStat');
-my $search_source     = $schema->source('SearchDocument');
+my $user_source          = $schema->source('User');
+my $credential_source    = $schema->source('Credential');
+my $session_source       = $schema->source('Session');
+my $space_source         = $schema->source('Space');
+my $category_source      = $schema->source('Category');
+my $thread_source        = $schema->source('Thread');
+my $post_source          = $schema->source('Post');
+my $body_source          = $schema->source('PostBody');
+my $revision_source      = $schema->source('PostRevision');
+my $counter_source       = $schema->source('ThreadCounter');
+my $counter_shard_source = $schema->source('ThreadCounterShard');
+my $stat_source          = $schema->source('CategoryStat');
+my $search_source        = $schema->source('SearchDocument');
 
 is( $user_source->from, 'users', 'user source maps users table' );
 is_deeply( [ $user_source->primary_columns ],
@@ -230,6 +231,23 @@ is( $counter_source->from, 'thread_counters',
 ok(
     $counter_source->has_relationship('thread'),
     'thread counter belongs to thread'
+);
+
+is( $counter_shard_source->from,
+    'thread_counter_shards',
+    'thread counter shard source maps anti-hot-row projection table' );
+is_deeply(
+    [ $counter_shard_source->primary_columns ],
+    [ 'thread_id', 'shard_id' ],
+    'thread counter shard primary key is explicit'
+);
+ok(
+    $counter_shard_source->has_column('reply_count_delta'),
+    'thread counter shard stores reply count deltas'
+);
+ok(
+    $counter_shard_source->has_relationship('thread'),
+    'thread counter shard belongs to thread'
 );
 
 is( $stat_source->from, 'category_stats',

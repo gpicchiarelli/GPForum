@@ -117,6 +117,11 @@ boundaries. Thread creation MUST use explicit modules equivalent to
 ThreadComposer and ThreadStore: one validates/normalizes command input and one
 persists thread, first post, body, revision, projection seed, event records, and
 audit records in one transaction.
+Post reply creation MUST use explicit modules equivalent to PostComposer and
+PostStore: one validates/normalizes reply command input and one persists post,
+body, revision, thread_counter_shards delta, post.created event, and audit
+records in one transaction. Reply creation MUST NOT update canonical thread
+counters directly on the hot write path.
 
 PermissionEngine:
 
@@ -348,6 +353,9 @@ post.created:
 
 Thread creation MUST emit thread.created and post.created with the same
 correlation id. post.created MUST be causally linked to thread.created.
+Reply creation MUST emit post.created without thread.created and MUST write an
+anti-hot-row thread_counter_shards delta instead of synchronously mutating a
+single reply counter row.
 
 post.edited:
 

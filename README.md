@@ -82,6 +82,7 @@ This repository currently contains:
 * partial, BRIN, covering, trigram, and projection-oriented indexes;
 * DBIx::Class mappings for core forum heads, bodies, revisions, counters, stats, and search projections;
 * first forum thread creation boundary with composer/store split, thread/post events, and audit record;
+* forum reply creation boundary with post/body/revision persistence, post event, audit record, and anti-hot-row counter shard delta;
 * server-side session persistence in the canonical `sessions` table;
 * UUIDv7 identifier generation for sortable distributed ids;
 * Argon2id password hashing and random session token services;
