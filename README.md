@@ -92,6 +92,7 @@ This repository currently contains:
 * transactional outbox rows for forum domain events;
 * retry-aware outbox dispatcher boundary for future Minion workers;
 * dead-letter preservation for exhausted outbox deliveries;
+* projection offset tracking for lag and health visibility;
 * automation scripts in [script](script).
 
 The current implementation step is **Milestone 1: Identity And Sessions** under

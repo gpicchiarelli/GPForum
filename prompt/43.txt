@@ -563,6 +563,8 @@ Projection failure:
 
 * projection_offsets MUST expose lag and status for search, notifications,
   feed, and counters;
+* projection offset writes MUST use a narrow OffsetTracker boundary that records
+  last event id, event timestamp, lag seconds, status, and update timestamp;
 * projection_generations MUST allow blue/green read-model rebuilds;
 * feed projections MUST be degradable to slower canonical queries and MUST
   never become authoritative truth.

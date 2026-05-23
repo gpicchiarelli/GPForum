@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 174;
+const my $EXPECTED_TESTS             => 182;
 const my $EXPECTED_MIGRATIONS        => 4;
 const my $EXPECTED_RUNNER_EXECUTIONS => 9;
 const my $FORUM_MIGRATION_INDEX      => 2;
@@ -27,12 +27,14 @@ const my $GOVERNANCE_MIGRATION_INDEX => 3;
 
 plan tests => $EXPECTED_TESTS;
 
-my $schema             = GPForum::Schema->clone;
-my $source             = $schema->source('SchemaVersion');
-my $event_source       = $schema->source('EventLog');
-my $audit_source       = $schema->source('AuditLog');
-my $outbox_source      = $schema->source('OutboxMessage');
-my $dead_letter_source = $schema->source('DeadLetter');
+my $schema                       = GPForum::Schema->clone;
+my $source                       = $schema->source('SchemaVersion');
+my $event_source                 = $schema->source('EventLog');
+my $audit_source                 = $schema->source('AuditLog');
+my $outbox_source                = $schema->source('OutboxMessage');
+my $dead_letter_source           = $schema->source('DeadLetter');
+my $projection_offset_source     = $schema->source('ProjectionOffset');
+my $projection_generation_source = $schema->source('ProjectionGeneration');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -117,6 +119,28 @@ ok( $dead_letter_source->has_column('error_class'),
     'dead letter stores error class' );
 ok( $dead_letter_source->has_column('retry_count'),
     'dead letter stores retry count' );
+
+is( $projection_offset_source->from,
+    'projection_offsets',
+    'projection offset source maps projection offsets table' );
+is_deeply( [ $projection_offset_source->primary_columns ],
+    ['projection_name'], 'projection offset primary key is explicit' );
+ok( $projection_offset_source->has_column('last_event_id'),
+    'projection offset stores last event id' );
+ok( $projection_offset_source->has_column('lag_seconds'),
+    'projection offset stores lag seconds' );
+ok( $projection_offset_source->has_column('status'),
+    'projection offset stores status' );
+
+is( $projection_generation_source->from,
+    'projection_generations',
+    'projection generation source maps projection generations table' );
+is_deeply( [ $projection_generation_source->primary_columns ],
+    ['generation_id'], 'projection generation primary key is explicit' );
+ok(
+    $projection_generation_source->has_column('is_active'),
+    'projection generation stores active marker'
+);
 
 my $user_source          = $schema->source('User');
 my $credential_source    = $schema->source('Credential');
