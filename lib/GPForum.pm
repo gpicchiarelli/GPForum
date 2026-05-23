@@ -10,6 +10,7 @@ use GPForum::Log;
 use GPForum::Runtime;
 use GPForum::Schema;
 use GPForum::Service::Clock;
+use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Id;
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::PostComposer;
@@ -23,6 +24,8 @@ use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Notification::Dispatcher;
+use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::RateLimiter;
@@ -206,6 +209,32 @@ sub startup {
         }
     );
     $self->helper(
+        gp_bookmark_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Community::BookmarkStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_subscription_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Notification::SubscriptionStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
+        gp_notification_dispatcher => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Notification::Dispatcher->new(
+                schema             => $controller->gp_schema,
+                subscription_store => $controller->gp_subscription_store,
+            );
+        }
+    );
+    $self->helper(
         gp_search_service => sub {
             my ($controller) = @_;
 
@@ -236,6 +265,28 @@ sub startup {
     $routes->post('/t/:thread_id/read')
       ->to('Forum#mark_thread_read')
       ->name('thread_mark_read');
+    $routes->get('/bookmarks')->to('Forum#bookmarks')->name('bookmarks');
+    $routes->post('/t/:thread_id/bookmark')
+      ->to('Forum#create_thread_bookmark')
+      ->name('thread_bookmark');
+    $routes->post('/t/:thread_id/bookmark/remove')
+      ->to('Forum#remove_thread_bookmark')
+      ->name('thread_bookmark_remove');
+    $routes->post('/t/:thread_id/subscribe')
+      ->to('Forum#subscribe_thread')
+      ->name('thread_subscribe');
+    $routes->post('/t/:thread_id/subscribe/mute')
+      ->to('Forum#mute_thread_subscription')
+      ->name('thread_subscription_mute');
+    $routes->post('/t/:thread_id/subscribe/remove')
+      ->to('Forum#unsubscribe_thread')
+      ->name('thread_unsubscribe');
+    $routes->get('/notifications')
+      ->to('Notifications#inbox')
+      ->name('notifications');
+    $routes->post('/notifications/:notification_id/read')
+      ->to('Notifications#mark_read')
+      ->name('notification_read');
     $routes->get('/search')->to('Forum#search')->name('forum_search');
     $routes->get('/register')->to('Identity#register_form')->name('register');
     $routes->post('/register')

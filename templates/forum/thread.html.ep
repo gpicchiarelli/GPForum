@@ -22,6 +22,44 @@
       </form>
     </section>
   % }
+  % if ($engagement && $engagement->{authenticated}) {
+    <section aria-labelledby="engagement-heading">
+      <h2 id="engagement-heading">Thread tools</h2>
+      % my $bookmark = $engagement->{bookmark} || {};
+      % my $subscription = $engagement->{subscription} || {};
+      % if ($bookmark->{bookmarked}) {
+        <form method="post" action="<%= url_for('thread_bookmark_remove', thread_id => $thread->{thread_id}) %>">
+          <%= csrf_field %>
+          <button type="submit">Remove bookmark</button>
+        </form>
+      % } else {
+        <form method="post" action="<%= url_for('thread_bookmark', thread_id => $thread->{thread_id}) %>">
+          <%= csrf_field %>
+          <label for="bookmark-note">Bookmark note</label>
+          <input id="bookmark-note" name="note" type="text" value="">
+          <button type="submit">Save bookmark</button>
+        </form>
+      % }
+      % if ($subscription->{subscribed}) {
+        <form method="post" action="<%= url_for('thread_unsubscribe', thread_id => $thread->{thread_id}) %>">
+          <%= csrf_field %>
+          <button type="submit">Unfollow thread</button>
+        </form>
+        % if (!$subscription->{muted}) {
+          <form method="post" action="<%= url_for('thread_subscription_mute', thread_id => $thread->{thread_id}) %>">
+            <%= csrf_field %>
+            <button type="submit">Mute notifications</button>
+          </form>
+        % }
+      % } else {
+        <form method="post" action="<%= url_for('thread_subscribe', thread_id => $thread->{thread_id}) %>">
+          <%= csrf_field %>
+          <input type="hidden" name="preference" value="all">
+          <button type="submit">Follow thread</button>
+        </form>
+      % }
+    </section>
+  % }
   <section aria-labelledby="posts-heading">
     <h2 id="posts-heading">Posts</h2>
     % if (@{$posts}) {

@@ -7,14 +7,18 @@ use Const::Fast;
 use Mojo::Base -base;
 
 use GPForum::Service::Clock;
+use GPForum::Service::Forum::PageWindow;
 use GPForum::Service::Id;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_RANK => 0;
+const my $DEFAULT_RANK   => 0;
+const my $DEFAULT_LIMIT  => 25;
+const my @CURSOR_COLUMNS => qw(created_at notification_id);
 
-has clock              => sub { return GPForum::Service::Clock->new; };
-has id_service         => sub { return GPForum::Service::Id->new; };
+has clock       => sub { return GPForum::Service::Clock->new; };
+has id_service  => sub { return GPForum::Service::Id->new; };
+has page_window => sub { return GPForum::Service::Forum::PageWindow->new; };
 has permission_engine  => undef;
 has schema             => undef;
 has subscription_store => undef;
@@ -74,17 +78,32 @@ sub fanout_to_subscribers {
 sub list_for_user {
     my ( $self, $user_id, $limit ) = @_;
 
-    my $search = $self->schema->resultset('NotificationInbox')->search(
+    my $search = $self->_search_for_user(
+        $user_id,
         {
-            recipient_user_id => $user_id,
-        },
-        {
-            order_by => [ { -desc => 'created_at' } ],
-            rows     => $limit,
+            limit => $limit || $DEFAULT_LIMIT,
         }
     );
 
     return [ _rows($search) ];
+}
+
+sub list_page_for_user {
+    my ( $self, $user_id, $options ) = @_;
+
+    my $page   = $self->page_window->plan($options);
+    my $search = $self->_search_for_user(
+        $user_id,
+        {
+            %{ $options || {} },
+            limit => $page->{fetch_rows},
+            after => $page->{after},
+        }
+    );
+
+    my @rows = _rows($search);
+
+    return $self->page_window->page( \@rows, $page->{limit}, \@CURSOR_COLUMNS );
 }
 
 sub mark_read {
@@ -118,6 +137,32 @@ sub _can_notify {
     return $self->permission_engine->can_notify(
         $input->{recipient_user_id}, $input->{source_type},
         $input->{source_id},         $input->{payload} || {},
+    );
+}
+
+sub _search_for_user {
+    my ( $self, $user_id, $options ) = @_;
+
+    my $query = { recipient_user_id => $user_id };
+    if ( $options->{after} ) {
+        $query->{-or} = [
+            { created_at => { q{<} => $options->{after}{sort_value} } },
+            {
+                -and => [
+                    { created_at      => $options->{after}{sort_value} },
+                    { notification_id => { q{<} => $options->{after}{id} } },
+                ],
+            },
+        ];
+    }
+
+    return $self->schema->resultset('NotificationInbox')->search(
+        $query,
+        {
+            order_by =>
+              [ { -desc => 'created_at' }, { -desc => 'notification_id' } ],
+            rows => $options->{limit} || $DEFAULT_LIMIT,
+        }
     );
 }
 

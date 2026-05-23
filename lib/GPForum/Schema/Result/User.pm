@@ -101,6 +101,14 @@ __PACKAGE__->has_many(
     read_marker_deltas => 'GPForum::Schema::Result::UserReadMarkerDelta',
     'user_id'
 );
+__PACKAGE__->has_many(
+    bookmarks => 'GPForum::Schema::Result::Bookmark',
+    'user_id'
+);
+__PACKAGE__->has_many(
+    subscriptions => 'GPForum::Schema::Result::Subscription',
+    'user_id'
+);
 
 1;
 

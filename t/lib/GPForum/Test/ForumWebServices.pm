@@ -140,6 +140,118 @@ sub mark_thread_read {
     };
 }
 
+sub list_page_for_user {
+    my ( $self, $user_id, $options ) = @_;
+
+    if ( !$options->{target_type} ) {
+        return {
+            items => [
+                {
+                    notification_id   => 'notification-1',
+                    recipient_user_id => $user_id,
+                    created_at        => '2026-05-23T12:00:00Z',
+                    read_at           => undef,
+                    rank_score        => 0,
+                },
+            ],
+            next_cursor => 'notification-cursor',
+        };
+    }
+
+    return {
+        items => [
+            {
+                bookmark_id => 'bookmark-1',
+                user_id     => $user_id,
+                target_type => 'thread',
+                target_id   => 'thread-1',
+                note        => 'Read later',
+                created_at  => '2026-05-23T12:00:00Z',
+                deleted_at  => undef,
+            },
+        ],
+        next_cursor => 'bookmark-cursor',
+    };
+}
+
+sub mark_read {
+    my ( $self, $notification_id, $recipient_user_id ) = @_;
+
+    return {
+        notification_id   => $notification_id,
+        recipient_user_id => $recipient_user_id,
+        read_at           => '2026-05-23T12:00:00Z',
+    };
+}
+
+sub save_bookmark {
+    my ( $self, $input ) = @_;
+
+    return {
+        bookmark_id => 'bookmark-1',
+        user_id     => $input->{user_id},
+        target_type => $input->{target_type},
+        target_id   => $input->{target_id},
+        note        => $input->{note} || q{},
+        created_at  => '2026-05-23T12:00:00Z',
+        deleted_at  => undef,
+    };
+}
+
+sub remove_for_user_target {
+    my ( $self, $input ) = @_;
+
+    return {
+        ok          => 1,
+        bookmark_id => 'bookmark-1',
+        target_type => $input->{target_type},
+        target_id   => $input->{target_id},
+        deleted_at  => '2026-05-23T12:00:00Z',
+    };
+}
+
+sub status_for_user_target {
+    my ( $self, $user_id, $target_type, $target_id ) = @_;
+
+    return { bookmarked => 0, subscribed => 0, muted => 0 } if !$user_id;
+
+    return { bookmarked => 0, subscribed => 0, muted => 0 }
+      if $target_type eq 'thread' && $target_id eq 'thread-1';
+
+    return { bookmarked => 0, subscribed => 0, muted => 0 };
+}
+
+sub save_subscription {
+    my ( $self, $input ) = @_;
+
+    return {
+        subscription_id => 'subscription-1',
+        user_id         => $input->{user_id},
+        target_type     => $input->{target_type},
+        target_id       => $input->{target_id},
+        preference      => $input->{preference} || 'all',
+        created_at      => '2026-05-23T12:00:00Z',
+        muted_at        => undef,
+        revoked_at      => undef,
+    };
+}
+
+sub mute_for_user_target {
+    return {
+        ok              => 1,
+        subscription_id => 'subscription-1',
+        muted_at        => '2026-05-23T12:00:00Z',
+    };
+}
+
+sub revoke_for_user_target {
+    return {
+        ok              => 1,
+        subscription_id => 'subscription-1',
+        revoked_at      => '2026-05-23T12:00:00Z',
+    };
+}
+
 sub next_position {
     return 2;
 }

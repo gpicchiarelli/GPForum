@@ -17,6 +17,20 @@ has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub { return GPForum::Service::Id->new; };
 has schema     => undef;
 
+sub save_subscription {
+    my ( $self, $input ) = @_;
+
+    my $existing =
+      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
+        $input->{target_id}, );
+
+    if ($existing) {
+        return $self->_restore_subscription( $existing, $input );
+    }
+
+    return $self->subscribe($input);
+}
+
 sub subscribe {
     my ( $self, $input ) = @_;
 
@@ -36,6 +50,39 @@ sub subscribe {
     return $row;
 }
 
+sub find_for_user_target {
+    my ( $self, $user_id, $target_type, $target_id ) = @_;
+
+    return $self->schema->resultset('Subscription')->find(
+        {
+            user_id     => $user_id,
+            target_type => $target_type,
+            target_id   => $target_id,
+        }
+    );
+}
+
+sub status_for_user_target {
+    my ( $self, $user_id, $target_type, $target_id ) = @_;
+
+    return { subscribed => 0, muted => 0 } if !$user_id;
+
+    my $subscription =
+      $self->find_for_user_target( $user_id, $target_type, $target_id );
+
+    return { subscribed => 0, muted => 0 } if !$subscription;
+
+    my $revoked_at = _column( $subscription, 'revoked_at' );
+    return { subscribed => 0, muted => 0 } if defined $revoked_at;
+
+    return {
+        subscribed      => 1,
+        muted           => defined _column( $subscription, 'muted_at' ) ? 1 : 0,
+        subscription_id => _column( $subscription, 'subscription_id' ),
+        preference      => _column( $subscription, 'preference' ),
+    };
+}
+
 sub mute {
     my ( $self, $subscription_id ) = @_;
 
@@ -48,6 +95,44 @@ sub revoke {
 
     return $self->_update_subscription( $subscription_id,
         { revoked_at => $self->clock->now_iso8601 } );
+}
+
+sub mute_for_user_target {
+    my ( $self, $input ) = @_;
+
+    my $subscription =
+      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
+        $input->{target_id}, );
+
+    return { ok => 0, error => 'not_found' } if !$subscription;
+
+    my $changes = { muted_at => $self->clock->now_iso8601 };
+    $subscription->update($changes);
+
+    return {
+        ok              => 1,
+        subscription_id => _column( $subscription, 'subscription_id' ),
+        %{$changes},
+    };
+}
+
+sub revoke_for_user_target {
+    my ( $self, $input ) = @_;
+
+    my $subscription =
+      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
+        $input->{target_id}, );
+
+    return { ok => 0, error => 'not_found' } if !$subscription;
+
+    my $changes = { revoked_at => $self->clock->now_iso8601 };
+    $subscription->update($changes);
+
+    return {
+        ok              => 1,
+        subscription_id => _column( $subscription, 'subscription_id' ),
+        %{$changes},
+    };
 }
 
 sub subscribers_for {
@@ -77,6 +162,37 @@ sub _update_subscription {
         subscription_id => $subscription_id,
         %{$changes},
     };
+}
+
+sub _restore_subscription {
+    my ( $self, $subscription, $input ) = @_;
+
+    my $changes = {
+        preference => $input->{preference} || $DEFAULT_PREFERENCE,
+        muted_at   => undef,
+        revoked_at => undef,
+    };
+    $subscription->update($changes);
+
+    return {
+        subscription_id => _column( $subscription, 'subscription_id' ),
+        user_id         => $input->{user_id},
+        target_type     => $input->{target_type},
+        target_id       => $input->{target_id},
+        preference      => $changes->{preference},
+        created_at      => _column( $subscription, 'created_at' ),
+        muted_at        => undef,
+        revoked_at      => undef,
+    };
+}
+
+sub _column {
+    my ( $row, $column ) = @_;
+
+    return $row->{$column}           if ref $row eq 'HASH';
+    return $row->get_column($column) if $row && $row->can('get_column');
+
+    return;
 }
 
 sub _rows {

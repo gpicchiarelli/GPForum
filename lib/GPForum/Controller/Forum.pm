@@ -77,6 +77,7 @@ sub thread {
         thread      => _thread_hash( $page->{thread} ),
         posts       => [ map { _post_hash($_) } @{ $page->{posts}{items} } ],
         reading     => _reading_summary( $self, $page ),
+        engagement  => _engagement_summary( $self, $page->{thread} ),
         next_cursor => $page->{posts}{next_cursor},
     };
 
@@ -176,6 +177,163 @@ sub mark_thread_read {
     return _read_marker_response( $self, $marked );
 }
 
+sub bookmarks {
+    my ($self) = @_;
+
+    my $user_id = _current_user_id($self);
+    return _unauthorized($self) if !$user_id;
+
+    my $page = $self->gp_bookmark_store->list_page_for_user(
+        $user_id,
+        {
+            target_type => 'thread',
+            limit       => $self->param('limit') || $DEFAULT_PAGE_LIMIT,
+            after       => $self->param('after'),
+        }
+    );
+
+    my $payload = {
+        bookmarks   => [ map { _bookmark_hash($_) } @{ $page->{items} } ],
+        next_cursor => $page->{next_cursor},
+    };
+
+    return _render_payload( $self, 'forum/bookmarks', $payload, $HTTP_OK );
+}
+
+sub create_thread_bookmark {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'thread.bookmark' );
+    return if !$user_id;
+
+    return if !_visible_thread($self);
+
+    my $bookmark = eval {
+        return $self->gp_bookmark_store->save_bookmark(
+            {
+                user_id     => $user_id,
+                target_type => 'thread',
+                target_id   => $self->param('thread_id'),
+                note        => $self->param('note'),
+            }
+        );
+    };
+
+    return _system_failure($self) if $EVAL_ERROR;
+
+    return _bookmark_action_response( $self, 'bookmarked', $bookmark );
+}
+
+sub remove_thread_bookmark {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'thread.bookmark.remove' );
+    return if !$user_id;
+
+    return if !_visible_thread($self);
+
+    my $removed = eval {
+        return $self->gp_bookmark_store->remove_for_user_target(
+            {
+                user_id     => $user_id,
+                target_type => 'thread',
+                target_id   => $self->param('thread_id'),
+            }
+        );
+    };
+
+    return _system_failure($self)                    if $EVAL_ERROR;
+    return _not_found( $self, 'bookmark not found' ) if !$removed->{ok};
+
+    return _bookmark_action_response( $self, 'bookmark_removed', $removed );
+}
+
+sub subscribe_thread {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'thread.subscribe' );
+    return if !$user_id;
+
+    return if !_visible_thread($self);
+
+    my $subscription = eval {
+        return $self->gp_subscription_store->save_subscription(
+            {
+                user_id     => $user_id,
+                target_type => 'thread',
+                target_id   => $self->param('thread_id'),
+                preference  => $self->param('preference') || 'all',
+            }
+        );
+    };
+
+    return _system_failure($self) if $EVAL_ERROR;
+
+    return _subscription_action_response( $self, 'subscribed', $subscription );
+}
+
+sub mute_thread_subscription {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'thread.subscription.mute' );
+    return if !$user_id;
+
+    return if !_visible_thread($self);
+
+    my $muted = eval {
+        return $self->gp_subscription_store->mute_for_user_target(
+            {
+                user_id     => $user_id,
+                target_type => 'thread',
+                target_id   => $self->param('thread_id'),
+            }
+        );
+    };
+
+    return _system_failure($self)                        if $EVAL_ERROR;
+    return _not_found( $self, 'subscription not found' ) if !$muted->{ok};
+
+    return _subscription_action_response( $self, 'subscription_muted', $muted );
+}
+
+sub unsubscribe_thread {
+    my ($self) = @_;
+
+    my $user_id = _write_user_id( $self, 'thread.unsubscribe' );
+    return if !$user_id;
+
+    return if !_visible_thread($self);
+
+    my $revoked = eval {
+        return $self->gp_subscription_store->revoke_for_user_target(
+            {
+                user_id     => $user_id,
+                target_type => 'thread',
+                target_id   => $self->param('thread_id'),
+            }
+        );
+    };
+
+    return _system_failure($self)                        if $EVAL_ERROR;
+    return _not_found( $self, 'subscription not found' ) if !$revoked->{ok};
+
+    return _subscription_action_response( $self, 'unsubscribed', $revoked );
+}
+
+sub _visible_thread {
+    my ($controller) = @_;
+
+    my $thread = $controller->gp_thread_detail_reader->find_thread(
+        $controller->param('thread_id') );
+
+    if ( !$thread ) {
+        _not_found( $controller, 'thread not found' );
+        return;
+    }
+
+    return $thread;
+}
+
 sub _reply_thread {
     my ($controller) = @_;
 
@@ -245,6 +403,39 @@ sub _reading_summary {
     );
 }
 
+sub _engagement_summary {
+    my ( $controller, $thread ) = @_;
+
+    my $user_id = _current_user_id($controller);
+    return { authenticated => 0 } if !$user_id;
+
+    my $thread_id = _column( $thread, 'thread_id' );
+    my $summary   = eval {
+        return {
+            authenticated => 1,
+            bookmark => $controller->gp_bookmark_store->status_for_user_target(
+                $user_id, 'thread', $thread_id
+            ),
+            subscription =>
+              $controller->gp_subscription_store->status_for_user_target(
+                $user_id, 'thread', $thread_id
+              ),
+        };
+    };
+
+    if ($EVAL_ERROR) {
+        $controller->app->log->warn("engagement summary degraded: $EVAL_ERROR");
+        return {
+            authenticated => 1,
+            status        => 'degraded',
+            bookmark      => { bookmarked => 0 },
+            subscription  => { subscribed => 0, muted => 0 },
+        };
+    }
+
+    return $summary;
+}
+
 sub _created_thread_response {
     my ( $controller, $stored ) = @_;
 
@@ -299,6 +490,40 @@ sub _read_marker_response {
 
     return $controller->redirect_to( 'thread',
         thread_id => $marked->{read_state}{thread_id}, );
+}
+
+sub _bookmark_action_response {
+    my ( $controller, $status, $bookmark ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                status   => $status,
+                bookmark => $bookmark,
+            },
+            status => $HTTP_OK,
+        );
+    }
+
+    return $controller->redirect_to( 'thread',
+        thread_id => $controller->param('thread_id'), );
+}
+
+sub _subscription_action_response {
+    my ( $controller, $status, $subscription ) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                status       => $status,
+                subscription => $subscription,
+            },
+            status => $HTTP_OK,
+        );
+    }
+
+    return $controller->redirect_to( 'thread',
+        thread_id => $controller->param('thread_id'), );
 }
 
 sub search {
@@ -506,6 +731,18 @@ sub _search_hash {
         body        => _column( $row, 'body' ),
         visibility  => _column( $row, 'visibility' ),
         indexed_at  => _column( $row, 'indexed_at' ),
+    };
+}
+
+sub _bookmark_hash {
+    my ($row) = @_;
+
+    return {
+        bookmark_id => _column( $row, 'bookmark_id' ),
+        target_type => _column( $row, 'target_type' ),
+        target_id   => _column( $row, 'target_id' ),
+        note        => _column( $row, 'note' ),
+        created_at  => _column( $row, 'created_at' ),
     };
 }
 

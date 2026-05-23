@@ -19,7 +19,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 370;
+const my $EXPECTED_TESTS               => 372;
 const my $EXPECTED_MIGRATIONS          => 11;
 const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
 const my $FORUM_MIGRATION_INDEX        => 2;
@@ -565,6 +565,14 @@ ok(
 ok(
     $user_source->has_relationship('read_marker_deltas'),
     'user has read marker delta relationship'
+);
+ok(
+    $user_source->has_relationship('bookmarks'),
+    'user has bookmarks relationship'
+);
+ok(
+    $user_source->has_relationship('subscriptions'),
+    'user has subscriptions relationship'
 );
 
 is( $credential_source->from, 'credentials',

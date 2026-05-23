@@ -109,6 +109,7 @@ This repository currently contains:
 * attachment upload intent, validation, lifecycle persistence, links, variants, scanning hook, and media processing worker boundaries;
 * operations hardening boundaries for rate limiting, metrics snapshots, runbook validation, and runtime sizing;
 * advanced community boundaries for mentions, bookmarks, reputation, trust snapshots, and user feed projection;
+* HTTP bookmark and thread-follow controls backed by idempotent community/notification stores;
 * moderation review boundaries for reports, reversible moderation actions, suspensions, and admin audit review;
 * admin authorization boundaries for role catalogs, scoped role bindings, permission review, and audit-backed role changes;
 * import/export portability boundaries for manifest validation, dry-run import jobs, legacy id mapping, failure reporting, and privacy-aware export manifests;
@@ -136,6 +137,14 @@ semantic SSR by default and still return JSON when requested with
 * `POST /threads`
 * `POST /t/:thread_id/replies`
 * `POST /t/:thread_id/read`
+* `GET /bookmarks`
+* `POST /t/:thread_id/bookmark`
+* `POST /t/:thread_id/bookmark/remove`
+* `POST /t/:thread_id/subscribe`
+* `POST /t/:thread_id/subscribe/mute`
+* `POST /t/:thread_id/subscribe/remove`
+* `GET /notifications`
+* `POST /notifications/:notification_id/read`
 * `GET /search?q=...`
 
 State-changing forum routes require CSRF and an authenticated session user. Read
@@ -145,6 +154,13 @@ event log, audit log, outbox, bodies, revisions, and counters stay coherent.
 Thread read progress is stored as compressed per-user read state plus a
 coalescable delta row, preserving continuity without making it authoritative
 forum content.
+Thread bookmarks and follow/mute/unfollow controls are wired through the
+existing community and notification stores. They are idempotent per user/thread,
+SSR-accessible, CSRF-protected, and derived from PostgreSQL rows rather than any
+process-local state.
+The notification inbox is also traversable over HTTP. It uses the existing
+notification dispatcher read model, keyset pagination, and a CSRF-protected
+mark-read workflow so realtime badge updates have an SSR fallback.
 SSR form submissions redirect back into the discussion flow; JSON clients keep
 the explicit `201 Created` payload by sending `Accept: application/json`.
 OS-level feature flags such as `GPFORUM_OS_REUSEPORT`,

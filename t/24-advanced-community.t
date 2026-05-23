@@ -20,7 +20,7 @@ use GPForum::Test::Id;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 36;
+const my $EXPECTED_TESTS       => 44;
 const my $BOOKMARK_LIMIT       => 20;
 const my $MENTION_COUNT        => 2;
 const my $DEFAULT_RANK         => 0;
@@ -95,6 +95,26 @@ is( $bookmark->{created_at},
     '2026-05-23T12:00:00Z', 'bookmark stores creation time' );
 is( scalar @{ $bookmarks->created }, 1, 'bookmark row is inserted' );
 
+my $bookmark_status =
+  $bookmark_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $bookmark_status->{bookmarked}, 1, 'bookmark status is active' );
+is( $bookmark_status->{bookmark_id},
+    'generated-1', 'bookmark status exposes bookmark id' );
+
+my $saved_bookmark = $bookmark_store->save_bookmark(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        note        => 'aggiornato',
+    }
+);
+is( $saved_bookmark->{bookmark_id},
+    'generated-1', 'saving an existing bookmark is idempotent' );
+is( $saved_bookmark->{note}, 'aggiornato', 'save updates bookmark note' );
+is( scalar @{ $bookmarks->created },
+    1, 'idempotent bookmark save does not insert a duplicate' );
+
 my $listed =
   $bookmark_store->list_for_user( 'user-1',
     { target_type => 'thread', limit => $BOOKMARK_LIMIT } );
@@ -113,6 +133,16 @@ is( $removed->{deleted_at},
     '2026-05-23T12:00:00Z', 'bookmark removal is soft delete' );
 is( $bookmarks->find('generated-1')->get_column('deleted_at'),
     '2026-05-23T12:00:00Z', 'bookmark row receives deleted timestamp' );
+my $removed_status =
+  $bookmark_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $removed_status->{bookmarked}, 0, 'removed bookmark status is inactive' );
+
+my $bookmark_page =
+  $bookmark_store->list_page_for_user( 'user-1',
+    { target_type => 'thread', limit => $BOOKMARK_LIMIT } );
+is( scalar @{ $bookmark_page->{items} }, 1, 'bookmark page returns items' );
+is( $bookmark_page->{next_cursor},
+    undef, 'bookmark page omits cursor when complete' );
 
 my $reputation = GPForum::Service::Community::ReputationLedger->new(
     schema     => $schema,

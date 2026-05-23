@@ -20,7 +20,7 @@ use GPForum::Test::PermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 41;
+const my $EXPECTED_TESTS => 61;
 const my $LIST_LIMIT     => 10;
 
 plan tests => $EXPECTED_TESTS;
@@ -64,11 +64,97 @@ is( $subscription->{created_at},
     '2026-05-23T12:00:00Z', 'subscription stores creation time' );
 is( scalar @{ $subscriptions->created }, 1, 'subscription row is created' );
 
+my $subscription_status =
+  $subscription_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $subscription_status->{subscribed}, 1, 'subscription status is active' );
+is( $subscription_status->{muted}, 0, 'subscription status starts unmuted' );
+is( $subscription_status->{subscription_id},
+    'generated-1', 'subscription status exposes id' );
+
+my $saved_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'mentions',
+    }
+);
+is( $saved_subscription->{subscription_id},
+    'generated-1', 'saving an existing subscription is idempotent' );
+is( $saved_subscription->{preference},
+    'mentions', 'idempotent subscription save updates preference' );
+is( scalar @{ $subscriptions->created },
+    1, 'idempotent subscription save does not insert a duplicate' );
+
 my $muted = $subscription_store->mute('generated-1');
 is( $muted->{muted_at}, '2026-05-23T12:00:00Z', 'subscription can be muted' );
 my $revoked = $subscription_store->revoke('generated-1');
 is( $revoked->{revoked_at},
     '2026-05-23T12:00:00Z', 'subscription can be revoked' );
+
+my $revoked_status =
+  $subscription_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $revoked_status->{subscribed},
+    0, 'revoked subscription status is inactive' );
+
+my $restored_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'all',
+    }
+);
+is( $restored_subscription->{subscription_id},
+    'generated-1', 'save restores revoked subscription' );
+is( $restored_subscription->{revoked_at},
+    undef, 'restored subscription clears revocation' );
+
+my $target_muted = $subscription_store->mute_for_user_target(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+ok( $target_muted->{ok}, 'subscription can be muted by target' );
+is( $target_muted->{muted_at},
+    '2026-05-23T12:00:00Z', 'target mute records timestamp' );
+
+my $unmuted_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'all',
+    }
+);
+is( $unmuted_subscription->{preference},
+    'all', 'save restores muted subscription preference' );
+is( $unmuted_subscription->{muted_at}, undef, 'save clears muted state' );
+
+my $target_revoked = $subscription_store->revoke_for_user_target(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+ok( $target_revoked->{ok}, 'subscription can be revoked by target' );
+is( $target_revoked->{revoked_at},
+    '2026-05-23T12:00:00Z', 'target revoke records timestamp' );
+
+my $active_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'all',
+    }
+);
+is( $active_subscription->{muted_at}, undef, 'active restore clears mute' );
+is( $active_subscription->{revoked_at},
+    undef, 'active restore clears revocation' );
 
 my $subscribers =
   [ $subscription_store->subscribers_for( 'thread', 'thread-1' ) ];
@@ -180,6 +266,18 @@ is( $inbox->last_query->{recipient_user_id},
     'user-1', 'notification list filters recipient' );
 is( $inbox->last_attrs->{rows}, $LIST_LIMIT,
     'notification list applies limit' );
+
+my $notification_page =
+  $dispatcher->list_page_for_user( 'user-1', { limit => $LIST_LIMIT } );
+is( scalar @{ $notification_page->{items} },
+    2, 'notification page returns inbox rows' );
+is( $notification_page->{next_cursor},
+    undef, 'notification page omits cursor when complete' );
+is(
+    $inbox->last_attrs->{rows},
+    $LIST_LIMIT + 1,
+    'notification page fetches one extra row'
+);
 
 my $read = $dispatcher->mark_read( 'generated-1', 'user-1' );
 

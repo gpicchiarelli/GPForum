@@ -14,7 +14,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 53;
+const my $EXPECTED_TESTS => 68;
 const my $HTTP_FOUND     => 302;
 const my $HTTP_OK        => 200;
 
@@ -75,6 +75,21 @@ $test->status_is($HTTP_OK);
 $test->get_ok('/t/thread-1');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="reading-heading"]');
+$test->element_exists('section[aria-labelledby="engagement-heading"]');
+$test->element_exists('form[action="/t/thread-1/bookmark"]');
+$test->element_exists('label[for="bookmark-note"]');
+$test->element_exists('form[action="/t/thread-1/subscribe"]');
+$test->get_ok('/bookmarks');
+$test->status_is($HTTP_OK);
+$test->element_exists('main[aria-labelledby="bookmarks-heading"]');
+$test->element_exists('a[href="/t/thread-1"]');
+$test->element_exists('nav[aria-label="Bookmark pagination"]');
+$test->get_ok('/notifications');
+$test->status_is($HTTP_OK);
+$test->element_exists('main[aria-labelledby="notifications-heading"]');
+$test->element_exists('ol[aria-label="Notification inbox"]');
+$test->element_exists('form[action="/notifications/notification-1/read"]');
+$test->element_exists('nav[aria-label="Notification pagination"]');
 $test->get_ok('/new-thread');
 my $csrf_token = _csrf_token($test);
 $test->post_ok(
@@ -107,7 +122,9 @@ sub _install_forum_fakes {
         qw(
         gp_category_reader gp_thread_reader gp_thread_detail_reader
         gp_thread_composer gp_thread_store gp_post_composer gp_post_store
-        gp_post_position gp_thread_read_state gp_search_service gp_rate_limiter
+        gp_post_position gp_thread_read_state gp_bookmark_store
+        gp_subscription_store gp_notification_dispatcher gp_search_service
+        gp_rate_limiter
         )
       )
     {

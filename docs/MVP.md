@@ -12,6 +12,14 @@ It is intentionally narrower than the full architectural contract.
 * `POST /threads` creates a thread for an authenticated session user.
 * `POST /t/:thread_id/replies` creates a reply for an authenticated session user.
 * `POST /t/:thread_id/read` records per-user thread reading progress.
+* `GET /bookmarks` renders the authenticated user's saved thread bookmarks.
+* `POST /t/:thread_id/bookmark` saves or restores a bookmark for a thread.
+* `POST /t/:thread_id/bookmark/remove` soft-removes a thread bookmark.
+* `POST /t/:thread_id/subscribe` follows a thread for notifications.
+* `POST /t/:thread_id/subscribe/mute` mutes a followed thread.
+* `POST /t/:thread_id/subscribe/remove` unfollows a thread.
+* `GET /notifications` renders the authenticated user's notification inbox.
+* `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /search?q=...` renders PostgreSQL-native search results.
 
 Read endpoints render semantic SSR by default. They also return JSON when the
@@ -28,6 +36,17 @@ first unread post anchor, unread count for the current page, and a CSRF-protecte
 form to mark visible posts as read. The read marker model is compressed to one
 row per `(user_id, thread_id)` plus a coalescable delta table for future
 asynchronous consolidation.
+
+Authenticated thread pages also include community-continuity controls: save
+bookmark, remove bookmark, follow, mute, and unfollow. These controls are
+server-rendered, keyboard-accessible, CSRF-protected, and backed by existing
+`BookmarkStore` and `SubscriptionStore` service boundaries. Bookmark listing
+uses keyset pagination and no `OFFSET`.
+
+Authenticated notification pages expose the existing notification inbox read
+model over SSR/JSON. Mark-read is CSRF-protected and writes through
+`Notification::Dispatcher`, preserving the notification read projection rather
+than inventing process-local UI state.
 
 ## What Works
 
@@ -47,6 +66,12 @@ uses `OFFSET`.
 The SSR forum templates use semantic landmarks, labelled forms, stable post
 anchors, accessible pagination navigation, and no JavaScript requirement for
 core forum reading.
+
+Bookmarks are soft-deleted and can be restored idempotently for the same
+`(user_id, target_type, target_id)` tuple. Thread subscriptions are also
+idempotent and can clear muted/revoked state when the user follows the same
+thread again. These are continuity tools, not authoritative moderation or
+permission records.
 
 `/health/ready` now performs a real lightweight DB readiness check and verifies
 that event, outbox, and projection resultsets are reachable.

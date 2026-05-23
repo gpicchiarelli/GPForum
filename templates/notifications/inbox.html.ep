@@ -1,0 +1,38 @@
+% layout 'default';
+% title 'Notifications - GPForum';
+
+<main aria-labelledby="notifications-heading">
+  <h1 id="notifications-heading">Notifications</h1>
+  % if (@{$notifications}) {
+    <ol aria-label="Notification inbox">
+      % for my $notification (@{$notifications}) {
+        <li>
+          <article aria-labelledby="notification-<%= $notification->{notification_id} %>-heading">
+            <h2 id="notification-<%= $notification->{notification_id} %>-heading">
+              Notification <%= $notification->{notification_id} %>
+            </h2>
+            <p>
+              Received at
+              <time datetime="<%= $notification->{created_at} %>"><%= $notification->{created_at} %></time>
+            </p>
+            % if ($notification->{read_at}) {
+              <p role="status">Read</p>
+            % } else {
+              <form method="post" action="<%= url_for('notification_read', notification_id => $notification->{notification_id}) %>">
+                <%= csrf_field %>
+                <button type="submit">Mark notification as read</button>
+              </form>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No notifications yet.</p>
+  % }
+  % if ($next_cursor) {
+    <nav aria-label="Notification pagination">
+      <a href="<%= url_for('notifications')->query(after => $next_cursor) %>">Older notifications</a>
+    </nav>
+  % }
+</main>
