@@ -10,6 +10,7 @@ use Mojo::Base -base;
 
 use GPForum::Service::Clock;
 use GPForum::Service::Operations::OSPreflight;
+use GPForum::Service::Operations::QueryBudget;
 
 our $VERSION = '0.001';
 
@@ -32,6 +33,8 @@ sub check {
         $self->_resultset_check('EventLog'),
         $self->_resultset_check('OutboxMessage'),
         $self->_resultset_check('ProjectionGeneration'),
+        $self->_resultset_check('EndpointQueryBudget'),
+        $self->_query_budget_drift_check,
     );
 
     return {
@@ -113,6 +116,37 @@ sub _resultset_check {
     } or return _failed_check( lc $name, $started, $EVAL_ERROR );
 
     return _ok_check( lc $name, $started );
+}
+
+sub _query_budget_drift_check {
+    my ($self) = @_;
+
+    my $started = time;
+    my $report  = eval {
+        return GPForum::Service::Operations::QueryBudget->new(
+            schema => $self->schema )->drift_report;
+    } or return _failed_check( 'query_budget_drift', $started, $EVAL_ERROR );
+
+    return _failed_query_budget_check( $started, $report )
+      if $report->{status} ne 'ok';
+
+    return {
+        name       => 'query_budget_drift',
+        status     => 'ok',
+        latency_ms => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
+        report     => $report,
+    };
+}
+
+sub _failed_query_budget_check {
+    my ( $started, $report ) = @_;
+
+    return {
+        name       => 'query_budget_drift',
+        status     => 'fail',
+        latency_ms => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
+        report     => $report,
+    };
 }
 
 sub _ok_check {

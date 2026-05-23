@@ -19,7 +19,7 @@ sub dbh {
 }
 
 sub resultset {
-    my ($self) = @_;
+    my ( $self, $name ) = @_;
 
     return $self;
 }
