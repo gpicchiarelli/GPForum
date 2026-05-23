@@ -17,6 +17,11 @@ offsets, blue/green rebuilds, hot-row avoidance, outbox retries,
 PostgreSQL-native search, disposable caches, online migrations, and
 observability must be considered for every scalable workflow.
 
+Prompt 52 alignment: the execution checklist is specialized for domain
+integrity, authorization correctness, moderation safety, visibility
+enforcement, audit traceability, governance workflows, anti-leak guarantees,
+policy-safe projections, cache invalidation, and replay preservation.
+
 Its purpose is to prevent architectural drift while GPForum moves from
 "constitution plus structural MVP" into a complete, navigable, durable forum
 platform.

@@ -1,5 +1,10 @@
 GPForum - Content Policy, Community Guidelines & Enforcement Constitution
 
+Prompt 52 alignment: content policy enforcement MUST be server-authoritative,
+event-backed, audit-backed, visibility-versioned where relevant, reversible
+where feasible, projection-safe, cache-invalidating, and conservative against
+leaks in search, feeds, metadata, previews, notifications, and plugins.
+
 This document defines the mandatory community policy model, content rule structure, enforcement levels, appeals, policy versioning, and social governance standards for GPForum.
 
 This specification is mandatory for moderation product design.
@@ -127,4 +132,3 @@ Automated systems MUST remain:
 * bounded.
 
 Automation MUST NOT become unreviewable authority.
-

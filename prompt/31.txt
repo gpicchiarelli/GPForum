@@ -5,6 +5,11 @@ dashboards, audit viewers, moderation oversight, emergency controls, filters,
 tables, dialogs, and bulk actions MUST be keyboard-operable, semantic,
 screen-reader compatible, focus-safe, and WCAG 2.2 AA compliant.
 
+Prompt 52 alignment: admin and staff workflows MUST be audit-backed,
+permission-scoped, moderation-safe, replay-aware, anti-leak, and protected from
+silent privilege escalation. Staff screens MUST not expose restricted content
+unless the actor is explicitly authorized for that scope.
+
 This document defines the mandatory admin console architecture, staff workflows, administrative boundaries, emergency controls, and operational visibility requirements for GPForum.
 
 This specification is mandatory.

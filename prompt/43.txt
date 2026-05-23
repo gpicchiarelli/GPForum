@@ -25,6 +25,11 @@ consumers, search indexing, cache invalidation, outbox delivery, and migrations
 must preserve explainable query topology, projection stability, rebuild safety,
 and graceful degradation.
 
+This contract is further specialized by prompt/52.txt. Domain workflows must
+preserve explicit authorization, visibility state, moderation state, event and
+audit traceability, projection safety, cache invalidation, anti-leak behavior,
+and replay-preserving governance semantics.
+
 ---
 
 Contract Purpose

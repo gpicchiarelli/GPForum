@@ -1,5 +1,10 @@
 GPForum - Permission Matrix & Authorization Rules Constitution
 
+Prompt 52 alignment: permission matrix changes MUST answer the mandatory
+authorization questions for read, write, moderate, delete, restore, move,
+search, subscribe, and export. Permission rules MUST remain explicit,
+visibility-aware, moderation-aware, audit-backed, and anti-leak.
+
 This document defines the initial permission matrix, role model, ABAC rules, and authorization evaluation expectations for GPForum.
 
 This specification is mandatory for implementation.
@@ -237,4 +242,3 @@ Authorization checks SHOULD return:
 User-facing denial messages MUST be safe and non-leaky.
 
 Operational logs SHOULD include enough context for audit.
-

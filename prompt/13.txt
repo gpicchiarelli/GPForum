@@ -1,5 +1,10 @@
 GPForum — Domain Model, Core Entities & Business Architecture Constitution
 
+Prompt 52 alignment: domain entities MUST preserve canonical truth, explicit
+visibility state, explicit moderation state, revision history, event emission,
+audit traceability, projection safety, cache invalidation, anti-leak invariants,
+and replay-safe reconstruction.
+
 This document defines the mandatory domain architecture, business entity philosophy, aggregate boundaries, lifecycle rules, invariants, ownership semantics, revision strategies, and long-term domain consistency principles of GPForum.
 
 This specification is foundational and mandatory.

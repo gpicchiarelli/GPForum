@@ -6,6 +6,11 @@ mutating controls MUST be semantic buttons, composer routes MUST support
 keyboard-only use, and no core route may require JavaScript as the only path to
 participation.
 
+Prompt 52 alignment: HTTP workflows MUST enforce authorization, visibility, and
+moderation state before rendering or mutating. Controllers MUST remain thin and
+MUST NOT bypass domain services, event emission, audit records, projection
+updates, cache invalidation, CSRF, or anti-leak filtering.
+
 This document defines the initial route map, controller responsibilities, request lifecycle, validation rules, and application workflow contracts for GPForum.
 
 This specification is mandatory for web implementation.

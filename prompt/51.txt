@@ -17,6 +17,12 @@ Minion asynchronous workers, SSR-first rendering, append-oriented persistence,
 event/audit/outbox discipline, permission safety, moderation authority, and
 optional Redis acceleration only.
 
+Prompt 52 alignment: scalable projections, search indexes, feeds, caches,
+notifications, counters, and realtime updates MUST remain policy-safe,
+visibility-aware, moderation-aware, deletion-aware, anti-leak, and replayable.
+Performance work MUST never bypass authorization or make derived state
+authoritative.
+
 ---
 
 1. Primary Objective

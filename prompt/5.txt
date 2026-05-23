@@ -1,5 +1,9 @@
 GPForum — Security Architecture Constitution
 
+Prompt 52 alignment: security-sensitive workflows MUST preserve domain
+integrity, explicit authorization, moderation safety, immutable audit records,
+anti-leak guarantees, and replay-safe event semantics.
+
 This document defines the mandatory security architecture, trust model, authentication strategy, authorization framework, audit discipline, browser security requirements, input validation standards, operational hardening rules, and defensive engineering philosophy of GPForum.
 
 Security is foundational and non-optional.

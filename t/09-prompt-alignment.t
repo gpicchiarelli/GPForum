@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 217;
+const my $EXPECTED_TESTS => 253;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -23,6 +23,7 @@ my $discipline        = path('prompt/48.txt')->slurp;
 my $os_performance    = path('prompt/49.txt')->slurp;
 my $execution         = path('prompt/50.txt')->slurp;
 my $scalability       = path('prompt/51.txt')->slurp;
+my $domain_integrity  = path('prompt/52.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -94,7 +95,7 @@ like(
 );
 like(
     $readme,
-    qr/51 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/52 [ ] architectural [ ] prompt [ ] constitutions/msx,
 'README counts the verifiable, accessibility, community, and discipline constitutions'
 );
 like(
@@ -134,7 +135,7 @@ like(
 );
 like(
     $readme,
-    qr/51 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/52 [ ] architectural [ ] prompt [ ] constitutions/msx,
     'README counts the accessibility constitution'
 );
 like(
@@ -379,6 +380,17 @@ _check_scalability_prompt(
         execution    => $execution,
         readme       => $readme,
         scalability  => $scalability,
+    }
+);
+
+_check_domain_integrity_prompt(
+    {
+        architecture     => $architecture,
+        domain_integrity => $domain_integrity,
+        engineering      => $engineering,
+        execution        => $execution,
+        readme           => $readme,
+        scalability      => $scalability,
     }
 );
 
@@ -681,6 +693,193 @@ sub _check_prompt_51_alignment {
 
     like( path($prompt_file)->slurp,
         qr/Prompt [ ] 51 [ ] alignment/msx, $message );
+
+    return;
+}
+
+sub _check_domain_integrity_prompt {
+    my ($context) = @_;
+
+    my $domain_text = $context->{domain_integrity};
+
+    like(
+        $domain_text,
+        qr/Domain [ ] Integrity, [ ] Authorization [ ] And [ ] Moderation/msx,
+        'domain integrity prompt defines the new constitution'
+    );
+    ok(
+        _has_all(
+            $domain_text,
+            'permission-safe system',
+            'moderation-safe system',
+            'audit-safe system',
+            'replay-safe system',
+        ),
+        'domain integrity prompt defines the safety objective'
+    );
+    like(
+        $domain_text,
+        qr/Canonical [ ] truth [ ] MUST [ ] remain [ ] in/msx,
+        'domain integrity prompt preserves canonical truth'
+    );
+    like(
+        $domain_text,
+        qr/Authorization [ ] MUST [ ] remain [ ] explicit/msx,
+        'domain integrity prompt requires explicit authorization'
+    );
+    ok(
+        _has_all(
+            $domain_text,
+            'who can read?',
+            'who can write?',
+            'who can export?',
+        ),
+        'domain integrity prompt requires mandatory authorization questions'
+    );
+    like(
+        $domain_text,
+        qr/Visibility [ ] MUST [ ] remain [ ] explicit/msx,
+        'domain integrity prompt requires explicit visibility'
+    );
+    like(
+        $domain_text,
+        qr/No [ ] restricted [ ] content [ ] may [ ] leak/msx,
+        'domain integrity prompt forbids restricted content leakage'
+    );
+    like(
+        $domain_text,
+        qr/Moderation [ ] MUST [ ] remain [ ] server-authoritative/msx,
+        'domain integrity prompt preserves server-authoritative moderation'
+    );
+    like(
+        $domain_text,
+        qr/Hard [ ] deletion [ ] MUST [ ] remain [ ] exceptional/msx,
+        'domain integrity prompt restricts hard deletion'
+    );
+    ok(
+        _has_all(
+            $domain_text,
+            'preserve historical revisions',
+            'preserve edit attribution',
+            'preserve moderation traceability',
+        ),
+        'domain integrity prompt preserves revision traceability'
+    );
+    ok(
+        index( $domain_text,
+            'All security-sensitive actions MUST create immutable audit records'
+        ) >= 0,
+        'domain integrity prompt requires immutable audit records'
+    );
+    ok(
+        index( $domain_text,
+            'All domain-significant workflows MUST emit events' ) >= 0,
+        'domain integrity prompt requires domain events'
+    );
+    ok(
+        _has_all( $domain_text, 'visibility_version', 'permission_version' ),
+        'domain integrity prompt requires version-aware permission state'
+    );
+    like(
+        $domain_text,
+qr/Private [ ] or [ ] moderated [ ] content [ ] MUST [ ] NEVER [ ] leak/msx,
+        'domain integrity prompt defines anti-leak discipline'
+    );
+    ok(
+        index( $domain_text,
+            'Search snippets MUST NOT expose restricted content' ) >= 0,
+        'domain integrity prompt protects search snippets'
+    );
+    like(
+        $domain_text,
+        qr/Notification [ ] projections [ ] MUST [ ] remain [ ] derived/msx,
+        'domain integrity prompt preserves notification derivation'
+    );
+    like(
+        $domain_text,
+        qr/Governance [ ] actions [ ] MUST [ ] remain [ ] explainable/msx,
+        'domain integrity prompt requires explainable governance'
+    );
+    ok(
+        _has_all(
+            $domain_text,
+            'deleted content is not publicly visible',
+            'hidden posts do not appear in search',
+            'suspended users cannot create content',
+            'revoked sessions cannot authenticate',
+        ),
+        'domain integrity prompt defines domain invariants'
+    );
+    like(
+        $domain_text,
+        qr/What [ ] is [ ] canonical [ ] truth[?]/msx,
+        'domain integrity prompt requires canonical truth review'
+    );
+    like(
+        $domain_text,
+        qr/What [ ] could [ ] leak[?]/msx,
+        'domain integrity prompt requires anti-leak review'
+    );
+    like(
+        $domain_text,
+        qr/How [ ] is [ ] replay [ ] preserved[?]/msx,
+        'domain integrity prompt requires replay preservation review'
+    );
+    ok(
+        _has_all(
+            $context->{readme},
+'Domain integrity, authorization correctness, and moderation safety are mandatory',
+        ),
+        'README records domain integrity prompt as a final decision'
+    );
+    like( $context->{architecture},
+        qr/prompt\/52[.]txt/msx,
+        'executable architecture prompt aligns with domain integrity prompt' );
+    like(
+        $context->{engineering},
+        qr/Prompt [ ] 52 [ ] alignment/msx,
+        'engineering invariants prompt aligns with domain integrity prompt'
+    );
+    like(
+        $context->{execution},
+        qr/Prompt [ ] 52 [ ] alignment/msx,
+        'execution constitution aligns with domain integrity prompt'
+    );
+    like(
+        $context->{scalability},
+        qr/Prompt [ ] 52 [ ] alignment/msx,
+        'scalability prompt aligns with domain integrity prompt'
+    );
+
+    _check_prompt_52_alignment( 'prompt/5.txt',
+        'security prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/9.txt',
+        'authorization prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/13.txt',
+        'domain model prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/22.txt',
+        'permission matrix prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/23.txt',
+        'event catalog prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/24.txt',
+        'HTTP workflow prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/26.txt',
+        'privacy prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/31.txt',
+        'admin console prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/32.txt',
+        'content policy prompt aligns with domain integrity prompt' );
+    _check_prompt_52_alignment( 'prompt/34.txt',
+        'SEO prompt aligns with domain integrity prompt' );
+
+    return;
+}
+
+sub _check_prompt_52_alignment {
+    my ( $prompt_file, $message ) = @_;
+
+    like( path($prompt_file)->slurp,
+        qr/Prompt [ ] 52 [ ] alignment/msx, $message );
 
     return;
 }

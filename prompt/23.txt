@@ -4,6 +4,10 @@ Prompt 45 alignment: event and workflow contracts MUST be verifiable. Event
 payloads, command semantics, idempotency keys, aggregate lineage, outbox effects,
 and replay expectations MUST have tests or explicit verification plans.
 
+Prompt 52 alignment: domain-significant workflows MUST emit immutable,
+replayable events and preserve authorization, visibility, moderation, audit,
+projection, cache invalidation, anti-leak, and governance semantics.
+
 This document defines the canonical domain event catalog, event payload expectations, producers, consumers, idempotency rules, and workflow contracts for GPForum.
 
 This specification is mandatory for event-driven implementation.

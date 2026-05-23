@@ -6,6 +6,12 @@ audit views, dialogs, filters, confirmations, and emergency controls MUST be
 semantic, focus-safe, screen-reader compatible, and non-color-only. Inaccessible
 staff tooling is an operational safety failure.
 
+Prompt 52 alignment: authorization, moderation, and governance workflows are
+execution invariants. Each workflow MUST answer who can read, write, moderate,
+delete, restore, move, search, subscribe, and export; visibility, moderation
+state, event emission, audit records, projection effects, cache invalidation,
+anti-leak behavior, and replay preservation MUST be explicit.
+
 This document defines the mandatory authorization architecture, permission model, moderation system, trust framework, governance rules, administrative boundaries, escalation policies, and operational control philosophy of GPForum.
 
 This specification is foundational and mandatory.

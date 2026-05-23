@@ -26,6 +26,10 @@ engineering invariants. Hot paths MUST be bounded and explainable; projections
 MUST be idempotent, observable, rebuildable, restart-safe, and never
 authoritative.
 
+Prompt 52 alignment: domain integrity, authorization correctness, moderation
+safety, audit traceability, anti-leak behavior, visibility correctness, and
+replay-preserving governance workflows are engineering invariants.
+
 It does not replace the existing constitutions. It binds them together with
 mechanically reviewable and testable engineering rules.
 

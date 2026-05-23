@@ -1,5 +1,10 @@
 GPForum - Privacy, Data Protection & Legal Operations Constitution
 
+Prompt 52 alignment: privacy and data-rights workflows MUST not leak private,
+moderated, hidden, deleted, quarantined, or restricted content through search,
+feeds, metadata, previews, notifications, projections, caches, exports, plugin
+hooks, or realtime events.
+
 This document defines the mandatory privacy, data protection, user data rights, legal compliance, consent, retention, export, deletion, and policy operation standards for GPForum.
 
 This specification is mandatory.
@@ -205,4 +210,3 @@ Policy acceptance SHOULD record:
 * source.
 
 Policy changes that affect user rights SHOULD be communicated clearly.
-
