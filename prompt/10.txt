@@ -220,6 +220,30 @@ Tracing MUST support:
 
 ⸻
 
+Profiling
+
+The platform MUST support profiling.
+
+Profiling SHOULD cover:
+
+* HTTP request handlers;
+* template rendering;
+* authorization checks;
+* database query paths;
+* worker execution;
+* event consumers;
+* websocket fanout paths.
+
+Preferred Perl profiler:
+
+* Devel::NYTProf.
+
+Profiling artifacts MUST be safe to collect, archive, and compare across releases.
+
+Profiling MUST NOT expose secrets or private user data.
+
+⸻
+
 Realtime Observability
 
 Realtime systems MUST expose:
@@ -423,6 +447,8 @@ Operational dashboards SHOULD expose:
 * realtime system state;
 * queue health;
 * replication status;
+* profiling summaries;
+* slow path reports;
 * moderation throughput;
 * security anomalies;
 * websocket metrics.

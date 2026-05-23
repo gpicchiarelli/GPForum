@@ -18,9 +18,15 @@ GPForum MUST test:
 * event workflows;
 * security boundaries;
 * rendering safety;
-* operational commands.
+* operational commands;
+* profiling readiness;
+* performance-critical paths.
 
 The platform MUST avoid relying on manual confidence for critical behavior.
+
+Tests MUST be perfectly mapped to GPForum requirements.
+
+"Perfectly covering" means every critical architectural, security, authorization, data, event, worker, privacy, and operational requirement has an explicit verification strategy.
 
 ---
 
@@ -38,7 +44,9 @@ The test suite SHOULD include:
 * template rendering tests;
 * browser or HTMX workflow tests;
 * migration tests;
-* load and capacity tests where appropriate.
+* load and capacity tests where appropriate;
+* profiling tests;
+* coverage verification.
 
 ---
 
@@ -50,7 +58,10 @@ Milestone 0 MUST include:
 * health endpoints work;
 * configuration validation works;
 * logging initializes;
-* database connection can be tested safely.
+* database connection can be tested safely;
+* Carton dependency installation works;
+* profiling command exists;
+* coverage command exists.
 
 Milestone 1 MUST include:
 
@@ -95,6 +106,28 @@ Security regression tests SHOULD cover:
 
 ---
 
+Coverage Requirements
+
+Coverage verification MUST exist from the first implementation milestone.
+
+Coverage MUST track:
+
+* statements;
+* branches where tooling permits;
+* authorization paths;
+* error paths;
+* worker retry paths;
+* event consumer paths;
+* security-sensitive paths.
+
+Coverage targets MUST be explicit per milestone.
+
+Critical flows SHOULD target complete requirement coverage, not only high numeric coverage.
+
+Uncovered critical requirements MUST block release.
+
+---
+
 Event Tests
 
 Event tests MUST verify:
@@ -104,6 +137,23 @@ Event tests MUST verify:
 * replay safety;
 * no duplicate external side effects on retry;
 * projection rebuild from event history.
+
+---
+
+Profiling Tests
+
+Profiling tests MUST verify that profiling can run.
+
+Profiling validation SHOULD include:
+
+* Devel::NYTProf execution;
+* profile artifact generation;
+* request-path profiling smoke test;
+* worker profiling smoke test;
+* slow query timing capture where database is available;
+* memory growth smoke checks for long-running processes.
+
+Profiling failures in release validation MUST be treated as operational readiness failures.
 
 ---
 
@@ -130,11 +180,13 @@ Release gates SHOULD include:
 
 * formatting;
 * Perl::Critic;
+* Carton dependency validation;
 * unit tests;
 * integration tests;
+* coverage validation;
+* profiling smoke validation;
 * migration validation;
 * security checks;
 * smoke tests.
 
 Failing release gates MUST block production deployment unless explicitly overridden by emergency procedure.
-

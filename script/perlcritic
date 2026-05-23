@@ -1,8 +1,14 @@
 #!/bin/sh
 set -eu
 
+runner="perlcritic"
+
+if command -v carton >/dev/null 2>&1 && [ -d local ]; then
+    runner="carton exec perlcritic"
+fi
+
 if [ "$#" -gt 0 ]; then
-    exec perlcritic --profile .perlcriticrc "$@"
+    exec $runner --profile .perlcriticrc "$@"
 fi
 
 tmp_file="${TMPDIR:-/tmp}/gpforum-perlcritic-files.$$"
@@ -17,4 +23,4 @@ if [ ! -s "$tmp_file" ]; then
     exit 0
 fi
 
-exec xargs perlcritic --profile .perlcriticrc < "$tmp_file"
+exec xargs $runner --profile .perlcriticrc < "$tmp_file"

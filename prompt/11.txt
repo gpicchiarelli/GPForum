@@ -58,6 +58,8 @@ Every pipeline MUST minimally include:
 * static analysis
 * formatting validation
 * test execution
+* coverage validation
+* profiling smoke validation
 * security scanning
 * artifact creation
 * deployment validation
@@ -78,7 +80,17 @@ Dependencies MUST:
 
 * remain pinned where appropriate;
 * remain auditable;
-* remain versioned.
+* remain versioned;
+* be reproducible through Carton.
+
+Carton is the mandatory Perl dependency manager for GPForum.
+
+The repository MUST maintain:
+
+* cpanfile;
+* cpanfile.snapshot after dependency installation;
+* scripted dependency installation;
+* CI dependency cache where safe.
 
 The system MUST minimize:
 
@@ -178,9 +190,15 @@ The platform MUST support:
 * authorization tests;
 * regression tests;
 * security tests;
-* distributed workflow tests.
+* distributed workflow tests;
+* coverage tests;
+* profiling tests.
 
 Critical workflows MUST remain continuously testable.
+
+Test coverage MUST be mapped to architectural requirements.
+
+Coverage gaps in critical workflows are release blockers.
 
 ⸻
 
@@ -224,6 +242,41 @@ Mandatory security validation SHOULD include:
 * abuse testing.
 
 Security regressions MUST block release workflows.
+
+⸻
+
+Coverage Philosophy
+
+Coverage is mandatory for critical behavior.
+
+Coverage validation MUST include:
+
+* statement coverage;
+* branch coverage where practical;
+* condition coverage for authorization and security logic;
+* workflow coverage for user-facing paths;
+* event and worker coverage.
+
+Coverage numbers MUST NOT replace review of requirement coverage.
+
+Critical workflows MUST have explicit tests tied to their prompt requirements.
+
+⸻
+
+Profiling Philosophy
+
+Profiling is mandatory.
+
+CI and release workflows SHOULD support:
+
+* Devel::NYTProf profiling runs;
+* request-path profiling;
+* worker profiling;
+* DB query timing capture;
+* memory growth checks;
+* startup time checks.
+
+Profiling MUST be available before production incidents require it.
 
 ⸻
 
@@ -430,6 +483,8 @@ CI/CD workflows SHOULD integrate:
 
 * release metrics;
 * deployment tracing;
+* profiling artifacts;
+* coverage reports;
 * incident correlation;
 * rollback telemetry.
 

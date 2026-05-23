@@ -37,17 +37,34 @@ The project SHOULD define:
 * application start command;
 * worker start command;
 * migration command;
-* test command.
+* test command;
+* coverage command;
+* profiling command.
 
-Packaging MAY use:
+Mandatory Perl packaging strategy:
 
 * Carton;
-* cpm;
+* cpanfile;
+* cpanfile.snapshot;
+* cpanfile.postgres for PostgreSQL-specific Perl dependencies.
+
+Additional packaging MAY use:
+
 * system packages;
 * container image;
 * deployment-specific packaging.
 
-The chosen strategy MUST be documented.
+Carton MUST be used for Perl dependency reproducibility.
+
+Dependency automation MUST provide:
+
+* install;
+* system preflight;
+* update with review;
+* audit where tooling allows;
+* test;
+* coverage;
+* profiling.
 
 ---
 

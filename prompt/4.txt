@@ -471,9 +471,15 @@ Mandatory testing:
 * integration tests;
 * authorization tests;
 * security tests;
-* regression tests.
+* regression tests;
+* coverage validation;
+* profiling validation.
 
 Critical workflows MUST remain covered.
+
+Perl profiling MUST be supported through Devel::NYTProf.
+
+Perl dependency management MUST use Carton.
 
 ⸻
 
@@ -483,6 +489,8 @@ CI MUST enforce:
 
 * Perl::Critic;
 * test suite execution;
+* coverage execution;
+* profiling smoke execution;
 * security scanning;
 * formatting consistency;
 * dependency auditing.

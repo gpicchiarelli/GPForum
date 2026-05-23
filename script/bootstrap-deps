@@ -1,0 +1,25 @@
+#!/bin/sh
+set -eu
+
+with_postgres=0
+
+if [ "${1:-}" = "--postgres" ]; then
+    with_postgres=1
+    shift
+fi
+
+if ! command -v carton >/dev/null 2>&1; then
+    echo "Carton is required. Install it with: cpanm Carton"
+    exit 1
+fi
+
+carton install "$@"
+
+if [ "$with_postgres" -eq 1 ]; then
+    if ! command -v pg_config >/dev/null 2>&1; then
+        echo "pg_config is required for DBD::Pg. Run script/system-preflight for OS package guidance."
+        exit 1
+    fi
+
+    exec carton inject DBD::Pg Test::PostgreSQL
+fi

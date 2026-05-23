@@ -67,6 +67,8 @@ Process counts SHOULD be adjustable by:
 
 Process scaling MUST remain observable.
 
+Process scaling MUST be profiled under representative workloads before production reliance.
+
 ---
 
 Per-Node Scaling
@@ -83,6 +85,14 @@ Per-node capacity MUST account for:
 * queue concurrency;
 * cache memory;
 * operating system limits.
+
+Per-node capacity plans MUST include profiling data for:
+
+* CPU time;
+* memory growth;
+* request latency;
+* worker throughput;
+* database connection pressure.
 
 The system MUST avoid increasing Perl processes beyond downstream capacity.
 

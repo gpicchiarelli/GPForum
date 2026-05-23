@@ -1,0 +1,143 @@
+GPForum - Profiling, Coverage & Perl Automation Constitution
+
+This document defines the mandatory profiling, coverage, dependency automation, and Perl tooling model for GPForum.
+
+This specification is foundational and mandatory.
+
+---
+
+Automation Philosophy
+
+GPForum MUST use the strongest practical Perl automation available.
+
+The project MUST avoid:
+
+* manual dependency installation;
+* unrepeatable profiling;
+* optional test coverage for critical paths;
+* undocumented performance investigation;
+* release confidence based on intuition.
+
+---
+
+Dependency Decision
+
+Carton is mandatory.
+
+The repository MUST use:
+
+* cpanfile;
+* cpanfile.postgres for PostgreSQL-specific Perl dependencies;
+* cpanfile.snapshot once dependencies are installed;
+* local dependency installation through Carton;
+* scripted commands for install, test, coverage, profiling, and critic.
+
+PostgreSQL-specific Perl dependencies MAY require system packages such as libpq development headers and pg_config.
+
+The repository MUST provide a preflight script that detects missing system prerequisites.
+
+Alternative Perl dependency tools MAY be evaluated only through an ADR.
+
+---
+
+Coverage Requirements
+
+Tests MUST perfectly cover GPForum requirements.
+
+Perfect coverage means:
+
+* every critical prompt requirement maps to at least one verification strategy;
+* every security-critical path has tests;
+* every authorization rule has tests;
+* every moderation state transition has tests;
+* every event producer and consumer has tests;
+* every worker retry/idempotency path has tests;
+* every privacy-sensitive workflow has tests;
+* every deployment-critical command has tests or smoke validation.
+
+Numeric coverage is required but not sufficient.
+
+Requirement coverage is authoritative.
+
+---
+
+Coverage Tooling
+
+Coverage tooling SHOULD use Perl-native tools.
+
+Preferred tooling:
+
+* Devel::Cover;
+* prove;
+* TAP-compatible test output.
+
+Coverage reports MUST be reproducible locally and in CI.
+
+Coverage thresholds MUST become stricter as milestones mature.
+
+---
+
+Profiling Requirements
+
+Profiling MUST be available from the first implementation milestone.
+
+Preferred profiler:
+
+* Devel::NYTProf.
+
+Profiling MUST support:
+
+* web request profiling;
+* worker profiling;
+* startup profiling;
+* template rendering profiling;
+* authorization path profiling;
+* event consumer profiling;
+* database call timing correlation.
+
+Profiling artifacts SHOULD be archived for release comparison.
+
+---
+
+Profiling Safety
+
+Profiling MUST NOT expose:
+
+* secrets;
+* raw credentials;
+* private user content;
+* session tokens;
+* internal security details to unauthorized viewers.
+
+Profiling MUST be disabled or tightly controlled in production unless an incident runbook explicitly enables it.
+
+---
+
+Automation Commands
+
+The project SHOULD provide scripts for:
+
+* dependency installation;
+* system preflight;
+* critic;
+* test;
+* coverage;
+* profiling;
+* smoke validation.
+
+Scripts MUST be deterministic and CI-friendly.
+
+---
+
+Release Gates
+
+Production releases MUST be blocked by:
+
+* failing tests;
+* failing critical coverage;
+* broken profiling command;
+* dependency reproducibility failure;
+* severe Perl::Critic violation;
+* security regression.
+
+Profiling readiness is an operational requirement, not a luxury.

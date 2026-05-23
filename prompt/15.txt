@@ -457,7 +457,14 @@ Performance testing SHOULD include:
 * websocket testing;
 * queue stress testing;
 * indexing stress testing;
-* partition scaling tests.
+* partition scaling tests;
+* profiling runs;
+* memory growth checks;
+* slow query analysis.
+
+Profiling MUST be part of performance engineering.
+
+The system SHOULD retain comparable profiling artifacts between releases.
 
 Performance assumptions MUST remain:
 

@@ -34,7 +34,10 @@ Milestone 0 MUST deliver:
 * structured logging;
 * health endpoint;
 * basic CI checks;
-* Perl::Critic configuration.
+* Perl::Critic configuration;
+* Carton dependency automation;
+* coverage command;
+* profiling command.
 
 No product feature should bypass this foundation.
 
@@ -188,6 +191,8 @@ Milestone 9 MUST deliver:
 * alert rules;
 * process pool sizing validation;
 * worker concurrency validation;
+* profiling artifact validation;
+* coverage threshold validation;
 * rate limiting;
 * abuse mitigation;
 * retention jobs;

@@ -28,6 +28,7 @@ Read the prompts in this order:
 5. `prompt/20.txt` through `prompt/27.txt` - implementation bridge, schema, workflows, UX, privacy, operations
 6. `prompt/28.txt` through `prompt/39.txt` - bootstrap, environment, communication, admin, policy, import/export, SEO, plugins, testing, contracts, deployment, and prompt governance
 7. `prompt/40.txt` - authoritative Perl multi-process and threading scalability model
+8. `prompt/41.txt` - profiling, coverage, Carton, and Perl automation model
 
 `prompt/18.txt` is an architectural exploration memo. It is useful context, but `prompt/19.txt` is the authoritative decision.
 
@@ -83,6 +84,7 @@ Implementation execution prompts:
 * `38.txt`
 * `39.txt`
 * `40.txt`
+* `41.txt`
 
 ## Precedence Rules
 
@@ -125,5 +127,23 @@ For production readiness, provide:
 * `27.txt`
 * `38.txt`
 * `40.txt`
+* `41.txt`
 
 AI-generated code MUST preserve the constraints in these prompt constitutions.
+
+## Perl Automation
+
+Carton is the mandatory Perl dependency manager for GPForum.
+
+Standard commands:
+
+* `script/bootstrap-deps`
+* `script/bootstrap-deps --postgres`
+* `script/system-preflight`
+* `script/perlcritic`
+* `script/test`
+* `script/coverage`
+* `script/profile -- <perl-program> [args...]`
+
+The base Carton install is reproducible through `cpanfile.snapshot`.
+PostgreSQL-specific Perl modules live in `cpanfile.postgres` and require system PostgreSQL client development files, including `pg_config`.
