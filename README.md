@@ -113,6 +113,7 @@ This repository currently contains:
 * mention extraction and persistence on thread/reply creation as derived social continuity state;
 * moderation review boundaries for reports, reversible moderation actions, suspensions, and admin audit review;
 * admin authorization boundaries for role catalogs, scoped role bindings, permission review, and audit-backed role changes;
+* idempotent admin bootstrap command for initial owner role, default admin/moderation permissions, and global role binding;
 * import/export portability boundaries for manifest validation, dry-run import jobs, legacy id mapping, failure reporting, and privacy-aware export manifests;
 * plugin extension boundaries for manifest validation, plugin registry lifecycle, named hook dispatch, and observable plugin failures;
 * privacy rights boundaries for account deletion requests, erasure jobs, retention legal holds, and staff data-rights review;
@@ -192,6 +193,9 @@ permission catalogs, scoped role binding review/write workflows, binding
 revocation, and bounded audit review through thin Mojolicious controllers over
 the existing admin services. Role binding writes remain audit-backed and
 CSRF-protected; the controller never manipulates persistence directly.
+Initial operator access is bootstrapped outside the HTTP console with
+`bin/gpforum-admin-bootstrap --user-id USER_ID`, which is idempotent and writes
+through the same role catalog and role binding boundaries.
 
 The root home route is backed by `HomePageReader`. It renders a public forum
 index from visible categories and keyset-paginated public threads, while keeping

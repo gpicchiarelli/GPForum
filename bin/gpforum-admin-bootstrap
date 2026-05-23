@@ -1,0 +1,14 @@
+#!/usr/bin/env perl
+package main;
+
+use strict;
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use GPForum::Command::AdminBootstrap;
+
+our $VERSION = '0.001';
+
+exit GPForum::Command::AdminBootstrap->new->run(@ARGV);

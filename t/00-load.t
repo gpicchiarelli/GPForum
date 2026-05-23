@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 164;
+const my $TEST_COUNT => 166;
 
 plan tests => $TEST_COUNT;
 
@@ -21,6 +21,7 @@ use_ok('GPForum::Runtime');
 use_ok('GPForum::OS::Process');
 use_ok('GPForum::OS::Socket');
 use_ok('GPForum::Command::Migrate');
+use_ok('GPForum::Command::AdminBootstrap');
 use_ok('GPForum::Command::PlatformCheck');
 use_ok('GPForum::Command::QueryBudget');
 use_ok('GPForum::Controller::Admin');
@@ -113,6 +114,7 @@ use_ok('GPForum::Service::Admin::PermissionGate');
 use_ok('GPForum::Service::Admin::PermissionReview');
 use_ok('GPForum::Service::Admin::RoleBindingStore');
 use_ok('GPForum::Service::Admin::RoleCatalog');
+use_ok('GPForum::Service::Admin::Bootstrapper');
 use_ok('GPForum::Service::Identity::Registration');
 use_ok('GPForum::Service::Identity::ProfileReader');
 use_ok('GPForum::Service::Identity::Store');

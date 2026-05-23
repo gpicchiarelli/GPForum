@@ -60,9 +60,10 @@ The admin surface is an operational MVP, not a full back-office suite. It is
 permission-gated through `PermissionGate`, writes through `RoleCatalog` and
 `RoleBindingStore`, and reviews state through `PermissionReview` and
 `AuditReview`. Role binding changes are CSRF-protected and audit-backed. The
-bootstrap problem remains explicit: initial `admin_console.view` and
-`admin_console.manage` permissions must be provisioned by migration, console, or
-operator-run service code before the HTTP console can govern itself.
+initial operator path is now explicit and repeatable:
+`bin/gpforum-admin-bootstrap --user-id USER_ID` creates the owner role,
+default admin/moderation permissions, role-permission links, and a global role
+binding idempotently.
 
 The root home route uses `HomePageReader` to compose visible categories and
 latest public threads through existing reader boundaries. It is SSR/JSON,
@@ -241,6 +242,13 @@ Apply migrations:
 ```sh
 carton exec perl -Ilib bin/gpforum-migrate --plan
 carton exec perl -Ilib bin/gpforum-migrate --apply
+```
+
+Bootstrap an initial owner after the target user exists:
+
+```sh
+carton exec perl -Ilib bin/gpforum-admin-bootstrap --user-id USER_ID
+carton exec perl -Ilib bin/gpforum-admin-bootstrap --user-id USER_ID --actor-user-id OPERATOR_ID --role-name gpforum_owner
 ```
 
 Start the app:
