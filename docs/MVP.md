@@ -139,7 +139,8 @@ thread/reply creation, and search. They are release-gate contracts for future
 instrumented observations rather than runtime query counters. The same service
 can synchronize the catalog into `endpoint_query_budgets` and report drift if
 the database contract diverges from the executable catalog. The CLI entry point
-is `bin/gpforum-query-budget --print|--sync|--check`.
+is `bin/gpforum-query-budget --print|--sync|--check`. Metrics expose both the
+catalog and, when a schema is configured, the drift report used by readiness.
 
 Start workers after Minion configuration is present:
 

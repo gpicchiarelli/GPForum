@@ -36,18 +36,19 @@ sub collect {
             pid            => $PROCESS_ID,
             uptime_seconds => int( time - $self->started_at ),
         },
-        runtime       => $runtime ? $runtime->as_hash : {},
-        os            => $self->_runtime_os_snapshot,
-        os_features   => $self->_runtime_os_features,
-        os_sockets    => $self->_runtime_os_sockets,
-        os_processes  => $self->_runtime_os_processes,
-        os_preflight  => $self->_runtime_os_preflight,
-        realtime      => $self->_realtime,
-        rate_limits   => $self->_rate_limits,
-        projections   => $self->_projections,
-        query_budgets => $self->_query_budgets,
-        database      => $self->_database,
-        outbox        => $self->_outbox,
+        runtime            => $runtime ? $runtime->as_hash : {},
+        os                 => $self->_runtime_os_snapshot,
+        os_features        => $self->_runtime_os_features,
+        os_sockets         => $self->_runtime_os_sockets,
+        os_processes       => $self->_runtime_os_processes,
+        os_preflight       => $self->_runtime_os_preflight,
+        realtime           => $self->_realtime,
+        rate_limits        => $self->_rate_limits,
+        projections        => $self->_projections,
+        query_budgets      => $self->_query_budgets,
+        query_budget_drift => $self->_query_budget_drift,
+        database           => $self->_database,
+        outbox             => $self->_outbox,
     };
 }
 
@@ -136,6 +137,21 @@ sub _query_budgets {
     my ($self) = @_;
 
     return $self->query_budget->snapshot;
+}
+
+sub _query_budget_drift {
+    my ($self) = @_;
+
+    return {} if !$self->schema;
+
+    my $report = eval {
+        return GPForum::Service::Operations::QueryBudget->new(
+            schema => $self->schema )->drift_report;
+    };
+
+    return {} if !$report;
+
+    return $report;
 }
 
 sub _database {

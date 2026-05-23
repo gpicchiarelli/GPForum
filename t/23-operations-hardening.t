@@ -25,7 +25,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 53;
+const my $EXPECTED_TESTS            => 55;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -163,6 +163,8 @@ is( $metrics->{projections}[0]{projection_name},
     'search_documents', 'metrics exposes projection lag' );
 is( $metrics->{query_budgets}{endpoints}{thread_view}{max_queries},
     $THREAD_VIEW_QUERY_BUDGET, 'metrics exposes thread view query budget' );
+is_deeply( $metrics->{query_budget_drift},
+    {}, 'metrics omit query budget drift without schema' );
 
 my $runbook_validator = GPForum::Service::Operations::RunbookValidator->new;
 my $bad_backup        = $runbook_validator->validate_backup(
@@ -275,6 +277,15 @@ is( $query_budget->drift_report($query_budget_schema)->{status},
     'fail', 'query budget drift report rejects mismatched stored budget' );
 is( $query_budget->drift_report($query_budget_schema)->{mismatched}[0],
     'thread_view', 'query budget drift report names mismatched endpoint' );
+
+my $drift_metrics = GPForum::Service::Operations::MetricsSnapshot->new(
+    clock        => $clock,
+    runtime      => $runtime,
+    schema       => $query_budget_schema,
+    query_budget => $query_budget,
+)->collect;
+is( $drift_metrics->{query_budget_drift}{status},
+    'fail', 'metrics expose query budget drift when schema is available' );
 my $bad_runtime = GPForum::Runtime->new(
     web_processes      => $BAD_WEB_PROCESSES,
     worker_processes   => $BAD_WORKER_PROCESSES,
