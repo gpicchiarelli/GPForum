@@ -93,6 +93,7 @@ This repository currently contains:
 * retry-aware outbox dispatcher boundary for future Minion workers;
 * dead-letter preservation for exhausted outbox deliveries;
 * projection offset tracking for lag and health visibility;
+* projection generation management for blue/green read-model rebuilds;
 * automation scripts in [script](script).
 
 The current implementation step is **Milestone 1: Identity And Sessions** under

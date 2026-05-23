@@ -566,6 +566,9 @@ Projection failure:
 * projection offset writes MUST use a narrow OffsetTracker boundary that records
   last event id, event timestamp, lag seconds, status, and update timestamp;
 * projection_generations MUST allow blue/green read-model rebuilds;
+* projection generation writes MUST use a narrow GenerationManager boundary that
+  starts, marks ready/failed, activates, and retires generations while keeping
+  only one active generation per projection;
 * feed projections MUST be degradable to slower canonical queries and MUST
   never become authoritative truth.
 
