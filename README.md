@@ -150,7 +150,9 @@ policy and process-class priority posture, so deployment tuning stays visible
 without scattering OS checks through application code. `/health/ready`,
 `/metrics`, and `script/system-preflight` include OS preflight status so unknown
 or degraded host capabilities are visible before production traffic depends on
-them.
+them. `GPFORUM_OS_MIN_RECOMMENDED_WORKERS` and
+`GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS` provide conservative readiness thresholds
+for host capacity posture.
 Local generated files have a dedicated atomic-write helper under
 `GPForum::OS::Filesystem`.
 

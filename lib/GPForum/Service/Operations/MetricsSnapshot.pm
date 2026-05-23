@@ -88,7 +88,19 @@ sub _runtime_os_preflight {
     return {} if !$self->runtime;
 
     return GPForum::Service::Operations::OSPreflight->new(
-        runtime => $self->runtime )->check;
+        runtime => $self->runtime,
+        $self->_os_preflight_settings,
+    )->check;
+}
+
+sub _os_preflight_settings {
+    my ($self) = @_;
+
+    return () if !$self->runtime;
+
+    my $settings = $self->runtime->os_preflight_settings || {};
+
+    return %{$settings};
 }
 
 sub _realtime {

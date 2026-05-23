@@ -22,26 +22,31 @@ const my $DEFAULT_WORKER_PROCESSES   => 2;
 const my $DEFAULT_REALTIME_PROCESSES => 1;
 const my $DEFAULT_OS_FEATURE_SETTING => 'auto';
 const my $DEFAULT_OS_AFFINITY        => 'off';
+const my $DEFAULT_OS_MIN_WORKERS     => 1;
+const my $DEFAULT_OS_MAX_OPEN_FDS    => 1024;
 const my $MINIMUM_PROCESS_COUNT      => 1;
 const my $MAXIMUM_PROCESS_COUNT      => 512;
+const my $MINIMUM_OS_THRESHOLD       => 1;
 const my %VALID_OS_FEATURE_SETTING   => map { $_ => 1 } qw(auto on off);
 const my %VALID_OS_AFFINITY          => map { $_ => 1 } qw(off manual);
 
-has environment         => sub { return $DEFAULT_ENVIRONMENT; };
-has log_level           => sub { return $DEFAULT_LOG_LEVEL; };
-has public_base_url     => sub { return $DEFAULT_PUBLIC_BASE_URL; };
-has session_secret      => sub { return $DEFAULT_SESSION_SECRET; };
-has database_dsn        => sub { return $DEFAULT_DATABASE_DSN; };
-has database_user       => sub { return $DEFAULT_DATABASE_USER; };
-has database_password   => sub { return $DEFAULT_DATABASE_PASSWORD; };
-has web_processes       => sub { return $DEFAULT_WEB_PROCESSES; };
-has worker_processes    => sub { return $DEFAULT_WORKER_PROCESSES; };
-has realtime_processes  => sub { return $DEFAULT_REALTIME_PROCESSES; };
-has os_reuseport        => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_sendfile         => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_worker_priority  => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_static_xsendfile => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_affinity         => sub { return $DEFAULT_OS_AFFINITY; };
+has environment                  => sub { return $DEFAULT_ENVIRONMENT; };
+has log_level                    => sub { return $DEFAULT_LOG_LEVEL; };
+has public_base_url              => sub { return $DEFAULT_PUBLIC_BASE_URL; };
+has session_secret               => sub { return $DEFAULT_SESSION_SECRET; };
+has database_dsn                 => sub { return $DEFAULT_DATABASE_DSN; };
+has database_user                => sub { return $DEFAULT_DATABASE_USER; };
+has database_password            => sub { return $DEFAULT_DATABASE_PASSWORD; };
+has web_processes                => sub { return $DEFAULT_WEB_PROCESSES; };
+has worker_processes             => sub { return $DEFAULT_WORKER_PROCESSES; };
+has realtime_processes           => sub { return $DEFAULT_REALTIME_PROCESSES; };
+has os_reuseport                 => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_sendfile                  => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_worker_priority           => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_static_xsendfile          => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_affinity                  => sub { return $DEFAULT_OS_AFFINITY; };
+has os_min_recommended_workers   => sub { return $DEFAULT_OS_MIN_WORKERS; };
+has os_max_open_file_descriptors => sub { return $DEFAULT_OS_MAX_OPEN_FDS; };
 
 sub from_environment {
     my ( $class, $environment ) = @_;
@@ -101,6 +106,14 @@ sub from_environment {
         os_affinity => _env_value(
             $environment, 'GPFORUM_OS_AFFINITY', $DEFAULT_OS_AFFINITY
         ),
+        os_min_recommended_workers => _env_integer(
+            $environment, 'GPFORUM_OS_MIN_RECOMMENDED_WORKERS',
+            $DEFAULT_OS_MIN_WORKERS
+        ),
+        os_max_open_file_descriptors => _env_integer(
+            $environment, 'GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS',
+            $DEFAULT_OS_MAX_OPEN_FDS
+        ),
     );
 
     $self->validate;
@@ -127,6 +140,10 @@ sub validate {
     _require_os_feature_setting( 'os_static_xsendfile',
         $self->os_static_xsendfile );
     _require_os_affinity( $self->os_affinity );
+    _require_os_threshold( 'os_min_recommended_workers',
+        $self->os_min_recommended_workers );
+    _require_os_threshold( 'os_max_open_file_descriptors',
+        $self->os_max_open_file_descriptors );
 
     if (   $self->environment eq 'production'
         && $self->session_secret eq $DEFAULT_SESSION_SECRET )
@@ -146,6 +163,15 @@ sub os_feature_settings {
         worker_priority  => $self->os_worker_priority,
         static_xsendfile => $self->os_static_xsendfile,
         affinity         => $self->os_affinity,
+    };
+}
+
+sub os_preflight_settings {
+    my ($self) = @_;
+
+    return {
+        min_recommended_workers   => $self->os_min_recommended_workers,
+        max_open_file_descriptors => $self->os_max_open_file_descriptors,
     };
 }
 
@@ -220,6 +246,15 @@ sub _require_os_affinity {
 
     croak 'os_affinity must be off or manual'
       if !exists $VALID_OS_AFFINITY{$value};
+
+    return;
+}
+
+sub _require_os_threshold {
+    my ( $name, $value ) = @_;
+
+    croak "$name must be >= $MINIMUM_OS_THRESHOLD"
+      if $value < $MINIMUM_OS_THRESHOLD;
 
     return;
 }

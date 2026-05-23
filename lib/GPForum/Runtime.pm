@@ -9,21 +9,23 @@ use GPForum::OS;
 
 our $VERSION = '0.001';
 
-has web_processes       => 1;
-has worker_processes    => 1;
-has realtime_processes  => 1;
-has os_profile          => sub { return GPForum::OS->detect; };
-has os_feature_settings => sub { return {}; };
+has web_processes         => 1;
+has worker_processes      => 1;
+has realtime_processes    => 1;
+has os_profile            => sub { return GPForum::OS->detect; };
+has os_feature_settings   => sub { return {}; };
+has os_preflight_settings => sub { return {}; };
 
 sub from_config {
     my ( $class, $config ) = @_;
 
     return $class->new(
-        web_processes       => $config->web_processes,
-        worker_processes    => $config->worker_processes,
-        realtime_processes  => $config->realtime_processes,
-        os_profile          => GPForum::OS->detect,
-        os_feature_settings => $config->os_feature_settings,
+        web_processes         => $config->web_processes,
+        worker_processes      => $config->worker_processes,
+        realtime_processes    => $config->realtime_processes,
+        os_profile            => GPForum::OS->detect,
+        os_feature_settings   => $config->os_feature_settings,
+        os_preflight_settings => $config->os_preflight_settings,
     );
 }
 
@@ -41,6 +43,7 @@ sub as_hash {
           $self->os_profile->socket_snapshot( $self->os_feature_settings ),
         os_processes =>
           $self->os_profile->process_snapshot( $self->os_feature_settings ),
+        os_preflight_settings => $self->os_preflight_settings,
     };
 }
 

@@ -8,12 +8,15 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $UNKNOWN_OS      => 'unknown';
-const my $SELECT_BACKEND  => 'select';
-const my $MINIMUM_CPU     => 1;
-const my $MINIMUM_WORKERS => 1;
+const my $UNKNOWN_OS           => 'unknown';
+const my $SELECT_BACKEND       => 'select';
+const my $MINIMUM_CPU          => 1;
+const my $MINIMUM_WORKERS      => 1;
+const my $DEFAULT_MAX_OPEN_FDS => 1024;
 
-has runtime => undef;
+has runtime                   => undef;
+has min_recommended_workers   => $MINIMUM_WORKERS;
+has max_open_file_descriptors => $DEFAULT_MAX_OPEN_FDS;
 
 sub check {
     my ($self) = @_;
@@ -23,9 +26,12 @@ sub check {
       if !$profile;
 
     my @checks = (
-        _os_check($profile),       _event_backend_check($profile),
-        _cpu_check($profile),      _worker_count_check($profile),
-        _resource_check($profile), _socket_check($profile),
+        _os_check($profile),
+        _event_backend_check($profile),
+        _cpu_check($profile),
+        $self->_worker_count_check($profile),
+        $self->_resource_check($profile),
+        _socket_check($profile),
         _process_check($profile),
     );
 
@@ -75,24 +81,30 @@ sub _cpu_check {
 }
 
 sub _worker_count_check {
-    my ($profile) = @_;
+    my ( $self, $profile ) = @_;
 
     my $os    = $profile->{os}                  || {};
     my $count = $os->{recommended_worker_count} || 0;
     return _failed_check( 'recommended_worker_count',
         'recommended worker count unavailable' )
       if $count < $MINIMUM_WORKERS;
+    return _degraded_check( 'recommended_worker_count',
+        'recommended worker count below configured threshold' )
+      if $count < $self->min_recommended_workers;
 
     return _ok_check('recommended_worker_count');
 }
 
 sub _resource_check {
-    my ($profile) = @_;
+    my ( $self, $profile ) = @_;
 
     my $resources = ( $profile->{os} || {} )->{resources} || {};
     return _degraded_check( 'resources',
         'open file descriptor count unavailable' )
       if !defined $resources->{open_file_descriptors};
+    return _degraded_check( 'resources',
+        'open file descriptor count exceeds configured threshold' )
+      if $resources->{open_file_descriptors} > $self->max_open_file_descriptors;
 
     return _ok_check('resources');
 }

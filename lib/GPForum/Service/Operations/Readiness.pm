@@ -79,7 +79,9 @@ sub _os_preflight_check {
 
     my $started   = time;
     my $preflight = GPForum::Service::Operations::OSPreflight->new(
-        runtime => $self->runtime )->check;
+        runtime => $self->runtime,
+        $self->_os_preflight_settings,
+    )->check;
 
     return {
         name       => 'os_preflight',
@@ -87,6 +89,16 @@ sub _os_preflight_check {
         latency_ms => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
         checks     => $preflight->{checks},
     };
+}
+
+sub _os_preflight_settings {
+    my ($self) = @_;
+
+    return () if !$self->runtime;
+
+    my $settings = $self->runtime->os_preflight_settings || {};
+
+    return %{$settings};
 }
 
 sub _resultset_check {

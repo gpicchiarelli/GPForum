@@ -35,4 +35,8 @@ sub as_hash {
     };
 }
 
+sub os_preflight_settings {
+    return {};
+}
+
 1;

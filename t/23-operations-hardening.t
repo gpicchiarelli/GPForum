@@ -22,7 +22,7 @@ use GPForum::Test::ProjectionLagProbe;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 40;
+const my $EXPECTED_TESTS            => 42;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -38,6 +38,8 @@ const my $BAD_REALTIME_PROCESSES    => 0;
 const my $FIRST_REMAINING_ALLOWANCE => 1;
 const my $EXHAUSTED_ALLOWANCE       => 0;
 const my $BUCKET_COUNT              => 1;
+const my $STRICT_WORKER_THRESHOLD   => 99;
+const my $STRICT_FD_THRESHOLD       => 1;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -205,6 +207,22 @@ ok(
     GPForum::Service::Operations::OSPreflight->new( runtime => $runtime )
       ->check->{status},
     'OS preflight returns a status for balanced runtime'
+);
+is(
+    GPForum::Service::Operations::OSPreflight->new(
+        runtime                 => $runtime,
+        min_recommended_workers => $STRICT_WORKER_THRESHOLD,
+    )->check->{status},
+    'degraded',
+    'OS preflight degrades below configured worker threshold'
+);
+is(
+    GPForum::Service::Operations::OSPreflight->new(
+        runtime                   => $runtime,
+        max_open_file_descriptors => $STRICT_FD_THRESHOLD,
+    )->check->{status},
+    'degraded',
+    'OS preflight degrades above configured file descriptor threshold'
 );
 my $bad_runtime = GPForum::Runtime->new(
     web_processes      => $BAD_WEB_PROCESSES,
