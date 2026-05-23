@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 48;
+const my $EXPECTED_TESTS => 51;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -77,6 +77,9 @@ for my $required_term (
     migration_runner
     ThreadComposer
     ThreadStore
+    PageWindow
+    ThreadReader
+    PostReader
     PostComposer
     PostStore
     OutboxDispatcher

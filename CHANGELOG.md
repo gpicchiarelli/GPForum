@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added bounded keyset pagination contracts for category thread lists and
+  thread post lists, including limit-plus-one fetching, stable cursors, and
+  pagination metadata.
 - Added process-local realtime websocket boundaries for authenticated
   connections, authorized channel subscriptions, thread updates, notification
   badge broadcasts, and explicit polling fallback.

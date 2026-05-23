@@ -122,6 +122,12 @@ PostStore: one validates/normalizes reply command input and one persists post,
 body, revision, thread_counter_shards delta, post.created event, and audit
 records in one transaction. Reply creation MUST NOT update canonical thread
 counters directly on the hot write path.
+Forum read workflows MUST use explicit pagination boundaries equivalent to
+PageWindow, ThreadReader, and PostReader. Category thread lists MUST use
+bounded keyset pagination ordered by pinned, last_activity_at, and thread_id.
+Thread post lists MUST use bounded keyset pagination ordered by position and
+post_id. Readers MUST fetch limit plus one row, return has_next and
+next_cursor metadata, and MUST NOT scan unbounded thread or post result sets.
 Domain event writes MUST create a matching outbox_messages row in the same
 transaction through a narrow builder equivalent to MessageBuilder, keeping
 delivery metadata outside EventStore and preventing store classes from becoming
