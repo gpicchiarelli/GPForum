@@ -148,6 +148,9 @@ semantic SSR by default and still return JSON when requested with
 * `POST /t/:thread_id/subscribe/remove`
 * `POST /t/:thread_id/report`
 * `POST /p/:post_id/report`
+* `GET /moderation/reports`
+* `POST /moderation/reports/:report_id/assign`
+* `POST /moderation/reports/:report_id/resolve`
 * `GET /notifications`
 * `POST /notifications/:notification_id/read`
 * `GET /mentions`
@@ -181,6 +184,10 @@ Thread and post reports are now traversable from the thread page. They require
 an authenticated session, CSRF, and rate limiting, then write through
 `ReportStore`, which records the report, append-only domain event, audit row,
 and transactional outbox handoff.
+The moderation report queue is also traversable for authorized staff. Access is
+checked by `PermissionGate` against PostgreSQL role bindings and permissions;
+assignment and resolution remain CSRF-protected and emit report transition
+events, audit rows, and outbox handoffs.
 The authenticated `/feed` route exposes the existing `user_feed_items`
 projection as a keyset-paginated personal continuity feed. It is derived,
 rebuildable, and non-authoritative: it stores only item references and version

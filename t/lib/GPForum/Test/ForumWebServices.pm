@@ -209,6 +209,48 @@ sub create_report {
     };
 }
 
+sub list_queue {
+    return [
+        {
+            report_id                  => 'report-1',
+            reporter_user_id           => 'user-1',
+            target_type                => 'post',
+            target_id                  => 'post-1',
+            reason                     => 'spam',
+            details                    => 'Repeated links',
+            status                     => 'open',
+            assigned_moderator_user_id => undef,
+            created_at                 => '2026-05-23T12:00:00Z',
+            resolved_at                => undef,
+            resolution                 => undef,
+        },
+    ];
+}
+
+sub assign_report {
+    my ( $self, $report_id, $moderator_user_id ) = @_;
+
+    return if $report_id ne 'report-1';
+
+    return {
+        report_id                  => $report_id,
+        assigned_moderator_user_id => $moderator_user_id,
+    };
+}
+
+sub resolve_report {
+    my ( $self, $report_id, $resolution ) = @_;
+
+    return if $report_id ne 'report-1';
+
+    return {
+        report_id   => $report_id,
+        status      => 'resolved',
+        resolved_at => '2026-05-23T12:00:00Z',
+        resolution  => $resolution,
+    };
+}
+
 sub summary_for_page {
     return {
         authenticated         => 1,

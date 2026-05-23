@@ -22,6 +22,9 @@ It is intentionally narrower than the full architectural contract.
 * `POST /t/:thread_id/subscribe/remove` unfollows a thread.
 * `POST /t/:thread_id/report` creates a moderation report for a visible thread.
 * `POST /p/:post_id/report` creates a moderation report for a visible post.
+* `GET /moderation/reports` renders the authorized moderation report queue.
+* `POST /moderation/reports/:report_id/assign` assigns a report to the current moderator.
+* `POST /moderation/reports/:report_id/resolve` resolves a report with an explicit resolution.
 * `GET /notifications` renders the authenticated user's notification inbox.
 * `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /mentions` renders the authenticated user's mention history.
@@ -68,6 +71,12 @@ thread page. Report creation is CSRF-protected, rate-limited, and backed by
 `ReportStore`. The store persists the report and emits append-only event, audit,
 and outbox rows so moderation intake is observable and asynchronously
 projectable without making UI state authoritative.
+
+Authorized moderators can traverse `/moderation/reports` to review the report
+queue, assign reports, and resolve reports. The moderation controller uses
+`PermissionGate`, which checks PostgreSQL role bindings and permissions rather
+than trusting a session flag. Report assignment and resolution are CSRF-protected
+and emit append-only transition events, audit rows, and outbox handoffs.
 
 Authenticated personal feeds expose the existing `user_feed_items` projection
 through `FeedReader`. The route is SSR/JSON, keyset-paginated, and deliberately

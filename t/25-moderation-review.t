@@ -19,19 +19,22 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 55;
+const my $EXPECTED_TESTS      => 61;
 const my $QUEUE_LIMIT         => 25;
 const my $AUDIT_LIMIT         => 10;
 const my $CREATED_REPORTS     => 1;
-const my $CREATED_EVENTS      => 1;
-const my $CREATED_OUTBOX_ROWS => 1;
+const my $CREATED_EVENTS      => 3;
+const my $CREATED_OUTBOX_ROWS => 3;
+const my $FIRST_EVENT_COUNT   => 1;
+const my $SECOND_EVENT_COUNT  => 2;
 const my $CREATED_ACTIONS     => 3;
-const my $CREATED_AUDIT_ROWS  => 4;
+const my $CREATED_AUDIT_ROWS  => 6;
 const my $FIRST_ACTION_INDEX  => 0;
 const my $SECOND_ACTION_INDEX => 1;
 const my $THIRD_ACTION_INDEX  => 2;
 const my $FIRST_AUDIT_INDEX   => 0;
 const my $SECOND_AUDIT_INDEX  => 1;
+const my $THIRD_AUDIT_INDEX   => 2;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -95,11 +98,11 @@ is( $report->{created_at},
     '2026-05-23T12:00:00Z', 'report stores creation time' );
 is( scalar @{ $reports->created }, $CREATED_REPORTS, 'report row is inserted' );
 is( scalar @{ $event_log->created },
-    $CREATED_EVENTS, 'report creation records a domain event' );
+    $FIRST_EVENT_COUNT, 'report creation records a domain event' );
 is( $event_log->created->[$FIRST_AUDIT_INDEX]{event_type},
     'report.created', 'report event type is explicit' );
 is( scalar @{ $outbox_messages->created },
-    $CREATED_OUTBOX_ROWS, 'report creation records outbox handoff' );
+    $FIRST_EVENT_COUNT, 'report creation records outbox handoff' );
 is( $outbox_messages->created->[$FIRST_AUDIT_INDEX]{event_id},
     'generated-3', 'report outbox points to report event' );
 is( $audit_log->created->[$FIRST_AUDIT_INDEX]{action},
@@ -113,6 +116,12 @@ is( $assigned->{assigned_moderator_user_id},
     'moderator-1', 'assignment stores moderator' );
 is( $reports->find('generated-1')->get_column('assigned_moderator_user_id'),
     'moderator-1', 'report row receives assigned moderator' );
+is( scalar @{ $event_log->created },
+    $SECOND_EVENT_COUNT, 'report assignment records a domain event' );
+is( $event_log->created->[$SECOND_AUDIT_INDEX]{event_type},
+    'report.assigned', 'assignment event type is explicit' );
+is( $audit_log->created->[$SECOND_AUDIT_INDEX]{action},
+    'report.assigned', 'assignment records audit row' );
 
 my $queue = $report_store->list_queue( { limit => $QUEUE_LIMIT } );
 is( scalar @{$queue}, $CREATED_REPORTS,     'moderation queue can be listed' );
@@ -126,6 +135,12 @@ is( $resolved->{resolved_at},
     '2026-05-23T12:00:00Z', 'resolution stores timestamp' );
 is( $reports->find('generated-1')->get_column('status'),
     'resolved', 'report row is updated as resolved' );
+is( scalar @{ $event_log->created },
+    $CREATED_EVENTS, 'report resolution records a domain event' );
+is( scalar @{ $outbox_messages->created },
+    $CREATED_OUTBOX_ROWS, 'report transitions record outbox handoffs' );
+is( $audit_log->created->[$THIRD_AUDIT_INDEX]{action},
+    'report.resolved', 'resolution records audit row' );
 
 my $action_store = GPForum::Service::Moderation::ActionStore->new(
     schema     => $schema,
@@ -191,9 +206,9 @@ is( $moderation_actions->created->[$THIRD_ACTION_INDEX]{action_type},
     'thread.locked', 'third action is lock' );
 is( scalar @{ $audit_log->created },
     $CREATED_AUDIT_ROWS, 'moderation actions create audit rows' );
-is( $audit_log->created->[$SECOND_AUDIT_INDEX]{action},
+is( $audit_log->created->[$CREATED_EVENTS]{action},
     'post.hidden', 'audit row stores action' );
-is( $audit_log->created->[$SECOND_AUDIT_INDEX]{metadata}{reason},
+is( $audit_log->created->[$CREATED_EVENTS]{metadata}{reason},
     'spam', 'audit row stores reason metadata' );
 
 my $reversed = $action_store->reverse_action( 'generated-1', 'moderator-2' );

@@ -9,6 +9,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Service::Admin::PermissionGate;
 use GPForum::Service::Admin::PermissionReview;
 use GPForum::Service::Admin::RoleBindingStore;
 use GPForum::Service::Admin::RoleCatalog;
@@ -19,7 +20,7 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 37;
+const my $EXPECTED_TESTS      => 42;
 const my $ROLE_LIMIT          => 10;
 const my $REVIEW_LIMIT        => 20;
 const my $CREATED_ROLES       => 1;
@@ -162,5 +163,36 @@ is( $role_permissions->last_query->{role_id},
     'generated-1', 'permission review filters role' );
 is( $role_permissions->last_attrs->{rows},
     $REVIEW_LIMIT, 'permission review applies limit' );
+
+my $permission_gate =
+  GPForum::Service::Admin::PermissionGate->new( schema => $schema );
+ok(
+    $permission_gate->allowed(
+        { user_id       => 'moderator-1' },
+        { resource_type => 'report', action => 'view_queue' },
+    ),
+    'permission gate allows matching role binding'
+);
+is( $role_bindings->last_query->{'me.user_id'},
+    'moderator-1', 'permission gate filters user' );
+is( $role_bindings->last_query->{'permission.resource_type'},
+    'report', 'permission gate filters resource type' );
+is( $role_bindings->last_query->{'permission.action'},
+    'view_queue', 'permission gate filters action' );
+
+my $empty_gate = GPForum::Service::Admin::PermissionGate->new(
+    schema => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            RoleBinding => GPForum::Test::ModerationResultSet->new,
+        },
+    ),
+);
+ok(
+    !$empty_gate->allowed(
+        { user_id       => 'missing' },
+        { resource_type => 'report', action => 'view_queue' }
+    ),
+    'permission gate denies without role binding'
+);
 
 1;

@@ -30,6 +30,7 @@ use GPForum::Service::Forum::ThreadComposer;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Forum::ThreadStore;
+use GPForum::Service::Admin::PermissionGate;
 use GPForum::Service::Identity::ProfileReader;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
@@ -329,6 +330,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_permission_gate => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::PermissionGate->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_search_service => sub {
             my ($controller) = @_;
 
@@ -385,6 +394,15 @@ sub startup {
     $routes->post('/p/:post_id/report')
       ->to('Forum#report_post')
       ->name('post_report');
+    $routes->get('/moderation/reports')
+      ->to('Moderation#reports')
+      ->name('moderation_reports');
+    $routes->post('/moderation/reports/:report_id/assign')
+      ->to('Moderation#assign_report')
+      ->name('moderation_report_assign');
+    $routes->post('/moderation/reports/:report_id/resolve')
+      ->to('Moderation#resolve_report')
+      ->name('moderation_report_resolve');
     $routes->get('/notifications')
       ->to('Notifications#inbox')
       ->name('notifications');

@@ -1,0 +1,57 @@
+% layout 'default';
+% title 'Moderation reports - GPForum';
+
+<section aria-labelledby="moderation-reports-heading">
+  <h1 id="moderation-reports-heading">Moderation reports</h1>
+  <form method="get" action="<%= url_for('moderation_reports') %>">
+    <label for="report-status">Status</label>
+    <select id="report-status" name="status">
+      <option value="open" <%= $status eq 'open' ? 'selected' : '' %>>Open</option>
+      <option value="triaged" <%= $status eq 'triaged' ? 'selected' : '' %>>Triaged</option>
+      <option value="resolved" <%= $status eq 'resolved' ? 'selected' : '' %>>Resolved</option>
+      <option value="rejected" <%= $status eq 'rejected' ? 'selected' : '' %>>Rejected</option>
+    </select>
+    <button type="submit">Filter</button>
+  </form>
+
+  % if (@{$reports}) {
+    <ol aria-label="Moderation report queue">
+      % for my $report (@{$reports}) {
+        <li>
+          <article aria-labelledby="report-<%= $report->{report_id} %>-heading">
+            <h2 id="report-<%= $report->{report_id} %>-heading">
+              <%= $report->{target_type} %> report
+            </h2>
+            <dl>
+              <dt>Reason</dt>
+              <dd><%= $report->{reason} %></dd>
+              <dt>Status</dt>
+              <dd><%= $report->{status} %></dd>
+              <dt>Target</dt>
+              <dd><%= $report->{target_type} %>: <%= $report->{target_id} %></dd>
+              <dt>Created</dt>
+              <dd><time datetime="<%= $report->{created_at} %>"><%= $report->{created_at} %></time></dd>
+            </dl>
+            <form method="post" action="<%= url_for('moderation_report_assign', report_id => $report->{report_id}) %>">
+              <%= csrf_field %>
+              <button type="submit">Assign to me</button>
+            </form>
+            <form method="post" action="<%= url_for('moderation_report_resolve', report_id => $report->{report_id}) %>">
+              <%= csrf_field %>
+              <label for="report-<%= $report->{report_id} %>-resolution">Resolution</label>
+              <select id="report-<%= $report->{report_id} %>-resolution" name="resolution" required>
+                <option value="no_action">No action</option>
+                <option value="content_hidden">Content hidden</option>
+                <option value="user_warned">User warned</option>
+                <option value="escalated">Escalated</option>
+              </select>
+              <button type="submit">Resolve report</button>
+            </form>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No reports match this queue.</p>
+  % }
+</section>

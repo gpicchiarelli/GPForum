@@ -39,6 +39,14 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 5,
         notes       => 'visible target check plus report event/audit/outbox',
     },
+    moderation_reports => {
+        max_queries => 5,
+        notes       => 'authorized moderation report queue read',
+    },
+    report_update => {
+        max_queries => 5,
+        notes       => 'authorized report assignment or resolution workflow',
+    },
     search => {
         max_queries => 2,
         notes       => 'permission-aware search projection lookup',

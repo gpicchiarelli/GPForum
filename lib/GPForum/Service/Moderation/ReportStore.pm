@@ -65,26 +65,61 @@ sub _insert_report {
 sub assign_report {
     my ( $self, $report_id, $moderator_user_id ) = @_;
 
-    my $report  = $self->schema->resultset('Report')->find($report_id);
-    my $changes = { assigned_moderator_user_id => $moderator_user_id };
-    $report->update($changes);
+    return $self->schema->txn_do(
+        sub {
+            my $report = $self->schema->resultset('Report')->find($report_id);
+            return if !$report;
 
-    return { report_id => $report_id, %{$changes} };
+            my $changes = { assigned_moderator_user_id => $moderator_user_id };
+            $report->update($changes);
+            my $assigned = { report_id => $report_id, %{$changes} };
+            $self->_record_transition_event_and_audit(
+                {
+                    report     => $report,
+                    event_type => 'report.assigned',
+                    actor_id   => $moderator_user_id,
+                    payload    => {
+                        assigned_moderator_user_id => $moderator_user_id,
+                    },
+                }
+            );
+
+            return $assigned;
+        }
+    );
 }
 
 sub resolve_report {
-    my ( $self, $report_id, $resolution ) = @_;
+    my ( $self, $report_id, $resolution, $actor_user_id ) = @_;
 
-    my $report      = $self->schema->resultset('Report')->find($report_id);
-    my $resolved_at = $self->clock->now_iso8601;
-    my $changes     = {
-        status      => $STATUS_RESOLVED,
-        resolved_at => $resolved_at,
-        resolution  => $resolution,
-    };
-    $report->update($changes);
+    return $self->schema->txn_do(
+        sub {
+            my $report = $self->schema->resultset('Report')->find($report_id);
+            return if !$report;
 
-    return { report_id => $report_id, %{$changes} };
+            my $resolved_at = $self->clock->now_iso8601;
+            my $changes     = {
+                status      => $STATUS_RESOLVED,
+                resolved_at => $resolved_at,
+                resolution  => $resolution,
+            };
+            $report->update($changes);
+            my $resolved = { report_id => $report_id, %{$changes} };
+            $self->_record_transition_event_and_audit(
+                {
+                    report     => $report,
+                    event_type => 'report.resolved',
+                    actor_id   => $actor_user_id,
+                    payload    => {
+                        resolution  => $resolution,
+                        resolved_at => $resolved_at,
+                    },
+                }
+            );
+
+            return $resolved;
+        }
+    );
 }
 
 sub list_queue {
@@ -162,11 +197,94 @@ sub _record_audit {
     return;
 }
 
+sub _record_transition_event_and_audit {
+    my ( $self, $input ) = @_;
+
+    my $report         = $input->{report};
+    my $report_id      = _column( $report, 'report_id' );
+    my $correlation_id = $self->id_service->uuid;
+    my $event_id       = $self->id_service->uuid;
+    my $created_at     = $self->clock->now_iso8601;
+    my $event          = {
+        event_id          => $event_id,
+        event_type        => $input->{event_type},
+        schema_version    => $SCHEMA_VERSION,
+        aggregate_type    => $REPORT_AGGREGATE,
+        aggregate_id      => $report_id,
+        aggregate_version => $SCHEMA_VERSION,
+        actor_id          => $input->{actor_id},
+        correlation_id    => $correlation_id,
+        causation_id      => undef,
+        idempotency_key   =>
+          join( q{:}, $input->{event_type}, $report_id, $event_id ),
+        payload => {
+            report_id   => $report_id,
+            target_type => _column( $report, 'target_type' ),
+            target_id   => _column( $report, 'target_id' ),
+            %{ $input->{payload} },
+        },
+        metadata   => {},
+        created_at => $created_at,
+    };
+
+    $self->schema->resultset('EventLog')->create($event);
+    $self->schema->resultset('OutboxMessage')
+      ->create( $self->outbox_builder->for_event($event) );
+    $self->_record_transition_audit(
+        {
+            action         => $input->{event_type},
+            actor_id       => $input->{actor_id},
+            correlation_id => $correlation_id,
+            created_at     => $created_at,
+            metadata       => $input->{payload},
+            report         => $report,
+        }
+    );
+
+    return;
+}
+
+sub _record_transition_audit {
+    my ( $self, $input ) = @_;
+
+    my $report = $input->{report};
+
+    $self->schema->resultset('AuditLog')->create(
+        {
+            audit_id       => $self->id_service->uuid,
+            action         => $input->{action},
+            schema_version => $SCHEMA_VERSION,
+            actor_id       => $input->{actor_id},
+            target_type    => _column( $report, 'target_type' ),
+            target_id      => _column( $report, 'target_id' ),
+            correlation_id => $input->{correlation_id},
+            previous_hash  => undef,
+            record_hash    => q{},
+            metadata       => {
+                report_id => _column( $report, 'report_id' ),
+                %{ $input->{metadata} },
+            },
+            created_at => $input->{created_at},
+        }
+    );
+
+    return;
+}
+
 sub _rows {
     my ($search) = @_;
 
     return $search->all       if $search->can('all');
     return @{ $search->rows } if $search->can('rows');
+
+    return;
+}
+
+sub _column {
+    my ( $row, $name ) = @_;
+
+    return $row->{$name}           if ref $row eq 'HASH';
+    return $row->get_column($name) if $row && $row->can('get_column');
 
     return;
 }

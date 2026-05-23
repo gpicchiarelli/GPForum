@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 158;
+const my $TEST_COUNT => 160;
 
 plan tests => $TEST_COUNT;
 
@@ -27,6 +27,7 @@ use_ok('GPForum::Controller::Health');
 use_ok('GPForum::Controller::Discovery');
 use_ok('GPForum::Controller::Forum');
 use_ok('GPForum::Controller::Identity');
+use_ok('GPForum::Controller::Moderation');
 use_ok('GPForum::Controller::Notifications');
 use_ok('GPForum::Controller::Operations');
 use_ok('GPForum::Controller::Realtime');
@@ -107,6 +108,7 @@ use_ok('GPForum::Service::Discovery::RobotsPolicy');
 use_ok('GPForum::Service::Discovery::SitemapBuilder');
 use_ok('GPForum::Service::Discovery::VisibilityPolicy');
 use_ok('GPForum::Service::Admin::AuditReview');
+use_ok('GPForum::Service::Admin::PermissionGate');
 use_ok('GPForum::Service::Admin::PermissionReview');
 use_ok('GPForum::Service::Admin::RoleBindingStore');
 use_ok('GPForum::Service::Admin::RoleCatalog');
