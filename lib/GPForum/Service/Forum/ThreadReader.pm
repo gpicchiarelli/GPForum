@@ -19,7 +19,7 @@ sub list_category_threads {
     my $query = {
         category_id      => $request->{category_id},
         deleted_at       => undef,
-        moderation_state => 'visible',
+        moderation_state => { -in => [ 'visible', 'locked' ] },
     };
     if ( $plan->{after} ) {
         $query->{-or} = _thread_cursor_clause( $plan->{after} );
@@ -49,7 +49,7 @@ sub list_public_threads {
     my $plan  = $self->page_window->plan($request);
     my $query = {
         deleted_at       => undef,
-        moderation_state => 'visible',
+        moderation_state => { -in => [ 'visible', 'locked' ] },
         visibility       => 'public',
     };
     if ( $plan->{after} ) {

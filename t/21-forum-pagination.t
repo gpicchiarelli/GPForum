@@ -111,8 +111,11 @@ is( $thread_resultset->last_query->{category_id},
     'category-1', 'thread reader filters category' );
 is( $thread_resultset->last_query->{deleted_at},
     undef, 'thread reader excludes deleted threads' );
-is( $thread_resultset->last_query->{moderation_state},
-    'visible', 'thread reader filters visible threads' );
+is_deeply(
+    $thread_resultset->last_query->{moderation_state},
+    { -in => [ 'visible', 'locked' ] },
+    'thread reader keeps visible and locked threads readable'
+);
 is(
     $thread_resultset->last_attrs->{rows},
     $REQUEST_LIMIT + 1,

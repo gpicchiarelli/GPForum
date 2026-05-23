@@ -34,6 +34,7 @@ use GPForum::Service::Admin::PermissionGate;
 use GPForum::Service::Identity::ProfileReader;
 use GPForum::Service::Identity::Registration;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
 use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Notification::SubscriptionStore;
@@ -330,6 +331,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_moderation_action_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Moderation::ActionStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_permission_gate => sub {
             my ($controller) = @_;
 
@@ -403,6 +412,21 @@ sub startup {
     $routes->post('/moderation/reports/:report_id/resolve')
       ->to('Moderation#resolve_report')
       ->name('moderation_report_resolve');
+    $routes->post('/moderation/posts/:post_id/hide')
+      ->to('Moderation#hide_post')
+      ->name('moderation_post_hide');
+    $routes->post('/moderation/posts/:post_id/restore')
+      ->to('Moderation#restore_post')
+      ->name('moderation_post_restore');
+    $routes->post('/moderation/threads/:thread_id/lock')
+      ->to('Moderation#lock_thread')
+      ->name('moderation_thread_lock');
+    $routes->post('/moderation/threads/:thread_id/unlock')
+      ->to('Moderation#unlock_thread')
+      ->name('moderation_thread_unlock');
+    $routes->post('/moderation/actions/:action_id/reverse')
+      ->to('Moderation#reverse_action')
+      ->name('moderation_action_reverse');
     $routes->get('/notifications')
       ->to('Notifications#inbox')
       ->name('notifications');

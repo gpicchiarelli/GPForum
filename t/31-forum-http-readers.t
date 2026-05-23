@@ -21,7 +21,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 31;
+const my $EXPECTED_TESTS         => 33;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -135,6 +135,11 @@ ok(
 );
 is( $schema->resultset('Thread')->last_query->{visibility},
     'public', 'home page reader uses public thread reader' );
+is_deeply(
+    $schema->resultset('Thread')->last_query->{moderation_state},
+    { -in => [ 'visible', 'locked' ] },
+    'home page reader keeps locked threads readable'
+);
 is( $schema->resultset('Thread')->last_attrs->{rows},
     $HOME_THREAD_FETCH_ROWS, 'home page reader asks for keyset lookahead' );
 ok(
@@ -230,6 +235,26 @@ my $hidden_detail =
   GPForum::Service::Forum::ThreadDetailReader->new( schema => $hidden_schema );
 is( $hidden_detail->find_thread('thread-hidden'),
     undef, 'hidden thread is not visible' );
+
+my $locked_schema = GPForum::Test::ForumReadSchema->new(
+    resultsets => {
+        Thread => GPForum::Test::ForumReadResultSet->new(
+            rows => [
+                _row(
+                    {
+                        thread_id        => 'thread-locked',
+                        moderation_state => 'locked',
+                        deleted_at       => undef,
+                    }
+                ),
+            ],
+        ),
+    },
+);
+my $locked_detail =
+  GPForum::Service::Forum::ThreadDetailReader->new( schema => $locked_schema );
+is( $locked_detail->find_thread('thread-locked')->get_column('thread_id'),
+    'thread-locked', 'locked thread remains readable' );
 
 my $deleted_category_schema = GPForum::Test::ForumReadSchema->new(
     resultsets => {

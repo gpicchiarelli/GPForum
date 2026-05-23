@@ -25,6 +25,11 @@ It is intentionally narrower than the full architectural contract.
 * `GET /moderation/reports` renders the authorized moderation report queue.
 * `POST /moderation/reports/:report_id/assign` assigns a report to the current moderator.
 * `POST /moderation/reports/:report_id/resolve` resolves a report with an explicit resolution.
+* `POST /moderation/posts/:post_id/hide` hides a post through `ActionStore`.
+* `POST /moderation/posts/:post_id/restore` restores a hidden post through `ActionStore`.
+* `POST /moderation/threads/:thread_id/lock` locks a thread through `ActionStore`.
+* `POST /moderation/threads/:thread_id/unlock` unlocks a thread through `ActionStore`.
+* `POST /moderation/actions/:action_id/reverse` records reversal of a moderation action.
 * `GET /notifications` renders the authenticated user's notification inbox.
 * `POST /notifications/:notification_id/read` marks one notification as read.
 * `GET /mentions` renders the authenticated user's mention history.
@@ -77,6 +82,14 @@ queue, assign reports, and resolve reports. The moderation controller uses
 `PermissionGate`, which checks PostgreSQL role bindings and permissions rather
 than trusting a session flag. Report assignment and resolution are CSRF-protected
 and emit append-only transition events, audit rows, and outbox handoffs.
+
+Moderation actions are now wired as real HTTP write workflows. Authorized staff
+can hide/restore posts, lock/unlock threads, and reverse moderation actions
+through CSRF-protected routes. `ActionStore` remains the write boundary: it
+updates canonical content state only inside a PostgreSQL transaction and emits a
+moderation action row, domain event, audit row, and transactional outbox
+handoff. Locked threads remain readable so archival links and discussion
+continuity survive moderation, but `locked_at` keeps reply creation closed.
 
 Authenticated personal feeds expose the existing `user_feed_items` projection
 through `FeedReader`. The route is SSR/JSON, keyset-paginated, and deliberately

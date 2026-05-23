@@ -19,16 +19,19 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 61;
+const my $EXPECTED_TESTS      => 68;
 const my $QUEUE_LIMIT         => 25;
 const my $AUDIT_LIMIT         => 10;
 const my $CREATED_REPORTS     => 1;
 const my $CREATED_EVENTS      => 3;
 const my $CREATED_OUTBOX_ROWS => 3;
+const my $MODERATION_EVENTS   => 7;
+const my $MODERATION_OUTBOX   => 7;
 const my $FIRST_EVENT_COUNT   => 1;
 const my $SECOND_EVENT_COUNT  => 2;
 const my $CREATED_ACTIONS     => 3;
-const my $CREATED_AUDIT_ROWS  => 6;
+const my $ACTION_AUDIT_ROWS   => 6;
+const my $CREATED_AUDIT_ROWS  => 7;
 const my $FIRST_ACTION_INDEX  => 0;
 const my $SECOND_ACTION_INDEX => 1;
 const my $THIRD_ACTION_INDEX  => 2;
@@ -205,11 +208,17 @@ is( $moderation_actions->created->[$SECOND_ACTION_INDEX]{action_type},
 is( $moderation_actions->created->[$THIRD_ACTION_INDEX]{action_type},
     'thread.locked', 'third action is lock' );
 is( scalar @{ $audit_log->created },
-    $CREATED_AUDIT_ROWS, 'moderation actions create audit rows' );
+    $ACTION_AUDIT_ROWS, 'moderation actions create audit rows' );
 is( $audit_log->created->[$CREATED_EVENTS]{action},
     'post.hidden', 'audit row stores action' );
 is( $audit_log->created->[$CREATED_EVENTS]{metadata}{reason},
     'spam', 'audit row stores reason metadata' );
+is( scalar @{ $event_log->created },
+    $ACTION_AUDIT_ROWS, 'moderation actions create domain events' );
+is( $event_log->created->[$CREATED_EVENTS]{event_type},
+    'post.hidden', 'hide action records event type' );
+is( scalar @{ $outbox_messages->created },
+    $ACTION_AUDIT_ROWS, 'moderation actions create outbox handoffs' );
 
 my $reversed = $action_store->reverse_action( 'generated-1', 'moderator-2' );
 is( $reversed->{moderation_action_id},
@@ -221,6 +230,14 @@ is(
     $moderation_actions->find('generated-1')->get_column('reversed_by_user_id'),
     'moderator-2', 'action row is marked reversed'
 );
+is( scalar @{ $event_log->created },
+    $MODERATION_EVENTS, 'moderation reversal creates a domain event' );
+is( $event_log->created->[-1]{event_type},
+    'moderation_action.reversed', 'reversal event type is explicit' );
+is( scalar @{ $outbox_messages->created },
+    $MODERATION_OUTBOX, 'moderation reversal creates outbox handoff' );
+is( $audit_log->created->[-1]{action},
+    'moderation_action.reversed', 'reversal records audit row' );
 
 my $audit_review =
   GPForum::Service::Admin::AuditReview->new( schema => $schema, );

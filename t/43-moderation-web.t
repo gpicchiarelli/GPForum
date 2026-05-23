@@ -16,7 +16,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 29;
+const my $EXPECTED_TESTS    => 52;
 const my $HTTP_OK           => 200;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
@@ -45,6 +45,78 @@ my $csrf_token = _json_value( $test, 'csrf_token' );
 $test->get_ok('/moderation/reports');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Moderation report queue"]});
+$test->element_exists(q{form[action="/moderation/posts/post-1/hide"]});
+
+$test->post_ok('/moderation/posts/post-1/hide');
+$test->status_is($HTTP_FORBIDDEN);
+
+$test->post_ok(
+    '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => q{},
+      }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/reason' => 'reason is required' );
+
+$test->post_ok(
+    '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'spam',
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/action/action_type' => 'post.hidden' );
+
+$test->post_ok(
+    '/moderation/posts/post-1/restore' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'appeal accepted',
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/action/action_type' => 'post.restored' );
+
+$test->post_ok(
+    '/moderation/threads/thread-1/lock' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'heated discussion',
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/action/action_type' => 'thread.locked' );
+
+$test->post_ok(
+    '/moderation/threads/thread-1/unlock' =>
+      { Accept => 'application/json' } => form => {
+        csrf_token => $csrf_token,
+        reason     => 'cooled down',
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/action/action_type' => 'thread.unlocked' );
+
+$test->post_ok(
+    '/moderation/actions/action-post-hide/reverse' =>
+      { Accept => 'application/json' } => form => {
+        csrf_token => $csrf_token,
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/action/reversed_by_user_id' => 'moderator-1' );
+
+$test->post_ok(
+    '/moderation/posts/missing/restore' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'missing target',
+      }
+);
+$test->status_is($HTTP_NOT_FOUND);
 
 $test->post_ok('/moderation/reports/report-1/assign');
 $test->status_is($HTTP_FORBIDDEN);
@@ -101,6 +173,8 @@ sub _install_moderation_fakes {
 
     my $services = GPForum::Test::ForumWebServices->new;
     $test_object->app->helper( gp_report_store => sub { return $services; } );
+    $test_object->app->helper(
+        gp_moderation_action_store => sub { return $services; } );
     $test_object->app->helper(
         gp_permission_gate => sub {
             return GPForum::Test::AllowPermissionGate->new;

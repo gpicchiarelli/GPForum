@@ -151,6 +151,11 @@ semantic SSR by default and still return JSON when requested with
 * `GET /moderation/reports`
 * `POST /moderation/reports/:report_id/assign`
 * `POST /moderation/reports/:report_id/resolve`
+* `POST /moderation/posts/:post_id/hide`
+* `POST /moderation/posts/:post_id/restore`
+* `POST /moderation/threads/:thread_id/lock`
+* `POST /moderation/threads/:thread_id/unlock`
+* `POST /moderation/actions/:action_id/reverse`
 * `GET /notifications`
 * `POST /notifications/:notification_id/read`
 * `GET /mentions`
@@ -188,6 +193,12 @@ The moderation report queue is also traversable for authorized staff. Access is
 checked by `PermissionGate` against PostgreSQL role bindings and permissions;
 assignment and resolution remain CSRF-protected and emit report transition
 events, audit rows, and outbox handoffs.
+Moderators can now execute reversible content actions from the same HTTP
+boundary. Post hide/restore, thread lock/unlock, and moderation action reversal
+delegate to `ActionStore`; each action runs in a PostgreSQL transaction and
+records the moderation action, domain event, audit row, and transactional
+outbox handoff. Locked threads remain readable for archival continuity, while
+reply creation is still blocked by `locked_at`.
 The authenticated `/feed` route exposes the existing `user_feed_items`
 projection as a keyset-paginated personal continuity feed. It is derived,
 rebuildable, and non-authoritative: it stores only item references and version

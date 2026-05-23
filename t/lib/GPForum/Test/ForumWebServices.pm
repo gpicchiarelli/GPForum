@@ -251,6 +251,94 @@ sub resolve_report {
     };
 }
 
+sub hide_post {
+    my ( $self, $input ) = @_;
+
+    return if $input->{post_id} ne 'post-1';
+
+    return {
+        ok     => 1,
+        action => {
+            moderation_action_id => 'action-post-hide',
+            action_type          => 'post.hidden',
+            target_type          => 'post',
+            target_id            => $input->{post_id},
+            reason               => $input->{reason},
+            reversed_at          => undef,
+            reversed_by_user_id  => undef,
+        },
+    };
+}
+
+sub restore_post {
+    my ( $self, $input ) = @_;
+
+    return if $input->{post_id} ne 'post-1';
+
+    return {
+        ok     => 1,
+        action => {
+            moderation_action_id => 'action-post-restore',
+            action_type          => 'post.restored',
+            target_type          => 'post',
+            target_id            => $input->{post_id},
+            reason               => $input->{reason},
+            reversed_at          => undef,
+            reversed_by_user_id  => undef,
+        },
+    };
+}
+
+sub lock_thread {
+    my ( $self, $input ) = @_;
+
+    return if $input->{thread_id} ne 'thread-1';
+
+    return {
+        ok     => 1,
+        action => {
+            moderation_action_id => 'action-thread-lock',
+            action_type          => 'thread.locked',
+            target_type          => 'thread',
+            target_id            => $input->{thread_id},
+            reason               => $input->{reason},
+            reversed_at          => undef,
+            reversed_by_user_id  => undef,
+        },
+    };
+}
+
+sub unlock_thread {
+    my ( $self, $input ) = @_;
+
+    return if $input->{thread_id} ne 'thread-1';
+
+    return {
+        ok     => 1,
+        action => {
+            moderation_action_id => 'action-thread-unlock',
+            action_type          => 'thread.unlocked',
+            target_type          => 'thread',
+            target_id            => $input->{thread_id},
+            reason               => $input->{reason},
+            reversed_at          => undef,
+            reversed_by_user_id  => undef,
+        },
+    };
+}
+
+sub reverse_action {
+    my ( $self, $action_id, $reversed_by_user_id ) = @_;
+
+    return if $action_id ne 'action-post-hide';
+
+    return {
+        moderation_action_id => $action_id,
+        reversed_at          => '2026-05-23T12:00:00Z',
+        reversed_by_user_id  => $reversed_by_user_id,
+    };
+}
+
 sub summary_for_page {
     return {
         authenticated         => 1,

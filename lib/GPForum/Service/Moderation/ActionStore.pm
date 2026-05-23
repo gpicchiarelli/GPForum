@@ -8,6 +8,7 @@ use Mojo::Base -base;
 
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
@@ -15,34 +16,50 @@ const my $STATE_VISIBLE  => 'visible';
 const my $STATE_HIDDEN   => 'hidden';
 const my $STATE_LOCKED   => 'locked';
 const my $SCHEMA_VERSION => 1;
+const my $TARGET_ACTION  => 'moderation_action';
 const my $TARGET_POST    => 'post';
 const my $TARGET_THREAD  => 'thread';
 
-has clock      => sub { return GPForum::Service::Clock->new; };
-has id_service => sub { return GPForum::Service::Id->new; };
-has schema     => undef;
+has clock          => sub { return GPForum::Service::Clock->new; };
+has id_service     => sub { return GPForum::Service::Id->new; };
+has outbox_builder => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Outbox::MessageBuilder->new(
+        id_service => $self->id_service, );
+};
+has schema => undef;
 
 sub hide_post {
     my ( $self, $input ) = @_;
 
-    my $timestamp = $self->clock->now_iso8601;
-    my $post      = $self->schema->resultset('Post')->find( $input->{post_id} );
-    $post->update(
-        {
-            moderation_state => $STATE_HIDDEN,
-            hidden_at        => $timestamp,
-        }
-    );
+    return $self->schema->txn_do(
+        sub {
+            my $timestamp = $self->clock->now_iso8601;
+            my $post =
+              $self->schema->resultset('Post')->find( $input->{post_id} );
+            return if !$post;
 
-    return $self->_record_action(
-        {
-            actor_user_id => $input->{actor_user_id},
-            action_type   => 'post.hidden',
-            target_type   => $TARGET_POST,
-            target_id     => $input->{post_id},
-            reason        => $input->{reason},
-            metadata      => { previous_state => $STATE_VISIBLE },
-            created_at    => $timestamp,
+            my $previous_state = _column( $post, 'moderation_state' );
+            $post->update(
+                {
+                    moderation_state => $STATE_HIDDEN,
+                    hidden_at        => $timestamp,
+                }
+            );
+
+            return $self->_record_action(
+                {
+                    actor_user_id  => $input->{actor_user_id},
+                    action_type    => 'post.hidden',
+                    target_type    => $TARGET_POST,
+                    target_id      => $input->{post_id},
+                    reason         => $input->{reason},
+                    metadata       => { previous_state => $previous_state },
+                    created_at     => $timestamp,
+                    correlation_id => $input->{correlation_id},
+                }
+            );
         }
     );
 }
@@ -50,23 +67,32 @@ sub hide_post {
 sub restore_post {
     my ( $self, $input ) = @_;
 
-    my $post = $self->schema->resultset('Post')->find( $input->{post_id} );
-    $post->update(
-        {
-            moderation_state => $STATE_VISIBLE,
-            hidden_at        => undef,
-        }
-    );
+    return $self->schema->txn_do(
+        sub {
+            my $post =
+              $self->schema->resultset('Post')->find( $input->{post_id} );
+            return if !$post;
 
-    return $self->_record_action(
-        {
-            actor_user_id => $input->{actor_user_id},
-            action_type   => 'post.restored',
-            target_type   => $TARGET_POST,
-            target_id     => $input->{post_id},
-            reason        => $input->{reason},
-            metadata      => { previous_state => $STATE_HIDDEN },
-            created_at    => $self->clock->now_iso8601,
+            my $previous_state = _column( $post, 'moderation_state' );
+            $post->update(
+                {
+                    moderation_state => $STATE_VISIBLE,
+                    hidden_at        => undef,
+                }
+            );
+
+            return $self->_record_action(
+                {
+                    actor_user_id  => $input->{actor_user_id},
+                    action_type    => 'post.restored',
+                    target_type    => $TARGET_POST,
+                    target_id      => $input->{post_id},
+                    reason         => $input->{reason},
+                    metadata       => { previous_state => $previous_state },
+                    created_at     => $self->clock->now_iso8601,
+                    correlation_id => $input->{correlation_id},
+                }
+            );
         }
     );
 }
@@ -74,25 +100,66 @@ sub restore_post {
 sub lock_thread {
     my ( $self, $input ) = @_;
 
-    my $timestamp = $self->clock->now_iso8601;
-    my $thread =
-      $self->schema->resultset('Thread')->find( $input->{thread_id} );
-    $thread->update(
-        {
-            moderation_state => $STATE_LOCKED,
-            locked_at        => $timestamp,
+    return $self->schema->txn_do(
+        sub {
+            my $timestamp = $self->clock->now_iso8601;
+            my $thread =
+              $self->schema->resultset('Thread')->find( $input->{thread_id} );
+            return if !$thread;
+
+            my $previous_state = _column( $thread, 'moderation_state' );
+            $thread->update(
+                {
+                    moderation_state => $STATE_LOCKED,
+                    locked_at        => $timestamp,
+                }
+            );
+
+            return $self->_record_action(
+                {
+                    actor_user_id  => $input->{actor_user_id},
+                    action_type    => 'thread.locked',
+                    target_type    => $TARGET_THREAD,
+                    target_id      => $input->{thread_id},
+                    reason         => $input->{reason},
+                    metadata       => { previous_state => $previous_state },
+                    created_at     => $timestamp,
+                    correlation_id => $input->{correlation_id},
+                }
+            );
         }
     );
+}
 
-    return $self->_record_action(
-        {
-            actor_user_id => $input->{actor_user_id},
-            action_type   => 'thread.locked',
-            target_type   => $TARGET_THREAD,
-            target_id     => $input->{thread_id},
-            reason        => $input->{reason},
-            metadata      => { previous_state => $STATE_VISIBLE },
-            created_at    => $timestamp,
+sub unlock_thread {
+    my ( $self, $input ) = @_;
+
+    return $self->schema->txn_do(
+        sub {
+            my $thread =
+              $self->schema->resultset('Thread')->find( $input->{thread_id} );
+            return if !$thread;
+
+            my $previous_state = _column( $thread, 'moderation_state' );
+            $thread->update(
+                {
+                    moderation_state => $STATE_VISIBLE,
+                    locked_at        => undef,
+                }
+            );
+
+            return $self->_record_action(
+                {
+                    actor_user_id  => $input->{actor_user_id},
+                    action_type    => 'thread.unlocked',
+                    target_type    => $TARGET_THREAD,
+                    target_id      => $input->{thread_id},
+                    reason         => $input->{reason},
+                    metadata       => { previous_state => $previous_state },
+                    created_at     => $self->clock->now_iso8601,
+                    correlation_id => $input->{correlation_id},
+                }
+            );
         }
     );
 }
@@ -100,15 +167,30 @@ sub lock_thread {
 sub reverse_action {
     my ( $self, $action_id, $reversed_by_user_id ) = @_;
 
-    my $timestamp = $self->clock->now_iso8601;
-    my $action = $self->schema->resultset('ModerationAction')->find($action_id);
-    my $changes = {
-        reversed_at         => $timestamp,
-        reversed_by_user_id => $reversed_by_user_id,
-    };
-    $action->update($changes);
+    return $self->schema->txn_do(
+        sub {
+            my $timestamp = $self->clock->now_iso8601;
+            my $action =
+              $self->schema->resultset('ModerationAction')->find($action_id);
+            return if !$action;
 
-    return { moderation_action_id => $action_id, %{$changes} };
+            my $changes = {
+                reversed_at         => $timestamp,
+                reversed_by_user_id => $reversed_by_user_id,
+            };
+            $action->update($changes);
+            $self->_record_reversal_event_and_audit(
+                {
+                    action              => $action,
+                    action_id           => $action_id,
+                    reversed_by_user_id => $reversed_by_user_id,
+                    reversed_at         => $timestamp,
+                }
+            );
+
+            return { moderation_action_id => $action_id, %{$changes} };
+        }
+    );
 }
 
 sub _record_action {
@@ -127,13 +209,106 @@ sub _record_action {
         reversed_by_user_id  => undef,
     };
     $self->schema->resultset('ModerationAction')->create($action);
-    $self->_record_audit($action);
+    $self->_record_event_and_audit(
+        {
+            action         => $action,
+            correlation_id => $input->{correlation_id},
+        }
+    );
 
     return { ok => 1, action => $action };
 }
 
+sub _record_event_and_audit {
+    my ( $self, $input ) = @_;
+
+    my $action         = $input->{action};
+    my $correlation_id = $input->{correlation_id} || $self->id_service->uuid;
+    my $event          = {
+        event_id          => $self->id_service->uuid,
+        event_type        => $action->{action_type},
+        schema_version    => $SCHEMA_VERSION,
+        aggregate_type    => $action->{target_type},
+        aggregate_id      => $action->{target_id},
+        aggregate_version => $SCHEMA_VERSION,
+        actor_id          => $action->{actor_user_id},
+        correlation_id    => $correlation_id,
+        causation_id      => undef,
+        idempotency_key   => join( q{:},
+            $action->{action_type}, $action->{target_type},
+            $action->{target_id},   $action->{moderation_action_id} ),
+        payload => {
+            moderation_action_id => $action->{moderation_action_id},
+            target_type          => $action->{target_type},
+            target_id            => $action->{target_id},
+            reason               => $action->{reason},
+            metadata             => $action->{metadata},
+        },
+        metadata   => {},
+        created_at => $action->{created_at},
+    };
+
+    $self->schema->resultset('EventLog')->create($event);
+    $self->schema->resultset('OutboxMessage')
+      ->create( $self->outbox_builder->for_event($event) );
+    $self->_record_audit(
+        {
+            action         => $action,
+            correlation_id => $correlation_id,
+        }
+    );
+
+    return;
+}
+
+sub _record_reversal_event_and_audit {
+    my ( $self, $input ) = @_;
+
+    my $action         = $input->{action};
+    my $correlation_id = $self->id_service->uuid;
+    my $event          = {
+        event_id          => $self->id_service->uuid,
+        event_type        => 'moderation_action.reversed',
+        schema_version    => $SCHEMA_VERSION,
+        aggregate_type    => $TARGET_ACTION,
+        aggregate_id      => $input->{action_id},
+        aggregate_version => $SCHEMA_VERSION,
+        actor_id          => $input->{reversed_by_user_id},
+        correlation_id    => $correlation_id,
+        causation_id      => undef,
+        idempotency_key   =>
+          join( q{:}, 'moderation_action.reversed', $input->{action_id} ),
+        payload => {
+            moderation_action_id => $input->{action_id},
+            reversed_by_user_id  => $input->{reversed_by_user_id},
+            reversed_at          => $input->{reversed_at},
+            original_action_type => _column( $action, 'action_type' ),
+            target_type          => _column( $action, 'target_type' ),
+            target_id            => _column( $action, 'target_id' ),
+        },
+        metadata   => {},
+        created_at => $input->{reversed_at},
+    };
+
+    $self->schema->resultset('EventLog')->create($event);
+    $self->schema->resultset('OutboxMessage')
+      ->create( $self->outbox_builder->for_event($event) );
+    $self->_record_reversal_audit(
+        {
+            action         => $action,
+            correlation_id => $correlation_id,
+            reversed_at    => $input->{reversed_at},
+            reversed_by    => $input->{reversed_by_user_id},
+        }
+    );
+
+    return;
+}
+
 sub _record_audit {
-    my ( $self, $action ) = @_;
+    my ( $self, $input ) = @_;
+
+    my $action = $input->{action};
 
     $self->schema->resultset('AuditLog')->create(
         {
@@ -143,7 +318,7 @@ sub _record_audit {
             actor_id       => $action->{actor_user_id},
             target_type    => $action->{target_type},
             target_id      => $action->{target_id},
-            correlation_id => $self->id_service->uuid,
+            correlation_id => $input->{correlation_id},
             previous_hash  => undef,
             record_hash    => q{},
             metadata       => {
@@ -153,6 +328,43 @@ sub _record_audit {
             created_at => $action->{created_at},
         }
     );
+
+    return;
+}
+
+sub _record_reversal_audit {
+    my ( $self, $input ) = @_;
+
+    my $action = $input->{action};
+
+    $self->schema->resultset('AuditLog')->create(
+        {
+            audit_id       => $self->id_service->uuid,
+            action         => 'moderation_action.reversed',
+            schema_version => $SCHEMA_VERSION,
+            actor_id       => $input->{reversed_by},
+            target_type    => _column( $action, 'target_type' ),
+            target_id      => _column( $action, 'target_id' ),
+            correlation_id => $input->{correlation_id},
+            previous_hash  => undef,
+            record_hash    => q{},
+            metadata       => {
+                moderation_action_id =>
+                  _column( $action, 'moderation_action_id' ),
+                original_action_type => _column( $action, 'action_type' ),
+            },
+            created_at => $input->{reversed_at},
+        }
+    );
+
+    return;
+}
+
+sub _column {
+    my ( $row, $name ) = @_;
+
+    return $row->{$name}           if ref $row eq 'HASH';
+    return $row->get_column($name) if $row && $row->can('get_column');
 
     return;
 }

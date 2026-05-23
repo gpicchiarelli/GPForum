@@ -32,6 +32,22 @@
               <dt>Created</dt>
               <dd><time datetime="<%= $report->{created_at} %>"><%= $report->{created_at} %></time></dd>
             </dl>
+            % if ($report->{target_type} eq 'post') {
+              <form method="post" action="<%= url_for('moderation_post_hide', post_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <label for="report-<%= $report->{report_id} %>-post-reason">Moderation reason</label>
+                <input id="report-<%= $report->{report_id} %>-post-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <button type="submit">Hide post</button>
+              </form>
+            % }
+            % if ($report->{target_type} eq 'thread') {
+              <form method="post" action="<%= url_for('moderation_thread_lock', thread_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <label for="report-<%= $report->{report_id} %>-thread-reason">Moderation reason</label>
+                <input id="report-<%= $report->{report_id} %>-thread-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <button type="submit">Lock thread</button>
+              </form>
+            % }
             <form method="post" action="<%= url_for('moderation_report_assign', report_id => $report->{report_id}) %>">
               <%= csrf_field %>
               <button type="submit">Assign to me</button>

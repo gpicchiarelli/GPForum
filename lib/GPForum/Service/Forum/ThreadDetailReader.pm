@@ -59,7 +59,13 @@ sub _thread_is_visible {
     return 0 if !$row;
     return 0 if defined $row->get_column('deleted_at');
 
-    return $row->get_column('moderation_state') eq 'visible' ? 1 : 0;
+    return _visible_state( $row->get_column('moderation_state') );
+}
+
+sub _visible_state {
+    my ($state) = @_;
+
+    return $state && ( $state eq 'visible' || $state eq 'locked' ) ? 1 : 0;
 }
 
 1;
