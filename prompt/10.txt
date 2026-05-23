@@ -5,6 +5,12 @@ hot-path latency, retry counts, projection lag, rebuild progress, dead letters,
 queue depth, slow query visibility, worker progress, cache posture, and active
 projection generation where relevant.
 
+Prompt 53 alignment: search, feed, syndication, autocomplete, metadata, and
+retrieval workflows MUST expose operational visibility for search latency,
+projection lag, rebuild progress, indexing throughput, failed indexing jobs,
+dead letters, feed generation latency, cache invalidation lag, active
+generation, and degraded no-leak states.
+
 This document defines the mandatory observability architecture, structured logging model, metrics strategy, distributed tracing philosophy, monitoring requirements, operational visibility standards, alerting rules, and incident analysis framework of GPForum.
 
 This specification is foundational and mandatory.

@@ -5,6 +5,11 @@ Notification inboxes, badges, read/unread state, digests, unsubscribe flows, and
 realtime notification updates MUST expose accessible text/state and MUST NOT
 rely on badge-only, color-only, or disruptive live-region behavior.
 
+Prompt 53 alignment: digests, feed emails, notification excerpts, and
+syndication-adjacent communication MUST remain permission-aware,
+moderation-aware, deletion-aware, anti-leak, rate-limited, and derived from
+safe canonical or projection state.
+
 This document defines the mandatory email architecture, verification flows, password reset flows, digest delivery, notification channels, unsubscribe behavior, and delivery observability for GPForum.
 
 This specification is mandatory.

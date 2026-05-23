@@ -1,5 +1,10 @@
 GPForum - PostgreSQL Native Search & Perl Retrieval Constitution
 
+Prompt 53 alignment: PostgreSQL-native retrieval now covers search, feeds,
+syndication, autocomplete, ranking, metadata, and discovery projections. These
+surfaces MUST remain derived, rebuildable, permission-safe, moderation-safe,
+deletion-aware, observable, and anti-leak.
+
 This document defines the replacement of OpenSearch as the default search architecture for GPForum.
 
 This specification is foundational and mandatory.

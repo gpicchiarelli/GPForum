@@ -30,6 +30,11 @@ Prompt 52 alignment: domain integrity, authorization correctness, moderation
 safety, audit traceability, anti-leak behavior, visibility correctness, and
 replay-preserving governance workflows are engineering invariants.
 
+Prompt 53 alignment: retrieval correctness is an engineering invariant. Search,
+feeds, syndication, metadata, autocomplete, ranking, and recommendations MUST
+remain derived, rebuildable, permission-safe, moderation-safe, bounded,
+observable, and anti-leak.
+
 It does not replace the existing constitutions. It binds them together with
 mechanically reviewable and testable engineering rules.
 

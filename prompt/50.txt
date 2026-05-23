@@ -22,6 +22,12 @@ integrity, authorization correctness, moderation safety, visibility
 enforcement, audit traceability, governance workflows, anti-leak guarantees,
 policy-safe projections, cache invalidation, and replay preservation.
 
+Prompt 53 alignment: the execution checklist is specialized for retrieval.
+Search, feed, syndication, autocomplete, ranking, metadata, and discovery
+changes MUST answer canonical truth, projection shape, indexing trigger,
+rebuild strategy, permission safety, moderation safety, leak risk, replay,
+cache invalidation, and indexing failure behavior.
+
 Its purpose is to prevent architectural drift while GPForum moves from
 "constitution plus structural MVP" into a complete, navigable, durable forum
 platform.

@@ -15,6 +15,11 @@ documents MUST support idempotent rebuilds, inactive rebuild generations,
 activation swaps where needed, permission-safe stale-state handling, and
 graceful degradation when indexing stalls.
 
+Prompt 53 alignment: search, autocomplete, ranking, feeds, metadata, and
+syndication MUST remain PostgreSQL-native by default, derived, rebuildable,
+permission-aware, moderation-aware, deletion-aware, observable, bounded,
+anti-leak, and operationally optional.
+
 This document defines the mandatory search architecture, indexing philosophy, retrieval model, ranking strategy, query discipline, synchronization workflows, language analysis rules, authorization-aware filtering, and long-term information retrieval principles of GPForum.
 
 This specification is foundational and mandatory.

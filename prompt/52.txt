@@ -18,6 +18,11 @@ Minion workers, SSR-first rendering, append-oriented persistence,
 event/audit/outbox discipline, projection rebuildability, explicit governance,
 accessibility, privacy boundaries, and optional Redis acceleration only.
 
+Prompt 53 alignment: all search, feed, syndication, autocomplete, metadata,
+ranking, and recommendation surfaces are derived retrieval systems. They MUST
+enforce permission safety, moderation safety, deletion safety, anti-leak rules,
+cache invalidation, and replay-preserving projection rebuilds.
+
 ---
 
 1. Primary Objective

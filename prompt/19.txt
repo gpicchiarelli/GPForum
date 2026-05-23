@@ -1,5 +1,10 @@
 GPForum - Cache, Coordination & Redis Decision Constitution
 
+Prompt 53 alignment: search caches, feed caches, autocomplete caches, and
+metadata caches are optional acceleration only. They MUST be disposable,
+bounded, scope-safe, permission-safe, moderation-safe, and event-invalidation
+aware; cache loss MUST NOT change retrieval correctness.
+
 This document resolves the cache and distributed coordination philosophy of GPForum after the Redis/KeyDB versus PostgreSQL-centric design discussion.
 
 This specification is foundational and mandatory.

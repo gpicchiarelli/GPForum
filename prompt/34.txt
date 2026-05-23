@@ -5,6 +5,11 @@ visibility-aware, moderation-aware, permission-safe, deletion-aware, and
 anti-leak. Restricted content MUST never appear in metadata, OpenGraph,
 sitemaps, feeds, snippets, previews, or public discovery projections.
 
+Prompt 53 alignment: RSS, Atom, OpenGraph, metadata, sitemap generation,
+public feeds, previews, snippets, trending, and related-thread discovery MUST
+be derived, rebuildable, bounded, cache-safe, visibility-safe, moderation-safe,
+deletion-aware, and conservative under ambiguity.
+
 This document defines the mandatory public discovery architecture, SEO-safe rendering, canonical URL strategy, sitemap rules, robots behavior, metadata, and syndication feeds for GPForum.
 
 This specification is mandatory for public deployments.

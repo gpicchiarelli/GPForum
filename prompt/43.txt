@@ -30,6 +30,11 @@ preserve explicit authorization, visibility state, moderation state, event and
 audit traceability, projection safety, cache invalidation, anti-leak behavior,
 and replay-preserving governance semantics.
 
+This contract is further specialized by prompt/53.txt. Retrieval workflows
+must preserve PostgreSQL-native search, derived indexes, rebuildable feeds,
+safe syndication, bounded query topology, permission-safe discovery,
+moderation-aware metadata, cache invalidation, and anti-leak behavior.
+
 ---
 
 Contract Purpose

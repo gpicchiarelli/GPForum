@@ -23,6 +23,11 @@ visibility-aware, moderation-aware, deletion-aware, anti-leak, and replayable.
 Performance work MUST never bypass authorization or make derived state
 authoritative.
 
+Prompt 53 alignment: search, feed, syndication, metadata, autocomplete, and
+ranking are hot retrieval surfaces. They MUST remain bounded, explainable,
+PostgreSQL-native by default, generation-aware where needed, async-indexed,
+cache-disposable, anti-leak, and gracefully degradable.
+
 ---
 
 1. Primary Objective

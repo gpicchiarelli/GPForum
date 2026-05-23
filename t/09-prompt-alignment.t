@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 253;
+const my $EXPECTED_TESTS => 297;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -24,6 +24,7 @@ my $os_performance    = path('prompt/49.txt')->slurp;
 my $execution         = path('prompt/50.txt')->slurp;
 my $scalability       = path('prompt/51.txt')->slurp;
 my $domain_integrity  = path('prompt/52.txt')->slurp;
+my $retrieval         = path('prompt/53.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -95,7 +96,7 @@ like(
 );
 like(
     $readme,
-    qr/52 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/53 [ ] architectural [ ] prompt [ ] constitutions/msx,
 'README counts the verifiable, accessibility, community, and discipline constitutions'
 );
 like(
@@ -135,7 +136,7 @@ like(
 );
 like(
     $readme,
-    qr/52 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/53 [ ] architectural [ ] prompt [ ] constitutions/msx,
     'README counts the accessibility constitution'
 );
 like(
@@ -390,6 +391,18 @@ _check_domain_integrity_prompt(
         engineering      => $engineering,
         execution        => $execution,
         readme           => $readme,
+        scalability      => $scalability,
+    }
+);
+
+_check_retrieval_prompt(
+    {
+        architecture     => $architecture,
+        domain_integrity => $domain_integrity,
+        engineering      => $engineering,
+        execution        => $execution,
+        readme           => $readme,
+        retrieval        => $retrieval,
         scalability      => $scalability,
     }
 );
@@ -880,6 +893,319 @@ sub _check_prompt_52_alignment {
 
     like( path($prompt_file)->slurp,
         qr/Prompt [ ] 52 [ ] alignment/msx, $message );
+
+    return;
+}
+
+sub _check_retrieval_prompt {
+    my ($context) = @_;
+
+    my $retrieval_text = $context->{retrieval};
+
+    like(
+        $retrieval_text,
+        qr/Search, [ ] Feed, [ ] Syndication [ ] And [ ] Retrieval/msx,
+        'retrieval prompt defines the new constitution'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'PostgreSQL-native retrieval platform',
+            'permission-safe discovery system',
+            'rebuildable indexing system',
+            'moderation-safe syndication system',
+        ),
+        'retrieval prompt defines the retrieval objective'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,    'Search and discovery MUST remain derived',
+            'permission-aware', 'moderation-aware', 'operationally optional',
+        ),
+        'retrieval prompt keeps search and discovery derived'
+    );
+    like(
+        $retrieval_text,
+        qr/Canonical [ ] truth [ ] remains/msx,
+        'retrieval prompt preserves canonical truth'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Search indexes are derived projections',
+            'RSS feeds are derived projections',
+            'Autocomplete is derived',
+            'Trending is derived',
+            'Recommendations are derived',
+        ),
+        'retrieval prompt classifies retrieval surfaces as derived'
+    );
+    like(
+        $retrieval_text,
+        qr/Search [ ] MUST [ ] remain [ ] PostgreSQL-native/msx,
+        'retrieval prompt preserves PostgreSQL-native search'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,        'tsvector',
+            'websearch_to_tsquery', 'GIN indexes',
+            'pg_trgm',              'unaccent',
+        ),
+        'retrieval prompt names PostgreSQL search features'
+    );
+    like(
+        $retrieval_text,
+qr/Italian [ ] language [ ] support [ ] SHOULD [ ] remain [ ] first-class/msx,
+        'retrieval prompt preserves Italian language support'
+    );
+    like(
+        $retrieval_text,
+        qr/Search [ ] projections [ ] MUST [ ] remain [ ] rebuildable/msx,
+        'retrieval prompt requires rebuildable search projections'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,    'entity_type',
+            'permission_scope', 'search_vector',
+            'source_version',   'visibility_version',
+            'permission_version',
+        ),
+        'retrieval prompt defines search projection fields'
+    );
+    like(
+        $retrieval_text,
+qr/Search [ ] projections [ ] MUST [ ] NOT [ ] become [ ] authoritative/msx,
+        'retrieval prompt forbids authoritative search projections'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'canonical write',
+            'event_log append',
+            'outbox message',
+            'Minion indexing job',
+            'projection update',
+            'cache invalidation',
+        ),
+        'retrieval prompt defines indexing workflow'
+    );
+    like(
+        $retrieval_text,
+        qr/Indexing [ ] MUST [ ] remain [ ] asynchronous/msx,
+        'retrieval prompt keeps indexing asynchronous'
+    );
+    like(
+        $retrieval_text,
+        qr/User-facing [ ] writes [ ] MUST [ ] NOT [ ] block/msx,
+        'retrieval prompt prevents write path blocking on indexing'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'full rebuild',
+            'targeted rebuild',
+            'replay from event range',
+            'resumable rebuild',
+            'generation switching',
+        ),
+        'retrieval prompt defines rebuild discipline'
+    );
+    like(
+        $retrieval_text,
+qr/Search [ ] rebuild [ ] MUST [ ] NOT [ ] block [ ] canonical [ ] writes/msx,
+        'retrieval prompt prevents rebuilds from blocking writes'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'generation_id',
+            'inactive rebuild generation',
+            'blue/green activation',
+            'rollback activation',
+        ),
+        'retrieval prompt defines projection generations'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,      'ts_rank',
+            'title weighting',    'freshness',
+            'category relevance', 'optional Perl-side ranking policy',
+        ),
+        'retrieval prompt defines ranking inputs'
+    );
+    like(
+        $retrieval_text,
+        qr/Ranking [ ] MUST [ ] remain [ ] explainable/msx,
+        'retrieval prompt requires explainable ranking'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'opaque scoring',
+            'nondeterministic ranking',
+            'hidden personalization',
+            'irreproducible results',
+        ),
+        'retrieval prompt rejects opaque ranking'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Autocomplete SHOULD',
+            'use pg_trgm where useful',
+            'remain permission-aware',
+            'remain rate-limited',
+            'remain bounded',
+        ),
+        'retrieval prompt defines autocomplete discipline'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Autocomplete MUST NEVER expose',
+            'private content',
+            'quarantined content',
+            'inaccessible threads',
+        ),
+        'retrieval prompt forbids autocomplete leaks'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Feeds MUST',
+            'respect visibility',
+            'respect moderation',
+            'respect deletion',
+            'support rebuildability',
+        ),
+        'retrieval prompt defines RSS and Atom safety'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Feeds SHOULD',
+            'expose excerpts by default',
+            'avoid unsafe HTML',
+            'remain rate-limited',
+        ),
+        'retrieval prompt defines feed ergonomics'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Private or moderated content MUST NOT appear in',
+            'OpenGraph',
+            'Twitter cards',
+            'sitemap entries',
+            'syndication feeds',
+        ),
+        'retrieval prompt defines metadata anti-leak rules'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Feed systems SHOULD remain derived projections',
+            'Feed rebuild MUST remain possible',
+        ),
+        'retrieval prompt preserves derived feed systems'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Trending systems MUST',
+            'tolerate rebuild',
+            'tolerate replay',
+            'avoid abuse amplification',
+        ),
+        'retrieval prompt defines trending constraints'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'Search caches and feed caches remain optional acceleration',
+            'be disposable',
+            'remain permission-safe',
+        ),
+        'retrieval prompt preserves cache disposability'
+    );
+    like(
+        $retrieval_text,
+        qr/Restricted [ ] content [ ] MUST [ ] NEVER [ ] leak [ ] through/msx,
+        'retrieval prompt defines restricted-content anti-leak rules'
+    );
+    ok(
+        _has_all(
+            $retrieval_text,
+            'search latency',
+            'projection lag',
+            'rebuild progress',
+            'indexing throughput',
+            'feed generation latency',
+        ),
+        'retrieval prompt defines retrieval observability'
+    );
+    like(
+        $retrieval_text,
+        qr/What [ ] is [ ] canonical [ ] truth[?]/msx,
+        'retrieval prompt requires canonical truth review'
+    );
+    like(
+        $retrieval_text,
+        qr/What [ ] happens [ ] if [ ] indexing [ ] fails[?]/msx,
+        'retrieval prompt requires indexing failure review'
+    );
+    ok(
+        _has_all(
+            $context->{readme},
+            'Search, feed, syndication, and retrieval safety are mandatory',
+        ),
+        'README records retrieval prompt as a final decision'
+    );
+    like( $context->{architecture},
+        qr/prompt\/53[.]txt/msx,
+        'executable architecture prompt aligns with retrieval prompt' );
+    like(
+        $context->{engineering},
+        qr/Prompt [ ] 53 [ ] alignment/msx,
+        'engineering invariants prompt aligns with retrieval prompt'
+    );
+    like(
+        $context->{execution},
+        qr/Prompt [ ] 53 [ ] alignment/msx,
+        'execution constitution aligns with retrieval prompt'
+    );
+    like(
+        $context->{scalability},
+        qr/Prompt [ ] 53 [ ] alignment/msx,
+        'scalability prompt aligns with retrieval prompt'
+    );
+    like(
+        $context->{domain_integrity},
+        qr/Prompt [ ] 53 [ ] alignment/msx,
+        'domain integrity prompt aligns with retrieval prompt'
+    );
+
+    _check_prompt_53_alignment( 'prompt/10.txt',
+        'observability prompt aligns with retrieval prompt' );
+    _check_prompt_53_alignment( 'prompt/14.txt',
+        'search prompt aligns with retrieval prompt' );
+    _check_prompt_53_alignment( 'prompt/19.txt',
+        'cache decision prompt aligns with retrieval prompt' );
+    _check_prompt_53_alignment( 'prompt/30.txt',
+        'email and notification prompt aligns with retrieval prompt' );
+    _check_prompt_53_alignment( 'prompt/34.txt',
+        'SEO prompt aligns with retrieval prompt' );
+    _check_prompt_53_alignment( 'prompt/42.txt',
+        'PostgreSQL-native search prompt aligns with retrieval prompt' );
+
+    return;
+}
+
+sub _check_prompt_53_alignment {
+    my ( $prompt_file, $message ) = @_;
+
+    like( path($prompt_file)->slurp,
+        qr/Prompt [ ] 53 [ ] alignment/msx, $message );
 
     return;
 }
