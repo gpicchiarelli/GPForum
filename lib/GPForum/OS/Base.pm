@@ -8,6 +8,8 @@ use English qw(-no_match_vars);
 use Mojo::Base -base;
 use POSIX qw(sysconf);
 
+use GPForum::OS::Resource;
+
 our $VERSION = '0.001';
 
 const my $DEFAULT_CPU_COUNT    => 1;
@@ -18,7 +20,8 @@ const my $FEATURE_ON           => 'on';
 const my $FEATURE_OFF          => 'off';
 const my $NPROCESSORS_CONSTANT => '_SC_NPROCESSORS_ONLN';
 
-has name => 'unknown';
+has name           => 'unknown';
+has resource_probe => sub { return GPForum::OS::Resource->new; };
 
 sub supports_reuseport {
     return 0;
@@ -75,6 +78,7 @@ sub snapshot {
         recommended_worker_count => $self->recommended_worker_count,
         supports_reuseport       => $self->supports_reuseport ? 1 : 0,
         supports_sendfile        => $self->supports_sendfile  ? 1 : 0,
+        resources                => $self->resource_probe->snapshot,
     };
 }
 

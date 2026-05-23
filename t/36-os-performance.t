@@ -10,13 +10,14 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::OS;
+use GPForum::OS::Resource;
 use GPForum::Runtime;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Test::OperationsClock;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 26;
+const my $EXPECTED_TESTS => 30;
 const my $WEB_PROCESSES  => 2;
 
 plan tests => $EXPECTED_TESTS;
@@ -29,6 +30,10 @@ ok( $detected->cpu_count >= 1, 'OS profile reports a positive CPU count' );
 ok(
     $detected->recommended_worker_count >= 1,
     'OS profile recommends a positive worker count'
+);
+ok(
+    exists $detected->snapshot->{resources},
+    'OS snapshot includes resource snapshot'
 );
 
 my $unknown = GPForum::OS->from_name('plan9');
@@ -83,5 +88,16 @@ my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
 is( $metrics->{os}{name}, 'linux', 'metrics expose OS profile' );
 is( $metrics->{os}{supports_sendfile},
     1, 'metrics expose OS sendfile capability' );
+ok( exists $metrics->{os}{resources}, 'metrics expose OS resource snapshot' );
+ok(
+    exists $metrics->{os}{resources}{open_file_descriptors},
+    'metrics expose open file descriptor count key'
+);
+
+my $resources = GPForum::OS::Resource->new->snapshot;
+ok(
+    exists $resources->{open_file_descriptors},
+    'resource probe returns file descriptor key'
+);
 
 1;

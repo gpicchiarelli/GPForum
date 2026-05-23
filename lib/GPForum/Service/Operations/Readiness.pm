@@ -26,6 +26,7 @@ sub check {
     my $started = time;
     my @checks  = (
         $self->_db_check,
+        $self->_runtime_check,
         $self->_resultset_check('EventLog'),
         $self->_resultset_check('OutboxMessage'),
         $self->_resultset_check('ProjectionGeneration'),
@@ -39,6 +40,21 @@ sub check {
         timestamp   => $self->clock->now_iso8601,
         latency_ms  => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
     };
+}
+
+sub _runtime_check {
+    my ($self) = @_;
+
+    my $started = time;
+    my $runtime = $self->runtime;
+    return _failed_check( 'runtime', $started, 'runtime profile unavailable' )
+      if !$runtime;
+
+    my $profile = $runtime->as_hash;
+    return _failed_check( 'runtime', $started, 'OS profile unavailable' )
+      if !$profile->{os} || !$profile->{os}{name};
+
+    return _ok_check( 'runtime', $started );
 }
 
 sub _db_check {

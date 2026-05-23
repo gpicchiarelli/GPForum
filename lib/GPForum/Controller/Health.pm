@@ -46,6 +46,7 @@ sub summary {
             application => 'GPForum',
             environment => $self->gp_config->environment,
             runtime     => $self->gp_runtime->as_hash,
+            os          => $self->gp_runtime->os_profile->snapshot,
             time        => $self->gp_clock->now_iso8601,
         },
     );

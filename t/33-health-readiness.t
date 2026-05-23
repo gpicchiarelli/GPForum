@@ -16,8 +16,8 @@ use GPForum::Test::ReadinessSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 8;
-const my $CHECK_COUNT    => 4;
+const my $EXPECTED_TESTS => 10;
+const my $CHECK_COUNT    => 5;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -33,6 +33,8 @@ is( $ready->{runtime}{mode}, 'test', 'readiness includes runtime' );
 is( scalar @{ $ready->{checks} },
     $CHECK_COUNT, 'readiness emits individual checks' );
 is( $ready->{checks}[0]{name}, 'database', 'readiness checks database first' );
+is( $ready->{checks}[1]{name}, 'runtime',  'readiness checks runtime profile' );
+is( $ready->{checks}[1]{status}, 'ok',     'runtime readiness check passes' );
 ok( defined $ready->{latency_ms}, 'readiness reports latency' );
 
 my $failed = GPForum::Service::Operations::Readiness->new(
