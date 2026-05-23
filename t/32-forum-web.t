@@ -17,7 +17,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 103;
+const my $EXPECTED_TESTS       => 109;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_UNAUTHORIZED    => 401;
@@ -79,6 +79,8 @@ my $csrf_token = _json_value( $test, 'csrf_token' );
 
 _get_json_ok( $test, '/bookmarks' );
 $test->status_is($HTTP_UNAUTHORIZED);
+_get_json_ok( $test, '/feed' );
+$test->status_is($HTTP_UNAUTHORIZED);
 _get_json_ok( $test, '/notifications' );
 $test->status_is($HTTP_UNAUTHORIZED);
 _get_json_ok( $test, '/mentions' );
@@ -138,6 +140,11 @@ _get_json_ok( $test, '/bookmarks' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/bookmarks/0/target_id' => 'thread-1' );
 $test->json_is( '/next_cursor'           => 'bookmark-cursor' );
+
+_get_json_ok( $test, '/feed' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/feed_items/0/item_id' => 'thread-1' );
+$test->json_is( '/next_cursor'          => 'feed-cursor' );
 
 _get_json_ok( $test, '/notifications' );
 $test->status_is($HTTP_OK);
@@ -254,6 +261,11 @@ sub _install_forum_fakes {
     {
         $test_object->app->helper( $helper => sub { return $services; } );
     }
+    $test_object->app->helper(
+        gp_feed_reader => sub {
+            return GPForum::Test::ForumWebServices->new( mode => 'feed' );
+        }
+    );
 
     return;
 }

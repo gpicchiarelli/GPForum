@@ -138,6 +138,7 @@ semantic SSR by default and still return JSON when requested with
 * `POST /threads`
 * `POST /t/:thread_id/replies`
 * `POST /t/:thread_id/read`
+* `GET /feed`
 * `GET /bookmarks`
 * `POST /t/:thread_id/bookmark`
 * `POST /t/:thread_id/bookmark/remove`
@@ -163,6 +164,11 @@ Thread bookmarks and follow/mute/unfollow controls are wired through the
 existing community and notification stores. They are idempotent per user/thread,
 SSR-accessible, CSRF-protected, and derived from PostgreSQL rows rather than any
 process-local state.
+The authenticated `/feed` route exposes the existing `user_feed_items`
+projection as a keyset-paginated personal continuity feed. It is derived,
+rebuildable, and non-authoritative: it stores only item references and version
+metadata, while canonical thread/post visibility remains enforced by the write
+and projection boundaries.
 The notification inbox is also traversable over HTTP. It uses the existing
 notification dispatcher read model, keyset pagination, and a CSRF-protected
 mark-read workflow so realtime badge updates have an SSR fallback.

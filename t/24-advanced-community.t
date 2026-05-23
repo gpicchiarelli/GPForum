@@ -11,6 +11,7 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Service::Community::BookmarkStore;
+use GPForum::Service::Community::FeedReader;
 use GPForum::Service::Community::FeedProjector;
 use GPForum::Service::Community::MentionExtractor;
 use GPForum::Service::Community::MentionReader;
@@ -24,7 +25,7 @@ use GPForum::Test::NotificationDispatcher;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 69;
+const my $EXPECTED_TESTS       => 76;
 const my $BOOKMARK_LIMIT       => 20;
 const my $MENTION_COUNT        => 2;
 const my $DEFAULT_RANK         => 0;
@@ -38,6 +39,8 @@ const my $AT_CODE              => 64;
 const my $AT_SIGN              => chr $AT_CODE;
 const my $MENTION_READER_LIMIT => 10;
 const my $MENTION_FETCH_ROWS   => $MENTION_READER_LIMIT + 1;
+const my $FEED_READER_LIMIT    => 10;
+const my $FEED_FETCH_ROWS      => $FEED_READER_LIMIT + 1;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -323,5 +326,35 @@ is( $feed->{items}[0]{visibility_version},
     $DEFAULT_VERSION, 'feed item carries visibility version' );
 is( $feed->{items}[0]{permission_version},
     $DEFAULT_VERSION, 'feed item carries permission version' );
+
+my $feed_reader =
+  GPForum::Service::Community::FeedReader->new( schema => $schema );
+my $feed_page =
+  $feed_reader->list_page_for_user( 'user-1', { limit => $FEED_READER_LIMIT } );
+is( scalar @{ $feed_page->{items} },
+    $FEED_USER_COUNT, 'feed reader returns projection rows' );
+is( $feed_page->{items}[0]->get_column('item_id'),
+    'post-1', 'feed reader preserves feed item rows' );
+is( $feed_items->last_query->{user_id}, 'user-1', 'feed reader filters user' );
+is( $feed_items->last_attrs->{rows},
+    $FEED_FETCH_ROWS, 'feed reader fetches one extra keyset row' );
+ok(
+    !exists $feed_items->last_attrs->{offset},
+    'feed reader does not use offset'
+);
+is( $feed_page->{next_cursor}, undef, 'feed reader omits empty cursor' );
+
+my $feed_cursor = encode_base64url('2026-05-23T12:00:00Z|post-1');
+$feed_reader->list_page_for_user(
+    'user-1',
+    {
+        limit => $FEED_READER_LIMIT,
+        after => $feed_cursor,
+    }
+);
+ok(
+    exists $feed_items->last_query->{-or},
+    'feed reader applies keyset cursor predicate'
+);
 
 1;

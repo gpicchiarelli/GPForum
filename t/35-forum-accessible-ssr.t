@@ -14,7 +14,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 74;
+const my $EXPECTED_TESTS => 79;
 const my $HTTP_FOUND     => 302;
 const my $HTTP_OK        => 200;
 
@@ -84,6 +84,11 @@ $test->status_is($HTTP_OK);
 $test->element_exists('main[aria-labelledby="bookmarks-heading"]');
 $test->element_exists('a[href="/t/thread-1"]');
 $test->element_exists('nav[aria-label="Bookmark pagination"]');
+$test->get_ok('/feed');
+$test->status_is($HTTP_OK);
+$test->element_exists('main[aria-labelledby="feed-heading"]');
+$test->element_exists('ol[aria-label="Personal feed"]');
+$test->element_exists('nav[aria-label="Feed pagination"]');
 $test->get_ok('/notifications');
 $test->status_is($HTTP_OK);
 $test->element_exists('main[aria-labelledby="notifications-heading"]');
@@ -136,6 +141,11 @@ sub _install_forum_fakes {
     {
         $test_object->app->helper( $helper => sub { return $services; } );
     }
+    $test_object->app->helper(
+        gp_feed_reader => sub {
+            return GPForum::Test::ForumWebServices->new( mode => 'feed' );
+        }
+    );
 
     return;
 }

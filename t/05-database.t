@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 376;
-const my $EXPECTED_MIGRATIONS          => 11;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
+const my $EXPECTED_TESTS               => 379;
+const my $EXPECTED_MIGRATIONS          => 12;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 33;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -31,6 +31,7 @@ const my $MODERATION_REVIEW_INDEX      => 7;
 const my $ADMIN_AUTHORIZATION_INDEX    => 8;
 const my $IMPORT_EXPORT_INDEX          => 9;
 const my $PLUGINS_INDEX                => 10;
+const my $PERSONAL_FEED_INDEX          => 11;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -1253,6 +1254,21 @@ like(
     qr/idx_plugin_hooks_dispatch/msx,
     'plugins migration indexes hook dispatch path'
 );
+
+my $personal_feed_sql = path( $summary->[$PERSONAL_FEED_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$PERSONAL_FEED_INDEX]->{description},
+    'personal feed indexes',
+    'personal feed index migration description is parsed'
+);
+like(
+    $personal_feed_sql,
+    qr/idx_user_feed_items_user_created/msx,
+    'personal feed migration indexes feed keyset order'
+);
+like( $personal_feed_sql, qr/INCLUDE/msx,
+    'personal feed migration covers projection metadata' );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;
 my $runner           = GPForum::Migration::Runner->new(

@@ -7,6 +7,8 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
+has mode => 'forum';
+
 sub list_categories {
     return [
         {
@@ -180,6 +182,23 @@ sub mark_thread_read {
 
 sub list_page_for_user {
     my ( $self, $user_id, $options ) = @_;
+
+    if ( $self->mode eq 'feed' ) {
+        return {
+            items => [
+                {
+                    user_id            => $user_id,
+                    item_type          => 'thread',
+                    item_id            => 'thread-1',
+                    created_at         => '2026-05-23T12:00:00Z',
+                    rank_score         => 0,
+                    visibility_version => 1,
+                    permission_version => 1,
+                },
+            ],
+            next_cursor => 'feed-cursor',
+        };
+    }
 
     if ( !$options->{target_type} ) {
         return {

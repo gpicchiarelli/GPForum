@@ -12,6 +12,7 @@ It is intentionally narrower than the full architectural contract.
 * `POST /threads` creates a thread for an authenticated session user.
 * `POST /t/:thread_id/replies` creates a reply for an authenticated session user.
 * `POST /t/:thread_id/read` records per-user thread reading progress.
+* `GET /feed` renders the authenticated user's derived personal feed.
 * `GET /bookmarks` renders the authenticated user's saved thread bookmarks.
 * `POST /t/:thread_id/bookmark` saves or restores a bookmark for a thread.
 * `POST /t/:thread_id/bookmark/remove` soft-removes a thread bookmark.
@@ -46,6 +47,11 @@ bookmark, remove bookmark, follow, mute, and unfollow. These controls are
 server-rendered, keyboard-accessible, CSRF-protected, and backed by existing
 `BookmarkStore` and `SubscriptionStore` service boundaries. Bookmark listing
 uses keyset pagination and no `OFFSET`.
+
+Authenticated personal feeds expose the existing `user_feed_items` projection
+through `FeedReader`. The route is SSR/JSON, keyset-paginated, and deliberately
+derived: it returns item references plus visibility/permission versions, not
+authoritative content.
 
 Authenticated notification pages expose the existing notification inbox read
 model over SSR/JSON. Mark-read is CSRF-protected and writes through

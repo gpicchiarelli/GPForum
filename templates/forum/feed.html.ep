@@ -1,0 +1,34 @@
+% layout 'default';
+% title 'Feed - GPForum';
+
+<main aria-labelledby="feed-heading">
+  <h1 id="feed-heading">Feed</h1>
+  % if (@{$feed_items}) {
+    <ol aria-label="Personal feed">
+      % for my $item (@{$feed_items}) {
+        <li>
+          <article aria-labelledby="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
+            <h2 id="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
+              % if (($item->{item_type} || q{}) eq 'thread') {
+                <a href="<%= url_for('thread', thread_id => $item->{item_id}) %>">Thread <%= $item->{item_id} %></a>
+              % } else {
+                <%= ucfirst($item->{item_type} || 'item') %> <%= $item->{item_id} %>
+              % }
+            </h2>
+            <p>
+              Added at
+              <time datetime="<%= $item->{created_at} %>"><%= $item->{created_at} %></time>
+            </p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <p>No feed items yet.</p>
+  % }
+  % if ($next_cursor) {
+    <nav aria-label="Feed pagination">
+      <a href="<%= url_for('feed')->query(after => $next_cursor) %>">Older feed items</a>
+    </nav>
+  % }
+</main>

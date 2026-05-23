@@ -179,6 +179,28 @@ sub mark_thread_read {
     return _read_marker_response( $self, $marked );
 }
 
+sub feed {
+    my ($self) = @_;
+
+    my $user_id = _current_user_id($self);
+    return _unauthorized($self) if !$user_id;
+
+    my $page = $self->gp_feed_reader->list_page_for_user(
+        $user_id,
+        {
+            limit => $self->param('limit') || $DEFAULT_PAGE_LIMIT,
+            after => $self->param('after'),
+        }
+    );
+
+    my $payload = {
+        feed_items  => [ map { _feed_item_hash($_) } @{ $page->{items} } ],
+        next_cursor => $page->{next_cursor},
+    };
+
+    return _render_payload( $self, 'forum/feed', $payload, $HTTP_OK );
+}
+
 sub bookmarks {
     my ($self) = @_;
 
@@ -774,6 +796,20 @@ sub _bookmark_hash {
         target_id   => _column( $row, 'target_id' ),
         note        => _column( $row, 'note' ),
         created_at  => _column( $row, 'created_at' ),
+    };
+}
+
+sub _feed_item_hash {
+    my ($row) = @_;
+
+    return {
+        user_id            => _column( $row, 'user_id' ),
+        item_type          => _column( $row, 'item_type' ),
+        item_id            => _column( $row, 'item_id' ),
+        created_at         => _column( $row, 'created_at' ),
+        rank_score         => _column( $row, 'rank_score' ),
+        visibility_version => _column( $row, 'visibility_version' ),
+        permission_version => _column( $row, 'permission_version' ),
     };
 }
 

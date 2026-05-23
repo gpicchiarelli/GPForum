@@ -11,6 +11,7 @@ use GPForum::Runtime;
 use GPForum::Schema;
 use GPForum::Service::Clock;
 use GPForum::Service::Community::BookmarkStore;
+use GPForum::Service::Community::FeedReader;
 use GPForum::Service::Community::MentionReader;
 use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Discovery::CanonicalUrl;
@@ -254,6 +255,14 @@ sub startup {
         }
     );
     $self->helper(
+        gp_feed_reader => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Community::FeedReader->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $self->helper(
         gp_mention_store => sub {
             my ($controller) = @_;
 
@@ -324,6 +333,7 @@ sub startup {
     $routes->post('/t/:thread_id/read')
       ->to('Forum#mark_thread_read')
       ->name('thread_mark_read');
+    $routes->get('/feed')->to('Forum#feed')->name('feed');
     $routes->get('/bookmarks')->to('Forum#bookmarks')->name('bookmarks');
     $routes->post('/t/:thread_id/bookmark')
       ->to('Forum#create_thread_bookmark')
