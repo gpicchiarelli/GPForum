@@ -10,10 +10,11 @@ use GPForum::Test::ModerationSearch;
 
 our $VERSION = '0.001';
 
-has created    => sub { return []; };
-has rows       => sub { return {}; };
-has last_query => sub { return {}; };
-has last_attrs => sub { return {}; };
+has created       => sub { return []; };
+has rows          => sub { return {}; };
+has last_query    => sub { return {}; };
+has last_attrs    => sub { return {}; };
+has filter_search => 0;
 
 sub create {
     my ( $self, $row ) = @_;
@@ -47,6 +48,8 @@ sub search {
 
     my %seen;
     my @rows = grep { !$seen{ 0 + $_ }++ } values %{ $self->rows };
+    @rows = grep { _matches_query( $_, $query ) } @rows
+      if $self->filter_search;
 
     return GPForum::Test::ModerationSearch->new( rows => \@rows );
 }
@@ -81,6 +84,9 @@ sub _row_keys {
               import_failure_id
               legacy_id_map_id
               export_request_id
+              plugin_id
+              hook_id
+              plugin_failure_id
             )
         },
         _composite_key($row),
@@ -101,6 +107,26 @@ sub _find_key {
     return _legacy_key($row) if exists $row->{legacy_type};
 
     return _composite_key($row);
+}
+
+sub _matches_query {
+    my ( $row, $query ) = @_;
+
+    return 1 if !$query || !%{$query};
+
+    for my $field ( keys %{$query} ) {
+        return if !_matches_field( $row, $field, $query->{$field} );
+    }
+
+    return 1;
+}
+
+sub _matches_field {
+    my ( $row, $field, $expected ) = @_;
+
+    my $actual = $row->get_column($field);
+
+    return defined $actual && $actual eq $expected;
 }
 
 sub _legacy_key {

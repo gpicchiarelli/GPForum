@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Added plugin extension boundaries for manifest validation, registry
+  lifecycle, named hook dispatch, observable failure recording, and PostgreSQL
+  migration coverage.
 - Added import/export portability boundaries for validated import manifests,
   dry-run jobs, legacy id mapping, import failure reporting, privacy-aware
   export manifests, and PostgreSQL migration coverage.

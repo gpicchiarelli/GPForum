@@ -615,6 +615,41 @@ projection.
 
 ---
 
+Plugin Extension Contract
+
+Plugins are optional extension points and MUST NOT become required for core
+correctness unless promoted into core through ADR and tests.
+
+Plugin extension workflows MUST use narrow modules:
+
+* PluginManifestValidator for plugin metadata, compatibility, capability,
+  permission, and hook contract validation;
+* PluginRegistry for plugins lifecycle, install/enable/disable state, and
+  hook registration;
+* HookDispatcher for named plugin_hooks execution with explicit ordering and
+  failure handling;
+* PluginFailureRecorder for plugin_failures observability.
+
+The required persistence tables are:
+
+* plugins;
+* plugin_hooks;
+* plugin_failures.
+
+Plugin hooks MUST define hook_name, callback_name, execution_order, timeout_ms,
+side_effect_policy, and enabled state. Hooks MUST NOT receive secrets unless an
+explicit permission and ADR allow it.
+
+Plugin failures MUST be visible through logs, metrics, admin review, or the
+plugin_failures table. Plugins MUST NOT hide operational errors.
+
+Plugin-provided HTML, templates, migrations, import adapters, notification
+channels, moderation classifiers, analytics sinks, and admin panels MUST obey
+the same authorization, sanitization, migration, and prompt alignment gates as
+core code.
+
+---
+
 Milestone Definition Of Done
 
 Every milestone MUST include:

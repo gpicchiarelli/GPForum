@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 320;
-const my $EXPECTED_MIGRATIONS          => 10;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 27;
+const my $EXPECTED_TESTS               => 338;
+const my $EXPECTED_MIGRATIONS          => 11;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 30;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -30,6 +30,7 @@ const my $ADVANCED_COMMUNITY_INDEX     => 6;
 const my $MODERATION_REVIEW_INDEX      => 7;
 const my $ADMIN_AUTHORIZATION_INDEX    => 8;
 const my $IMPORT_EXPORT_INDEX          => 9;
+const my $PLUGINS_INDEX                => 10;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -65,6 +66,9 @@ my $import_job_source              = $schema->source('ImportJob');
 my $import_failure_source          = $schema->source('ImportFailure');
 my $legacy_id_map_source           = $schema->source('LegacyIdMap');
 my $export_request_source          = $schema->source('ExportRequest');
+my $plugin_source                  = $schema->source('Plugin');
+my $plugin_hook_source             = $schema->source('PluginHook');
+my $plugin_failure_source          = $schema->source('PluginFailure');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -416,6 +420,32 @@ ok( $export_request_source->has_relationship('requester'),
     'export request belongs to requester' );
 ok( $export_request_source->has_relationship('subject'),
     'export request belongs to subject' );
+
+is( $plugin_source->from, 'plugins', 'plugin source maps table' );
+is_deeply( [ $plugin_source->primary_columns ],
+    ['plugin_id'], 'plugin primary key is explicit' );
+ok( $plugin_source->has_column('compatible_gpforum_range'),
+    'plugin stores compatibility range' );
+ok( $plugin_source->has_relationship('hooks'),    'plugin has hooks' );
+ok( $plugin_source->has_relationship('failures'), 'plugin has failures' );
+
+is( $plugin_hook_source->from,
+    'plugin_hooks', 'plugin hook source maps table' );
+is_deeply( [ $plugin_hook_source->primary_columns ],
+    ['hook_id'], 'plugin hook primary key is explicit' );
+ok( $plugin_hook_source->has_column('side_effect_policy'),
+    'plugin hook stores side-effect policy' );
+ok( $plugin_hook_source->has_relationship('plugin'),
+    'plugin hook belongs to plugin' );
+
+is( $plugin_failure_source->from,
+    'plugin_failures', 'plugin failure source maps table' );
+is_deeply( [ $plugin_failure_source->primary_columns ],
+    ['plugin_failure_id'], 'plugin failure primary key is explicit' );
+ok( $plugin_failure_source->has_column('error_class'),
+    'plugin failure stores error class' );
+ok( $plugin_failure_source->has_relationship('plugin'),
+    'plugin failure belongs to plugin' );
 
 my $user_source          = $schema->source('User');
 my $credential_source    = $schema->source('Credential');
@@ -1073,6 +1103,31 @@ like(
     $import_export_sql,
     qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] export_requests/msx,
     'import export migration creates export requests table'
+);
+
+my $plugins_sql = path( $summary->[$PLUGINS_INDEX]->{file} )->slurp;
+
+is( $summary->[$PLUGINS_INDEX]->{description},
+    'plugins', 'plugins migration description is parsed' );
+like(
+    $plugins_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] plugins/msx,
+    'plugins migration creates plugins table'
+);
+like(
+    $plugins_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] plugin_hooks/msx,
+    'plugins migration creates plugin hooks table'
+);
+like(
+    $plugins_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] plugin_failures/msx,
+    'plugins migration creates plugin failures table'
+);
+like(
+    $plugins_sql,
+    qr/idx_plugin_hooks_dispatch/msx,
+    'plugins migration indexes hook dispatch path'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 113;
+const my $TEST_COUNT => 120;
 
 plan tests => $TEST_COUNT;
 
@@ -49,6 +49,9 @@ use_ok('GPForum::Schema::Result::NotificationPreference');
 use_ok('GPForum::Schema::Result::NotificationRead');
 use_ok('GPForum::Schema::Result::OutboxMessage');
 use_ok('GPForum::Schema::Result::Permission');
+use_ok('GPForum::Schema::Result::Plugin');
+use_ok('GPForum::Schema::Result::PluginFailure');
+use_ok('GPForum::Schema::Result::PluginHook');
 use_ok('GPForum::Schema::Result::Post');
 use_ok('GPForum::Schema::Result::PostBody');
 use_ok('GPForum::Schema::Result::PostRevision');
@@ -99,6 +102,10 @@ use_ok('GPForum::Service::Portability::ExportBundleBuilder');
 use_ok('GPForum::Service::Portability::ImportJobStore');
 use_ok('GPForum::Service::Portability::ImportManifestValidator');
 use_ok('GPForum::Service::Portability::LegacyIdMapper');
+use_ok('GPForum::Service::Plugin::FailureRecorder');
+use_ok('GPForum::Service::Plugin::HookDispatcher');
+use_ok('GPForum::Service::Plugin::ManifestValidator');
+use_ok('GPForum::Service::Plugin::Registry');
 use_ok('GPForum::Service::Forum::ThreadComposer');
 use_ok('GPForum::Service::Forum::ThreadStore');
 use_ok('GPForum::Service::Forum::PageWindow');

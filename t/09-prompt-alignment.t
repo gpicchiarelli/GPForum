@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 93;
+const my $EXPECTED_TESTS => 100;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -146,6 +146,13 @@ for my $required_term (
     import_failures
     legacy_id_map
     export_requests
+    PluginManifestValidator
+    PluginRegistry
+    HookDispatcher
+    PluginFailureRecorder
+    plugins
+    plugin_hooks
+    plugin_failures
     )
   )
 {

@@ -14,7 +14,7 @@ use GPForum::Command::Migrate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 10;
+const my $EXPECTED_TESTS => 11;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -72,6 +72,8 @@ like(
     qr/010 [ ] import [ ] export/msx,
     'plan command prints import export migration'
 );
+like( $output, qr/011 [ ] plugins/msx,
+    'plan command prints plugins migration' );
 
 throws_ok(
     sub {
