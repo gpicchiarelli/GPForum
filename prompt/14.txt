@@ -10,6 +10,11 @@ filters, result lists, snippets, empty states, and pagination MUST use semantic
 HTML, accessible labels, keyboard navigation, and screen-reader-safe result
 counts/status messages.
 
+Prompt 51 alignment: search is a hot, derived, rebuildable projection. Search
+documents MUST support idempotent rebuilds, inactive rebuild generations,
+activation swaps where needed, permission-safe stale-state handling, and
+graceful degradation when indexing stalls.
+
 This document defines the mandatory search architecture, indexing philosophy, retrieval model, ranking strategy, query discipline, synchronization workflows, language analysis rules, authorization-aware filtering, and long-term information retrieval principles of GPForum.
 
 This specification is foundational and mandatory.

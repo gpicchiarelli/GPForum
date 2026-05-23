@@ -11,6 +11,12 @@ This constitution is mandatory.
 It does not replace the existing constitutions. It binds implementation work to
 the concrete repository reality that already exists.
 
+Prompt 51 alignment: the execution checklist is specialized for operational
+scalability and projection stability. Hot paths, query topology, projection
+offsets, blue/green rebuilds, hot-row avoidance, outbox retries,
+PostgreSQL-native search, disposable caches, online migrations, and
+observability must be considered for every scalable workflow.
+
 Its purpose is to prevent architectural drift while GPForum moves from
 "constitution plus structural MVP" into a complete, navigable, durable forum
 platform.

@@ -20,6 +20,11 @@ now requires every workflow change to answer the execution checklist for
 canonical state, events, projections, audit, indexes, permissions, failure
 modes, rebuildability, replayability, and operational scaling.
 
+This contract is also specialized by prompt/51.txt. Hot paths, projection
+consumers, search indexing, cache invalidation, outbox delivery, and migrations
+must preserve explainable query topology, projection stability, rebuild safety,
+and graceful degradation.
+
 ---
 
 Contract Purpose

@@ -12,6 +12,10 @@ centralize OS-specific behavior behind `GPForum::OS`. Worker counts MUST account
 for CPU, memory, file descriptors, PostgreSQL connection pressure, event
 backend, and deployment profile.
 
+Prompt 51 alignment: horizontal scaling MUST preserve projection stability,
+outbox idempotency, worker restart safety, hot-row avoidance, bounded hot-path
+queries, and graceful degradation when optional derived subsystems lag.
+
 This document defines the mandatory Perl runtime scalability model for GPForum, including multi-process execution, dynamic process scaling, bounded threading, workload isolation, and capacity estimation rules.
 
 This specification is foundational and mandatory.

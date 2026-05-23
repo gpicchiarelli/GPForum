@@ -21,6 +21,11 @@ workflow change MUST preserve canonical state classification, event discipline,
 auditability, permission safety, projection rebuildability, transaction
 determinism, failure-mode clarity, replayability, and operational scaling.
 
+Prompt 51 alignment: operational scalability and projection stability are
+engineering invariants. Hot paths MUST be bounded and explainable; projections
+MUST be idempotent, observable, rebuildable, restart-safe, and never
+authoritative.
+
 It does not replace the existing constitutions. It binds them together with
 mechanically reviewable and testable engineering rules.
 

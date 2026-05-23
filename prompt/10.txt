@@ -1,5 +1,10 @@
 GPForum — Observability, Logging & Operational Intelligence Constitution
 
+Prompt 51 alignment: observability MUST expose operational scalability state:
+hot-path latency, retry counts, projection lag, rebuild progress, dead letters,
+queue depth, slow query visibility, worker progress, cache posture, and active
+projection generation where relevant.
+
 This document defines the mandatory observability architecture, structured logging model, metrics strategy, distributed tracing philosophy, monitoring requirements, operational visibility standards, alerting rules, and incident analysis framework of GPForum.
 
 This specification is foundational and mandatory.

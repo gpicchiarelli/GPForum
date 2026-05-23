@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 185;
+const my $EXPECTED_TESTS => 217;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -22,6 +22,7 @@ my $community         = path('prompt/47.txt')->slurp;
 my $discipline        = path('prompt/48.txt')->slurp;
 my $os_performance    = path('prompt/49.txt')->slurp;
 my $execution         = path('prompt/50.txt')->slurp;
+my $scalability       = path('prompt/51.txt')->slurp;
 my $readme            = path('README.md')->slurp;
 
 like(
@@ -93,7 +94,7 @@ like(
 );
 like(
     $readme,
-    qr/50 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/51 [ ] architectural [ ] prompt [ ] constitutions/msx,
 'README counts the verifiable, accessibility, community, and discipline constitutions'
 );
 like(
@@ -133,7 +134,7 @@ like(
 );
 like(
     $readme,
-    qr/50 [ ] architectural [ ] prompt [ ] constitutions/msx,
+    qr/51 [ ] architectural [ ] prompt [ ] constitutions/msx,
     'README counts the accessibility constitution'
 );
 like(
@@ -371,6 +372,16 @@ like(
     'software engineering prompt aligns with execution constitution'
 );
 
+_check_scalability_prompt(
+    {
+        architecture => $architecture,
+        engineering  => $engineering,
+        execution    => $execution,
+        readme       => $readme,
+        scalability  => $scalability,
+    }
+);
+
 for my $required_term (
     qw(
     command_log
@@ -492,6 +503,196 @@ for my $required_term (
 {
     like( $architecture, qr/\Q$required_term\E/msx,
         "$required_term is represented in executable architecture prompt" );
+}
+
+sub _check_scalability_prompt {
+    my ($context) = @_;
+
+    my $scalability_text = $context->{scalability};
+
+    like(
+        $scalability_text,
+        qr/Operational [ ] Scalability [ ] And [ ] Projection [ ] Stability/msx,
+        'scalability prompt defines the new constitution'
+    );
+    like(
+        $scalability_text,
+        qr/It [ ] extends [ ] prompt\/50[.]txt/msx,
+        'scalability prompt extends execution constitution'
+    );
+    ok(
+        _has_all(
+            $scalability_text, 'operationally predictable',
+            'rebuildable',     'horizontally scalable',
+        ),
+        'scalability prompt defines operational objective'
+    );
+    ok(
+        _has_all(
+            $scalability_text,
+            'thread view',
+            'category listing',
+            'search queries',
+        ),
+        'scalability prompt names forum hot paths'
+    );
+    like(
+        $scalability_text,
+        qr/Hot [ ] paths [ ] MUST [ ] minimize [ ] joins/msx,
+        'scalability prompt constrains hot path joins'
+    );
+    like(
+        $scalability_text,
+        qr/All [ ] critical [ ] queries [ ] MUST [ ] be [ ] explainable/msx,
+        'scalability prompt requires explainable queries'
+    );
+    like(
+        $scalability_text,
+        qr/N[+]1 [ ] queries/msx,
+        'scalability prompt forbids N+1 queries'
+    );
+    ok(
+        _has_all(
+            $scalability_text,
+            'partial indexes',
+            'covering indexes',
+            'BRIN indexes',
+        ),
+        'scalability prompt defines index topology'
+    );
+    like(
+        $scalability_text,
+        qr/Projection [ ] updates [ ] MUST [ ] be [ ] idempotent/msx,
+        'scalability prompt requires idempotent projections'
+    );
+    like(
+        $scalability_text,
+        qr/Projection [ ] lag [ ] MUST [ ] be [ ] observable/msx,
+        'scalability prompt requires projection lag visibility'
+    );
+    like(
+        $scalability_text,
+        qr/shadow [ ] rebuilds/msx,
+        'scalability prompt supports blue/green projection rebuilds'
+    );
+    like(
+        $scalability_text,
+        qr/globally [ ] hot [ ] mutable [ ] rows/msx,
+        'scalability prompt forbids hot mutable rows'
+    );
+    ok(
+        _has_all(
+            $scalability_text,
+            '`event_log` is domain truth',
+            '`outbox_messages` is delivery work',
+        ),
+        'scalability prompt separates event log and outbox'
+    );
+    like(
+        $scalability_text,
+        qr/Search [ ] remains [ ] PostgreSQL-native/msx,
+        'scalability prompt preserves PostgreSQL-native search'
+    );
+    like(
+        $scalability_text,
+        qr/Search [ ] MUST [ ] NEVER [ ] become [ ] authoritative/msx,
+        'scalability prompt forbids authoritative search'
+    );
+    ok(
+        _has_all(
+            $scalability_text, 'Caches MUST be disposable, bounded',
+            'invalidation-aware',
+        ),
+        'scalability prompt preserves cache disposability'
+    );
+    like(
+        $scalability_text,
+        qr/Canonical [ ] forum [ ] operation [ ] MUST [ ] survive/msx,
+        'scalability prompt requires graceful derived-system failure'
+    );
+    ok(
+        _has_all(
+            $scalability_text,
+            'additive schema',
+            'background backfill',
+            'constraint enforcement',
+        ),
+        'scalability prompt defines online migration sequence'
+    );
+    ok(
+        _has_all(
+            $scalability_text,
+            'projection lag',
+            'dead letters',
+            'queue depth',
+        ),
+        'scalability prompt defines operational observability'
+    );
+    like(
+        $scalability_text,
+        qr/What [ ] is [ ] the [ ] hot [ ] query[?]/msx,
+        'scalability prompt requires hot-query review'
+    );
+    like(
+        $scalability_text,
+        qr/What [ ] is [ ] the [ ] operational [ ] recovery [ ] path[?]/msx,
+        'scalability prompt requires operational recovery review'
+    );
+    ok(
+        _has_all(
+            $context->{readme},
+            'Operational scalability and projection stability are mandatory',
+        ),
+        'README records scalability prompt as a final decision'
+    );
+    like(
+        $context->{execution},
+        qr/Prompt [ ] 51 [ ] alignment/msx,
+        'execution constitution aligns with scalability prompt'
+    );
+    _check_prompt_51_alignment( 'prompt/3.txt',
+        'database prompt aligns with scalability prompt' );
+    _check_prompt_51_alignment( 'prompt/8.txt',
+        'worker prompt aligns with scalability prompt' );
+    _check_prompt_51_alignment( 'prompt/10.txt',
+        'observability prompt aligns with scalability prompt' );
+    _check_prompt_51_alignment( 'prompt/14.txt',
+        'search prompt aligns with scalability prompt' );
+    _check_prompt_51_alignment( 'prompt/15.txt',
+        'performance prompt aligns with scalability prompt' );
+    _check_prompt_51_alignment( 'prompt/40.txt',
+        'multi-process prompt aligns with scalability prompt' );
+    _check_prompt_51_alignment( 'prompt/41.txt',
+        'profiling prompt aligns with scalability prompt' );
+    like( $context->{architecture},
+        qr/prompt\/51[.]txt/msx,
+        'executable architecture prompt aligns with scalability prompt' );
+    like(
+        $context->{engineering},
+        qr/Prompt [ ] 51 [ ] alignment/msx,
+        'engineering invariants prompt aligns with scalability prompt'
+    );
+
+    return;
+}
+
+sub _check_prompt_51_alignment {
+    my ( $prompt_file, $message ) = @_;
+
+    like( path($prompt_file)->slurp,
+        qr/Prompt [ ] 51 [ ] alignment/msx, $message );
+
+    return;
+}
+
+sub _has_all {
+    my ( $text, @terms ) = @_;
+
+    for my $term (@terms) {
+        return 0 if index( $text, $term ) < 0;
+    }
+
+    return 1;
 }
 
 1;

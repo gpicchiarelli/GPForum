@@ -1,0 +1,370 @@
+GPForum - Operational Scalability And Projection Stability Execution Constitution
+
+This document defines the mandatory execution discipline for operational
+scalability, projection stability, query topology, hot-path optimization,
+projection rebuild safety, concurrency correctness, transaction discipline, and
+anti-entropy architecture in the existing GPForum repository.
+
+This constitution is mandatory.
+
+It extends prompt/50.txt. Prompt 50 defines the general execution checklist.
+This constitution specializes that checklist for scalable reads, projection
+correctness, rebuildable systems, and operationally predictable growth.
+
+It preserves all GPForum constitutions, including PostgreSQL authority,
+Perl-first implementation, DBIx::Class persistence, Mojolicious web delivery,
+Minion asynchronous workers, SSR-first rendering, append-oriented persistence,
+event/audit/outbox discipline, permission safety, moderation authority, and
+optional Redis acceleration only.
+
+---
+
+1. Primary Objective
+
+GPForum MUST evolve into a system that remains operationally predictable,
+rebuildable, horizontally scalable, low-entropy, query-efficient, replay-safe,
+moderation-safe, and permission-safe under long-term production growth.
+
+Operational scalability MUST be achieved by preserving architecture, not by
+adding opaque infrastructure.
+
+Projection stability MUST be achieved by making derived state idempotent,
+observable, replayable, and disposable.
+
+---
+
+2. Repository Reality
+
+The existing repository already contains:
+
+* identity workflows;
+* DBIx::Class schema and result classes;
+* event log;
+* audit log;
+* thread, post, body, and revision model;
+* projection structures;
+* migration framework;
+* CQRS-lite patterns;
+* projection versioning concepts;
+* append-oriented persistence;
+* PostgreSQL-authoritative architecture.
+
+New scalability work MUST inspect and preserve existing modules, result
+classes, migrations, event semantics, transaction boundaries, projection
+patterns, indexes, tests, and operational scripts before implementation.
+
+---
+
+3. Hot Path Discipline
+
+The following paths are official hot paths:
+
+* thread view;
+* category listing;
+* homepage listing;
+* login;
+* session validation;
+* thread creation;
+* post creation;
+* notifications;
+* search queries.
+
+Hot paths MUST minimize joins, ORM hydration, transaction duration,
+unnecessary writes, synchronous external calls, expensive recalculation,
+template-side work, and repeated parsing.
+
+Hot paths MUST remain bounded.
+
+Hot paths SHOULD prefer projection tables, conservative joins, explicit column
+selection, keyset pagination, deterministic ordering, and prepared view models.
+
+Thread and category list paths MUST NOT hydrate large post bodies unless body
+content is required for the response.
+
+---
+
+4. Query Topology Rules
+
+All critical queries MUST be explainable.
+
+The architecture MUST avoid:
+
+* N+1 queries;
+* unbounded scans;
+* unstable sort plans;
+* ORM-induced query explosions;
+* giant eager loads;
+* unpredictable planner behavior;
+* accidental OFFSET pagination on hot paths.
+
+Critical query shapes MUST use stable pagination, deterministic ordering,
+bounded result sizes, and indexes that match the intended access path.
+
+The architecture SHOULD use partial indexes, covering indexes, BRIN indexes
+for append-only logs, GIN indexes for search vectors, trigram indexes for
+search assist, and projection-specific indexes where useful.
+
+Critical list queries SHOULD use projection tables and avoid body hydration
+unless necessary.
+
+Every new hot query MUST identify:
+
+* the endpoint or worker path it supports;
+* the expected filter columns;
+* the expected ordering;
+* the limit or keyset boundary;
+* the index strategy;
+* the failure mode when the projection is stale or unavailable.
+
+---
+
+5. Projection Stability
+
+Projection tables are rebuildable read models.
+
+Projection updates MUST be idempotent, retry-tolerant, replay-tolerant,
+restart-tolerant, duplicate-delivery-tolerant, observable, and safe to rerun.
+
+Projection updates MUST NOT become canonical truth.
+
+Projection updates MUST NOT bypass permissions, moderation visibility,
+deletion state, suspension state, or privacy constraints.
+
+Projection consumers MUST be able to resume from known progress.
+
+Projection errors MUST be visible through metrics, logs, readiness or
+operations tooling, and dead-letter or retry records where appropriate.
+
+---
+
+6. Projection Offset Tracking
+
+Projection consumers SHOULD maintain:
+
+* projection_name;
+* last_event_id;
+* last_event_created_at;
+* lag_seconds;
+* updated_at;
+* generation_id.
+
+Projection lag MUST be observable.
+
+Projection reconciliation MUST be possible.
+
+Projection offset state MUST be derived from durable progress and MUST NOT
+pretend that a projection is current when replay is incomplete.
+
+---
+
+7. Blue/Green Projection Rebuild
+
+Projection rebuild SHOULD support shadow rebuilds, generation switching,
+rollback, interruption recovery, resumable replay, and active-generation
+visibility.
+
+Search projections and feed projections SHOULD support inactive rebuild
+generations, activation swap, rollback generation, and safe stale-generation
+isolation.
+
+Projection generation activation MUST be explicit.
+
+Rebuild jobs MUST NOT block canonical forum operation.
+
+---
+
+8. Hot Row Avoidance
+
+The architecture MUST avoid globally hot mutable rows.
+
+Particularly sensitive rows and counters include:
+
+* thread counters;
+* category counters;
+* notification counters;
+* rate limit counters;
+* online presence;
+* high-volume read markers;
+* high-traffic feed counters.
+
+GPForum MAY use shard counters, delta accumulation, reconciliation jobs,
+eventual projection consolidation, write coalescing, approximate counters for
+non-critical metrics, and read models designed for batch consolidation.
+
+Canonical correctness MUST NOT depend on a hot counter row.
+
+---
+
+9. Transaction Discipline
+
+Transactions MUST remain short, deterministic, replay-safe, and bounded.
+
+Transactions MUST NOT render templates, call external APIs, perform websocket
+fanout, perform expensive recalculation, perform projection rebuilds, perform
+search indexing, send email, run digest generation, or process large files.
+
+Canonical writes MUST complete before asynchronous orchestration.
+
+The correct scalable write shape is:
+
+    validate -> authorize -> canonical write -> event -> audit -> outbox -> commit -> respond -> worker projection
+
+---
+
+10. Outbox Discipline
+
+The architecture MUST separate canonical event persistence from delivery
+orchestration.
+
+`event_log` is domain truth.
+
+`outbox_messages` is delivery work.
+
+Outbox processing MUST support retries, dead letters, idempotency, replay,
+observability, lock ownership, retry scheduling, and safe worker restart.
+
+Outbox failures MUST NOT corrupt committed canonical state.
+
+---
+
+11. Search Discipline
+
+Search remains PostgreSQL-native by default.
+
+Search MUST remain derived, rebuildable, permission-safe, moderation-safe, and
+operationally optional.
+
+Search SHOULD use PostgreSQL `tsvector`, `GIN` indexes, `pg_trgm`, weighted
+ranking, language-aware configurations, and rebuildable search document
+projections.
+
+Search MUST NEVER become authoritative.
+
+Search indexing stalls MUST degrade forum operation gracefully.
+
+Search output MUST NOT leak hidden, deleted, moderated, private, suspended, or
+unauthorized content.
+
+---
+
+12. Cache Discipline
+
+Caches remain optional acceleration.
+
+Caches MUST be disposable, bounded, invalidation-aware, namespace-aware where
+useful, permission-safe, moderation-safe, and tolerant of loss.
+
+Caches MUST NOT contain authoritative state, unrecoverable state, hidden
+permission decisions without safe scope/versioning, or content that bypasses
+moderation.
+
+Cache invalidation SHOULD be event-driven.
+
+Cache failure MUST degrade to PostgreSQL-backed reads or a controlled degraded
+response.
+
+---
+
+13. Failure Model
+
+Canonical forum operation MUST survive failures in optional or derived
+subsystems.
+
+GPForum MUST degrade gracefully when:
+
+* Redis or compatible optional acceleration disappears;
+* workers restart;
+* projection rebuilds fail;
+* websocket systems fail;
+* notifications lag;
+* search indexing stalls;
+* cache invalidation lags;
+* outbox delivery is delayed.
+
+Failure must be observable.
+
+Failure must be recoverable.
+
+Failure must not silently turn derived state into authority.
+
+---
+
+14. Migration Discipline
+
+Migrations MUST support online evolution, avoid giant locks, document rollback
+stance, support batch backfill, preserve compatibility during rollout, and
+describe projection impact.
+
+Preferred strategy:
+
+1. additive schema;
+2. background backfill;
+3. validation;
+4. constraint enforcement.
+
+Migrations that affect hot paths MUST document index strategy, lock risk,
+query-plan expectations, backfill mechanics, and rollback stance.
+
+---
+
+15. Observability
+
+Critical workflows MUST expose latency, retry counts, projection lag, rebuild
+progress, dead letters, queue depth, slow query visibility, worker progress,
+cache hit/miss where relevant, and projection generation state where relevant.
+
+The system MUST support operational diagnosis.
+
+Every projection consumer SHOULD expose enough state to answer:
+
+* what is being consumed;
+* how far behind it is;
+* which generation is active;
+* whether replay is stuck;
+* whether errors are retryable;
+* whether stale reads are expected.
+
+---
+
+16. Code Generation Checklist
+
+Before generating scalability, projection, query, cache, worker, migration, or
+search code, the implementer MUST inspect:
+
+* existing projections;
+* existing event semantics;
+* existing transaction boundaries;
+* existing schema relationships;
+* existing indexing strategy;
+* existing pagination strategy;
+* existing query budgets;
+* existing outbox and worker patterns;
+* existing observability surfaces.
+
+Every new feature MUST answer:
+
+1. What is canonical state?
+2. What projection exists?
+3. What indexes support it?
+4. What is the hot query?
+5. What is the replay strategy?
+6. What is the failure strategy?
+7. What is the rebuild strategy?
+8. What is the permission boundary?
+9. What becomes eventually consistent?
+10. What is the operational recovery path?
+
+If these answers do not exist, the implementation is incomplete.
+
+---
+
+17. Final Rule
+
+GPForum scales by preserving low entropy.
+
+The best scalability feature is the one that makes canonical writes shorter,
+read models clearer, projections safer, hot queries bounded, and recovery more
+boring.
+
+No optimization is acceptable if it weakens auditability, permission safety,
+moderation authority, replayability, or PostgreSQL authority.

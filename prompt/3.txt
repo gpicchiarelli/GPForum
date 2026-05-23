@@ -1,5 +1,11 @@
 GPForum — Database Architecture Constitution
 
+Prompt 51 alignment: database work MUST preserve operational scalability and
+projection stability. Hot queries MUST have explainable topology, bounded
+ordering, matching indexes, and projection-aware access paths. Projection
+offsets, blue/green rebuilds, hot-row avoidance, additive migrations, and
+online backfill discipline are mandatory design concerns.
+
 Prompt 45 alignment: database design MUST preserve verifiable invariants.
 Canonical tables, event/audit logs, outbox tables, migration metadata, and
 projection lineage MUST remain mechanically testable. Migrations MUST document

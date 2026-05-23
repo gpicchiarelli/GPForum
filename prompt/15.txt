@@ -13,6 +13,11 @@ long transactions, repeated parsing, and unnecessary synchronous filesystem
 work. OS-specific optimizations require fallback, feature flags, documentation,
 and profiling evidence.
 
+Prompt 51 alignment: performance work MUST preserve hot-path query topology,
+projection stability, hot-row avoidance, outbox separation, cache
+disposability, search derivation, migration online safety, and graceful
+degradation under worker or projection failure.
+
 This document defines the mandatory performance philosophy, scalability architecture, latency discipline, throughput strategy, resource management model, cache hierarchy, backpressure behavior, load-shedding principles, and long-term capacity engineering standards of GPForum.
 
 This specification is foundational and mandatory.

@@ -1,5 +1,10 @@
 GPForum — Worker, Queue & Asynchronous Processing Constitution
 
+Prompt 51 alignment: projection and outbox workers MUST remain idempotent,
+retry-tolerant, restart-safe, replay-tolerant, duplicate-delivery-tolerant,
+observable, and safe for projection lag reconciliation. Worker failure MUST NOT
+corrupt canonical state or make derived state authoritative.
+
 Prompt 45 alignment: workers MUST preserve idempotent, observable, replay-safe
 contracts. Queue payloads MUST be versioned where long-lived, failures MUST be
 classified, retries MUST be bounded, and asynchronous state MUST NOT become

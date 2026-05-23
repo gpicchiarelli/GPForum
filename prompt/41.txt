@@ -12,6 +12,10 @@ descriptor limits, event backend assumptions, PostgreSQL latency, render
 latency, queue lag, and cache hit/miss behavior. Platform-native tools MAY
 supplement Devel::NYTProf but MUST NOT replace scripted Perl profiling.
 
+Prompt 51 alignment: profiling and coverage MUST be able to investigate hot
+queries, projection lag, rebuild progress, outbox retries, dead letters, cache
+hit/miss posture, worker restart behavior, and slow-query visibility.
+
 Prompt 46 alignment: coverage and automation MUST track accessibility-critical
 routes and workflows where practical. Accessibility regressions in semantic
 rendering, keyboard access, focus behavior, forms, themes, plugins, realtime
