@@ -94,6 +94,7 @@ This repository currently contains:
 * dead-letter preservation for exhausted outbox deliveries;
 * projection offset tracking for lag and health visibility;
 * projection generation management for blue/green read-model rebuilds;
+* Minion registration, idempotent job runner, and worker placeholders for search, notification, and cache invalidation;
 * automation scripts in [script](script).
 
 The current implementation step is **Milestone 1: Identity And Sessions** under

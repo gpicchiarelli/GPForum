@@ -133,6 +133,10 @@ with retry metadata.
 Outbox delivery MUST use a narrow DeadLetterRecorder after bounded retries are
 exhausted. Dead-letter creation MUST preserve failed payload, source id,
 technical error class/message, retry count, and first/last failure timestamps.
+Outbox workers MUST dispatch domain events through a narrow DomainEventTransport
+with explicit handlers for SearchIndexing, NotificationDispatch, and
+CacheInvalidation placeholders. Worker tasks MUST use an IdempotentJobRunner
+boundary and Minion registration MUST be isolated in a MinionRegistrar module.
 
 PermissionEngine:
 
