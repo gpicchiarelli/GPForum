@@ -4,6 +4,25 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title><%= title %></title>
+    % my $page_metadata = stash('page_metadata') || {};
+    % if ($page_metadata->{description}) {
+      <meta name="description" content="<%= $page_metadata->{description} %>">
+    % }
+    % if ($page_metadata->{robots}) {
+      <meta name="robots" content="<%= $page_metadata->{robots} %>">
+    % }
+    % if ($page_metadata->{canonical}) {
+      <link rel="canonical" href="<%= $page_metadata->{canonical} %>">
+    % }
+    % if ($page_metadata->{open_graph}) {
+      % my $open_graph = $page_metadata->{open_graph};
+      <meta property="og:title" content="<%= $open_graph->{title} %>">
+      <meta property="og:type" content="<%= $open_graph->{type} %>">
+      <meta property="og:url" content="<%= $open_graph->{url} %>">
+      % if ($open_graph->{description}) {
+        <meta property="og:description" content="<%= $open_graph->{description} %>">
+      % }
+    % }
   </head>
   <body>
     <header>

@@ -16,6 +16,7 @@ use GPForum::Service::Community::MentionReader;
 use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Discovery::CanonicalUrl;
 use GPForum::Service::Discovery::FeedBuilder;
+use GPForum::Service::Discovery::MetadataBuilder;
 use GPForum::Service::Discovery::RobotsPolicy;
 use GPForum::Service::Discovery::SitemapBuilder;
 use GPForum::Service::Id;
@@ -87,6 +88,14 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Discovery::FeedBuilder->new(
+                canonical_url => $controller->gp_canonical_url );
+        }
+    );
+    $self->helper(
+        gp_metadata_builder => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Discovery::MetadataBuilder->new(
                 canonical_url => $controller->gp_canonical_url );
         }
     );
@@ -444,6 +453,9 @@ sub startup {
     $routes->get('/admin/audit')->to('Admin#audit')->name('admin_audit');
     $routes->get('/categories')->to('Forum#categories')->name('categories');
     $routes->get('/c/:category_id')->to('Forum#category')->name('category');
+    $routes->get('/t/:thread_id/:slug')
+      ->to('Forum#thread')
+      ->name('thread_canonical');
     $routes->get('/t/:thread_id')->to('Forum#thread')->name('thread');
     $routes->get('/new-thread')
       ->to('Forum#new_thread_form')

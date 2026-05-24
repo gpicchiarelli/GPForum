@@ -25,11 +25,19 @@ sub thread_metadata {
     my $description =
       _excerpt( $body->{safe_text} || $body->{body_text} || q{} );
 
+    my $canonical = $self->canonical_url->thread_url($thread);
+
     return {
         title       => $thread->{title},
         description => $description,
-        canonical   => $self->canonical_url->thread_url($thread),
-        robots      => 'index,follow',
+        canonical   => $canonical,
+        open_graph  => {
+            title       => $thread->{title},
+            description => $description,
+            type        => 'article',
+            url         => $canonical,
+        },
+        robots => 'index,follow',
     };
 }
 

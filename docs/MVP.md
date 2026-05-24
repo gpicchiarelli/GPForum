@@ -18,6 +18,7 @@ It is intentionally narrower than the full architectural contract.
 * `GET /categories` renders visible categories.
 * `GET /c/:category_id` renders one category and a keyset-paginated thread list.
 * `GET /t/:thread_id` renders one visible thread and keyset-paginated posts.
+* `GET /t/:thread_id/:slug` renders the same visible thread through its canonical public URL.
 * `GET /new-thread` renders the thread form with a CSRF token.
 * `POST /threads` creates a thread for an authenticated session user.
 * `POST /t/:thread_id/replies` creates a reply for an authenticated session user.
@@ -153,6 +154,11 @@ Public discovery routes are now traversable. They use `CanonicalUrl`,
 feed output include only public, visible, non-deleted resources and render safe
 excerpts only; search remains disallowed in robots policy to avoid indexing
 query result pages.
+
+Visible thread pages now publish permission-safe metadata from
+`MetadataBuilder`: canonical URL, robots policy, safe description, and
+OpenGraph fields derived only from already-visible thread/post data. Hidden,
+deleted, private, or moderated resources remain noindex/no-snippet by policy.
 
 Search autocomplete is exposed as a JSON retrieval endpoint. It goes through
 `Searcher`, uses bounded limits, rate limits requests, and returns minimal

@@ -17,7 +17,7 @@ use GPForum::Service::Discovery::VisibilityPolicy;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 36;
+const my $EXPECTED_TESTS       => 40;
 const my $VISIBLE_THREAD_COUNT => 1;
 const my $ROBOT_RULE_COUNT     => 6;
 
@@ -98,6 +98,18 @@ is(
 );
 is( $thread_metadata->{robots}, 'index,follow',
     'public metadata is indexable' );
+is( $thread_metadata->{open_graph}{title},
+    'Welcome', 'metadata includes safe OpenGraph title' );
+is(
+    $thread_metadata->{open_graph}{description},
+    'Hello safe public world',
+    'metadata includes safe OpenGraph description'
+);
+is(
+    $thread_metadata->{open_graph}{url},
+    'https://forum.gp/t/thread-1/welcome',
+    'metadata includes safe OpenGraph url'
+);
 
 my $private_metadata = $metadata->thread_metadata(
     {
@@ -113,6 +125,8 @@ ok(
     !exists $private_metadata->{description},
     'private thread metadata does not leak description'
 );
+ok( !exists $private_metadata->{open_graph},
+    'private thread metadata does not leak OpenGraph data' );
 
 my $visibility_policy = GPForum::Service::Discovery::VisibilityPolicy->new;
 ok(

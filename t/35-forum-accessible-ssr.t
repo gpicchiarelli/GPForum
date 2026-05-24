@@ -14,7 +14,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 79;
+const my $EXPECTED_TESTS => 87;
 const my $HTTP_FOUND     => 302;
 const my $HTTP_OK        => 200;
 
@@ -43,6 +43,13 @@ $test->element_exists('nav[aria-label="Thread pagination"]');
 $test->get_ok('/t/thread-1');
 $test->status_is($HTTP_OK);
 $test->element_exists('article[aria-labelledby="thread-heading"]');
+$test->content_like(
+    qr{<link [^>]* rel="canonical" [^>]* /t/thread-1/welcome}msx);
+$test->element_exists('meta[name="robots"][content="index,follow"]');
+$test->element_exists('meta[name="description"][content="First post"]');
+$test->element_exists('meta[property="og:title"][content="Welcome"]');
+$test->content_like(
+    qr{<meta [^>]* property="og:url" [^>]* /t/thread-1/welcome}msx);
 $test->text_is( 'h1' => 'Welcome' );
 $test->element_exists('section[aria-labelledby="posts-heading"]');
 $test->element_exists('article[id="post-post-1"]');
@@ -51,6 +58,10 @@ $test->element_exists('form[action="/t/thread-1/replies"]');
 $test->element_exists('label[for="reply-body"]');
 $test->element_exists('textarea[id="reply-body"][name="body_source"]');
 $test->element_exists('input[name="csrf_token"]');
+
+$test->get_ok('/t/thread-1/welcome');
+$test->status_is($HTTP_OK);
+$test->text_is( 'h1' => 'Welcome' );
 
 $test->get_ok('/new-thread');
 $test->status_is($HTTP_OK);

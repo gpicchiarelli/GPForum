@@ -82,9 +82,14 @@ sub thread {
 
     return _not_found( $self, 'thread not found' ) if !$page->{ok};
 
+    my $thread = _thread_hash( $page->{thread} );
+    my $posts  = [ map { _post_hash($_) } @{ $page->{posts}{items} } ];
+
     my $payload = {
-        thread      => _thread_hash( $page->{thread} ),
-        posts       => [ map { _post_hash($_) } @{ $page->{posts}{items} } ],
+        thread        => $thread,
+        posts         => $posts,
+        page_metadata =>
+          _thread_page_metadata( $self, $thread, $posts->[0] || {} ),
         reading     => _reading_summary( $self, $page ),
         engagement  => _engagement_summary( $self, $page->{thread} ),
         next_cursor => $page->{posts}{next_cursor},
@@ -1051,6 +1056,17 @@ sub _post_hash {
         moderation_state => _column( $row, 'moderation_state' ),
         body             => $body_text,
     };
+}
+
+sub _thread_page_metadata {
+    my ( $controller, $thread, $first_post ) = @_;
+
+    return $controller->gp_metadata_builder->thread_metadata(
+        $thread,
+        {
+            safe_text => $first_post->{body} || q{},
+        }
+    );
 }
 
 sub _search_hash {

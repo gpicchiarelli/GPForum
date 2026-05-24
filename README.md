@@ -145,6 +145,7 @@ semantic SSR by default and still return JSON when requested with
 * `GET /categories`
 * `GET /c/:category_id`
 * `GET /t/:thread_id`
+* `GET /t/:thread_id/:slug`
 * `GET /new-thread`
 * `POST /threads`
 * `POST /t/:thread_id/replies`
