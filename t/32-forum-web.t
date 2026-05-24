@@ -18,7 +18,7 @@ use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 127;
+const my $EXPECTED_TESTS       => 136;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
@@ -285,12 +285,23 @@ _get_json_ok( $test, '/search?q=welcome' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/results/0/entity_id' => 'thread-1' );
 
+_get_json_ok( $test, '/search/autocomplete?q=wel' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/suggestions/0/entity_id' => 'thread-1' );
+$test->json_hasnt('/suggestions/0/body');
+
+_get_json_ok( $test, '/search/autocomplete?q=w' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/suggestions' => [] );
+
 _get_json_ok( $test, '/search' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/results' => [] );
 
 $test->app->helper(
     gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
+_get_json_ok( $test, '/search/autocomplete?q=wel' );
+$test->status_is($HTTP_TOO_MANY);
 _get_json_ok( $test, '/new-thread' );
 my $rate_csrf = _json_value( $test, 'csrf_token' );
 $test->post_ok(

@@ -48,6 +48,7 @@ It is intentionally narrower than the full architectural contract.
 * `GET /mentions` renders the authenticated user's mention history.
 * `GET /u/:username` renders a public-safe contributor profile.
 * `GET /search?q=...` renders PostgreSQL-native search results.
+* `GET /search/autocomplete?q=...` returns bounded PostgreSQL-native autocomplete suggestions.
 * `GET /robots.txt` renders crawler policy.
 * `GET /sitemap.xml` renders public category/thread sitemap XML.
 * `GET /feed.atom` renders a public Atom feed.
@@ -152,6 +153,11 @@ Public discovery routes are now traversable. They use `CanonicalUrl`,
 feed output include only public, visible, non-deleted resources and render safe
 excerpts only; search remains disallowed in robots policy to avoid indexing
 query result pages.
+
+Search autocomplete is exposed as a JSON retrieval endpoint. It goes through
+`Searcher`, uses bounded limits, rate limits requests, and returns minimal
+suggestions without bodies or snippets so autocomplete cannot become a content
+leak surface.
 
 ## What Works
 

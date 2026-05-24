@@ -175,6 +175,7 @@ semantic SSR by default and still return JSON when requested with
 * `GET /mentions`
 * `GET /u/:username`
 * `GET /search?q=...`
+* `GET /search/autocomplete?q=...`
 * `GET /robots.txt`
 * `GET /sitemap.xml`
 * `GET /feed.atom`

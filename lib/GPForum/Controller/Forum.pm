@@ -21,9 +21,14 @@ const my $HTTP_SERVER_ERROR  => 500;
 const my $DEFAULT_PAGE_LIMIT => 25;
 const my $REPORT_DETAILS_MAX => 2_000;
 const my $REPORT_REASON_MAX  => 80;
+const my $AUTOCOMPLETE_LIMIT => 10;
+const my $AUTOCOMPLETE_MIN   => 2;
 const my $SEARCH_LIMIT       => 20;
+const my $SEARCH_MAX_LIMIT   => 50;
 const my $TARGET_POST        => 'post';
 const my $TARGET_THREAD      => 'thread';
+const my $READ_RATE_LIMIT    => 60;
+const my $READ_RATE_WINDOW   => 60;
 const my $WRITE_RATE_LIMIT   => 20;
 const my $WRITE_RATE_WINDOW  => 60;
 
@@ -743,7 +748,13 @@ sub search {
     my $rows = eval {
         return $self->gp_search_service->search(
             { user_id => _current_user_id($self) },
-            $query, { limit => $self->param('limit') || $SEARCH_LIMIT },
+            $query,
+            {
+                limit => _bounded_limit(
+                    $self->param('limit'),
+                    $SEARCH_LIMIT, $SEARCH_MAX_LIMIT
+                ),
+            },
         );
     };
 
@@ -762,6 +773,55 @@ sub search {
             results => [ map { _search_hash($_) } @{$rows} ],
         },
         $HTTP_OK
+    );
+}
+
+sub search_autocomplete {
+    my ($self) = @_;
+
+    my $query = _trim( $self->param('q') || $self->param('prefix') );
+
+    if ( length $query < $AUTOCOMPLETE_MIN ) {
+        return $self->render(
+            json   => { query => $query, suggestions => [] },
+            status => $HTTP_OK,
+        );
+    }
+
+    return _rate_limited($self)
+      if !_read_allowed( $self, 'search.autocomplete' );
+
+    my $rows = eval {
+        return $self->gp_search_service->autocomplete(
+            { user_id => _current_user_id($self) },
+            $query,
+            {
+                limit => _bounded_limit(
+                    $self->param('limit'), $AUTOCOMPLETE_LIMIT,
+                    $SEARCH_MAX_LIMIT,
+                ),
+            },
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        $self->app->log->warn("autocomplete degraded: $EVAL_ERROR");
+        return $self->render(
+            json => {
+                query       => $query,
+                status      => 'degraded',
+                suggestions => [],
+            },
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->render(
+        json => {
+            query       => $query,
+            suggestions => [ map { _autocomplete_hash($_) } @{$rows} ],
+        },
+        status => $HTTP_OK,
     );
 }
 
@@ -847,6 +907,24 @@ sub _allowed {
             action         => $action,
             limit          => $WRITE_RATE_LIMIT,
             window_seconds => $WRITE_RATE_WINDOW,
+        }
+    );
+
+    return $decision->{ok};
+}
+
+sub _read_allowed {
+    my ( $controller, $action ) = @_;
+
+    my $actor_id =
+      _current_user_id($controller) || _request_address($controller);
+    my $decision = $controller->gp_rate_limiter->check(
+        {
+            scope          => 'forum_retrieval',
+            actor_id       => $actor_id,
+            action         => $action,
+            limit          => $READ_RATE_LIMIT,
+            window_seconds => $READ_RATE_WINDOW,
         }
     );
 
@@ -988,6 +1066,17 @@ sub _search_hash {
     };
 }
 
+sub _autocomplete_hash {
+    my ($row) = @_;
+
+    return {
+        entity_type => _column( $row, 'entity_type' ),
+        entity_id   => _column( $row, 'entity_id' ),
+        title       => _column( $row, 'title' ),
+        visibility  => _column( $row, 'visibility' ),
+    };
+}
+
 sub _bookmark_hash {
     my ($row) = @_;
 
@@ -1051,6 +1140,12 @@ sub _current_user_id {
     return $controller->session('user_id');
 }
 
+sub _request_address {
+    my ($controller) = @_;
+
+    return $controller->tx->remote_address || 'anonymous';
+}
+
 sub _body_hash {
     my ($body) = @_;
 
@@ -1075,6 +1170,17 @@ sub _is_non_negative_integer {
     return 0 if !defined $value;
 
     return $value =~ /\A [[:digit:]]+ \z/msx ? 1 : 0;
+}
+
+sub _bounded_limit {
+    my ( $value, $default, $maximum ) = @_;
+
+    return $default
+      if !defined $value || $value !~ /\A [[:digit:]]+ \z/msx || $value < 1;
+
+    return $maximum if $value > $maximum;
+
+    return $value;
 }
 
 sub _bad_request {

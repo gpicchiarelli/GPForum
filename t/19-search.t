@@ -23,8 +23,10 @@ use GPForum::Worker::Handler::SearchIndexing;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS      => 37;
+const my $EXPECTED_TESTS      => 40;
 const my $SEARCH_LIMIT        => 5;
+const my $SEARCH_DEFAULT      => 20;
+const my $SEARCH_MAX          => 50;
 const my $AT_CODE             => 64;
 const my $MATCH_OPERATOR      => join q{}, chr $AT_CODE, chr $AT_CODE;
 const my $POST_SOURCE_VERSION => 3;
@@ -212,6 +214,16 @@ my $autocomplete =
 is( scalar @{$autocomplete}, 1, 'autocomplete filters denied render results' );
 is( $search_documents->last_query->{title_normalized}{-like},
     'wel%', 'autocomplete uses normalized title prefix' );
+
+$searcher->search( { user_id => 'user-1' }, 'forum', { limit => 10_000 } );
+is( $search_documents->last_attrs->{rows},
+    $SEARCH_MAX, 'search clamps excessive limit' );
+$searcher->autocomplete( { user_id => 'user-1' }, 'Wel', { limit => 10_000 } );
+is( $search_documents->last_attrs->{rows},
+    $SEARCH_MAX, 'autocomplete clamps excessive limit' );
+$searcher->autocomplete( { user_id => 'user-1' }, 'Wel', { limit => 0 } );
+is( $search_documents->last_attrs->{rows},
+    $SEARCH_DEFAULT, 'autocomplete defaults invalid limit' );
 
 my $fake_indexer = GPForum::Test::SearchIndexer->new;
 my $handler =

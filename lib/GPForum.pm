@@ -521,6 +521,9 @@ sub startup {
       ->to('Notifications#mark_read')
       ->name('notification_read');
     $routes->get('/mentions')->to('Notifications#mentions')->name('mentions');
+    $routes->get('/search/autocomplete')
+      ->to('Forum#search_autocomplete')
+      ->name('search_autocomplete');
     $routes->get('/search')->to('Forum#search')->name('forum_search');
     $routes->get('/register')->to('Identity#register_form')->name('register');
     $routes->post('/register')

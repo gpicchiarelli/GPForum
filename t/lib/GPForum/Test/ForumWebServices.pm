@@ -626,6 +626,19 @@ sub search {
     ];
 }
 
+sub autocomplete {
+    return [
+        {
+            entity_type => 'thread',
+            entity_id   => 'thread-1',
+            title       => 'Welcome',
+            body        => 'First post must not be exposed here',
+            visibility  => 'public',
+            indexed_at  => '2026-05-23T12:00:00Z',
+        },
+    ];
+}
+
 sub check {
     return { ok => 1 };
 }

@@ -9,6 +9,7 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my $DEFAULT_LIMIT  => 20;
+const my $MAX_LIMIT      => 50;
 const my $AT_CODE        => 64;
 const my $MATCH_OPERATOR => join q{}, chr $AT_CODE, chr $AT_CODE;
 
@@ -21,7 +22,7 @@ sub search {
     $options ||= {};
 
     my @visibility = $self->_visibility_for( $actor, $options );
-    my $limit      = $options->{limit} || $DEFAULT_LIMIT;
+    my $limit      = _bounded_limit( $options->{limit} );
     my $search     = $self->schema->resultset('SearchDocument')->search(
         {
             visibility       => { -in             => \@visibility },
@@ -43,7 +44,7 @@ sub autocomplete {
     $options ||= {};
 
     my @visibility = $self->_visibility_for( $actor, $options );
-    my $limit      = $options->{limit} || $DEFAULT_LIMIT;
+    my $limit      = _bounded_limit( $options->{limit} );
     my $search     = $self->schema->resultset('SearchDocument')->search(
         {
             visibility       => { -in   => \@visibility },
@@ -92,6 +93,17 @@ sub _rows {
     return @{ $search->rows } if $search->can('rows');
 
     return;
+}
+
+sub _bounded_limit {
+    my ($limit) = @_;
+
+    return $DEFAULT_LIMIT
+      if !defined $limit || $limit !~ /\A [[:digit:]]+ \z/msx || $limit < 1;
+
+    return $MAX_LIMIT if $limit > $MAX_LIMIT;
+
+    return $limit;
 }
 
 1;
