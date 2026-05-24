@@ -65,6 +65,7 @@ sub startup {
 
     $self->secrets( [ $config->session_secret ] );
     $self->mode( $config->environment );
+    _configure_browser_security( $self, $config );
 
     $self->helper( gp_config  => sub { return $config; } );
     $self->helper( gp_runtime => sub { return $runtime; } );
@@ -546,6 +547,46 @@ sub startup {
     $routes->post('/logout')->to('Identity#logout')->name('logout');
     $routes->get('/u/:username')->to('Identity#profile')->name('profile');
     $routes->websocket('/realtime')->to('Realtime#stream')->name('realtime');
+
+    return;
+}
+
+sub _configure_browser_security {
+    my ( $application, $config ) = @_;
+
+    $application->sessions->samesite('Lax');
+    $application->sessions->secure(
+        $config->environment eq 'production' ? 1 : 0 );
+
+    $application->hook(
+        after_dispatch => sub {
+            my ($controller) = @_;
+
+            _set_browser_security_headers($controller);
+        }
+    );
+
+    return;
+}
+
+sub _set_browser_security_headers {
+    my ($controller) = @_;
+
+    my $headers = $controller->res->headers;
+
+    $headers->header( 'X-Content-Type-Options' => 'nosniff' );
+    $headers->header( 'X-Frame-Options'        => 'DENY' );
+    $headers->header( 'Referrer-Policy' => 'strict-origin-when-cross-origin' );
+    $headers->header( 'Permissions-Policy' =>
+          'camera=(), microphone=(), geolocation=(), payment=()' );
+    $headers->content_security_policy(
+        join q{; },
+        q{default-src 'self'},
+        q{base-uri 'self'},
+        q{form-action 'self'},
+        q{frame-ancestors 'none'},
+        q{object-src 'none'},
+    );
 
     return;
 }

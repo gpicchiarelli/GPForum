@@ -24,6 +24,7 @@ where the next conservative work should land.
 | Forum SSR traversal | MVP funzionante | regressions in permission-safe rendering | keep route smoke and accessibility tests mandatory |
 | Admin/moderation | MVP funzionante | authorization drift | expand negative permission tests before feature growth |
 | Search/discovery | MVP funzionante | metadata/feed leakage | keep anti-leak tests near every new discovery path |
+| Browser security | MVP funzionante | response/security header drift | keep security header smoke tests mandatory |
 | Realtime | contract-only/MVP boundary | process-local behavior only | keep fallback documented and non-authoritative |
 | Benchmarks | incompleto | no p50/p95/p99 baseline | add deterministic local HTTP benchmark harness |
 | Query topology | MVP funzionante | budget exists but needs CI enforcement against a real DB | run migrations, query-budget check, and query-plan check in CI |
