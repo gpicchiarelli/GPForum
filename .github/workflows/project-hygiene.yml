@@ -39,6 +39,7 @@ jobs:
           test -f docs/OBSERVABILITY.md
           test -f docs/OS_OPTIMIZATION.md
           test -f docs/OS_RUNTIME_ENFORCEMENT.md
+          test -f docs/OS_RUNTIME_EVIDENCE.md
           test -f docs/DEPLOYMENT.md
           test -f docs/DEPLOYMENT_EVIDENCE.md
           test -f deploy/systemd/gpforum.service

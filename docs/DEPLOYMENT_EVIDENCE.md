@@ -60,6 +60,8 @@ export GPFORUM_DATABASE_PASSWORD=''
 * runs warmup requests separately from measured iterations;
 * records p50/p95/p99, req/s, status codes, DB query count, duplicate query
   count and query-budget status;
+* records OS runtime evidence, including actual Mojolicious reactor class,
+  socket option probes, PostgreSQL settings and temporary filesystem mount;
 * optionally compares each route with the existing configured in-process
   benchmark;
 * stops Hypnotoad with `hypnotoad -s` and then falls back to process-group
@@ -68,6 +70,29 @@ export GPFORUM_DATABASE_PASSWORD=''
 The temporary runtime is isolated from normal deployment files. It does not
 modify sysctl, does not require root, does not require Redis, and does not
 require a reverse proxy.
+
+## OS Runtime Evidence
+
+The Hypnotoad report now includes `runtime.os_evidence`.
+
+Current macOS evidence classifies:
+
+| Capability | State |
+| --- | --- |
+| Hypnotoad prefork | active |
+| `reuse=1` listen URL | active |
+| `SO_REUSEPORT` socket probe | active |
+| `SO_KEEPALIVE` socket probe | active |
+| `TCP_NODELAY` socket probe | active |
+| declared event backend | `kqueue` |
+| actual Mojolicious reactor | `Mojo::Reactor::Poll` |
+| sendfile/X-Sendfile | configurable, not materialized |
+| PostgreSQL tuning | settings observed, not applied by GPForum |
+| temp filesystem | APFS `/System/Volumes/Data` on this macOS host |
+
+The event backend mismatch is intentional evidence, not hidden failure:
+GPForum's Darwin profile declares the desired `kqueue` posture, but the current
+local Perl runtime does not have a native kqueue reactor module installed.
 
 ## Current Local Evidence
 

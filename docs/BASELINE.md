@@ -63,6 +63,7 @@ The current local baseline passes:
 | saved benchmark baseline check | passing with `script/benchmark-http --fixture --check --baseline ...` |
 | configured benchmark profiles | passing with observed DB query counters for `small`, `medium`, and `hot-thread` |
 | Hypnotoad benchmark smoke | passing locally against Postgres.app with 2 workers and observed query headers |
+| OS runtime evidence smoke | passing; direct Hypnotoad smoke reports socket probes, event-loop mismatch, PostgreSQL settings availability, and temp filesystem mount |
 | `script/cpan-license-check` | passing |
 | `script/coverage` | passing |
 | `script/query-budget --check` | passing against synchronized PostgreSQL-backed query budget rows |
@@ -70,7 +71,7 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=57, Tests=2846, Result=PASS
+Files=58, Tests=2874, Result=PASS
 ```
 
 Latest coverage gate after Hypnotoad deployment evidence hardening:
@@ -94,7 +95,7 @@ execution. No repository failure log was produced by the remote runner.
 
 ## Tests Present
 
-The repository currently has 57 `.t` files covering:
+The repository currently has 58 `.t` files covering:
 
 * load/config/health/home;
 * identity registration, web forms, profile, session token service;
@@ -125,6 +126,10 @@ The repository currently has 57 `.t` files covering:
 * Hypnotoad deployment evidence now starts a temporary prefork runtime, records
   worker metadata, compares against in-process results, and observes DB query
   budgets through benchmark-only headers.
+* OS runtime evidence now records the declared OS backend, actual Mojolicious
+  reactor class, Hypnotoad `reuse=1` configuration, kernel socket option
+  probes, PostgreSQL runtime settings, and the temporary filesystem mount used
+  by benchmark runs.
 * Realtime remains process-local and covered as an enhancement boundary.
 * CI validates migrations on PostgreSQL; local `script/query-budget --check`
   requires an installed PostgreSQL driver and a configured evidence database.

@@ -18,6 +18,7 @@ use Time::HiRes qw(sleep time);
 use GPForum::Command::Benchmark;
 use GPForum::Command::PerformanceSeed;
 use GPForum::Config;
+use GPForum::OS::RuntimeEvidence;
 use GPForum::Schema;
 
 our $VERSION = '0.001';
@@ -556,6 +557,9 @@ sub _runtime_metadata {
     my ( $runtime, $options ) = @_;
 
     my $master_pid = _read_pid_file( $runtime->{pid_file} );
+    my %environment =
+      %{ $runtime->{environment} || {} };
+    local %ENV = ( %ENV, %environment );
 
     return {
         base_url            => $runtime->{base_url},
@@ -571,9 +575,10 @@ sub _runtime_metadata {
         mojolicious_version =>
           eval { require Mojolicious; return $Mojolicious::VERSION; }
           || 'unknown',
-        git_commit => _git_commit(),
-        database   => { dsn => _redacted_dsn() },
-        config     => {
+        git_commit  => _git_commit(),
+        database    => { dsn => _redacted_dsn() },
+        os_evidence => GPForum::OS::RuntimeEvidence->from_environment->report,
+        config      => {
             accepts    => $options->{accepts},
             keep_alive => $options->{keep_alive},
             backlog    => $options->{backlog},
@@ -692,6 +697,8 @@ sub _text_report {
           . _list_text( $report->{runtime}{worker_pids} || [] );
     }
     $text .= "\n";
+    $text .= _os_evidence_line( $report->{runtime}{os_evidence} )
+      if $report->{runtime} && $report->{runtime}{os_evidence};
 
     for my $route ( @{ $report->{routes} || [] } ) {
         next if ref $route ne 'HASH';
@@ -699,6 +706,27 @@ sub _text_report {
     }
 
     return $text;
+}
+
+sub _os_evidence_line {
+    my ($evidence) = @_;
+
+    return join q{ },
+      'os_evidence_status=' . ( $evidence->{status} || 'unknown' ),
+      'declared_event_backend='
+      . ( $evidence->{event_loop}{declared_backend} || 'unknown' ),
+      'actual_reactor='
+      . ( $evidence->{event_loop}{actual_reactor_class} || 'unknown' ),
+      'reuseport_configured='
+      . ( $evidence->{hypnotoad}{reuseport_configured} || 0 ),
+      'reuseport_verified='
+      . ( $evidence->{socket_options}{reuseport}{verified} || 0 ),
+      'sendfile_materialized='
+      . ( $evidence->{static_transfer}{materialized_in_benchmark} || 0 ),
+      'postgresql_settings='
+      . ( $evidence->{postgresql}{available} ? 'available' : 'unavailable' ),
+      'temp_mount=' . ( $evidence->{filesystem}{df}{mounted_on} || 'unknown' ),
+      "\n";
 }
 
 sub _route_line {

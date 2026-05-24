@@ -14,7 +14,7 @@ use GPForum::Command::HypnotoadBenchmark;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 32;
+const my $EXPECTED_TESTS => 34;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -212,6 +212,18 @@ my $runtime_text = GPForum::Command::HypnotoadBenchmark::_text_report(
             workers_requested => 2,
             master_pid        => 123,
             worker_pids       => [ 124, 125 ],
+            os_evidence       => {
+                status     => 'mismatch',
+                event_loop => {
+                    declared_backend     => 'kqueue',
+                    actual_reactor_class => 'Mojo::Reactor::Poll',
+                },
+                hypnotoad      => { reuseport_configured => 1 },
+                socket_options => { reuseport            => { verified => 1 } },
+                static_transfer => { materialized_in_benchmark => 0 },
+                postgresql      => { available                 => 1 },
+                filesystem      => { df => { mounted_on => '/tmp' } },
+            },
         },
         routes => [$route_summary],
     }
@@ -227,5 +239,15 @@ like( $runtime_text, qr/db_queries=max=1/msx,
     'text report includes DB query summary' );
 like( $runtime_text, qr/statuses=200:3/msx,
     'text report includes status-code summary' );
+like(
+    $runtime_text,
+    qr/os_evidence_status=mismatch/msx,
+    'text report includes OS evidence status'
+);
+like(
+    $runtime_text,
+    qr/actual_reactor=Mojo::Reactor::Poll/msx,
+    'text report includes actual reactor evidence'
+);
 
 1;

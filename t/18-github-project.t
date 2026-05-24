@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 75;
+const my $EXPECTED_TESTS => 76;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -41,6 +41,7 @@ for my $required_file (
     docs/SECURITY_HARDENING.md
     docs/OS_OPTIMIZATION.md
     docs/OS_RUNTIME_ENFORCEMENT.md
+    docs/OS_RUNTIME_EVIDENCE.md
     docs/DEPLOYMENT.md
     docs/DEPLOYMENT_EVIDENCE.md
     deploy/systemd/gpforum.service
