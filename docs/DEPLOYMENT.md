@@ -32,6 +32,26 @@ script/gpforum-os-preflight --strict --json
 `--strict` treats degraded OS/runtime posture as a deployment failure. This is
 appropriate for production once limits and worker counts have been tuned.
 
+## Deployment Evidence
+
+Run the Hypnotoad evidence gate before treating a deployment profile as
+measured:
+
+```sh
+script/bench-hypnotoad --check --profile small --workers 2 \
+  --iterations 20 --warmup 3 \
+  --route /categories \
+  --route /t/018f1004-0001-7000-8000-000000000001 \
+  --route /search?q=performance \
+  --route /health/ready \
+  --route /metrics
+```
+
+The benchmark starts an isolated temporary Hypnotoad runtime, records worker
+metadata, compares against in-process evidence when enabled, observes DB query
+counts through benchmark-only headers, and stops the server gracefully. See
+`docs/DEPLOYMENT_EVIDENCE.md` for current local values and methodology.
+
 ## Linux With systemd
 
 Example:

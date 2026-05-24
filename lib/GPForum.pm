@@ -650,7 +650,9 @@ sub _configure_db_query_observer {
                     status        => $controller->res->code || 0,
                 }
             );
-            _record_query_budget_observation( $stats, $record );
+            my $observation =
+              _record_query_budget_observation( $stats, $record );
+            _add_benchmark_query_headers( $controller, $record, $observation );
         }
     );
 
@@ -823,6 +825,37 @@ sub _record_query_budget_observation {
         }
     );
     $stats->record_budget_observation( $record->{request_id}, $observation );
+
+    return $observation;
+}
+
+sub _add_benchmark_query_headers {
+    my ( $controller, $record, $observation ) = @_;
+
+    return if ( $ENV{GPFORUM_BENCHMARK_QUERY_HEADERS} || q{} ) ne '1';
+    return if !$record;
+
+    my $headers = $controller->res->headers;
+    $headers->header(
+        'X-GPForum-DB-Queries' => defined $record->{queries}
+        ? $record->{queries}
+        : 0
+    );
+    $headers->header(
+        'X-GPForum-DB-Transactions' => defined $record->{transactions}
+        ? $record->{transactions}
+        : 0
+    );
+    $headers->header(
+        'X-GPForum-DB-Duplicate-Queries' => defined $record->{duplicate_queries}
+        ? $record->{duplicate_queries}
+        : 0
+    );
+    $headers->header(
+        'X-GPForum-DB-Budget' => $observation
+        ? $observation->{status}
+        : 'none'
+    );
 
     return;
 }

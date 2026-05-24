@@ -226,10 +226,34 @@ script/seed-benchmark --profile small
 script/query-plan-evidence --check
 script/benchmark-http --configured --check --iterations 3 --warmup 1 \
   --route /categories --route /health/ready
+script/bench-hypnotoad --check --profile small --workers 2 \
+  --iterations 2 --warmup 1 --no-compare \
+  --route /categories --route /health/ready
 ```
 
 This keeps the evidence gate small enough for CI while proving that migrations,
-seed data, DB plans, and configured HTTP paths work together.
+seed data, DB plans, configured HTTP paths, and a minimal Hypnotoad prefork
+runtime work together.
+
+## Hypnotoad Deployment Evidence
+
+`script/bench-hypnotoad` starts a temporary Hypnotoad server, uses a free local
+port, enables benchmark-only query-count headers, runs warmup separately from
+measured requests, and stops the server after the run.
+
+Latest local Postgres.app evidence against `gpforum_visible_evidence`, with 2
+Hypnotoad workers, 1 warmup request and 3 measured iterations:
+
+| Route | Hypnotoad p95 ms | In-process p95 ms | Req/s | Max DB queries | Duplicate queries | Budget |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `/categories` | 1.317 | 1.428 | 670.695 | 0 | 0 | ok |
+| `/t/018f1004-0001-7000-8000-000000000001` | 3.612 | 3.954 | 260.489 | 2 | 0 | ok |
+| `/search?q=performance` | 2.111 | 2.048 | 472.296 | 1 | 0 | ok |
+| `/health/ready` | 4.030 | 4.020 | 242.993 | 5 | 0 | none |
+
+The route-level query budget remained clean under Hypnotoad: no HTTP errors, no
+budget breaches, and no duplicate SQL fingerprints on the measured forum hot
+path.
 
 ## Current Limits
 
@@ -238,12 +262,11 @@ seed data, DB plans, and configured HTTP paths work together.
 * DB-backed query-plan evidence detects plan-shape risks; it is not a full
   production load test.
 * Medium and hot-thread evidence now pass locally; longer soak runs and
-  multi-worker Hypnotoad measurements are still separate work.
+  reverse-proxy measurements are still separate work.
 
 ## Next Production Evidence Steps
 
 1. Archive medium/hot-thread JSON evidence as CI artifacts when runner limits
    allow longer database evidence runs.
-2. Add a Hypnotoad/reverse-proxy benchmark path to complement in-process
-   `Test::Mojo` measurements.
+2. Add optional reverse-proxy benchmark evidence in front of Hypnotoad.
 3. Add long-running memory drift checks for hot-thread SSR rendering.

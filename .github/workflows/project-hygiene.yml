@@ -40,6 +40,7 @@ jobs:
           test -f docs/OS_OPTIMIZATION.md
           test -f docs/OS_RUNTIME_ENFORCEMENT.md
           test -f docs/DEPLOYMENT.md
+          test -f docs/DEPLOYMENT_EVIDENCE.md
           test -f deploy/systemd/gpforum.service
           test -f deploy/freebsd/gpforum
           test -f deploy/launchd/com.gpforum.app.plist
@@ -51,6 +52,7 @@ jobs:
           test -f docs/adr/0000-template.md
           test -x script/bench-http
           test -x script/bench-hotpaths
+          test -x script/bench-hypnotoad
           test -x script/cpan-license-check
           test -x script/perltidy-check
           test -x script/gpforum-os-preflight

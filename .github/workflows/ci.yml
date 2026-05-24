@@ -89,6 +89,9 @@ jobs:
       - name: Run configured benchmark smoke
         run: script/benchmark-http --configured --check --iterations 3 --warmup 1 --route /categories --route /health/ready
 
+      - name: Run Hypnotoad benchmark smoke
+        run: script/bench-hypnotoad --check --profile small --workers 2 --iterations 2 --warmup 1 --no-compare --route /categories --route /health/ready
+
       - name: Sync query budget catalog
         run: script/query-budget --sync
 

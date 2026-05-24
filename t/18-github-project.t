@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 71;
+const my $EXPECTED_TESTS => 75;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -42,6 +42,7 @@ for my $required_file (
     docs/OS_OPTIMIZATION.md
     docs/OS_RUNTIME_ENFORCEMENT.md
     docs/DEPLOYMENT.md
+    docs/DEPLOYMENT_EVIDENCE.md
     deploy/systemd/gpforum.service
     deploy/systemd/gpforum-unix-socket.service
     deploy/freebsd/gpforum
@@ -51,12 +52,14 @@ for my $required_file (
     deploy/caddy/Caddyfile
     prompt/44.txt
     bin/gpforum-benchmark
+    bin/gpforum-bench-hypnotoad
     bin/gpforum-os-preflight
     bin/gpforum-query-plan-evidence
     bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
     script/bench-http
     script/bench-hotpaths
+    script/bench-hypnotoad
     script/benchmark-http
     script/cpan-license-check
     script/perltidy-check
@@ -88,9 +91,11 @@ like(
     qr/script\/bootstrap-deps [ ] --postgres/msx,
     'CI installs optional PostgreSQL dependencies for DB gates'
 );
-like( $ci, qr/prove [ ] -lr [ ] t/msx,    'CI runs prove -lr t' );
-like( $ci, qr/script\/coverage/msx,       'CI runs coverage' );
-like( $ci, qr/gpforum-benchmark/msx,      'CI runs benchmark smoke' );
+like( $ci, qr/prove [ ] -lr [ ] t/msx, 'CI runs prove -lr t' );
+like( $ci, qr/script\/coverage/msx,    'CI runs coverage' );
+like( $ci, qr/gpforum-benchmark/msx,   'CI runs benchmark smoke' );
+like( $ci, qr/script\/bench-hypnotoad/msx,
+    'CI runs Hypnotoad benchmark smoke' );
 like( $ci, qr/script\/perltidy-check/msx, 'CI checks Perl formatting' );
 like(
     $ci,

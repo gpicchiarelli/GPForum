@@ -62,6 +62,7 @@ The current local baseline passes:
 | `script/query-plan-evidence --check --profile small|medium|hot-thread` | passing against a seeded PostgreSQL 18.4 Postgres.app evidence database |
 | saved benchmark baseline check | passing with `script/benchmark-http --fixture --check --baseline ...` |
 | configured benchmark profiles | passing with observed DB query counters for `small`, `medium`, and `hot-thread` |
+| Hypnotoad benchmark smoke | passing locally against Postgres.app with 2 workers and observed query headers |
 | `script/cpan-license-check` | passing |
 | `script/coverage` | passing |
 | `script/query-budget --check` | passing against synchronized PostgreSQL-backed query budget rows |
@@ -69,19 +70,23 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=56, Tests=2810, Result=PASS
+Files=57, Tests=2846, Result=PASS
 ```
 
-Latest coverage gate after production load observability hardening:
+Latest coverage gate after Hypnotoad deployment evidence hardening:
 
 ```text
-Total coverage: 92.5%
+Total coverage: 89.3%
 ```
 
 The coverage gate remains passing. The percentage changed after adding
-benchmark/seed observability branches and the new DB query observer; targeted
-tests cover the new request counter, metrics exposure, profile-aware benchmark
-output, deterministic seed behavior, and query-plan profile metadata.
+benchmark/seed observability branches, the DB query observer, and the Hypnotoad
+server lifecycle harness; targeted tests cover the request counter, metrics
+exposure, profile-aware benchmark output, deterministic seed behavior,
+query-plan profile metadata, and Hypnotoad report parsing/threshold logic. The
+remaining lower-coverage branches are live process start/stop and failure
+fallbacks that are exercised by the deployment evidence command rather than by
+unit tests.
 
 Remote GitHub Actions were triggered for this baseline commit, but GitHub did
 not start the jobs because the account billing/spending limit blocked runner
@@ -89,7 +94,7 @@ execution. No repository failure log was produced by the remote runner.
 
 ## Tests Present
 
-The repository currently has 56 `.t` files covering:
+The repository currently has 57 `.t` files covering:
 
 * load/config/health/home;
 * identity registration, web forms, profile, session token service;
@@ -117,6 +122,9 @@ The repository currently has 56 `.t` files covering:
   database DSN is configured and CI runs it after migrations and seed data.
 * Configured HTTP benchmarks now report observed DB query counters, duplicate
   SQL fingerprints and query-budget mismatches.
+* Hypnotoad deployment evidence now starts a temporary prefork runtime, records
+  worker metadata, compares against in-process results, and observes DB query
+  budgets through benchmark-only headers.
 * Realtime remains process-local and covered as an enhancement boundary.
 * CI validates migrations on PostgreSQL; local `script/query-budget --check`
   requires an installed PostgreSQL driver and a configured evidence database.
@@ -127,8 +135,8 @@ The repository currently has 56 `.t` files covering:
 
 * Archive medium/hot-thread PostgreSQL evidence JSON as CI artifacts once
   runner limits allow longer configured benchmark jobs.
-* Add multi-process/Hypnotoad benchmark evidence; current HTTP evidence is
-  in-process and deterministic.
+* Add reverse-proxy benchmark evidence in front of Hypnotoad; current
+  deployment evidence measures direct Hypnotoad only.
 * Continue expanding negative authorization tests for less common staff
   permission combinations and long-lived session edge cases.
 * Promote hot-thread benchmark evidence to a longer manual/nightly gate.
@@ -136,6 +144,6 @@ The repository currently has 56 `.t` files covering:
 
 ## Next Priorities
 
-1. Add multi-worker Hypnotoad/reverse-proxy benchmark evidence.
+1. Add reverse-proxy benchmark evidence in front of Hypnotoad.
 2. Archive medium/hot-thread JSON evidence in CI artifacts.
 3. Add longer soak checks for worker RSS drift on hot-thread rendering.
