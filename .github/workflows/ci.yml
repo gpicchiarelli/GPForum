@@ -68,6 +68,9 @@ jobs:
       - name: Run tests
         run: script/test
 
+      - name: Run benchmark smoke
+        run: carton exec bin/gpforum-benchmark --fixture --iterations 2 --warmup 1 --route /health/live --route /categories
+
       - name: Apply database migrations
         run: carton exec bin/gpforum-migrate --apply
 

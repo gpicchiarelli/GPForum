@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 38;
+const my $EXPECTED_TESTS => 43;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -35,7 +35,10 @@ for my $required_file (
     docs/adr/0000-template.md
     docs/CPAN_LICENSE_REVIEW.md
     docs/OPERATIONAL_BASELINE.md
+    docs/PERFORMANCE_BASELINE.md
     prompt/44.txt
+    bin/gpforum-benchmark
+    script/bench-http
     script/cpan-license-check
     script/perltidy-check
     )
@@ -53,6 +56,7 @@ my $governance = path('GOVERNANCE.md')->slurp;
 like( $ci, qr/script\/perlcritic/msx,     'CI runs Perl::Critic' );
 like( $ci, qr/script\/test/msx,           'CI runs tests' );
 like( $ci, qr/script\/coverage/msx,       'CI runs coverage' );
+like( $ci, qr/gpforum-benchmark/msx,      'CI runs benchmark smoke' );
 like( $ci, qr/script\/perltidy-check/msx, 'CI checks Perl formatting' );
 like(
     $ci,
@@ -101,6 +105,8 @@ like(
     qr/GitHub [ ] project [ ] success [ ] surface/msx,
     'README points to the GitHub project success surface'
 );
+like( $readme, qr/script\/bench-http/msx,
+    'README documents the HTTP benchmark command' );
 like(
     $governance,
     qr/Giacomo [ ] Picchiarelli/msx,

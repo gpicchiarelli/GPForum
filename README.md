@@ -340,6 +340,7 @@ Run quality commands:
 script/perlcritic
 script/test
 script/coverage
+script/bench-http --iterations 5 --warmup 1 --route /health/live --route /t/thread-1
 script/profile -Ilib bin/gpforum-migrate --plan
 script/profile-route /categories
 ```
