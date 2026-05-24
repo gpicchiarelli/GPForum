@@ -87,6 +87,10 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 2,
         notes       => 'permission-aware search projection lookup',
     },
+    search_autocomplete => {
+        max_queries => 2,
+        notes => 'bounded permission-aware autocomplete projection lookup',
+    },
 );
 
 has budgets => sub { return _default_budgets(); };

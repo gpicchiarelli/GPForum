@@ -14,6 +14,7 @@ const my $AT_SIGN => chr $AT_CODE;
 has missing_profile => 0;
 has duplicate       => 0;
 has invalid_login   => 0;
+has invalid_session => 0;
 has revoked         => sub { return []; };
 
 sub create_registration {
@@ -50,6 +51,20 @@ sub revoke_session {
     my ( $self, $input ) = @_;
 
     push @{ $self->revoked }, { %{$input} };
+
+    return {
+        ok      => 1,
+        session => {
+            session_id => $input->{session_id},
+            user_id    => $input->{user_id},
+        },
+    };
+}
+
+sub validate_session {
+    my ( $self, $input ) = @_;
+
+    return { ok => 0, error => 'expired' } if $self->invalid_session;
 
     return {
         ok      => 1,

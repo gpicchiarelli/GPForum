@@ -12,6 +12,9 @@ authorization, CSRF, anti-leak and abuse-control paths.
   `login_rotation` marker.
 * Web sessions carry an explicit `session_expires_at_epoch`; stale sessions are
   expired before route dispatch.
+* Signed-cookie identity is cross-checked against the server-side `sessions`
+  row when both `session_id` and `user_id` are present; expired or revoked
+  rows clear the web session.
 * Logout remains idempotent: a missing or already-revoked server session still
   returns the same accepted logout response after CSRF validation.
 * Rate limiting is PostgreSQL-backed when the database is available and falls
@@ -25,32 +28,35 @@ authorization, CSRF, anti-leak and abuse-control paths.
 
 ## Route Security Matrix
 
-| Route | Auth requirement | CSRF | Rate limit | Permission |
-| --- | --- | --- | --- | --- |
-| `POST /register` | anonymous allowed | required | `identity.register` | none |
-| `POST /login` | anonymous allowed | required | `identity.login` | none |
-| `POST /logout` | anonymous allowed, idempotent | required | `identity.logout` | session revoke if present |
-| `POST /threads` | authenticated | required | `thread.create` | active participation |
-| `POST /t/:thread_id/replies` | authenticated | required | `reply.create` | active participation and unlocked thread |
-| `POST /t/:thread_id/read` | authenticated | required | `thread.read` | visible thread |
-| `POST /t/:thread_id/bookmark` | authenticated | required | `thread.bookmark` | visible thread |
-| `POST /t/:thread_id/bookmark/remove` | authenticated | required | `thread.bookmark.remove` | visible thread |
-| `POST /t/:thread_id/subscribe` | authenticated | required | `thread.subscribe` | visible thread |
-| `POST /t/:thread_id/subscribe/mute` | authenticated | required | `thread.subscription.mute` | visible thread |
-| `POST /t/:thread_id/subscribe/remove` | authenticated | required | `thread.unsubscribe` | visible thread |
-| `POST /t/:thread_id/report` | authenticated | required | `report.create` | visible thread |
-| `POST /p/:post_id/report` | authenticated | required | `report.create` | visible post and thread |
-| `POST /notifications/:notification_id/read` | authenticated | required | `notification.read` | recipient owns notification |
-| `POST /admin/*` | authenticated | required | request path budget | `admin_console.manage` |
-| `POST /moderation/*` | authenticated | required | request path budget | resource/action specific moderation permission |
-| `GET /search/autocomplete` | anonymous or authenticated | not applicable | `search.autocomplete` | permission-aware search projection |
+| Route | Auth requirement | Permission | CSRF | Rate limit | Query budget |
+| --- | --- | --- | --- | --- | --- |
+| `POST /register` | anonymous allowed | none | required | `identity.register` | identity write path |
+| `POST /login` | anonymous allowed | none | required | `identity.login` | identity read/write path |
+| `POST /logout` | anonymous allowed, idempotent | session revoke if present | required | `identity.logout` | identity write path |
+| `POST /threads` | authenticated | active participation | required | `thread.create` | `thread_create:6` |
+| `POST /t/:thread_id/replies` | authenticated | active participation and unlocked thread | required | `reply.create` | `reply_create:6` |
+| `POST /t/:thread_id/read` | authenticated | visible thread | required | `thread.read` | thread read-state path |
+| `GET /feed` | authenticated | own feed projection | not applicable | no write limit | feed projection path |
+| `GET /bookmarks` | authenticated | own bookmark projection | not applicable | no write limit | bookmark projection path |
+| `POST /t/:thread_id/bookmark` | authenticated | visible thread | required | `thread.bookmark` | bookmark write path |
+| `POST /t/:thread_id/bookmark/remove` | authenticated | visible thread | required | `thread.bookmark.remove` | bookmark write path |
+| `POST /t/:thread_id/subscribe` | authenticated | visible thread | required | `thread.subscribe` | subscription write path |
+| `POST /t/:thread_id/subscribe/mute` | authenticated | visible thread | required | `thread.subscription.mute` | subscription write path |
+| `POST /t/:thread_id/subscribe/remove` | authenticated | visible thread | required | `thread.unsubscribe` | subscription write path |
+| `POST /t/:thread_id/report` | authenticated | visible thread | required | `report.create` | `report_create:5` |
+| `POST /p/:post_id/report` | authenticated | visible post and thread | required | `report.create` | `report_create:5` |
+| `POST /notifications/:notification_id/read` | authenticated | recipient owns notification | required | `notification.read` | notification write path |
+| `POST /admin/*` | authenticated | `admin_console.manage` or scoped admin permission | required | request path budget | admin budgets |
+| `POST /moderation/*` | authenticated | resource/action specific moderation permission | required | request path budget | moderation budgets |
+| `GET /search` | anonymous or authenticated | permission-aware search projection | not applicable | read path budget | `search:2` |
+| `GET /search/autocomplete` | anonymous or authenticated | permission-aware search projection | not applicable | `search.autocomplete` | `search_autocomplete:2` |
 
 ## Abuse Controls
 
 | Abuse vector | Control |
 | --- | --- |
 | Session fixation | login removes prior identity markers and rotates `login_rotation` |
-| Expired session reuse | `before_dispatch` expires stale sessions |
+| Expired session reuse | `before_dispatch` expires stale cookie sessions and rejects expired server-side session rows |
 | Credential stuffing | login/register rate limits through PostgreSQL-backed limiter |
 | Report spam | `report.create` has a tighter write limit and duplicate open reports are blocked |
 | Mention fanout | mention recording caps fanout and audits skipped excess mentions |
@@ -64,6 +70,9 @@ authorization, CSRF, anti-leak and abuse-control paths.
 
 * `rate_limits.store`;
 * `rate_limits.status`;
+* `rate_limits.rate_limit_allowed`;
+* `rate_limits.rate_limit_blocked`;
+* `rate_limits.degraded_rate_limiter_active`;
 * `rate_limits.stats.checks`;
 * `rate_limits.stats.blocked`;
 * `rate_limits.stats.primary_failures`;
@@ -87,11 +96,12 @@ Latest local hardening verification:
 | `script/perltidy-check` | passed |
 | `script/perlcritic --severity 5` | passed |
 | `script/architecture-check` | passed |
-| `script/query-plan-check` | passed with 23 indexed hot-path checks |
-| `carton exec prove -lr t` | passed: 55 files, 2738 tests |
+| `script/query-plan-check` | passed with 23 indexed hot-path checks; DB evidence skipped locally without DSN |
+| `carton exec prove -lr t` | passed: 55 files, 2762 tests |
 | `script/coverage` | passed: total coverage 93.1% |
 | `script/query-plan-evidence --dry-run` | passed |
 | `script/benchmark-http --fixture --check --iterations 5 --warmup 1` | passed |
+| `script/bench-hotpaths --iterations 1 --warmup 0 --route /health` | passed |
 | `script/query-budget --check` | requires optional `DBD::Pg` and a configured PostgreSQL runtime; not runnable in this local Carton tree |
 
 ## PostgreSQL Rate Limit Storage

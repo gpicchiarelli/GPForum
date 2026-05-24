@@ -44,6 +44,7 @@ Deterministic routes:
 | category | `/c/018f1001-0001-7000-8000-000000000001` |
 | thread | `/t/018f1004-0001-7000-8000-000000000001` |
 | search | `/search?q=performance` |
+| autocomplete | `/search/autocomplete?q=per` |
 | health ready | `/health/ready` |
 | metrics | `/metrics` |
 
@@ -55,9 +56,14 @@ Static query topology remains enforced by:
 script/query-plan-check
 ```
 
-It verifies required hot-path indexes and rejects `OFFSET` in Perl/templates.
-The static gate now requires `idx_notification_inbox_recipient_created`, because
-the existing notification inbox reader orders by `(recipient_user_id,
+It verifies required hot-path indexes and rejects `OFFSET` in Perl/templates. If
+`GPFORUM_DATABASE_DSN` is present, the same command also runs DB-backed query
+plan evidence. This makes `script/query-plan-check` a static gate on developer
+machines and a PostgreSQL `EXPLAIN` gate in configured CI/runtime evidence
+environments.
+
+The static gate now requires `idx_notification_inbox_recipient_created`,
+because the existing notification inbox reader orders by `(recipient_user_id,
 created_at DESC, notification_id DESC)`.
 
 DB-backed evidence is run with:
@@ -75,6 +81,7 @@ It executes `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for:
 | category_threads | `threads_category_activity_visible_locked` |
 | thread_view | `posts_visible_thread_position` |
 | search | `search_documents_vector` |
+| autocomplete | `search_documents_title_trgm` |
 | feed | `user_feed_items_user_created` |
 | notifications | `notification_inbox_recipient_created` |
 | moderation_queue | `reports_queue` |
@@ -109,18 +116,25 @@ Fixture benchmark with thresholds:
 script/benchmark-http --fixture --check --iterations 5 --warmup 1
 ```
 
+The convenience wrapper for the same thresholded hot-path fixture gate is:
+
+```sh
+script/bench-hotpaths
+```
+
 Latest local fixture result:
 
 | Endpoint | Status | p50 ms | p95 ms | p99 ms | req/s | Budget |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `/` | 200 | 2.233 | 2.425 | 2.425 | 453.880 | home:5 |
-| `/categories` | 200 | 1.096 | 1.375 | 1.375 | 786.658 | categories:3 |
-| `/c/category-1` | 200 | 2.169 | 2.557 | 2.557 | 426.840 | category_threads:5 |
-| `/t/thread-1` | 200 | 1.660 | 1.692 | 1.692 | 582.413 | thread_view:8 |
-| `/search?q=performance` | 200 | 1.279 | 1.295 | 1.295 | 742.171 | search:2 |
-| `/health` | 200 | 1.071 | 1.127 | 1.127 | 906.132 | none |
-| `/health/ready` | 503 | 3.558 | 4.041 | 4.041 | 264.019 | none |
-| `/metrics` | 200 | 0.543 | 0.621 | 0.621 | 1700.164 | none |
+| `/` | 200 | 2.150 | 2.329 | 2.329 | 460.275 | home:5 |
+| `/categories` | 200 | 1.049 | 1.059 | 1.059 | 914.071 | categories:3 |
+| `/c/category-1` | 200 | 2.056 | 2.208 | 2.208 | 466.282 | category_threads:5 |
+| `/t/thread-1` | 200 | 1.436 | 1.518 | 1.518 | 673.502 | thread_view:8 |
+| `/search?q=performance` | 200 | 1.214 | 1.249 | 1.249 | 771.494 | search:2 |
+| `/search/autocomplete?q=per` | 200 | 1.563 | 1.737 | 1.737 | 589.966 | search_autocomplete:2 |
+| `/health` | 200 | 1.144 | 1.178 | 1.178 | 817.380 | none |
+| `/health/ready` | 503 | 3.612 | 3.849 | 3.849 | 272.343 | none |
+| `/metrics` | 200 | 0.677 | 0.736 | 0.736 | 1346.572 | none |
 
 `/health/ready` returns `503` in fixture mode because PostgreSQL is not
 configured in that benchmark mode. This is expected and does not mean the
@@ -141,7 +155,7 @@ Thresholds are deliberately loose release gates, not performance promises:
 | --- | ---: | ---: | ---: |
 | home | 750 ms | 1500 ms | 1 |
 | categories | 500 ms | 1000 ms | 1 |
-| category/thread/search | 1000 ms | 2000 ms | 1 |
+| category/thread/search/autocomplete | 1000 ms | 2000 ms | 1 |
 | health/metrics/default | 1000 ms | 2000 ms | 1 |
 
 ## Security Evidence Added
@@ -151,8 +165,8 @@ Negative web tests now cover:
 * expired session cookie cannot read protected notification inbox;
 * user with a moderator-looking identity but without permission cannot read
   suspension queues or suspend users;
-* public Atom feed, sitemap, and search responses do not leak hidden fixture
-  content.
+* public Atom feed, sitemap, search, autocomplete, profile, notification,
+  category and thread responses do not leak hidden fixture content.
 
 Existing security tests already cover missing CSRF, anonymous write routes,
 normal user denial on admin/moderation, non-enumerative identity failures, and

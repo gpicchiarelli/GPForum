@@ -138,6 +138,38 @@ sub revoke_session {
     return { ok => 1, session => $session };
 }
 
+sub validate_session {
+    my ( $self, $input ) = @_;
+
+    my $session_id = $input->{session_id};
+    my $user_id    = $input->{user_id};
+    return { ok => 0, error => 'not_found' }
+      if !defined $session_id
+      || !length $session_id
+      || !defined $user_id
+      || !length $user_id;
+
+    my $session = $self->schema->resultset('Session')->find(
+        {
+            session_id => $session_id,
+            user_id    => $user_id,
+        }
+    );
+    return { ok => 0, error => 'not_found' } if !$session;
+    return { ok => 0, error => 'revoked' }
+      if defined _column( $session, 'revoked_at' );
+
+    my $now = $self->clock->now_iso8601;
+    if ( _session_expired( $session, $now ) ) {
+        _update_row( $session, { revoked_at => $now } );
+        return { ok => 0, error => 'expired', session => $session };
+    }
+
+    _update_row( $session, { last_seen_at => $now } );
+
+    return { ok => 1, session => $session };
+}
+
 sub _find_login_user {
     my ( $self, $identifier ) = @_;
 
@@ -286,6 +318,15 @@ sub _update_row {
     }
 
     return $row->update($values);
+}
+
+sub _session_expired {
+    my ( $session, $now ) = @_;
+
+    my $expires_at = _column( $session, 'expires_at' );
+    return 1 if !defined $expires_at || !length $expires_at;
+
+    return $expires_at le $now ? 1 : 0;
 }
 
 sub _hash_value {

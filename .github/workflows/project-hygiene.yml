@@ -49,6 +49,7 @@ jobs:
           test -f .github/dependabot.yml
           test -f docs/adr/0000-template.md
           test -x script/bench-http
+          test -x script/bench-hotpaths
           test -x script/cpan-license-check
           test -x script/perltidy-check
           test -x script/gpforum-os-preflight

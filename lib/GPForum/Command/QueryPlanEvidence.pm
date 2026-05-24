@@ -29,6 +29,7 @@ const my @DEFAULT_ENDPOINT_NAMES => qw(
   category_threads
   thread_view
   search
+  autocomplete
   feed
   notifications
   moderation_queue
@@ -346,6 +347,20 @@ sub _endpoint_definition {
                  LIMIT 20
             },
             bind => ['performance'],
+        },
+        autocomplete => {
+            purpose   => 'permission-safe PostgreSQL autocomplete projection',
+            sql_label => 'search_documents_title_trgm',
+            sql       => q{
+                SELECT entity_type, entity_id, title
+                  FROM search_documents
+                 WHERE visibility = 'public'
+                   AND permission_scope = 'public'
+                   AND title_normalized LIKE ?
+                 ORDER BY title_normalized ASC
+                 LIMIT 10
+            },
+            bind => ['performance%'],
         },
         feed => {
             purpose   => 'user feed projection',

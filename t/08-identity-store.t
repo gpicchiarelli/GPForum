@@ -11,12 +11,13 @@ use lib 't/lib';
 
 use GPForum::Test::Id;
 use GPForum::Test::Schema;
+use GPForum::Test::FixedClock;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Password;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 26;
+const my $EXPECTED_TESTS => 33;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -134,6 +135,51 @@ ok(
     $login_schema->sessions->[0]{revoked_at},
     'revoked session records revocation timestamp'
 );
+
+my $session_schema = GPForum::Test::Schema->new(
+    sessions => [
+        {
+            session_id   => 'session-valid',
+            user_id      => 'user-1',
+            expires_at   => '2026-05-24T12:00:00Z',
+            revoked_at   => undef,
+            last_seen_at => '2026-05-23T11:00:00Z',
+        },
+        {
+            session_id => 'session-expired',
+            user_id    => 'user-1',
+            expires_at => '2026-05-23T11:00:00Z',
+            revoked_at => undef,
+        },
+        {
+            session_id => 'session-revoked',
+            user_id    => 'user-1',
+            expires_at => '2026-05-24T12:00:00Z',
+            revoked_at => '2026-05-23T10:00:00Z',
+        },
+    ],
+);
+my $session_store = GPForum::Service::Identity::Store->new(
+    clock  => GPForum::Test::FixedClock->new,
+    schema => $session_schema,
+);
+my $valid_session = $session_store->validate_session(
+    { session_id => 'session-valid', user_id => 'user-1' } );
+ok( $valid_session->{ok}, 'server-side session validation accepts live row' );
+is( $session_schema->sessions->[0]{last_seen_at},
+    '2026-05-23T12:00:00Z', 'live session updates last_seen_at' );
+
+my $expired_session = $session_store->validate_session(
+    { session_id => 'session-expired', user_id => 'user-1' } );
+ok( !$expired_session->{ok}, 'expired server-side session is rejected' );
+is( $expired_session->{error}, 'expired', 'expired session error is explicit' );
+is( $session_schema->sessions->[1]{revoked_at},
+    '2026-05-23T12:00:00Z', 'expired session is invalidated server-side' );
+
+my $revoked_session = $session_store->validate_session(
+    { session_id => 'session-revoked', user_id => 'user-1' } );
+ok( !$revoked_session->{ok}, 'revoked server-side session is rejected' );
+is( $revoked_session->{error}, 'revoked', 'revoked session error is explicit' );
 
 my $duplicate_schema = GPForum::Test::Schema->new(
     existing_usernames => { giacomo                => 1 },

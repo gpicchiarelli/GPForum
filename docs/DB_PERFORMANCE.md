@@ -129,7 +129,7 @@ script/query-plan-check
 Local `script/query-plan-check` result:
 
 ```text
-query-plan-check status=ok indexes=23 offset_violations=0
+query-plan-check status=ok indexes=23 offset_violations=0 db_evidence=skipped
 ```
 
 The production evidence gate adds
@@ -166,4 +166,5 @@ The next DB-backed report should include `EXPLAIN (ANALYZE, BUFFERS)` for:
 * category thread list;
 * thread post list;
 * search projection query;
+* autocomplete projection query;
 * feed, notification inbox, moderation queue, readiness and metrics evidence.

@@ -16,7 +16,7 @@ use GPForum::Test::IdentitySecurityAudit;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 89;
+const my $EXPECTED_TESTS    => 95;
 const my $HTTP_OK           => 200;
 const my $HTTP_ACCEPTED     => 202;
 const my $HTTP_BAD_REQUEST  => 400;
@@ -174,6 +174,20 @@ my $idempotent_logout_token = _csrf_token($test);
 $test->post_ok(
     '/logout' => form => { csrf_token => $idempotent_logout_token } );
 $test->status_is($HTTP_ACCEPTED);
+
+my $invalid_session_test = Test::Mojo->new('GPForum');
+_install_session_state_routes($invalid_session_test);
+$invalid_session_test->app->helper(
+    gp_identity_store => sub {
+        return GPForum::Test::IdentityStore->new( invalid_session => 1 );
+    }
+);
+$invalid_session_test->get_ok('/__test/fixate-session');
+$invalid_session_test->status_is($HTTP_OK);
+$invalid_session_test->get_ok('/__test/session-state');
+$invalid_session_test->status_is($HTTP_OK);
+$invalid_session_test->json_is( '/user_id'    => undef );
+$invalid_session_test->json_is( '/session_id' => undef );
 
 $test->get_ok('/u/giacomo_forum');
 $test->status_is($HTTP_OK);

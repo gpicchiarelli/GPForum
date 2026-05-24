@@ -10,7 +10,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 20;
+const my $EXPECTED_TESTS => 22;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -73,7 +73,14 @@ my $query_plan_json =
 my $query_plan = decode_json($query_plan_json);
 is( $query_plan->{status}, 'ok', 'query plan evidence has dry-run mode' );
 is( scalar @{ $query_plan->{endpoints} },
-    10, 'query plan evidence covers hot endpoints' );
+    11, 'query plan evidence covers hot endpoints' );
+is( $query_plan->{endpoints}[5]{endpoint},
+    'autocomplete', 'query plan evidence includes autocomplete' );
+
+my $hotpaths =
+  _capture_command( 'script/bench-hotpaths', '--iterations', '1', '--warmup',
+    '0', '--route', '/health', );
+like( $hotpaths, qr/mode=fixture/msx, 'bench-hotpaths runs fixture gate' );
 
 my $threshold_json = _capture_command(
     'script/benchmark-http', '--fixture',

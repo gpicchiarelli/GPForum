@@ -51,10 +51,10 @@ script/query-plan-check
 
 Result:
 
-* full test suite passed: 55 files, 2738 tests;
+* full test suite passed: 55 files, 2762 tests;
 * `script/architecture-check` passed;
-* `script/query-plan-check` passed with 23 indexed query plans and 0
-  `OFFSET` violations;
+* `script/query-plan-check` passed with 23 indexed query plans, 0 `OFFSET`
+  violations, and DB-backed evidence activation when a DSN is configured;
 * `git diff --check` passed.
 
 `script/query-budget --check` still requires a configured PostgreSQL runtime and

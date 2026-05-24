@@ -144,7 +144,17 @@ sub _rate_limits {
 
     return {} if !$self->rate_limiter;
 
-    return $self->rate_limiter->snapshot;
+    my $snapshot = $self->rate_limiter->snapshot;
+    my $stats    = $snapshot->{stats} || {};
+
+    $snapshot->{rate_limit_allowed} =
+      defined $stats->{allowed} ? $stats->{allowed} : 0;
+    $snapshot->{rate_limit_blocked} =
+      defined $stats->{blocked} ? $stats->{blocked} : 0;
+    $snapshot->{degraded_rate_limiter_active} =
+      _degraded_rate_limiter_active( $snapshot, $stats );
+
+    return $snapshot;
 }
 
 sub _security {
@@ -220,6 +230,15 @@ sub _outbox {
     return {} if !defined $pending;
 
     return { pending => $pending };
+}
+
+sub _degraded_rate_limiter_active {
+    my ( $snapshot, $stats ) = @_;
+
+    return 1 if ( $snapshot->{status}     || q{} ) eq 'degraded';
+    return 1 if ( $stats->{fallback_used} || 0 ) > 0;
+
+    return 0;
 }
 
 1;

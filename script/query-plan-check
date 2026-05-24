@@ -46,21 +46,27 @@ for my $check (@required_indexes) {
 }
 
 my @offset_violations = _offset_violations();
+my $db_evidence       = _db_evidence();
 
-if ( @missing || @offset_violations ) {
+if ( @missing || @offset_violations || !$db_evidence->{ok} ) {
     print 'query-plan-check status=fail'
       . ' missing_indexes='
       . join( q{,}, @missing )
       . ' offset_violations='
-      . join( q{,}, @offset_violations ) . "\n"
+      . join( q{,}, @offset_violations )
+      . ' db_evidence='
+      . $db_evidence->{status} . "\n"
       or croak 'failed to write query plan check result';
+    print $db_evidence->{output} if length $db_evidence->{output};
     exit 1;
 }
 
 print 'query-plan-check status=ok indexes='
   . scalar(@required_indexes)
-  . " offset_violations=0\n"
+  . ' offset_violations=0 db_evidence='
+  . $db_evidence->{status} . "\n"
   or croak 'failed to write query plan check result';
+print $db_evidence->{output} if length $db_evidence->{output};
 
 exit 0;
 
@@ -101,6 +107,32 @@ sub _scan_files {
     }
 
     return @files;
+}
+
+sub _db_evidence {
+    return { ok => 1, status => 'skipped', output => q{} }
+      if !_database_dsn_present();
+
+    my $output = q{};
+    open my $evidence, q{-|}, 'script/query-plan-evidence', '--check'
+      or croak 'failed to run DB-backed query plan evidence';
+
+    while ( my $line = <$evidence> ) {
+        $output .= $line;
+    }
+
+    my $ok = close $evidence ? 1 : 0;
+
+    return {
+        ok     => $ok,
+        status => $ok ? 'ok' : 'fail',
+        output => $output,
+    };
+}
+
+sub _database_dsn_present {
+    return defined $ENV{GPFORUM_DATABASE_DSN}
+      && length $ENV{GPFORUM_DATABASE_DSN} ? 1 : 0;
 }
 
 sub _files_under {

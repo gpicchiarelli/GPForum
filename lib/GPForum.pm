@@ -616,10 +616,60 @@ sub _configure_session_guard {
             my ($controller) = @_;
 
             _expire_stale_session($controller);
+            _validate_server_session($controller);
         }
     );
 
     return;
+}
+
+sub _validate_server_session {
+    my ($controller) = @_;
+
+    my $session_id = $controller->session('session_id');
+    my $user_id    = $controller->session('user_id');
+    return if !defined $session_id || !length $session_id;
+    return if !defined $user_id    || !length $user_id;
+
+    my $validation = eval {
+        return $controller->gp_identity_store->validate_session(
+            {
+                session_id => $session_id,
+                user_id    => $user_id,
+            }
+        );
+    };
+    return if $validation && $validation->{ok};
+
+    _clear_web_session($controller);
+    $controller->gp_security_telemetry->record(
+        'session_invalidated',
+        {
+            reason => _session_validation_error($validation),
+            route  => _current_route_name($controller),
+            status => 401,
+        }
+    );
+
+    return;
+}
+
+sub _clear_web_session {
+    my ($controller) = @_;
+
+    my $session = $controller->session;
+    delete @{$session}
+      {qw(user_id session_id login_rotation session_expires_at_epoch)};
+    $controller->session( expires => 1 );
+
+    return;
+}
+
+sub _session_validation_error {
+    my ($validation) = @_;
+
+    return 'validation_failed' if !$validation;
+    return $validation->{error} || 'validation_failed';
 }
 
 sub _expire_stale_session {
@@ -629,10 +679,7 @@ sub _expire_stale_session {
     return if !defined $expires_at;
     return if $expires_at > time;
 
-    my $session = $controller->session;
-    delete @{$session}
-      {qw(user_id session_id login_rotation session_expires_at_epoch)};
-    $controller->session( expires => 1 );
+    _clear_web_session($controller);
     $controller->gp_security_telemetry->record(
         'session_expired',
         {

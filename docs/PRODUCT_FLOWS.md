@@ -69,12 +69,12 @@ script/query-plan-check
 Result:
 
 * product-flow test set passed: 7 files, 390 tests;
-* full test suite passed: 55 files, 2738 tests;
+* full test suite passed: 55 files, 2762 tests;
 * `script/perltidy-check` passed;
 * `script/perlcritic --severity 5` passed;
 * `script/architecture-check` passed;
-* `script/query-plan-check` passed with 23 indexed query plans and 0
-  `OFFSET` violations.
+* `script/query-plan-check` passed with 23 indexed query plans, 0 `OFFSET`
+  violations, and DB-backed evidence activation when a DSN is configured.
 
 `script/query-budget --check` still requires the PostgreSQL test runtime and
 `DBD::Pg` in the local Carton tree.

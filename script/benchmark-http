@@ -51,6 +51,7 @@ exec carton exec bin/gpforum-benchmark "$@" \
     --route "/c/$category_id" \
     --route "/t/$thread_id" \
     --route /search?q=performance \
+    --route /search/autocomplete?q=per \
     --route /health \
     --route /health/ready \
     --route /metrics

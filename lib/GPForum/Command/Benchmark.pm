@@ -42,12 +42,15 @@ const my %THRESHOLD_BY_ENDPOINT => (
       { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
     thread_view => { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
     search      => { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
+    search_autocomplete =>
+      { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
 );
 const my @DEFAULT_ROUTES => (
     q{/},                 q{/categories},
     q{/c/category-1},     q{/t/thread-1},
-    q{/search?q=welcome}, q{/health},
-    q{/health/ready},     q{/metrics},
+    q{/search?q=welcome}, q{/search/autocomplete?q=wel},
+    q{/health},           q{/health/ready},
+    q{/metrics},
 );
 
 has app_class => 'GPForum';
@@ -251,9 +254,10 @@ sub _query_budget {
 sub _endpoint_name {
     my ($route) = @_;
 
-    return 'category_threads' if $route =~ m{\A /c/}msx;
-    return 'thread_view'      if $route =~ m{\A /t/}msx;
-    return 'search'           if $route =~ m{\A /search}msx;
+    return 'search_autocomplete' if $route =~ m{\A /search/autocomplete}msx;
+    return 'category_threads'    if $route =~ m{\A /c/}msx;
+    return 'thread_view'         if $route =~ m{\A /t/}msx;
+    return 'search'              if $route =~ m{\A /search}msx;
 
     return $ROUTE_ENDPOINT{$route};
 }

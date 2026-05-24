@@ -13,6 +13,7 @@ use lib 't/lib';
 use GPForum::Service::Community::MentionStore;
 use GPForum::Service::Moderation::ReportStore;
 use GPForum::Service::Operations::RateLimiter;
+use GPForum::Service::Operations::RateLimiter::PostgreSQLStore;
 use GPForum::Service::Operations::SecurityTelemetry;
 use GPForum::Test::AdminWebServices;
 use GPForum::Test::AllowPermissionGate;
@@ -22,6 +23,7 @@ use GPForum::Test::FixedClock;
 use GPForum::Test::ForumWebServices;
 use GPForum::Test::Id;
 use GPForum::Test::IdentityStore;
+use GPForum::Test::RateLimitSchema;
 use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
@@ -63,6 +65,35 @@ subtest 'rate limiter degrades to local store and audits blocked events' =>
     is( $telemetry->snapshot->{events}{rate_limit_hit}{count},
         1, 'telemetry records rate limit hit' );
   };
+
+subtest 'postgres rate limiter uses shared atomic upsert semantics' => sub {
+    my $schema = GPForum::Test::RateLimitSchema->new;
+    my $first_store =
+      GPForum::Service::Operations::RateLimiter::PostgreSQLStore->new(
+        clock  => GPForum::Test::FixedClock->new,
+        schema => $schema,
+      );
+    my $second_store =
+      GPForum::Service::Operations::RateLimiter::PostgreSQLStore->new(
+        clock  => GPForum::Test::FixedClock->new,
+        schema => $schema,
+      );
+
+    my %first_input = %{ _limit_input() };
+    $first_input{limit} = 1;
+    my %second_input = %{ _limit_input() };
+    $second_input{limit} = 1;
+    my $first  = $first_store->check( \%first_input );
+    my $second = $second_store->check( \%second_input );
+
+    ok( $first->{ok},   'first process-shaped store allows shared bucket' );
+    ok( !$second->{ok}, 'second process-shaped store observes shared bucket' );
+    like(
+        $schema->dbh->calls->[0]{sql},
+        qr/ON [ ] CONFLICT/msx,
+        'PostgreSQL store uses atomic upsert'
+    );
+};
 
 subtest 'mention fanout is bounded and audit-backed' => sub {
     my $schema = GPForum::Test::Schema->new( users => _mention_users(12), );
@@ -187,6 +218,22 @@ subtest 'anti-leak surfaces exclude hidden content in SSR and JSON' => sub {
 
     $test->get_ok(
         '/search/autocomplete?q=hidden' => { Accept => 'application/json' } );
+    $test->status_is($HTTP_OK);
+    $test->content_unlike(qr/private [ ] text [ ] must [ ] not [ ] leak/msx);
+
+    $test->get_ok('/c/category-1');
+    $test->status_is($HTTP_OK);
+    $test->content_unlike(qr/private [ ] text [ ] must [ ] not [ ] leak/msx);
+
+    $test->get_ok( '/c/category-1' => { Accept => 'application/json' } );
+    $test->status_is($HTTP_OK);
+    $test->content_unlike(qr/private [ ] text [ ] must [ ] not [ ] leak/msx);
+
+    $test->get_ok('/t/thread-1');
+    $test->status_is($HTTP_OK);
+    $test->content_unlike(qr/private [ ] text [ ] must [ ] not [ ] leak/msx);
+
+    $test->get_ok( '/t/thread-1' => { Accept => 'application/json' } );
     $test->status_is($HTTP_OK);
     $test->content_unlike(qr/private [ ] text [ ] must [ ] not [ ] leak/msx);
 

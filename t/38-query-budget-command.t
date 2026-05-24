@@ -52,7 +52,7 @@ my $sync_output  = _capture_stdout(
 
 like(
     $sync_output,
-    qr/\A synced [ ] 19 [ ] endpoint/msx,
+    qr/\A synced [ ] 20 [ ] endpoint/msx,
     'query budget sync reports synced endpoint count'
 );
 is( $resultset->rows->{thread_view}->get_column('max_queries'),

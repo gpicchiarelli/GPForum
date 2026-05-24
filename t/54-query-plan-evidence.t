@@ -16,7 +16,7 @@ use GPForum::Test::QueryPlanEvidenceDbh;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 26;
+const my $EXPECTED_TESTS => 28;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -121,7 +121,7 @@ my $dry_run = GPForum::Command::QueryPlanEvidence->new->evidence_report(
 );
 is( $dry_run->{mode}, 'dry-run', 'dry-run report avoids PostgreSQL' );
 is( scalar @{ $dry_run->{endpoints} },
-    10, 'dry-run report lists default evidence endpoints' );
+    11, 'dry-run report lists default evidence endpoints' );
 like(
     GPForum::Command::QueryPlanEvidence->new->format_report( $dry_run, 'text' ),
     qr/query_plan_evidence [ ] status=ok/msx,
@@ -145,6 +145,18 @@ close $stdout or die 'failed to close output capture';
 my $run_report = decode_json($run_output);
 is( $run_report->{endpoints}[0]{endpoint},
     'metrics', 'run endpoint selection is reflected in JSON' );
+
+my $autocomplete = GPForum::Command::QueryPlanEvidence->new->evidence_report(
+    {
+        analyze   => 1,
+        dry_run   => 1,
+        endpoints => ['autocomplete'],
+    }
+);
+is( $autocomplete->{endpoints}[0]{sql_label},
+    'search_documents_title_trgm', 'autocomplete evidence uses trigram index' );
+is( $autocomplete->{endpoints}[0]{status},
+    'ok', 'autocomplete evidence participates in dry-run gate' );
 
 throws_ok(
     sub {

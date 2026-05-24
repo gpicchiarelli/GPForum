@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 70;
+const my $EXPECTED_TESTS => 71;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -56,6 +56,7 @@ for my $required_file (
     bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
     script/bench-http
+    script/bench-hotpaths
     script/benchmark-http
     script/cpan-license-check
     script/perltidy-check

@@ -27,7 +27,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 62;
+const my $EXPECTED_TESTS            => 65;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -178,6 +178,12 @@ is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
 is( $metrics->{rate_limits}{buckets},
     $BUCKET_COUNT, 'metrics exposes limiter snapshot' );
+is( $metrics->{rate_limits}{rate_limit_allowed},
+    3, 'metrics exposes allowed rate-limit counter' );
+is( $metrics->{rate_limits}{rate_limit_blocked},
+    1, 'metrics exposes blocked rate-limit counter' );
+is( $metrics->{rate_limits}{degraded_rate_limiter_active},
+    0, 'metrics exposes degraded rate-limiter state' );
 is( $metrics->{security}{total}, 1, 'metrics exposes security event total' );
 is( $metrics->{security}{events}{csrf_failure}{count},
     1, 'metrics exposes csrf failure count' );

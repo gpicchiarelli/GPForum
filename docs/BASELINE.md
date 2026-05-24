@@ -31,6 +31,7 @@ script/perlcritic --severity 5
 script/architecture-check
 script/query-plan-check
 script/query-plan-evidence --check
+script/bench-hotpaths
 carton exec prove -lr t
 script/query-budget --check
 script/coverage
@@ -55,7 +56,7 @@ The current local baseline passes:
 | `script/perlcritic --severity 5` | passing |
 | `script/perltidy-check` | passing |
 | `script/architecture-check` | passing |
-| `script/query-plan-check` | passing with 23 indexed hot-path checks |
+| `script/query-plan-check` | passing with 23 indexed hot-path checks and DB-backed evidence when `GPFORUM_DATABASE_DSN` is configured |
 | `script/query-plan-evidence --dry-run` | passing |
 | `script/query-plan-evidence --check` | attempted locally; fails clearly because optional `DBD::Pg` is not installed; enforced in CI after PostgreSQL setup and deterministic seed |
 | `script/cpan-license-check` | passing |
@@ -65,7 +66,7 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=55, Tests=2738, Result=PASS
+Files=55, Tests=2762, Result=PASS
 ```
 
 Latest coverage gate at baseline time:
@@ -104,7 +105,8 @@ The repository currently has 55 `.t` files covering:
   observable local fallback, session-expiry enforcement, duplicate-report
   blocking and mention fanout limits.
 * Query plan verification now has a DB-backed `EXPLAIN (ANALYZE, BUFFERS)`
-  evidence command, enforced in CI after migrations and seed data.
+  evidence command; `script/query-plan-check` invokes it automatically when a
+  database DSN is configured and CI runs it after migrations and seed data.
 * Realtime remains process-local and covered as an enhancement boundary.
 * CI validates migrations on PostgreSQL, but local baseline without PostgreSQL
   does not run `script/query-budget --check` unless a database is configured.
