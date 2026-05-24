@@ -35,6 +35,7 @@ jobs:
           test -f docs/CPAN_LICENSE_REVIEW.md
           test -f docs/OPERATIONAL_BASELINE.md
           test -f docs/PERFORMANCE_BASELINE.md
+          test -f docs/OS_OPTIMIZATION.md
           test -f .github/CODEOWNERS
           test -f .github/pull_request_template.md
           test -f .github/dependabot.yml
@@ -42,6 +43,7 @@ jobs:
           test -x script/bench-http
           test -x script/cpan-license-check
           test -x script/perltidy-check
+          test -x script/gpforum-os-preflight
           test -x script/query-plan-check
 
       - name: No backup artifacts

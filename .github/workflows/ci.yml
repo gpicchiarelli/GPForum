@@ -68,6 +68,9 @@ jobs:
       - name: Run query plan check
         run: script/query-plan-check
 
+      - name: Run OS preflight
+        run: script/gpforum-os-preflight --json
+
       - name: Run tests
         run: carton exec prove -lr t
 

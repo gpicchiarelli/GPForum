@@ -15,6 +15,7 @@ sub snapshot {
             {
                 supported => 1,
                 enabled   => 1,
+                setting   => 'always',
                 purpose   => 'listener restart tolerance',
             }
         ),
@@ -22,6 +23,7 @@ sub snapshot {
             {
                 supported => $os->supports_reuseport ? 1 : 0,
                 enabled   => _feature_enabled( $features, 'reuseport' ),
+                setting   => _feature_setting( $features, 'reuseport' ),
                 purpose   => 'multi-process listener distribution',
             }
         ),
@@ -29,6 +31,7 @@ sub snapshot {
             {
                 supported => 1,
                 enabled   => 1,
+                setting   => 'always',
                 purpose   => 'connection liveness detection',
             }
         ),
@@ -36,6 +39,7 @@ sub snapshot {
             {
                 supported => 1,
                 enabled   => 1,
+                setting   => 'always',
                 purpose   => 'latency control for dynamic responses',
             }
         ),
@@ -43,6 +47,7 @@ sub snapshot {
             {
                 supported => $os->supports_sendfile ? 1 : 0,
                 enabled   => _feature_enabled( $features, 'sendfile' ),
+                setting   => _feature_setting( $features, 'sendfile' ),
                 purpose   => 'delegated static and attachment transfer',
             }
         ),
@@ -60,6 +65,7 @@ sub _option {
         supported => $supported,
         enabled   => $enabled,
         degraded  => _degraded_option( $requested, $supported ),
+        setting   => $input->{setting},
         purpose   => $input->{purpose},
     };
 }
@@ -83,6 +89,15 @@ sub _feature_enabled {
     return 0 if !exists $features->{$name};
 
     return $features->{$name}{enabled} ? 1 : 0;
+}
+
+sub _feature_setting {
+    my ( $features, $name ) = @_;
+
+    return 'unknown' if !$features;
+    return 'unknown' if !exists $features->{$name};
+
+    return $features->{$name}{setting} || 'unknown';
 }
 
 1;
