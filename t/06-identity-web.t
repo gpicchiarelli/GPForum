@@ -16,7 +16,7 @@ use GPForum::Test::IdentitySecurityAudit;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 77;
+const my $EXPECTED_TESTS    => 89;
 const my $HTTP_OK           => 200;
 const my $HTTP_ACCEPTED     => 202;
 const my $HTTP_BAD_REQUEST  => 400;
@@ -29,6 +29,7 @@ plan tests => $EXPECTED_TESTS;
 
 my $test  = Test::Mojo->new('GPForum');
 my $audit = GPForum::Test::IdentitySecurityAudit->new;
+_install_session_state_routes($test);
 $test->app->helper(
     gp_identity_store => sub {
         return GPForum::Test::IdentityStore->new;
@@ -104,6 +105,8 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->content_like(qr/identifier [ ] is [ ] required/msx);
 $test->content_like(qr/password [ ] is [ ] required/msx);
 
+$test->get_ok('/__test/fixate-session');
+$test->status_is($HTTP_OK);
 $test->get_ok('/login');
 my $fresh_login_token = _csrf_token($test);
 
@@ -116,6 +119,14 @@ $test->post_ok(
 );
 $test->status_is($HTTP_ACCEPTED);
 $test->text_is( 'h1' => 'Login request accepted' );
+$test->get_ok('/__test/session-state');
+$test->status_is($HTTP_OK);
+$test->json_is( '/user_id'    => 'user-1' );
+$test->json_is( '/session_id' => 'session-1' );
+$test->json_has('/session_expires_at_epoch');
+$test->json_has('/login_rotation');
+isnt( $test->tx->res->json->{login_rotation},
+    'fixed-rotation', 'login rotates fixed session marker' );
 is( scalar @{ $audit->records }, 1, 'login request is audited' );
 is( $audit->records->[0]{method},
     'record_login_request', 'login audit method is explicit' );
@@ -157,6 +168,12 @@ $test->text_is( 'h1' => 'Logout request accepted' );
 is( scalar @{ $audit->records }, 2, 'logout request is audited' );
 is( $audit->records->[1]{method},
     'record_logout_request', 'logout audit method is explicit' );
+
+$test->get_ok('/login');
+my $idempotent_logout_token = _csrf_token($test);
+$test->post_ok(
+    '/logout' => form => { csrf_token => $idempotent_logout_token } );
+$test->status_is($HTTP_ACCEPTED);
 
 $test->get_ok('/u/giacomo_forum');
 $test->status_is($HTTP_OK);
@@ -241,6 +258,41 @@ sub _csrf_token {
     my ($token) = $body =~ /name="csrf_token" [^>]+ value="([^"]+)"/msx;
 
     return $token;
+}
+
+sub _install_session_state_routes {
+    my ($test_object) = @_;
+
+    $test_object->app->routes->get('/__test/fixate-session')->to(
+        cb => sub {
+            my ($controller) = @_;
+
+            $controller->session(
+                login_rotation           => 'fixed-rotation',
+                session_expires_at_epoch => time + 3_600,
+                session_id               => 'fixed-session',
+                user_id                  => 'attacker',
+            );
+            return $controller->render( json => { ok => 1 } );
+        }
+    );
+    $test_object->app->routes->get('/__test/session-state')->to(
+        cb => sub {
+            my ($controller) = @_;
+
+            return $controller->render(
+                json => {
+                    login_rotation => $controller->session('login_rotation'),
+                    session_expires_at_epoch =>
+                      $controller->session('session_expires_at_epoch'),
+                    session_id => $controller->session('session_id'),
+                    user_id    => $controller->session('user_id'),
+                }
+            );
+        }
+    );
+
+    return;
 }
 
 1;

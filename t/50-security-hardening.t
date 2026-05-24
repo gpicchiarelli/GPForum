@@ -264,6 +264,7 @@ sub _install_test_session_route {
             my ($controller) = @_;
 
             $controller->session( user_id => $controller->param('user_id') );
+            $controller->session( session_expires_at_epoch => time + 3_600 );
             return $controller->render( json => { ok => 1 } );
         }
     );
@@ -273,7 +274,7 @@ sub _install_test_session_route {
             my ($controller) = @_;
 
             $controller->session( user_id => $controller->param('user_id') );
-            $controller->session( expires => 1 );
+            $controller->session( session_expires_at_epoch => time - 1 );
             return $controller->render( json => { ok => 1 } );
         }
     );

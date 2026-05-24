@@ -22,7 +22,7 @@ tmp_file="${TMPDIR:-/tmp}/gpforum-perlcritic-files.$$"
 trap 'rm -f "$tmp_file"' EXIT HUP INT TERM
 
 find bin lib script t \
-    -type f \( -path 'bin/*' -o -name '*.pm' -o -name '*.pl' -o -name '*.t' \) \
+    -type f \( -path 'bin/*' -o -name '*.pm' -o -name '*.pl' -o -name '*.t' \) -print0 \
     > "$tmp_file" 2>/dev/null || true
 
 if [ ! -s "$tmp_file" ]; then
@@ -30,4 +30,4 @@ if [ ! -s "$tmp_file" ]; then
     exit 0
 fi
 
-exec xargs $runner --profile .perlcriticrc "$@" < "$tmp_file"
+exec xargs -0 $runner --profile .perlcriticrc "$@" < "$tmp_file"

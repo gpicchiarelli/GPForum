@@ -30,6 +30,8 @@ const my $TARGET_THREAD      => 'thread';
 const my $READ_RATE_LIMIT    => 60;
 const my $READ_RATE_WINDOW   => 60;
 const my $WRITE_RATE_LIMIT   => 20;
+const my $REPORT_RATE_LIMIT  => 5;
+const my $CHURN_RATE_LIMIT   => 10;
 const my $WRITE_RATE_WINDOW  => 60;
 
 sub categories {
@@ -493,11 +495,12 @@ sub _record_post_mentions {
     my $result = eval {
         return $controller->gp_mention_store->record_for_source(
             {
-                source_type => 'post',
-                source_id   => $post_id,
-                actor_id    => $actor_id,
-                body_source => $command->{body}{body_source},
-                thread_id   => $command->{post}{thread_id},
+                source_type  => 'post',
+                source_id    => $post_id,
+                actor_id     => $actor_id,
+                body_source  => $command->{body}{body_source},
+                max_mentions => 10,
+                thread_id    => $command->{post}{thread_id},
             }
         );
     };
@@ -910,12 +913,23 @@ sub _allowed {
             scope          => 'forum_http',
             actor_id       => $user_id,
             action         => $action,
-            limit          => $WRITE_RATE_LIMIT,
+            limit          => _write_limit_for($action),
             window_seconds => $WRITE_RATE_WINDOW,
         }
     );
 
     return $decision->{ok};
+}
+
+sub _write_limit_for {
+    my ($action) = @_;
+
+    return $REPORT_RATE_LIMIT if $action eq 'report.create';
+    return $CHURN_RATE_LIMIT
+      if $action =~
+      /\A thread[.](?:bookmark|subscribe|subscription|unsubscribe)/msx;
+
+    return $WRITE_RATE_LIMIT;
 }
 
 sub _read_allowed {
@@ -988,6 +1002,14 @@ sub _reject_suspended {
     if ( _requires_participation($action)
         && !_can_participate( $controller, $user_id ) )
     {
+        _record_security_event(
+            $controller,
+            'suspended_user_block',
+            {
+                action => $action,
+                status => $HTTP_FORBIDDEN,
+            }
+        );
         _forbidden( $controller, 'user is suspended' );
         return 1;
     }
@@ -1217,6 +1239,14 @@ sub _bad_request {
 sub _csrf_failure {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'csrf_failure',
+        {
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
     return _render_error(
         $controller,
         $HTTP_FORBIDDEN,
@@ -1231,6 +1261,14 @@ sub _csrf_failure {
 sub _unauthorized {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'auth_denial',
+        {
+            status => $HTTP_UNAUTHORIZED,
+        }
+    );
+
     return _render_error(
         $controller,
         $HTTP_UNAUTHORIZED,
@@ -1244,6 +1282,15 @@ sub _unauthorized {
 
 sub _forbidden {
     my ( $controller, $error ) = @_;
+
+    _record_security_event(
+        $controller,
+        'auth_denial',
+        {
+            reason => 'forbidden',
+            status => $HTTP_FORBIDDEN,
+        }
+    );
 
     return _render_error(
         $controller,
@@ -1273,6 +1320,14 @@ sub _not_found {
 sub _rate_limited {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'rate_limit_hit',
+        {
+            status => $HTTP_TOO_MANY,
+        }
+    );
+
     return _render_error(
         $controller,
         $HTTP_TOO_MANY,
@@ -1296,6 +1351,23 @@ sub _system_failure {
             error  => 'internal error',
         }
     );
+}
+
+sub _record_security_event {
+    my ( $controller, $event_type, $metadata ) = @_;
+
+    return $controller->gp_security_telemetry->record(
+        $event_type,
+        {
+            %{$metadata}, route => _current_route_name($controller),
+        }
+    );
+}
+
+sub _current_route_name {
+    my ($controller) = @_;
+
+    return eval { return $controller->current_route; } || 'unknown';
 }
 
 1;

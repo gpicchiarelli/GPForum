@@ -279,10 +279,11 @@ worker cache invalidation consumes domain events and invalidates matching tags.
 Local generated files have a dedicated atomic-write helper under
 `GPForum::OS::Filesystem`.
 
-Known MVP limits: realtime fanout and rate limiting are process-local, search
-depends on PostgreSQL projection rows, and reply position allocation is protected
-by the database uniqueness constraint but should gain advisory locking or a
-dedicated sequence allocator before hot production traffic.
+Known MVP limits: realtime fanout is process-local, rate limiting has a
+PostgreSQL-backed store with local degraded fallback, search depends on
+PostgreSQL projection rows, and reply position allocation is protected by the
+database uniqueness constraint but should gain advisory locking or a dedicated
+sequence allocator before hot production traffic.
 Endpoint query budgets are now exposed through operational metrics for hot
 paths such as home, category threads, thread view, create workflows, and search.
 Use `carton exec bin/gpforum-query-budget --print`, `--sync`, or `--check` to

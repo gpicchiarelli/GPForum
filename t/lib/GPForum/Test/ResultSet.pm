@@ -20,6 +20,14 @@ sub find {
     return;
 }
 
+sub count {
+    my ($self) = @_;
+
+    return 0 if !$self->rows;
+
+    return scalar @{ $self->rows };
+}
+
 sub create {
     my ( $self, $row ) = @_;
 
@@ -33,8 +41,12 @@ sub search {
     my ( $self, $query, $attributes ) = @_;
 
     my @rows =
-      $self->name eq 'Credential'
-      ? grep { _matches_query( $_, $query ) } @{ $self->schema->credentials }
+      $self->name eq 'Credential' ? grep { _matches_query( $_, $query ) }
+      @{ $self->schema->credentials }
+      : $self->name eq 'User' ? grep { _matches_query( $_, $query ) }
+      @{ $self->schema->users }
+      : $self->name eq 'Report' ? grep { _matches_query( $_, $query ) }
+      @{ $self->schema->reports }
       : ();
 
     return ref($self)->new(
@@ -42,6 +54,14 @@ sub search {
         name   => $self->name,
         rows   => \@rows,
     );
+}
+
+sub all {
+    my ($self) = @_;
+
+    return if !$self->rows;
+
+    return @{ $self->rows };
 }
 
 sub single {
@@ -105,6 +125,10 @@ sub _matches_query {
     for my $key ( keys %{$query} ) {
         my $expected = $query->{$key};
         my $actual   = $row->{$key};
+        if ( ref $expected eq 'HASH' && exists $expected->{-in} ) {
+            return 0 if !_in_list( $actual, $expected->{-in} );
+            next;
+        }
         return 0 if defined $expected  && !defined $actual;
         return 0 if !defined $expected && defined $actual;
         return 0 if defined $expected  && $actual ne $expected;
@@ -113,11 +137,24 @@ sub _matches_query {
     return 1;
 }
 
+sub _in_list {
+    my ( $actual, $values ) = @_;
+
+    return 0 if !defined $actual;
+
+    for my $value ( @{$values} ) {
+        return 1 if defined $value && $actual eq $value;
+    }
+
+    return 0;
+}
+
 sub _has_storage_rows {
     my ($self) = @_;
 
     return 1 if $self->name eq 'User';
     return 1 if $self->name eq 'Credential';
+    return 1 if $self->name eq 'Report';
     return 1 if $self->name eq 'Session';
 
     return 0;
@@ -128,6 +165,7 @@ sub _storage_rows {
 
     return $self->schema->users       if $self->name eq 'User';
     return $self->schema->credentials if $self->name eq 'Credential';
+    return $self->schema->reports     if $self->name eq 'Report';
     return $self->schema->sessions    if $self->name eq 'Session';
 
     return [];

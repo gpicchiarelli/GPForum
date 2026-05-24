@@ -49,7 +49,7 @@ or SPA-first architecture is introduced here.
 | Area | Risk | Current mitigation | Priority |
 | --- | --- | --- | --- |
 | Email verification | Registration creates login-capable accounts before a full verification workflow exists. | Account state is explicit and email verification columns already exist. | medium |
-| Multi-process rate limiting | Rate limiter is still process-local. | Security baseline documents PostgreSQL-backed limiter as next hardening layer. | medium |
+| Multi-process rate limiting | PostgreSQL-backed limiter exists; local memory remains degraded fallback. | `/metrics` exposes primary failures, fallback usage and blocked decisions. | low |
 | Realtime fanout | Websocket state is process-local. | Realtime is enhancement-only and canonical writes do not depend on it. | medium |
 | Worker placeholders | Some Minion tasks are registered placeholders. | Outbox, dispatcher, and handler boundaries already exist; placeholders are observable. | medium |
 | Rich content rendering | Safe rendered body boundary is trusted by templates. | Tests preserve escaping/sanitized-body contract. | high before rich renderer |
@@ -69,11 +69,11 @@ script/query-plan-check
 Result:
 
 * product-flow test set passed: 7 files, 390 tests;
-* full test suite passed: 51 files, 2592 tests;
+* full test suite passed: 55 files, 2738 tests;
 * `script/perltidy-check` passed;
 * `script/perlcritic --severity 5` passed;
 * `script/architecture-check` passed;
-* `script/query-plan-check` passed with 21 indexed query plans and 0
+* `script/query-plan-check` passed with 23 indexed query plans and 0
   `OFFSET` violations.
 
 `script/query-budget --check` still requires the PostgreSQL test runtime and
@@ -84,7 +84,7 @@ Result:
 1. Add email verification workflow on top of the existing identity schema.
 2. Replace worker placeholder tasks with real outbox-driven handlers in priority
    order: search indexing, notification dispatch, cache invalidation.
-3. Add PostgreSQL-backed rate-limit storage for multi-process deployments.
+3. Run PostgreSQL-backed rate-limit evidence against a seeded database.
 4. Expand SSR form tests for admin/moderation happy-path redirects, not only
    JSON responses.
 5. Add fixture-backed browser walkthrough for register -> login -> thread ->

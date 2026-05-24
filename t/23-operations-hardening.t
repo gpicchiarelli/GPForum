@@ -16,6 +16,7 @@ use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Operations::RateLimiter;
+use GPForum::Service::Operations::SecurityTelemetry;
 use GPForum::Service::Operations::RunbookValidator;
 use GPForum::Service::Operations::RuntimeSizing;
 use GPForum::Service::Realtime::Hub;
@@ -26,7 +27,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 59;
+const my $EXPECTED_TESTS            => 62;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -122,12 +123,16 @@ my $local_cache = GPForum::Service::Operations::LocalCache->new(
     namespace => 'metrics-cache',
 );
 $local_cache->put( 'categories:list', [] );
+my $security_telemetry =
+  GPForum::Service::Operations::SecurityTelemetry->new( clock => $clock );
+$security_telemetry->record( 'csrf_failure', { status => 403 } );
 my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
     clock               => $clock,
     local_caches        => [$local_cache],
     runtime             => $runtime,
     realtime_hub        => $hub,
     rate_limiter        => $limiter,
+    security_telemetry  => $security_telemetry,
     projection_trackers => [ GPForum::Test::ProjectionLagProbe->new ],
 )->collect;
 
@@ -173,6 +178,11 @@ is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
 is( $metrics->{rate_limits}{buckets},
     $BUCKET_COUNT, 'metrics exposes limiter snapshot' );
+is( $metrics->{security}{total}, 1, 'metrics exposes security event total' );
+is( $metrics->{security}{events}{csrf_failure}{count},
+    1, 'metrics exposes csrf failure count' );
+is( $metrics->{security}{events}{csrf_failure}{last_metadata}{status},
+    403, 'metrics exposes safe security metadata' );
 is( $metrics->{projections}[0]{projection_name},
     'search_documents', 'metrics exposes projection lag' );
 is( $metrics->{query_budgets}{endpoints}{thread_view}{max_queries},

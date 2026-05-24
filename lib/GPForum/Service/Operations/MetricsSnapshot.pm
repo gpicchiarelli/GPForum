@@ -21,6 +21,7 @@ has local_caches        => sub { return []; };
 has schema              => undef;
 has rate_limiter        => undef;
 has realtime_hub        => undef;
+has security_telemetry  => undef;
 has projection_trackers => sub { return []; };
 has query_budget =>
   sub { return GPForum::Service::Operations::QueryBudget->new; };
@@ -48,6 +49,7 @@ sub collect {
         local_caches        => $self->_local_caches,
         realtime            => $self->_realtime,
         rate_limits         => $self->_rate_limits,
+        security            => $self->_security,
         projections         => $self->_projections,
         query_budgets       => $self->_query_budgets,
         query_budget_drift  => $self->_query_budget_drift,
@@ -143,6 +145,14 @@ sub _rate_limits {
     return {} if !$self->rate_limiter;
 
     return $self->rate_limiter->snapshot;
+}
+
+sub _security {
+    my ($self) = @_;
+
+    return {} if !$self->security_telemetry;
+
+    return $self->security_telemetry->snapshot;
 }
 
 sub _projections {

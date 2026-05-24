@@ -33,9 +33,57 @@ sub create_report {
 
     return $self->schema->txn_do(
         sub {
+            my $duplicate = $self->_open_duplicate_report($input);
+            if ($duplicate) {
+                $self->_record_duplicate_audit( $input, $duplicate );
+                return $duplicate;
+            }
+
             return $self->_insert_report($input);
         }
     );
+}
+
+sub _open_duplicate_report {
+    my ( $self, $input ) = @_;
+
+    return $self->schema->resultset('Report')->search(
+        {
+            reporter_user_id => $input->{reporter_user_id},
+            target_type      => $input->{target_type},
+            target_id        => $input->{target_id},
+            status           => $STATUS_OPEN,
+        },
+        {
+            order_by => { -desc => 'created_at' },
+            rows     => 1,
+        }
+    )->single;
+}
+
+sub _record_duplicate_audit {
+    my ( $self, $input, $duplicate ) = @_;
+
+    $self->schema->resultset('AuditLog')->create(
+        {
+            audit_id       => $self->id_service->uuid,
+            action         => 'report.duplicate_blocked',
+            schema_version => $SCHEMA_VERSION,
+            actor_id       => $input->{reporter_user_id},
+            target_type    => $input->{target_type},
+            target_id      => $input->{target_id},
+            correlation_id => $self->id_service->uuid,
+            previous_hash  => undef,
+            record_hash    => q{},
+            metadata       => {
+                existing_report_id => _column( $duplicate, 'report_id' ),
+                reason             => $input->{reason},
+            },
+            created_at => $self->clock->now_iso8601,
+        }
+    );
+
+    return;
 }
 
 sub _insert_report {

@@ -55,7 +55,7 @@ The current local baseline passes:
 | `script/perlcritic --severity 5` | passing |
 | `script/perltidy-check` | passing |
 | `script/architecture-check` | passing |
-| `script/query-plan-check` | passing with 21 indexed hot-path checks |
+| `script/query-plan-check` | passing with 23 indexed hot-path checks |
 | `script/query-plan-evidence --dry-run` | passing |
 | `script/query-plan-evidence --check` | attempted locally; fails clearly because optional `DBD::Pg` is not installed; enforced in CI after PostgreSQL setup and deterministic seed |
 | `script/cpan-license-check` | passing |
@@ -65,13 +65,13 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=54, Tests=2709, Result=PASS
+Files=55, Tests=2738, Result=PASS
 ```
 
 Latest coverage gate at baseline time:
 
 ```text
-Total coverage: 93.0%
+Total coverage: 93.1%
 ```
 
 Remote GitHub Actions were triggered for this baseline commit, but GitHub did
@@ -80,7 +80,7 @@ execution. No repository failure log was produced by the remote runner.
 
 ## Tests Present
 
-The repository currently has 54 `.t` files covering:
+The repository currently has 55 `.t` files covering:
 
 * load/config/health/home;
 * identity registration, web forms, profile, session token service;
@@ -100,6 +100,9 @@ The repository currently has 54 `.t` files covering:
 * PostgreSQL benchmark seed exists with deterministic `small`, `medium`, and
   `hot-thread` profiles, but local DB-backed execution still requires optional
   `DBD::Pg`.
+* Security hardening now includes PostgreSQL-backed rate-limit storage,
+  observable local fallback, session-expiry enforcement, duplicate-report
+  blocking and mention fanout limits.
 * Query plan verification now has a DB-backed `EXPLAIN (ANALYZE, BUFFERS)`
   evidence command, enforced in CI after migrations and seed data.
 * Realtime remains process-local and covered as an enhancement boundary.
@@ -113,8 +116,8 @@ The repository currently has 54 `.t` files covering:
 * Add archived medium-profile PostgreSQL evidence output once local/remote
   runner PostgreSQL execution is available.
 * Add observed DB query counters to configured HTTP benchmark output.
-* Continue expanding negative authorization tests for edge combinations around
-  admin, moderation and session expiry.
+* Continue expanding negative authorization tests for less common staff
+  permission combinations and long-lived session edge cases.
 * Promote hot-thread benchmark evidence to a longer manual/nightly gate.
 * Keep `docs/CPAN_LICENSE_REVIEW.md` synchronized with every `cpanfile` change.
 
@@ -122,4 +125,4 @@ The repository currently has 54 `.t` files covering:
 
 1. Run medium-profile DB-backed evidence and archive JSON reports.
 2. Add observed DB query counting around configured HTTP benchmark routes.
-3. Coverage cleanup for benchmark fixture/support modules or documented exclusion.
+3. Run DB-backed security evidence with `016_security_abuse_hardening` applied.

@@ -116,9 +116,10 @@ keeping hidden/deleted posts out of the hot read path.
 
 ## Query Budget Status
 
-`script/query-plan-check` now requires all three hot-path indexes and still
-rejects `OFFSET` in application/template paths. Budgets did not change because
-the service query topology did not change:
+`script/query-plan-check` now requires the forum, notification, abuse-control
+and rate-limit hot-path indexes while still rejecting `OFFSET` in
+application/template paths. Budgets did not change because the service query
+topology did not change:
 
 ```sh
 script/query-budget --check
@@ -128,7 +129,7 @@ script/query-plan-check
 Local `script/query-plan-check` result:
 
 ```text
-query-plan-check status=ok indexes=21 offset_violations=0
+query-plan-check status=ok indexes=23 offset_violations=0
 ```
 
 The production evidence gate adds
@@ -136,6 +137,12 @@ The production evidence gate adds
 reader. That reader filters by `recipient_user_id` and orders by
 `created_at DESC, notification_id DESC`; without this index, populated inboxes
 would require avoidable sort work on a user hot path.
+
+The security hardening gate adds
+`idx_rate_limit_buckets_scope_action_window` for PostgreSQL-backed rate-limit
+windows and `idx_reports_reporter_target_open` for duplicate open-report
+detection. Both support abuse-control checks that run before writes and must
+remain bounded under repeated hostile requests.
 
 Local `script/query-budget --check` could not reach the budget table because
 `DBD::Pg` is not installed in this Carton tree. The check remains a CI/runtime

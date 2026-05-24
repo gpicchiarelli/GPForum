@@ -4,75 +4,201 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base;
 
 use GPForum::Service::Clock;
+use GPForum::Service::Id;
+use GPForum::Service::Operations::RateLimiter::LocalMemoryStore;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_LIMIT          => 60;
-const my $DEFAULT_WINDOW_SECONDS => 60;
+const my $SCHEMA_VERSION => 1;
 
-has clock   => sub { return GPForum::Service::Clock->new; };
-has buckets => sub { return {}; };
+has clock          => sub { return GPForum::Service::Clock->new; };
+has fallback_store => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Operations::RateLimiter::LocalMemoryStore->new(
+        clock => $self->clock, );
+};
+has id_service         => sub { return GPForum::Service::Id->new; };
+has primary_store      => undef;
+has schema             => undef;
+has security_telemetry => undef;
+has stats              => sub {
+    return {
+        allowed          => 0,
+        audit_failures   => 0,
+        blocked          => 0,
+        checks           => 0,
+        fallback_used    => 0,
+        primary_failures => 0,
+    };
+};
 
 sub check {
     my ( $self, $input ) = @_;
 
-    my $key            = _key($input);
-    my $limit          = $input->{limit}          || $DEFAULT_LIMIT;
-    my $window_seconds = $input->{window_seconds} || $DEFAULT_WINDOW_SECONDS;
-    my $now            = $self->clock->now_epoch;
-    my $bucket         = $self->_bucket( $key, $now, $window_seconds );
+    my $decision = $self->_check_primary($input);
+    if ( !$decision ) {
+        $decision = $self->_check_fallback($input);
+    }
 
-    $bucket->{count} += 1;
+    $self->_record_decision( $input, $decision );
 
-    return {
-        ok              => $bucket->{count} <= $limit ? 1 : 0,
-        key             => $key,
-        limit           => $limit,
-        remaining       => _remaining( $limit, $bucket->{count} ),
-        reset_at_epoch  => $bucket->{reset_at_epoch},
-        window_seconds  => $window_seconds,
-        observed_count  => $bucket->{count},
-        mitigation_hint => 'slow_down',
-    };
+    return $decision;
 }
 
 sub snapshot {
     my ($self) = @_;
 
-    return { buckets => scalar keys %{ $self->buckets }, };
+    my $store_snapshot = $self->_store_snapshot;
+
+    return { %{$store_snapshot}, stats => { %{ $self->stats } }, };
 }
 
-sub _bucket {
-    my ( $self, $key, $now, $window_seconds ) = @_;
+sub _check_primary {
+    my ( $self, $input ) = @_;
 
-    my $bucket = $self->buckets->{$key};
-    if ( !$bucket || $now >= $bucket->{reset_at_epoch} ) {
-        $bucket = {
-            count          => 0,
-            reset_at_epoch => $now + $window_seconds,
-        };
-        $self->buckets->{$key} = $bucket;
+    return if !$self->primary_store;
+
+    my $decision = eval { return $self->primary_store->check($input); };
+    if ( !$decision ) {
+        $self->stats->{primary_failures} += 1;
+        $self->_telemetry(
+            'rate_limit_store_degraded',
+            {
+                action   => $input->{action},
+                degraded => 1,
+                reason   => 'primary_store_failed',
+                store    => 'postgresql',
+            },
+        );
+        return;
     }
 
-    return $bucket;
+    return $decision;
 }
 
-sub _key {
+sub _check_fallback {
+    my ( $self, $input ) = @_;
+
+    my $decision = $self->fallback_store->check($input);
+    if ( $self->primary_store ) {
+        $decision->{degraded} = 1;
+        $self->stats->{fallback_used} += 1;
+    }
+
+    return $decision;
+}
+
+sub _record_decision {
+    my ( $self, $input, $decision ) = @_;
+
+    $self->stats->{checks} += 1;
+    if ( $decision->{ok} ) {
+        $self->stats->{allowed} += 1;
+        return;
+    }
+
+    $self->stats->{blocked} += 1;
+    $self->_telemetry(
+        'rate_limit_hit',
+        {
+            action   => $input->{action},
+            degraded => $decision->{degraded} ? 1 : 0,
+            status   => 429,
+            store    => $decision->{store},
+        },
+    );
+    $self->_record_block_audit( $input, $decision );
+
+    return;
+}
+
+sub _record_block_audit {
+    my ( $self, $input, $decision ) = @_;
+
+    return if !$self->schema;
+
+    my $created = eval {
+        return $self->schema->resultset('AuditLog')->create(
+            {
+                action         => 'rate_limit.blocked',
+                actor_id       => _uuid_or_undef( $input->{actor_id} ),
+                audit_id       => $self->id_service->uuid,
+                correlation_id => $self->id_service->uuid,
+                created_at     => $self->clock->now_iso8601,
+                metadata       => {
+                    action         => $input->{action},
+                    actor_hash     => _actor_hash($input),
+                    limit          => $decision->{limit},
+                    observed_count => $decision->{observed_count},
+                    scope          => $input->{scope},
+                    store          => $decision->{store},
+                    window_seconds => $decision->{window_seconds},
+                },
+                previous_hash  => undef,
+                record_hash    => q{},
+                schema_version => $SCHEMA_VERSION,
+                target_id      => undef,
+                target_type    => 'rate_limit',
+            }
+        );
+    };
+
+    if ( !$created ) {
+        $self->stats->{audit_failures} += 1;
+    }
+
+    return;
+}
+
+sub _store_snapshot {
+    my ($self) = @_;
+
+    my $snapshot = eval {
+        return $self->primary_store
+          ? $self->primary_store->snapshot
+          : $self->fallback_store->snapshot;
+    };
+
+    if ($snapshot) {
+        $snapshot->{fallback} = $self->fallback_store->snapshot
+          if $self->primary_store;
+        return $snapshot;
+    }
+
+    my $fallback = $self->fallback_store->snapshot;
+    $fallback->{status}   = 'degraded';
+    $fallback->{fallback} = 1;
+
+    return $fallback;
+}
+
+sub _telemetry {
+    my ( $self, $event_type, $metadata ) = @_;
+
+    return if !$self->security_telemetry;
+
+    return $self->security_telemetry->record( $event_type, $metadata );
+}
+
+sub _actor_hash {
     my ($input) = @_;
 
-    return join q{:}, $input->{scope}, $input->{actor_id}, $input->{action};
+    return sha256_hex( join q{:}, $input->{scope}, $input->{actor_id} || q{} );
 }
 
-sub _remaining {
-    my ( $limit, $count ) = @_;
+sub _uuid_or_undef {
+    my ($value) = @_;
 
-    my $remaining = $limit - $count;
-
-    return $remaining > 0 ? $remaining : 0;
+    return defined $value
+      && $value =~
+/\A [[:xdigit:]]{8} - [[:xdigit:]]{4} - [[:xdigit:]]{4} - [[:xdigit:]]{4} - [[:xdigit:]]{12} \z/msx
+      ? $value
+      : undef;
 }
 
 1;
-

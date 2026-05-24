@@ -2,7 +2,7 @@
 
 Date: 2026-05-24.
 
-This is commit 4 security hardening. It strengthens existing HTTP workflows
+This is the security hardening baseline. It strengthens existing HTTP workflows
 without adding new product features, external services, Redis, OpenSearch, or a
 new authentication architecture.
 
@@ -13,12 +13,17 @@ new authentication architecture.
 | CSRF | Every current server-rendered POST form includes `csrf_field`; every current POST route is covered by functional missing-token tests. |
 | Session cookies | Development cookies are `HttpOnly` and `SameSite=Lax`; production cookies are additionally `Secure`. |
 | Login/register/logout | CSRF protected, rate limited, generic rate-limit errors, non-enumerative duplicate-registration response, login/logout audit hooks. |
-| Session rotation | Existing cookie-session payload is changed on accepted login through a rotation marker; logout expires the browser session. |
+| Session rotation | Existing cookie-session payload is changed on accepted login through a rotation marker; stale session markers are expired before dispatch. |
+| Rate limiting | PostgreSQL-backed bucket store with explicit local degraded fallback. |
 | Admin authorization | Anonymous requests return `401`; permission-denied users return `403`; POST routes require CSRF before authorization checks. |
 | Moderation authorization | Anonymous requests return `401`; permission-denied users return `403`; POST routes require CSRF before authorization checks. |
 | Forum write authorization | Thread/reply/read/bookmark/subscription/report POSTs require CSRF and an authenticated session. |
 | Audit | Registration, thread, post, report, admin role binding, moderation actions, suspension actions, login requests, and logout requests have audit paths. |
+| Abuse telemetry | CSRF failures, authorization denials, rate-limit hits and suspended-user blocks are exposed through `/metrics` without sensitive data. |
 | Escaping | Templates use escaped output by default; raw post body rendering remains restricted to the sanitized body boundary. |
+
+The current route-by-route hardening matrix is maintained in
+`docs/SECURITY_HARDENING.md`.
 
 ## Commands
 
@@ -46,9 +51,9 @@ script/query-plan-check
 
 Result:
 
-* full test suite passed: 51 files, 2568 tests;
+* full test suite passed: 55 files, 2738 tests;
 * `script/architecture-check` passed;
-* `script/query-plan-check` passed with 21 indexed query plans and 0
+* `script/query-plan-check` passed with 23 indexed query plans and 0
   `OFFSET` violations;
 * `git diff --check` passed.
 
@@ -71,7 +76,11 @@ The security hardening test suite now covers:
 * duplicate registration responses that do not disclose whether the username or
   email already exists;
 * login/register rate limiting;
+* PostgreSQL rate-limit fallback behavior and audit rows for blocked requests;
+* report duplicate blocking without duplicate domain events;
+* mention fanout limiting with audit rows;
 * login/logout audit hook invocation;
+* session-fixation regression through login marker rotation;
 * cookie `HttpOnly`, `SameSite`, and production `Secure` flags.
 
 ## Sensitive Audit Behavior
@@ -84,8 +93,10 @@ request addresses are SHA-256 hashed before entering audit metadata.
 
 * Email verification is still not implemented; registration creates accounts
   that can authenticate before a verification workflow is added.
-* The rate limiter is still process-local and disposable; PostgreSQL-backed
-  rate limiting remains a future optional hardening layer.
+* Local fallback rate limiting is still process-local and is acceptable only as
+  degraded mode.
+* DB-backed security evidence still requires `DBD::Pg` and migration
+  `016_security_abuse_hardening` applied.
 * Raw post body rendering in `templates/forum/thread.html.ep` assumes the
   `PostComposer`/`post_bodies.body_rendered_safe` sanitizer boundary. That
   invariant is tested, but a future richer renderer must keep the same contract.
@@ -96,7 +107,6 @@ request addresses are SHA-256 hashed before entering audit metadata.
 
 1. Add email verification and account activation policy on top of the existing
    identity schema.
-2. Add PostgreSQL-backed optional rate-limit storage for multi-process
-   deployments.
+2. Run PostgreSQL-backed abuse tests on a seeded database and archive evidence.
 3. Add explicit audit rows for failed credential verification with careful
    anti-enumeration and rate-limit behavior.

@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 390;
-const my $EXPECTED_MIGRATIONS          => 15;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 42;
+const my $EXPECTED_TESTS               => 397;
+const my $EXPECTED_MIGRATIONS          => 16;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 45;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -34,6 +34,7 @@ const my $PLUGINS_INDEX                => 10;
 const my $PERSONAL_FEED_INDEX          => 11;
 const my $PUBLIC_PROFILE_INDEX         => 12;
 const my $HOT_PATH_INDEX               => 13;
+const my $SECURITY_ABUSE_INDEX         => 15;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -78,6 +79,7 @@ my $export_request_source          = $schema->source('ExportRequest');
 my $plugin_source                  = $schema->source('Plugin');
 my $plugin_hook_source             = $schema->source('PluginHook');
 my $plugin_failure_source          = $schema->source('PluginFailure');
+my $rate_limit_bucket_source       = $schema->source('RateLimitBucket');
 
 is( $source->from, 'schema_versions', 'schema version source maps table' );
 is_deeply( [ $source->primary_columns ],
@@ -609,6 +611,20 @@ is_deeply( [ $session_source->primary_columns ],
 ok( $session_source->has_column('session_hash'), 'session stores token hash' );
 ok( $session_source->has_column('revoked_at'), 'session supports revocation' );
 ok( $session_source->has_relationship('user'), 'session belongs to user' );
+
+is( $rate_limit_bucket_source->from,
+    'rate_limit_buckets', 'rate limit source maps buckets table' );
+is_deeply(
+    [ $rate_limit_bucket_source->primary_columns ],
+    [qw(scope actor_hash action window_started_at)],
+    'rate limit bucket primary key is scoped by window'
+);
+ok( $rate_limit_bucket_source->has_column('observed_count'),
+    'rate limit bucket stores observed count' );
+ok( $rate_limit_bucket_source->has_column('blocked_count'),
+    'rate limit bucket stores blocked count' );
+ok( $rate_limit_bucket_source->has_column('expires_at'),
+    'rate limit bucket stores expiry' );
 
 is( $space_source->from, 'spaces', 'space source maps spaces table' );
 is_deeply( [ $space_source->primary_columns ],
@@ -1332,6 +1348,20 @@ like(
     $hot_path_sql,
     qr/WHERE [ ] deleted_at [ ] IS [ ] NULL/msx,
     'hot path migration keeps indexes partial on live rows'
+);
+
+my $security_abuse_sql =
+  path( $summary->[$SECURITY_ABUSE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$SECURITY_ABUSE_INDEX]->{description},
+    'security abuse hardening',
+    'security abuse hardening migration description is parsed'
+);
+like(
+    $security_abuse_sql,
+    qr/CREATE [ ] TABLE [ ] IF [ ] NOT [ ] EXISTS [ ] rate_limit_buckets/msx,
+    'security abuse migration creates PostgreSQL rate limit buckets'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

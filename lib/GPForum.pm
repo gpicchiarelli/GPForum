@@ -50,7 +50,9 @@ use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::RateLimiter;
+use GPForum::Service::Operations::RateLimiter::PostgreSQLStore;
 use GPForum::Service::Operations::Readiness;
+use GPForum::Service::Operations::SecurityTelemetry;
 use GPForum::Service::Password;
 use GPForum::Service::Realtime::Hub;
 use GPForum::Service::Search::Searcher;
@@ -72,6 +74,7 @@ sub startup {
     $self->secrets( [ $config->session_secret ] );
     $self->mode( $config->environment );
     _configure_browser_security( $self, $config );
+    _configure_session_guard($self);
 
     $self->helper( gp_config         => sub { return $config; } );
     $self->helper( gp_runtime        => sub { return $runtime; } );
@@ -129,6 +132,14 @@ sub startup {
     $self->helper(
         gp_session_token => sub { return GPForum::Service::SessionToken->new; }
     );
+    my $security_telemetry;
+    $self->helper(
+        gp_security_telemetry => sub {
+            $security_telemetry ||=
+              GPForum::Service::Operations::SecurityTelemetry->new;
+            return $security_telemetry;
+        }
+    );
     my $local_cache;
     $self->helper(
         gp_local_cache => sub {
@@ -173,7 +184,17 @@ sub startup {
     my $rate_limiter;
     $self->helper(
         gp_rate_limiter => sub {
-            $rate_limiter ||= GPForum::Service::Operations::RateLimiter->new;
+            my ($controller) = @_;
+
+            $rate_limiter ||= GPForum::Service::Operations::RateLimiter->new(
+                primary_store =>
+                  GPForum::Service::Operations::RateLimiter::PostgreSQLStore
+                  ->new(
+                    schema => $controller->gp_schema
+                  ),
+                schema             => $controller->gp_schema,
+                security_telemetry => $controller->gp_security_telemetry,
+            );
             return $rate_limiter;
         }
     );
@@ -182,12 +203,13 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Operations::MetricsSnapshot->new(
-                runtime        => $runtime,
-                runtime_policy => $runtime_policy,
-                schema         => $controller->gp_schema,
-                realtime_hub   => $controller->gp_realtime_hub,
-                rate_limiter   => $controller->gp_rate_limiter,
-                local_caches   => [ $controller->gp_local_cache ],
+                runtime            => $runtime,
+                runtime_policy     => $runtime_policy,
+                schema             => $controller->gp_schema,
+                realtime_hub       => $controller->gp_realtime_hub,
+                rate_limiter       => $controller->gp_rate_limiter,
+                security_telemetry => $controller->gp_security_telemetry,
+                local_caches       => [ $controller->gp_local_cache ],
             );
         }
     );
@@ -586,6 +608,42 @@ sub _configure_browser_security {
     return;
 }
 
+sub _configure_session_guard {
+    my ($application) = @_;
+
+    $application->hook(
+        before_dispatch => sub {
+            my ($controller) = @_;
+
+            _expire_stale_session($controller);
+        }
+    );
+
+    return;
+}
+
+sub _expire_stale_session {
+    my ($controller) = @_;
+
+    my $expires_at = $controller->session('session_expires_at_epoch');
+    return if !defined $expires_at;
+    return if $expires_at > time;
+
+    my $session = $controller->session;
+    delete @{$session}
+      {qw(user_id session_id login_rotation session_expires_at_epoch)};
+    $controller->session( expires => 1 );
+    $controller->gp_security_telemetry->record(
+        'session_expired',
+        {
+            route  => _current_route_name($controller),
+            status => 401,
+        }
+    );
+
+    return;
+}
+
 sub _set_browser_security_headers {
     my ($controller) = @_;
 
@@ -606,6 +664,12 @@ sub _set_browser_security_headers {
     );
 
     return;
+}
+
+sub _current_route_name {
+    my ($controller) = @_;
+
+    return eval { return $controller->current_route; } || 'unknown';
 }
 
 1;

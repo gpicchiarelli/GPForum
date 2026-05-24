@@ -245,6 +245,14 @@ sub _wants_json {
 sub _csrf_failure {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'csrf_failure',
+        {
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
     return _render_error(
         $controller,
         $HTTP_FORBIDDEN,
@@ -259,6 +267,14 @@ sub _csrf_failure {
 sub _unauthorized {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'auth_denial',
+        {
+            status => $HTTP_UNAUTHORIZED,
+        }
+    );
+
     return _render_error(
         $controller,
         $HTTP_UNAUTHORIZED,
@@ -272,6 +288,14 @@ sub _unauthorized {
 
 sub _rate_limited {
     my ($controller) = @_;
+
+    _record_security_event(
+        $controller,
+        'rate_limit_hit',
+        {
+            status => $HTTP_TOO_MANY,
+        }
+    );
 
     return _render_error(
         $controller,
@@ -327,6 +351,23 @@ sub _render_error {
         %{$payload},
         status => $status,
     );
+}
+
+sub _record_security_event {
+    my ( $controller, $event_type, $metadata ) = @_;
+
+    return $controller->gp_security_telemetry->record(
+        $event_type,
+        {
+            %{$metadata}, route => _current_route_name($controller),
+        }
+    );
+}
+
+sub _current_route_name {
+    my ($controller) = @_;
+
+    return eval { return $controller->current_route; } || 'unknown';
 }
 
 1;

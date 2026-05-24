@@ -5,11 +5,15 @@ use warnings;
 
 use Mojo::Base -base;
 
+use Const::Fast;
 use GPForum::Service::Clock;
 use GPForum::Service::Community::MentionExtractor;
 use GPForum::Service::Id;
 
 our $VERSION = '0.001';
+
+const my $DEFAULT_MAX_MENTIONS => 10;
+const my $SCHEMA_VERSION       => 1;
 
 has clock => sub { return GPForum::Service::Clock->new; };
 has extractor =>
@@ -24,14 +28,62 @@ sub record_for_source {
     my $mentions = $self->extractor->extract( $input->{body_source} );
     return _empty_result() if !@{$mentions};
 
+    my $limited = $self->_limit_mentions( $input, $mentions );
+    $mentions = $limited->{mentions};
     my $resolved = $self->_resolve_users($mentions);
     my $work     = sub {
-        return $self->_insert_mentions( $input, $mentions, $resolved );
+        my $result = $self->_insert_mentions( $input, $mentions, $resolved );
+        push @{ $result->{skipped} }, @{ $limited->{skipped} };
+        return $result;
     };
 
     return $self->schema->can('txn_do')
       ? $self->schema->txn_do($work)
       : $work->();
+}
+
+sub _limit_mentions {
+    my ( $self, $input, $mentions ) = @_;
+
+    my $max_mentions = $input->{max_mentions} || $DEFAULT_MAX_MENTIONS;
+    return { mentions => $mentions, skipped => [] }
+      if @{$mentions} <= $max_mentions;
+
+    my @allowed = @{$mentions}[ 0 .. $max_mentions - 1 ];
+    my @blocked = @{$mentions}[ $max_mentions .. $#{$mentions} ];
+    my @skipped = map { _skip( $_, 'fanout_limited' ) } @blocked;
+    $self->_record_fanout_audit( $input, scalar @blocked, $max_mentions );
+
+    return { mentions => \@allowed, skipped => \@skipped };
+}
+
+sub _record_fanout_audit {
+    my ( $self, $input, $blocked_count, $max_mentions ) = @_;
+
+    my $created = eval {
+        return $self->schema->resultset('AuditLog')->create(
+            {
+                action         => 'mention.fanout_limited',
+                actor_id       => _uuid_or_undef( $input->{actor_id} ),
+                audit_id       => $self->id_service->uuid,
+                correlation_id => $self->id_service->uuid,
+                created_at     => $self->clock->now_iso8601,
+                metadata       => {
+                    blocked_count => $blocked_count,
+                    max_mentions  => $max_mentions,
+                    source_id     => $input->{source_id},
+                    source_type   => $input->{source_type},
+                },
+                previous_hash  => undef,
+                record_hash    => q{},
+                schema_version => $SCHEMA_VERSION,
+                target_id      => _uuid_or_undef( $input->{source_id} ),
+                target_type    => 'mention',
+            }
+        );
+    };
+
+    return $created;
 }
 
 sub _insert_mentions {
@@ -179,6 +231,16 @@ sub _column {
     return $row->get_column($column) if $row && $row->can('get_column');
 
     return;
+}
+
+sub _uuid_or_undef {
+    my ($value) = @_;
+
+    return defined $value
+      && $value =~
+/\A [[:xdigit:]]{8} - [[:xdigit:]]{4} - [[:xdigit:]]{4} - [[:xdigit:]]{4} - [[:xdigit:]]{12} \z/msx
+      ? $value
+      : undef;
 }
 
 sub _rows {

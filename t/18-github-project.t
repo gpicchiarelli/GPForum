@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 69;
+const my $EXPECTED_TESTS => 70;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -38,6 +38,7 @@ for my $required_file (
     docs/OPERATIONAL_BASELINE.md
     docs/PERFORMANCE_BASELINE.md
     docs/PERFORMANCE_EVIDENCE.md
+    docs/SECURITY_HARDENING.md
     docs/OS_OPTIMIZATION.md
     docs/OS_RUNTIME_ENFORCEMENT.md
     docs/DEPLOYMENT.md

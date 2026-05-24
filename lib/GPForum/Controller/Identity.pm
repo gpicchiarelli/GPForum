@@ -6,6 +6,7 @@ use warnings;
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
+use Time::HiRes qw(time);
 
 our $VERSION = '0.001';
 
@@ -22,6 +23,7 @@ const my $LOGOUT_LIMIT      => 20;
 const my $REGISTER_LIMIT    => 5;
 const my $SHORT_WINDOW      => 60;
 const my $LONG_WINDOW       => 300;
+const my $SESSION_SECONDS   => 2_592_000;
 
 sub register_form {
     my ($self) = @_;
@@ -294,10 +296,14 @@ sub _authenticate_login {
 sub _apply_login_session {
     my ( $controller, $authenticated ) = @_;
 
+    my $session = $controller->session;
+    delete @{$session}
+      {qw(user_id session_id login_rotation session_expires_at_epoch)};
     $controller->session(
-        login_rotation => $controller->gp_id->uuid,
-        session_id     => $authenticated->{session_id},
-        user_id        => $authenticated->{user_id},
+        login_rotation           => $controller->gp_id->uuid,
+        session_expires_at_epoch => int( time + $SESSION_SECONDS ),
+        session_id               => $authenticated->{session_id},
+        user_id                  => $authenticated->{user_id},
     );
 
     return;
@@ -356,6 +362,14 @@ sub _request_address {
 sub _rate_limited {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'rate_limit_hit',
+        {
+            status => $HTTP_TOO_MANY,
+        }
+    );
+
     if ( _wants_json($controller) ) {
         return $controller->render(
             json => {
@@ -374,6 +388,15 @@ sub _rate_limited {
 
 sub _invalid_login {
     my ($controller) = @_;
+
+    _record_security_event(
+        $controller,
+        'auth_denial',
+        {
+            action => 'identity.login',
+            status => $HTTP_UNAUTHORIZED,
+        }
+    );
 
     if ( _wants_json($controller) ) {
         return $controller->render(
@@ -398,10 +421,35 @@ sub _invalid_login {
 sub _csrf_failure {
     my ($controller) = @_;
 
+    _record_security_event(
+        $controller,
+        'csrf_failure',
+        {
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
     return $controller->render(
         text   => 'Bad CSRF token',
         status => $HTTP_FORBIDDEN,
     );
+}
+
+sub _record_security_event {
+    my ( $controller, $event_type, $metadata ) = @_;
+
+    return $controller->gp_security_telemetry->record(
+        $event_type,
+        {
+            %{$metadata}, route => _current_route_name($controller),
+        }
+    );
+}
+
+sub _current_route_name {
+    my ($controller) = @_;
+
+    return eval { return $controller->current_route; } || 'unknown';
 }
 
 1;
