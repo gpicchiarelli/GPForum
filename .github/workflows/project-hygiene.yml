@@ -54,6 +54,7 @@ jobs:
           test -x script/bench-http
           test -x script/bench-hotpaths
           test -x script/bench-hypnotoad
+          test -x script/bench-hypnotoad-scaling
           test -x script/cpan-license-check
           test -x script/perltidy-check
           test -x script/gpforum-os-preflight

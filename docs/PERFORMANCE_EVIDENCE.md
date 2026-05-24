@@ -235,6 +235,47 @@ This keeps the evidence gate small enough for CI while proving that migrations,
 seed data, DB plans, configured HTTP paths, and a minimal Hypnotoad prefork
 runtime work together.
 
+## Hypnotoad Worker Scaling
+
+`script/bench-hypnotoad-scaling` is the local evidence gate for worker-count
+changes. It runs real forum/search routes across multiple prefork sizes and
+records the same route metrics as `script/bench-hypnotoad`:
+
+* p50/p95/p99 latency;
+* requests per second;
+* observed DB query counts;
+* duplicate SQL fingerprint counts;
+* route query-budget status;
+* OS runtime evidence, including actual Mojolicious reactor class.
+
+Recommended local scaling command:
+
+```sh
+script/bench-hypnotoad-scaling --seed --check --profile hot-thread \
+  --worker-set 2,4,8 --iterations 20 --warmup 3 \
+  --route /categories \
+  --route /c/018f1001-0001-7000-8000-000000000001 \
+  --route /t/018f1004-0001-7000-8000-000000000001 \
+  --route '/search?q=performance'
+```
+
+The command should be run before increasing production worker count. On macOS,
+the current evidence reports `Mojo::Reactor::Poll`; operators testing high
+socket concurrency should compare this with an environment where the optional
+`EV` module activates `Mojo::Reactor::EV`.
+
+Current local smoke result on Postgres.app with a temporary migrated database:
+
+| Workers | Thread p95 ms | Search p95 ms | Thread DB max | Search DB max | Duplicate SQL |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 2 | 3.688 | 2.122 | 2 | 1 | 0 |
+| 4 | 4.140 | 2.522 | 2 | 1 | 0 |
+| 8 | 3.398 | 2.005 | 2 | 1 | 0 |
+
+The smoke shows no DB query-budget regression when moving between 2, 4 and 8
+workers. It does not prove multicore saturation because the local macOS
+preflight reports a conservative CPU count and the run is deliberately short.
+
 ## Hypnotoad Deployment Evidence
 
 `script/bench-hypnotoad` starts a temporary Hypnotoad server, uses a free local

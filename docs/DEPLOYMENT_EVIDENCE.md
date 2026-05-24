@@ -94,6 +94,47 @@ The event backend mismatch is intentional evidence, not hidden failure:
 GPForum's Darwin profile declares the desired `kqueue` posture, but the current
 local Perl runtime does not have a native kqueue reactor module installed.
 
+## Worker Scaling Evidence
+
+`script/bench-hypnotoad-scaling` repeats the Hypnotoad benchmark across a worker
+set, usually `2,4,8`, using the real forum/search route surface. It reuses the
+same benchmark implementation as `script/bench-hypnotoad`, so query headers,
+duplicate-query detection, OS runtime evidence and route thresholds remain
+consistent.
+
+Local scaling smoke:
+
+```sh
+script/bench-hypnotoad-scaling --seed --check --profile small \
+  --worker-set 2,4,8 --iterations 2 --warmup 1 \
+  --route /categories \
+  --route /t/018f1004-0001-7000-8000-000000000001 \
+  --route '/search?q=performance'
+```
+
+The command is not a CI default because it starts multiple prefork runtimes.
+Use it before changing worker counts, reactor dependencies, reverse proxy
+settings or socket policy.
+
+Latest local Postgres.app scaling smoke, using a temporary migrated database
+and deterministic `small` seed:
+
+| Workers | Route | p95 ms | Req/s | Max DB queries | Duplicate queries | Budget |
+| ---: | --- | ---: | ---: | ---: | ---: | --- |
+| 2 | `/categories` | 1.460 | 587.026 | 0 | 0 | ok |
+| 2 | `/t/018f1004-0001-7000-8000-000000000001` | 3.688 | 241.371 | 2 | 0 | ok |
+| 2 | `/search?q=performance` | 2.122 | 437.522 | 1 | 0 | ok |
+| 4 | `/categories` | 1.972 | 471.482 | 0 | 0 | ok |
+| 4 | `/t/018f1004-0001-7000-8000-000000000001` | 4.140 | 234.136 | 2 | 0 | ok |
+| 4 | `/search?q=performance` | 2.522 | 372.496 | 1 | 0 | ok |
+| 8 | `/categories` | 1.516 | 606.245 | 0 | 0 | ok |
+| 8 | `/t/018f1004-0001-7000-8000-000000000001` | 3.398 | 224.186 | 2 | 0 | ok |
+| 8 | `/search?q=performance` | 2.005 | 461.267 | 1 | 0 | ok |
+
+All three worker counts used `Mojo::Reactor::Poll` on this machine. The run is
+too small to claim saturation behavior; it proves that the real forum/search
+routes stay budget-clean under prefork worker count changes.
+
 ## Current Local Evidence
 
 Environment:

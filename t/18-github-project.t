@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 76;
+const my $EXPECTED_TESTS => 78;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -54,6 +54,7 @@ for my $required_file (
     prompt/44.txt
     bin/gpforum-benchmark
     bin/gpforum-bench-hypnotoad
+    bin/gpforum-bench-hypnotoad-scaling
     bin/gpforum-os-preflight
     bin/gpforum-query-plan-evidence
     bin/gpforum-seed-benchmark
@@ -61,6 +62,7 @@ for my $required_file (
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
+    script/bench-hypnotoad-scaling
     script/benchmark-http
     script/cpan-license-check
     script/perltidy-check

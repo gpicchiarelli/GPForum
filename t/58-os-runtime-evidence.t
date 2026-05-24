@@ -18,7 +18,7 @@ use GPForum::Test::OSResourceSnapshot;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 25;
+const my $EXPECTED_TESTS => 29;
 const my $WORKERS        => 2;
 
 plan tests => $EXPECTED_TESTS;
@@ -57,10 +57,24 @@ my $evidence = GPForum::OS::RuntimeEvidence->new(
 is( $evidence->{status}, 'active', 'OS evidence is active for select profile' );
 is( $evidence->{event_loop}{declared_backend},
     'select', 'evidence records declared backend' );
+is( $evidence->{event_loop}{expected_reactor},
+    'Mojo::Reactor::Poll', 'select profile expects Poll reactor' );
 like(
     $evidence->{event_loop}{actual_reactor_class},
     qr/\A Mojo::Reactor::/msx,
     'evidence records actual reactor class'
+);
+ok(
+    length $evidence->{event_loop}{recommendation},
+    'evidence records reactor recommendation'
+);
+ok(
+    exists $evidence->{event_loop}{modules}{mojo_ev},
+    'evidence records Mojolicious EV reactor module file status'
+);
+ok(
+    exists $evidence->{event_loop}{modules}{ev},
+    'evidence records EV dependency status'
 );
 is( $evidence->{hypnotoad}{prefork}, 1, 'evidence records prefork workers' );
 is( $evidence->{hypnotoad}{workers},
@@ -142,7 +156,7 @@ sub selectall_arrayref {
 
     return [
         map {
-            {
+            +{
                 name    => $_,
                 setting => $_ eq 'shared_buffers' ? '16384' : '1',
                 unit    => $_ eq 'shared_buffers' ? '8kB'   : undef,

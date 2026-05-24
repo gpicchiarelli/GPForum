@@ -145,9 +145,11 @@ sub _event_loop_report {
         actual_reactor_class => $actual,
         expected_reactor     => $expected,
         portable_fallback    => $actual =~ /Poll\z/msx ? 1 : 0,
+        recommendation       => _reactor_recommendation( $declared, $actual ),
         modules              => {
-            kqueue => _module_available('Mojo::Reactor::KQueue'),
-            ev     => _module_available('Mojo::Reactor::EV'),
+            mojo_ev   => _module_file_available('Mojo::Reactor::EV'),
+            ev        => _module_available('EV'),
+            io_kqueue => _module_available('IO::KQueue'),
         },
     };
 }
@@ -304,8 +306,8 @@ sub _actual_reactor {
 sub _expected_reactor_class {
     my ($backend) = @_;
 
-    return 'Mojo::Reactor::KQueue' if $backend eq 'kqueue';
-    return 'Mojo::Reactor::EV'     if $backend eq 'epoll';
+    return 'Mojo::Reactor::EV' if $backend eq 'kqueue';
+    return 'Mojo::Reactor::EV' if $backend eq 'epoll';
 
     return 'Mojo::Reactor::Poll';
 }
@@ -322,14 +324,46 @@ sub _reactor_matches {
 sub _module_available {
     my ($module) = @_;
 
-    my $path = $module;
-    $path =~ s{::}{/}gmsx;
-    $path .= '.pm';
+    my $path = _module_path($module);
+    return 0 if !_module_file_available($module);
 
     return eval {
         require $path;
         return 1;
     } ? 1 : 0;
+}
+
+sub _module_file_available {
+    my ($module) = @_;
+
+    my $path = _module_path($module);
+
+    for my $include (@INC) {
+        return 1 if -e "$include/$path";
+    }
+
+    return 0;
+}
+
+sub _module_path {
+    my ($module) = @_;
+
+    my $path = $module;
+    $path =~ s{::}{/}gmsx;
+    $path .= '.pm';
+
+    return $path;
+}
+
+sub _reactor_recommendation {
+    my ( $declared, $actual ) = @_;
+
+    return 'native-reactor-active'
+      if _reactor_matches( $actual, _expected_reactor_class($declared) );
+    return 'install optional EV module to activate Mojo::Reactor::EV'
+      if $declared eq 'kqueue' || $declared eq 'epoll';
+
+    return 'poll fallback acceptable for conservative unknown OS mode';
 }
 
 sub _probe_socket_option {

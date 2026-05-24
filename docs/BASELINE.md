@@ -64,6 +64,7 @@ The current local baseline passes:
 | configured benchmark profiles | passing with observed DB query counters for `small`, `medium`, and `hot-thread` |
 | Hypnotoad benchmark smoke | passing locally against Postgres.app with 2 workers and observed query headers |
 | OS runtime evidence smoke | passing; direct Hypnotoad smoke reports socket probes, event-loop mismatch, PostgreSQL settings availability, and temp filesystem mount |
+| Hypnotoad worker scaling smoke | passing locally across 2/4/8 workers on real forum/search routes |
 | `script/cpan-license-check` | passing |
 | `script/coverage` | passing |
 | `script/query-budget --check` | passing against synchronized PostgreSQL-backed query budget rows |
@@ -71,7 +72,7 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=58, Tests=2874, Result=PASS
+Files=59, Tests=2901, Result=PASS
 ```
 
 Latest coverage gate after Hypnotoad deployment evidence hardening:
@@ -95,7 +96,7 @@ execution. No repository failure log was produced by the remote runner.
 
 ## Tests Present
 
-The repository currently has 58 `.t` files covering:
+The repository currently has 59 `.t` files covering:
 
 * load/config/health/home;
 * identity registration, web forms, profile, session token service;
@@ -126,6 +127,8 @@ The repository currently has 58 `.t` files covering:
 * Hypnotoad deployment evidence now starts a temporary prefork runtime, records
   worker metadata, compares against in-process results, and observes DB query
   budgets through benchmark-only headers.
+* Hypnotoad worker scaling evidence now runs the same real forum/search route
+  set across configurable worker counts such as `2,4,8`.
 * OS runtime evidence now records the declared OS backend, actual Mojolicious
   reactor class, Hypnotoad `reuse=1` configuration, kernel socket option
   probes, PostgreSQL runtime settings, and the temporary filesystem mount used
