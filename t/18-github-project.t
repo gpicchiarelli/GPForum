@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 43;
+const my $EXPECTED_TESTS => 46;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -33,6 +33,7 @@ for my $required_file (
     CHANGELOG.md
     docs/adr/README.md
     docs/adr/0000-template.md
+    docs/BASELINE.md
     docs/CPAN_LICENSE_REVIEW.md
     docs/OPERATIONAL_BASELINE.md
     docs/PERFORMANCE_BASELINE.md
@@ -41,6 +42,7 @@ for my $required_file (
     script/bench-http
     script/cpan-license-check
     script/perltidy-check
+    script/query-budget
     )
   )
 {
@@ -53,8 +55,17 @@ my $prompt     = path('prompt/44.txt')->slurp;
 my $readme     = path('README.md')->slurp;
 my $governance = path('GOVERNANCE.md')->slurp;
 
-like( $ci, qr/script\/perlcritic/msx,     'CI runs Perl::Critic' );
-like( $ci, qr/script\/test/msx,           'CI runs tests' );
+like(
+    $ci,
+    qr/script\/perlcritic [ ] --severity [ ] 5/msx,
+    'CI runs Perl::Critic at severity 5'
+);
+like(
+    $ci,
+    qr/script\/bootstrap-deps [ ] --postgres/msx,
+    'CI installs optional PostgreSQL dependencies for DB gates'
+);
+like( $ci, qr/prove [ ] -lr [ ] t/msx,    'CI runs prove -lr t' );
 like( $ci, qr/script\/coverage/msx,       'CI runs coverage' );
 like( $ci, qr/gpforum-benchmark/msx,      'CI runs benchmark smoke' );
 like( $ci, qr/script\/perltidy-check/msx, 'CI checks Perl formatting' );
@@ -75,8 +86,8 @@ like(
 );
 like(
     $ci,
-    qr/gpforum-query-budget [ ] --check/msx,
-    'CI checks query budget drift'
+    qr/script\/query-budget [ ] --check/msx,
+    'CI checks query budget through script wrapper'
 );
 like(
     $ci,

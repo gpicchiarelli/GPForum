@@ -7,7 +7,14 @@ if command -v carton >/dev/null 2>&1 && [ -d local ]; then
     runner="carton exec perlcritic"
 fi
 
-if [ "$#" -gt 0 ]; then
+has_target=0
+for argument in "$@"; do
+    if [ -e "$argument" ]; then
+        has_target=1
+    fi
+done
+
+if [ "$has_target" -eq 1 ]; then
     exec $runner --profile .perlcriticrc "$@"
 fi
 
@@ -23,4 +30,4 @@ if [ ! -s "$tmp_file" ]; then
     exit 0
 fi
 
-exec xargs $runner --profile .perlcriticrc < "$tmp_file"
+exec xargs $runner --profile .perlcriticrc "$@" < "$tmp_file"

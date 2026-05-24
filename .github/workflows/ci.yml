@@ -45,7 +45,7 @@ jobs:
           sudo cpanm --notest Carton
 
       - name: Install Perl dependencies
-        run: script/bootstrap-deps
+        run: script/bootstrap-deps --postgres
 
       - name: Verify dependency lock
         run: carton check
@@ -60,7 +60,7 @@ jobs:
         run: script/perltidy-check
 
       - name: Run Perl::Critic
-        run: script/perlcritic
+        run: script/perlcritic --severity 5
 
       - name: Run architecture boundary check
         run: script/architecture-check
@@ -69,7 +69,7 @@ jobs:
         run: script/query-plan-check
 
       - name: Run tests
-        run: script/test
+        run: carton exec prove -lr t
 
       - name: Run benchmark smoke
         run: carton exec bin/gpforum-benchmark --fixture --iterations 2 --warmup 1 --route /health/live --route /categories
@@ -78,10 +78,10 @@ jobs:
         run: carton exec bin/gpforum-migrate --apply
 
       - name: Sync query budget catalog
-        run: carton exec bin/gpforum-query-budget --sync
+        run: script/query-budget --sync
 
       - name: Check query budget catalog
-        run: carton exec bin/gpforum-query-budget --check
+        run: script/query-budget --check
 
       - name: Run platform check
         run: carton exec bin/gpforum-platform-check --with-db

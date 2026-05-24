@@ -35,10 +35,12 @@ requirements without review.
 | Test::WWW::Mechanize | develop | Perl 5 license | web test helper | dev-only allowed |
 | Devel::Cover | develop | Perl 5 license | coverage tool | dev-only allowed |
 | Devel::NYTProf | develop | Perl 5 license | profiling tool | dev-only allowed |
+| DBD::Pg | optional-postgres | Perl 5 license | PostgreSQL driver for DB-backed CI and deployments | allowed |
+| Test::PostgreSQL | optional-postgres | Perl 5 license | PostgreSQL integration testing helper | dev-only allowed |
 
 Dependency governance rules:
 
-* Any new `requires` entry in `cpanfile` must add a row here in the same patch.
+* Any new `requires` entry in `cpanfile` or `cpanfile.postgres` must add a row here in the same patch.
 * Runtime dependencies require explicit license posture and operational risk.
 * Development dependencies may be stricter or heavier only if they do not become
   production requirements.

@@ -17,7 +17,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS           => 8;
+const my $EXPECTED_TESTS           => 10;
 const my $THREAD_VIEW_QUERY_BUDGET => 8;
 
 plan tests => $EXPECTED_TESTS;
@@ -88,6 +88,18 @@ throws_ok(
     'unknown query budget command fails with usage'
 );
 
+my $script_output = _capture_command( 'script/query-budget', '--print' );
+like(
+    $script_output,
+    qr/thread_view [ ] queries=8/msx,
+    'query budget script wrapper prints thread view budget'
+);
+like(
+    $script_output,
+    qr/search [ ] queries=2/msx,
+    'query budget script wrapper prints search budget'
+);
+
 sub _capture_stdout {
     my ($code) = @_;
 
@@ -114,6 +126,23 @@ sub _capture_stdout_status {
         output => $output,
         status => $status,
     };
+}
+
+sub _capture_command {
+    my (@command) = @_;
+
+    open my $handle, q{-|}, @command
+      or croak 'failed to run query budget script';
+
+    my $captured = q{};
+    while ( my $line = <$handle> ) {
+        $captured .= $line;
+    }
+
+    close $handle
+      or croak 'query budget script failed';
+
+    return $captured;
 }
 
 1;
