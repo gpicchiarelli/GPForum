@@ -28,8 +28,16 @@ sub list_thread_posts {
     my $search = $self->schema->resultset('Post')->search(
         $query,
         {
-            prefetch => ['current_body'],
-            order_by =>
+            columns => [
+                qw(
+                  post_id thread_id author_user_id current_body_id position
+                  visibility moderation_state
+                )
+            ],
+            join      => 'current_body',
+            '+select' => ['current_body.body_rendered_safe'],
+            '+as'     => ['body'],
+            order_by  =>
               [ { -asc => 'me.position' }, { -asc => 'me.post_id' }, ],
             rows => $plan->{fetch_rows},
         }

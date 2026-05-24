@@ -63,6 +63,7 @@ sub run {
 sub evidence_report {
     my ( $self, $options ) = @_;
 
+    $options->{profile} ||= 'small';
     my @endpoints = _selected_endpoints($options);
     if ( $options->{dry_run} ) {
         return _dry_run_report( \@endpoints, $options );
@@ -81,6 +82,7 @@ sub evidence_report {
         dsn => _redact_dsn( GPForum::Config->from_environment->database_dsn ),
         endpoints    => \@reports,
         checked_at   => 'runtime',
+        dataset      => { profile => $options->{profile} },
         failure_rule => {
             seq_scan_plan_rows    => $PLAN_ROWS_SEQ_OK,
             sort_plan_rows        => $PLAN_ROWS_SORT_OK,
@@ -256,6 +258,7 @@ sub _dry_run_report {
         status    => 'ok',
         mode      => 'dry-run',
         analyze   => $options->{analyze} ? 1 : 0,
+        dataset   => { profile => $options->{profile} },
         endpoints => [
             map {
                 my $definition = _endpoint_definition($_);
@@ -460,7 +463,9 @@ sub _text_report {
       . ' mode='
       . $report->{mode}
       . ' analyze='
-      . $report->{analyze} . "\n";
+      . $report->{analyze}
+      . ' dataset_profile='
+      . $report->{dataset}{profile} . "\n";
 
     for my $endpoint ( @{ $report->{endpoints} } ) {
         $text .= join q{ },
@@ -493,6 +498,7 @@ sub _options {
         endpoints => [],
         format    => 'text',
         help      => 0,
+        profile   => 'small',
     };
 
     while (@arguments) {
@@ -516,6 +522,9 @@ sub _consume_option {
             push @{ $options->{endpoints} },
               _endpoint_name( shift @{$arguments} );
         },
+        '--profile' => sub {
+            $options->{profile} = _profile( shift @{$arguments} );
+        },
     );
 
     my $handler = $handler{$argument};
@@ -534,6 +543,18 @@ sub _endpoint_name {
     return $value;
 }
 
+sub _profile {
+    my ($value) = @_;
+
+    croak _usage()
+      if !defined $value
+      || ( $value ne 'small'
+        && $value ne 'medium'
+        && $value ne 'hot-thread' );
+
+    return $value;
+}
+
 sub _print_usage {
     print _usage(), "\n" or croak 'failed to write usage';
 
@@ -542,7 +563,7 @@ sub _print_usage {
 
 sub _usage {
     return
-'Usage: script/query-plan-evidence [--dry-run] [--json] [--check] [--no-analyze] [--endpoint NAME] ...';
+'Usage: script/query-plan-evidence [--dry-run] [--json] [--check] [--no-analyze] [--profile small|medium|hot-thread] [--endpoint NAME] ...';
 }
 
 sub _db_error {

@@ -52,6 +52,17 @@ const my @DEFAULT_ROUTES => (
     q{/health},           q{/health/ready},
     q{/metrics},
 );
+const my @SEEDED_ROUTES => (
+    q{/},
+    q{/categories},
+    q{/c/018f1001-0001-7000-8000-000000000001},
+    q{/t/018f1004-0001-7000-8000-000000000001},
+    q{/search?q=performance},
+    q{/search/autocomplete?q=per},
+    q{/health},
+    q{/health/ready},
+    q{/metrics},
+);
 
 has app_class => 'GPForum';
 
@@ -117,8 +128,13 @@ sub _benchmark {
         iterations => $options->{iterations},
         warmup     => $options->{warmup},
         routes     => \@reports,
-        process    => {
+        dataset    => {
+            profile       => $options->{profile},
+            seeded_routes => $options->{profile} eq 'fixture' ? 0 : 1,
+        },
+        process => {
             pid           => $PROCESS_ID,
+            worker_count  => $ENV{GPFORUM_WEB_PROCESSES} || 'configured',
             memory_rss_kb => _resident_set_kb(),
         },
     };
@@ -130,18 +146,22 @@ sub _route_report {
     _warm_route( $test, $route, $options->{warmup} );
 
     my @latencies;
+    my @observations;
     my %statuses;
     my $started = time;
 
     for ( 1 .. $options->{iterations} ) {
         my $sample = _request_sample( $test, $route );
         push @latencies, $sample->{elapsed_ms};
+        push @observations, $sample->{db_query_stats}
+          if $sample->{db_query_stats};
         $statuses{ $sample->{status} }++;
     }
 
     my $elapsed = time - $started;
 
-    return _summary( $route, \@latencies, \%statuses, $elapsed );
+    return _summary( $route, \@latencies, \%statuses, $elapsed,
+        \@observations );
 }
 
 sub _warm_route {
@@ -162,13 +182,14 @@ sub _request_sample {
     my $result  = $test->ua->start($tx);
 
     return {
-        status     => $result->res->code || 0,
-        elapsed_ms => ( time - $started ) * $MILLISECONDS,
+        status         => $result->res->code || 0,
+        elapsed_ms     => ( time - $started ) * $MILLISECONDS,
+        db_query_stats => scalar _last_query_stats($test),
     };
 }
 
 sub _summary {
-    my ( $route, $latencies, $statuses, $elapsed ) = @_;
+    my ( $route, $latencies, $statuses, $elapsed, $observations ) = @_;
 
     my @sorted    = sort { $a <=> $b } @{$latencies};
     my $p50       = _percentile( \@sorted, $P50 );
@@ -177,17 +198,21 @@ sub _summary {
     my $rps       = scalar(@sorted) / _nonzero($elapsed);
     my $threshold = _threshold_for($route);
 
+    my $query_budget = _query_budget($route);
+    my $db_queries   = _db_query_summary( $observations, $query_budget );
+
     return {
-        route        => $route,
-        status       => _threshold_status( $p95, $p99, $rps, $threshold ),
-        requests     => scalar @sorted,
+        route    => $route,
+        status   => _route_status( $p95, $p99, $rps, $threshold, $db_queries ),
+        requests => scalar @sorted,
         req_per_sec  => _rounded($rps),
         p50_ms       => _rounded($p50),
         p95_ms       => _rounded($p95),
         p99_ms       => _rounded($p99),
         max_ms       => _rounded( $sorted[-1] || 0 ),
         status_codes => $statuses,
-        query_budget => _query_budget($route),
+        db_queries   => $db_queries,
+        query_budget => $query_budget,
         threshold    => $threshold,
     };
 }
@@ -204,7 +229,9 @@ sub _report_text {
     my $text =
         "mode=$report->{mode} status=$report->{status}"
       . " iterations=$report->{iterations} warmup=$report->{warmup}"
+      . " dataset_profile=$report->{dataset}{profile}"
       . " pid=$report->{process}{pid}"
+      . " worker_count=$report->{process}{worker_count}"
       . q{ memory_rss_kb=}
       . (
         defined $report->{process}{memory_rss_kb}
@@ -234,6 +261,7 @@ sub _route_line {
       'threshold=' . _threshold_text( $route->{threshold} ),
       'regression=' . _regression_text( $route->{regression} ),
       'query_budget=' . _query_budget_text( $route->{query_budget} ),
+      'db_queries=' . _db_query_text( $route->{db_queries} ),
       'statuses=' . _statuses( $route->{status_codes} ),
       "\n";
 }
@@ -278,6 +306,32 @@ sub _query_budget_text {
     return $budget->{endpoint_name} . q{:} . $budget->{max_queries};
 }
 
+sub _db_query_text {
+    my ($summary) = @_;
+
+    return 'not-observed' if !$summary || !$summary->{observed};
+
+    return join q{,},
+      'max=' . $summary->{max_queries},
+      'avg=' . $summary->{avg_queries},
+      'transactions=' . $summary->{max_transactions},
+      'duplicates=' . $summary->{max_duplicate_queries},
+      'budget=' . $summary->{budget_status};
+}
+
+sub _last_query_stats {
+    my ($test) = @_;
+
+    my $stats =
+      eval { return $test->app->build_controller->gp_db_query_stats; };
+    return if !$stats || !$stats->can('last_request');
+
+    my $last = $stats->last_request;
+    return if !$last || !$last->{attached};
+
+    return $last;
+}
+
 sub _threshold_for {
     my ($route) = @_;
 
@@ -293,6 +347,24 @@ sub _threshold_for {
     return { %{$threshold} };
 }
 
+sub _route_status {
+    my ( $p95, $p99, $rps, $threshold, $db_queries ) = @_;
+
+    return 'fail'
+      if _threshold_status( $p95, $p99, $rps, $threshold ) ne 'ok';
+    return 'fail'
+      if $db_queries
+      && $db_queries->{observed}
+      && $db_queries->{budget_status} eq 'fail';
+    return 'fail'
+      if $db_queries
+      && $db_queries->{observed}
+      && $db_queries->{budget_status} ne 'none'
+      && $db_queries->{max_duplicate_queries} > 0;
+
+    return 'ok';
+}
+
 sub _threshold_status {
     my ( $p95, $p99, $rps, $threshold ) = @_;
 
@@ -300,6 +372,44 @@ sub _threshold_status {
       if $p95 > $threshold->{p95_ms}
       || $p99 > $threshold->{p99_ms}
       || $rps < $threshold->{min_req_per_sec};
+
+    return 'ok';
+}
+
+sub _db_query_summary {
+    my ( $observations, $budget ) = @_;
+
+    return { observed => 0, budget_status => 'not-observed' }
+      if !@{$observations};
+
+    my @queries      = map { $_->{queries}      || 0 } @{$observations};
+    my @transactions = map { $_->{transactions} || 0 } @{$observations};
+    my @duplicates =
+      map { $_->{duplicate_queries} || 0 } @{$observations};
+    my $max_queries      = _max(@queries);
+    my $max_transactions = _max(@transactions);
+    my $max_duplicates   = _max(@duplicates);
+    my $avg_queries      = _average(@queries);
+    my $budget_status =
+      _observed_budget_status( $max_queries, $max_transactions, $budget );
+
+    return {
+        observed              => 1,
+        samples               => scalar @{$observations},
+        max_queries           => $max_queries,
+        avg_queries           => _rounded($avg_queries),
+        max_transactions      => $max_transactions,
+        max_duplicate_queries => $max_duplicates,
+        budget_status         => $budget_status,
+    };
+}
+
+sub _observed_budget_status {
+    my ( $queries, $transactions, $budget ) = @_;
+
+    return 'none' if !$budget;
+    return 'fail' if $queries > $budget->{max_queries};
+    return 'fail' if $transactions > $budget->{max_transactions};
 
     return 'ok';
 }
@@ -459,6 +569,7 @@ sub _options {
         format               => 'text',
         iterations           => $DEFAULT_ITERATIONS,
         regression_tolerance => 0.25,
+        profile              => 'fixture',
         warmup               => $DEFAULT_WARMUP,
         routes               => [],
     };
@@ -468,7 +579,10 @@ sub _options {
     }
 
     if ( !@{ $options->{routes} } ) {
-        $options->{routes} = [@DEFAULT_ROUTES];
+        $options->{routes} =
+          $options->{profile} eq 'fixture'
+          ? [@DEFAULT_ROUTES]
+          : [@SEEDED_ROUTES];
     }
 
     return $options;
@@ -504,6 +618,9 @@ sub _consume_option {
         '--regression-tolerance' => sub {
             $options->{regression_tolerance} =
               _non_negative_number( shift @{$arguments} );
+        },
+        '--profile' => sub {
+            $options->{profile} = _profile( shift @{$arguments} );
         },
     );
 
@@ -598,6 +715,43 @@ sub _non_negative_number {
     return 0 + $value;
 }
 
+sub _profile {
+    my ($value) = @_;
+
+    croak _usage()
+      if !defined $value
+      || ( $value ne 'fixture'
+        && $value ne 'small'
+        && $value ne 'medium'
+        && $value ne 'hot-thread' );
+
+    return $value;
+}
+
+sub _max {
+    my (@values) = @_;
+
+    my $max = 0;
+    for my $value (@values) {
+        $max = $value if $value > $max;
+    }
+
+    return $max;
+}
+
+sub _average {
+    my (@values) = @_;
+
+    return 0 if !@values;
+
+    my $sum = 0;
+    for my $value (@values) {
+        $sum += $value;
+    }
+
+    return $sum / scalar @values;
+}
+
 sub _resident_set_kb {
     open my $process, q{-|}, q{ps}, q{-o}, q{rss=}, q{-p}, $PROCESS_ID
       or return;
@@ -614,7 +768,7 @@ sub _resident_set_kb {
 
 sub _usage {
     return
-'Usage: bin/gpforum-benchmark [--fixture|--configured] [--json] [--check] [--iterations N] [--warmup N] [--route /path] [--baseline file] [--write-baseline file] [--regression-tolerance N] ...';
+'Usage: bin/gpforum-benchmark [--fixture|--configured] [--json] [--check] [--profile fixture|small|medium|hot-thread] [--iterations N] [--warmup N] [--route /path] [--baseline file] [--write-baseline file] [--regression-tolerance N] ...';
 }
 
 1;

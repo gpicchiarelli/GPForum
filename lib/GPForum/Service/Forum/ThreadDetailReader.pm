@@ -24,7 +24,18 @@ sub find_thread {
 
     return if !defined $thread_id || !length $thread_id;
 
-    my $row = $self->schema->resultset('Thread')->find($thread_id);
+    my $row = $self->schema->resultset('Thread')->find(
+        $thread_id,
+        {
+            columns => [
+                qw(
+                  thread_id category_id author_user_id title slug pinned
+                  visibility moderation_state locked_at last_activity_at
+                  deleted_at
+                )
+            ],
+        }
+    );
 
     return if !_thread_is_visible($row);
 

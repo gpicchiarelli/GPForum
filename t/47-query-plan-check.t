@@ -22,7 +22,7 @@ like(
     qr/query-plan-check [ ] status=ok/msx,
     'query plan check passes'
 );
-like( $output, qr/indexes=23/msx,
+like( $output, qr/indexes=25/msx,
     'query plan check covers required hot path indexes' );
 like( $output, qr/db_evidence=skipped/msx,
     'query plan check skips DB evidence without DSN' );

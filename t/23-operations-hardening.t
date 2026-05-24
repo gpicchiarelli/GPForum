@@ -13,6 +13,7 @@ use lib 't/lib';
 use GPForum::Runtime;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
+use GPForum::Service::Operations::DbQueryStats;
 use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Operations::RateLimiter;
@@ -27,7 +28,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 65;
+const my $EXPECTED_TESTS            => 69;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -126,8 +127,24 @@ $local_cache->put( 'categories:list', [] );
 my $security_telemetry =
   GPForum::Service::Operations::SecurityTelemetry->new( clock => $clock );
 $security_telemetry->record( 'csrf_failure', { status => 403 } );
+my $query_stats = GPForum::Service::Operations::DbQueryStats->new;
+my $query_token =
+  $query_stats->start_request(
+    { route => 'thread', endpoint_name => 'thread_view' } );
+$query_stats->query_start('SELECT * FROM posts WHERE thread_id = ?');
+$query_stats->query_start('SELECT * FROM posts WHERE thread_id = ?');
+$query_stats->txn_begin;
+$query_stats->finish_request(
+    $query_token,
+    {
+        route         => 'thread',
+        endpoint_name => 'thread_view',
+        status        => $HTTP_OK,
+    }
+);
 my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
     clock               => $clock,
+    db_query_stats      => $query_stats,
     local_caches        => [$local_cache],
     runtime             => $runtime,
     realtime_hub        => $hub,
@@ -191,6 +208,14 @@ is( $metrics->{security}{events}{csrf_failure}{last_metadata}{status},
     403, 'metrics exposes safe security metadata' );
 is( $metrics->{projections}[0]{projection_name},
     'search_documents', 'metrics exposes projection lag' );
+is( $metrics->{db_query_stats}{requests_observed},
+    1, 'metrics exposes observed DB request count' );
+is( $metrics->{db_query_stats}{last_request}{queries},
+    2, 'metrics exposes observed DB query count' );
+is( $metrics->{db_query_stats}{last_request}{transactions},
+    1, 'metrics exposes observed DB transaction count' );
+is( $metrics->{db_query_stats}{duplicate_query_warnings},
+    1, 'metrics exposes duplicate DB query warnings' );
 is( $metrics->{query_budgets}{endpoints}{thread_view}{max_queries},
     $THREAD_VIEW_QUERY_BUDGET, 'metrics exposes thread view query budget' );
 is_deeply( $metrics->{query_budget_drift},

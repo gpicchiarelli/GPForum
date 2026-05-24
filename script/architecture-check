@@ -28,6 +28,25 @@ check_query_topology_gate() {
     fi
 }
 
+check_template_business_logic() {
+    if [ ! -d templates ]; then
+        return
+    fi
+
+    if grep -RInE -- 'resultset|DBIx::Class|GPForum::Schema|->search[[:space:]]*\(|->create[[:space:]]*\(|->update[[:space:]]*\(|->delete[[:space:]]*\(|gp_[[:alnum:]_]+' templates; then
+        echo "architecture-check: templates must render prepared view models only" >&2
+        status=1
+    fi
+}
+
+check_authority_language() {
+    if grep -RInE -- 'cache[^[:cntrl:]]*authoritative|authoritative[^[:cntrl:]]*cache|projection[^[:cntrl:]]*authoritative|authoritative[^[:cntrl:]]*projection' lib templates script bin \
+        | grep -vE '^script/architecture-check:'; then
+        echo "architecture-check: cache/projection authority language is forbidden in runtime code" >&2
+        status=1
+    fi
+}
+
 for file in lib/GPForum/Controller/*.pm; do
     [ -f "$file" ] || continue
     check_controller_forbidden_persistence "$file"
@@ -35,5 +54,7 @@ done
 
 check_os_specific_logic
 check_query_topology_gate
+check_template_business_logic
+check_authority_language
 
 exit "$status"

@@ -111,6 +111,7 @@ sub _with_transaction {
 sub _insert_dataset {
     my ( $dbh, $plan ) = @_;
 
+    _clear_performance_dataset($dbh);
     _insert_space($dbh);
     _insert_users( $dbh, $plan );
     _insert_roles_and_permissions( $dbh, $plan );
@@ -125,6 +126,76 @@ sub _insert_dataset {
     _insert_feed_items( $dbh, $plan );
     _insert_reports( $dbh, $plan );
     _insert_moderation_actions( $dbh, $plan );
+
+    return;
+}
+
+sub _clear_performance_dataset {
+    my ($dbh) = @_;
+
+    my @statements = (
+        [
+q{DELETE FROM moderation_actions WHERE moderation_action_id::text LIKE '018f1010-%'}
+        ],
+        [q{DELETE FROM reports WHERE report_id::text LIKE '018f100f-%'}],
+        [
+            q{
+                DELETE FROM notification_inbox
+                 WHERE notification_id::text LIKE '018f1009-%'
+            }
+        ],
+        [
+q{DELETE FROM notifications WHERE notification_id::text LIKE '018f1009-%'}
+        ],
+        [
+            q{
+                DELETE FROM user_feed_items
+                 WHERE user_id::text LIKE '018f1002-%'
+                    OR item_id::text LIKE '018f1004-%'
+            }
+        ],
+        [
+q{DELETE FROM subscriptions WHERE subscription_id::text LIKE '018f100e-%'}
+        ],
+        [q{DELETE FROM bookmarks WHERE bookmark_id::text LIKE '018f100d-%'}],
+        [
+            q{
+                DELETE FROM user_read_marker_deltas
+                 WHERE user_id::text LIKE '018f1002-%'
+                    OR thread_id::text LIKE '018f1004-%'
+            }
+        ],
+        [
+            q{
+                DELETE FROM thread_read_state
+                 WHERE user_id::text LIKE '018f1002-%'
+                    OR thread_id::text LIKE '018f1004-%'
+            }
+        ],
+        [
+q{DELETE FROM thread_counters WHERE thread_id::text LIKE '018f1004-%'}
+        ],
+        [ q{DELETE FROM search_documents WHERE space_id = ?}, $SPACE_ID ],
+        [
+q{DELETE FROM post_revisions WHERE revision_id::text LIKE '018f1007-%'}
+        ],
+        [q{DELETE FROM post_bodies WHERE body_id::text LIKE '018f1006-%'}],
+        [q{DELETE FROM posts WHERE post_id::text LIKE '018f1005-%'}],
+        [q{DELETE FROM threads WHERE thread_id::text LIKE '018f1004-%'}],
+        [
+q{DELETE FROM category_stats WHERE category_id::text LIKE '018f1001-%'}
+        ],
+        [ q{DELETE FROM categories WHERE space_id = ?}, $SPACE_ID ],
+        [q{DELETE FROM role_bindings WHERE binding_id::text LIKE '018f100c-%'}],
+        [q{DELETE FROM sessions WHERE session_id::text LIKE '018f1003-%'}],
+        [q{DELETE FROM users WHERE id::text LIKE '018f1002-%'}],
+        [ q{DELETE FROM spaces WHERE space_id = ?}, $SPACE_ID ],
+    );
+
+    for my $statement (@statements) {
+        my ( $sql, @bind ) = @{$statement};
+        $dbh->do( $sql, undef, @bind );
+    }
 
     return;
 }
@@ -1148,10 +1219,9 @@ sub _thread_number {
 }
 
 sub _post_key {
-    my ( $plan, $thread_number, $position ) = @_;
+    my ( undef, $thread_number, $position ) = @_;
 
-    return ( $thread_number - 1 ) * $plan->{dataset}{posts_per_thread} +
-      $position;
+    return $thread_number * 10_000 + $position;
 }
 
 sub _threads_in_category {

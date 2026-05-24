@@ -3,6 +3,7 @@ set -eu
 
 configured=0
 has_route=0
+has_profile=0
 
 for argument in "$@"; do
     if [ "$argument" = "--configured" ]; then
@@ -10,6 +11,9 @@ for argument in "$@"; do
     fi
     if [ "$argument" = "--route" ]; then
         has_route=1
+    fi
+    if [ "$argument" = "--profile" ]; then
+        has_profile=1
     fi
 done
 
@@ -40,9 +44,15 @@ fi
 if [ "$configured" -eq 1 ]; then
     category_id="${GPFORUM_BENCHMARK_CATEGORY_ID:-018f1001-0001-7000-8000-000000000001}"
     thread_id="${GPFORUM_BENCHMARK_THREAD_ID:-018f1004-0001-7000-8000-000000000001}"
+    profile="${GPFORUM_BENCHMARK_PROFILE:-small}"
 else
     category_id="${GPFORUM_BENCHMARK_CATEGORY_ID:-category-1}"
     thread_id="${GPFORUM_BENCHMARK_THREAD_ID:-thread-1}"
+    profile="fixture"
+fi
+
+if [ "$has_profile" -eq 0 ]; then
+    set -- "$@" --profile "$profile"
 fi
 
 exec carton exec bin/gpforum-benchmark "$@" \

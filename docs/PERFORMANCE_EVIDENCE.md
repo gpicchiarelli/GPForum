@@ -35,6 +35,10 @@ search documents, read-state rows, bookmarks, subscriptions, notifications,
 feed items, reports, and moderation actions. IDs are deterministic UUIDv7-like
 fixtures so the same hot routes can be benchmarked repeatedly.
 
+The seed clears the deterministic benchmark fixture rows before inserting the
+requested profile. Running `small`, `medium`, and `hot-thread` sequentially on
+the same evidence database is therefore idempotent and profile-specific.
+
 Deterministic routes:
 
 | Route | Path |
@@ -98,13 +102,14 @@ Failure rules are intentionally conservative:
 | Pagination | fail on SQL page-skipping in hot queries |
 
 Local DB-backed result on this workstation: passing against PostgreSQL 18.4
-from Postgres.app, using an isolated evidence cluster on `127.0.0.1:55432`,
-the deterministic `small` seed, and `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`.
+from Postgres.app, using an isolated evidence cluster on `127.0.0.1:55434`,
+the deterministic `small`, `medium`, and `hot-thread` seeds, and
+`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`.
 
 ```text
-query-plan-check status=ok indexes=23 offset_violations=0 db_evidence=ok
-query_plan_evidence status=ok mode=postgres analyze=1
-endpoints=11 violations=none warnings=none
+small      query_plan_evidence status=ok endpoints=11 violations=none
+medium     query_plan_evidence status=ok endpoints=11 violations=none
+hot-thread query_plan_evidence status=ok endpoints=11 violations=none
 ```
 
 Dry-run evidence:
@@ -168,19 +173,23 @@ script/benchmark-http --configured --check --iterations 20 --warmup 3
 ```
 
 Latest configured PostgreSQL result, with PostgreSQL 18.4 from Postgres.app,
-isolated evidence cluster, `small` seed, and `GPFORUM_WEB_PROCESSES=1`:
+isolated evidence cluster, observed DB query counters, and 5 measured
+iterations after 1 warmup iteration:
 
-| Endpoint | Status | p50 ms | p95 ms | p99 ms | req/s | Budget |
-| --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `/` | 200 | 2.820 | 4.003 | 4.003 | 322.908 | home:5 |
-| `/categories` | 200 | 1.223 | 1.641 | 1.641 | 754.690 | categories:3 |
-| `/c/018f1001-0001-7000-8000-000000000001` | 200 | 2.310 | 2.949 | 2.949 | 408.205 | category_threads:5 |
-| `/t/018f1004-0001-7000-8000-000000000001` | 200 | 4.329 | 5.105 | 5.105 | 221.998 | thread_view:8 |
-| `/search?q=performance` | 200 | 1.852 | 2.702 | 2.702 | 499.227 | search:2 |
-| `/search/autocomplete?q=per` | 200 | 1.860 | 2.255 | 2.255 | 516.235 | search_autocomplete:2 |
-| `/health` | 200 | 1.172 | 1.388 | 1.388 | 812.283 | none |
-| `/health/ready` | 200 | 3.178 | 3.728 | 3.728 | 301.514 | none |
-| `/metrics` | 200 | 3.135 | 3.653 | 3.653 | 312.418 | none |
+| Profile | Endpoint | p95 ms | p99 ms | req/s | Max DB queries | Duplicate queries | Budget |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| small | `/` | 2.794 | 2.794 | 362.134 | 1 | 0 | ok |
+| small | `/c/...0001` | 2.197 | 2.197 | 450.574 | 2 | 0 | ok |
+| small | `/t/...0001` | 2.818 | 2.818 | 350.062 | 2 | 0 | ok |
+| small | `/search?q=performance` | 1.744 | 1.744 | 559.778 | 1 | 0 | ok |
+| medium | `/` | 3.839 | 3.839 | 266.878 | 1 | 0 | ok |
+| medium | `/c/...0001` | 3.325 | 3.325 | 295.074 | 2 | 0 | ok |
+| medium | `/t/...0001` | 3.552 | 3.552 | 280.995 | 2 | 0 | ok |
+| medium | `/search?q=performance` | 2.173 | 2.173 | 448.311 | 1 | 0 | ok |
+| hot-thread | `/` | 4.569 | 4.569 | 224.698 | 1 | 0 | ok |
+| hot-thread | `/c/...0001` | 4.543 | 4.543 | 242.670 | 2 | 0 | ok |
+| hot-thread | `/t/...0001` | 6.279 | 6.279 | 167.302 | 2 | 0 | ok |
+| hot-thread | `/search?q=performance` | 3.987 | 3.987 | 247.183 | 1 | 0 | ok |
 
 Thresholds are deliberately loose release gates, not performance promises:
 
@@ -224,17 +233,17 @@ seed data, DB plans, and configured HTTP paths work together.
 
 ## Current Limits
 
-* Query count values in fixture HTTP output are release-budget contracts, not
-  observed DB query counters.
+* Configured HTTP benchmark output now includes observed DB query counters;
+  fixture mode remains useful as a route/rendering threshold gate.
 * DB-backed query-plan evidence detects plan-shape risks; it is not a full
   production load test.
-* The first serious PostgreSQL evidence run should use `--profile medium`, then
-  repeat with `--profile hot-thread` before tuning thread view further.
+* Medium and hot-thread evidence now pass locally; longer soak runs and
+  multi-worker Hypnotoad measurements are still separate work.
 
 ## Next Production Evidence Steps
 
-1. Run `script/query-plan-evidence --check --json` against a seeded medium
-   PostgreSQL database and archive the JSON output.
-2. Add observed DB query counters around configured HTTP benchmark routes.
-3. Promote the hot-thread profile into a nightly or manual CI job once runner
-   limits allow longer database evidence runs.
+1. Archive medium/hot-thread JSON evidence as CI artifacts when runner limits
+   allow longer database evidence runs.
+2. Add a Hypnotoad/reverse-proxy benchmark path to complement in-process
+   `Test::Mojo` measurements.
+3. Add long-running memory drift checks for hot-thread SSR rendering.

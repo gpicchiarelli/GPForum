@@ -209,7 +209,7 @@ ok( $page->{posts}{next_cursor}, 'thread page exposes post cursor' );
 is( $schema->resultset('Post')->last_attrs->{order_by}[0]{-asc},
     'me.position', 'post reader qualifies position ordering' );
 is( $schema->resultset('Post')->last_attrs->{order_by}[1]{-asc},
-    'me.post_id', 'post reader qualifies post id ordering after prefetch' );
+    'me.post_id', 'post reader qualifies post id ordering after body join' );
 
 my $missing_page = $detail_reader->thread_page( { thread_id => 'missing' } );
 ok( !$missing_page->{ok}, 'missing thread page is not ok' );

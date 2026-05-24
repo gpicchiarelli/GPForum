@@ -1063,11 +1063,11 @@ sub _thread_hash {
 sub _post_hash {
     my ($row) = @_;
 
-    my $body = _related_current_body($row);
-    my $body_text =
-      $body
-      ? _column( $body, 'body_rendered_safe' )
-      : _column( $row,  'body' );
+    my $body_text = _column( $row, 'body' );
+    if ( !defined $body_text ) {
+        my $body = _related_current_body($row);
+        $body_text = _column( $body, 'body_rendered_safe' ) if $body;
+    }
 
     return {
         post_id          => _column( $row, 'post_id' ),

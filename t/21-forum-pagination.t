@@ -18,7 +18,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 33;
+const my $EXPECTED_TESTS => 34;
 const my $DEFAULT_LIMIT  => 25;
 const my $MAX_LIMIT      => 100;
 const my $REQUEST_LIMIT  => 2;
@@ -168,8 +168,10 @@ is( $post_resultset->last_query->{thread_id},
     'thread-1', 'post reader filters thread' );
 is( $post_resultset->last_query->{deleted_at},
     undef, 'post reader excludes deleted posts' );
-is( $post_resultset->last_attrs->{prefetch}[0],
-    'current_body', 'post reader prefetches current body for thread view' );
+is( $post_resultset->last_attrs->{join},
+    'current_body', 'post reader joins current body for thread view' );
+is( $post_resultset->last_attrs->{'+as'}[0],
+    'body', 'post reader aliases rendered body without object inflation' );
 is(
     $post_resultset->last_attrs->{rows},
     $REQUEST_LIMIT + 1,

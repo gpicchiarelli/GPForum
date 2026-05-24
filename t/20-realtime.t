@@ -18,7 +18,7 @@ use GPForum::Test::RealtimePermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 34;
+const my $EXPECTED_TESTS => 37;
 const my $POLL_SECONDS   => 30;
 const my $UNREAD_COUNT   => 7;
 
@@ -125,6 +125,7 @@ my $thread_broadcast =
   $hub->broadcast_thread_update( 'thread-1', { post_id => 'post-1' } );
 ok( $thread_broadcast->{ok}, 'thread broadcast succeeds' );
 is( $thread_broadcast->{delivered}, 1, 'thread broadcast delivers once' );
+is( $thread_broadcast->{failed}, 0, 'thread broadcast records zero failures' );
 is( $thread_connection->sent->[0]{json}{type},
     'thread.update', 'thread broadcast sends update type' );
 is( $thread_connection->sent->[0]{json}{payload}{post_id},
@@ -159,5 +160,23 @@ my $denied = $hub->subscribe(
 );
 ok( !$denied->{ok}, 'hub returns denied subscription' );
 is( $denied->{reason}, 'wrong_recipient', 'hub returns denial reason' );
+
+my $failing_connection = GPForum::Test::RealtimeConnection->new( fail => 1 );
+$hub->register_connection( 'failing-connection', { user_id => 'user-1' },
+    $failing_connection, );
+$hub->subscribe(
+    {
+        connection_id => 'failing-connection',
+        actor         => { user_id => 'user-1' },
+        channel       => 'thread:thread-1',
+        context       => {},
+    }
+);
+my $degraded_broadcast =
+  $hub->broadcast_thread_update( 'thread-1', { post_id => 'post-2' } );
+ok( $degraded_broadcast->{ok},
+    'realtime broadcast remains non-authoritative on send failure' );
+is( $degraded_broadcast->{failed},
+    1, 'realtime broadcast records failed local delivery' );
 
 1;

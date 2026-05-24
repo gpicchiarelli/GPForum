@@ -17,6 +17,7 @@ our $VERSION = '0.001';
 const my $MILLISECONDS_PER_SECOND => 1000;
 
 has clock               => sub { return GPForum::Service::Clock->new; };
+has db_query_stats      => undef;
 has local_caches        => sub { return []; };
 has schema              => undef;
 has rate_limiter        => undef;
@@ -51,6 +52,7 @@ sub collect {
         rate_limits         => $self->_rate_limits,
         security            => $self->_security,
         projections         => $self->_projections,
+        db_query_stats      => $self->_db_query_stats,
         query_budgets       => $self->_query_budgets,
         query_budget_drift  => $self->_query_budget_drift,
         database            => $self->_database,
@@ -172,6 +174,14 @@ sub _projections {
         grep { defined }
         map  { $_->observe_lag } @{ $self->projection_trackers }
     ];
+}
+
+sub _db_query_stats {
+    my ($self) = @_;
+
+    return {} if !$self->db_query_stats;
+
+    return $self->db_query_stats->snapshot;
 }
 
 sub _query_budgets {

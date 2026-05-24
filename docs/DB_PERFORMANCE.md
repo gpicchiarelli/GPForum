@@ -30,7 +30,7 @@ configured HTTP paths together.
 | `/` | The latest public thread list had no dedicated index matching `last_activity_at DESC, thread_id DESC`. | Added `idx_threads_public_activity`. |
 | `/c/:category_id` | The category thread index existed, but it only indexed `moderation_state = 'visible'` and omitted the `thread_id` keyset tie-breaker while the reader includes `locked` threads. | Added `idx_threads_category_activity_visible_locked`. |
 | `/t/:thread_id` | The visible post index existed, but it omitted the `post_id` keyset tie-breaker and covering columns used by the thread page prefetch path. | Added `idx_posts_visible_thread_position`. |
-| `/search` | Existing GIN and trigram indexes already support the current PostgreSQL-native search projection. | No new search index was added. |
+| `/search` | DB-backed evidence showed medium-profile broad search and autocomplete could choose sequential scans over `search_documents`. | Added partial public/latest and public/title-prefix search indexes. |
 
 ## Before / After
 
@@ -39,7 +39,7 @@ configured HTTP paths together.
 | `/` | Public latest threads depended on generic thread storage or unrelated category/profile indexes. | Dedicated partial covering index for public, live, readable latest threads. | `home:5`, unchanged |
 | `/c/:category_id` | Category order index did not match locked-readable semantics or full keyset order. | Dedicated partial covering index matches category, pinned, activity, and thread-id order. | `category_threads:5`, unchanged |
 | `/t/:thread_id` | Post order index matched thread and position only. | Dedicated partial covering index matches thread, position, and post-id order. | `thread_view:8`, unchanged |
-| `/search?q=performance` | GIN `search_vector` and trigram title indexes already present. | Unchanged. | `search:2`, unchanged |
+| `/search?q=performance` | GIN `search_vector` and trigram title indexes existed, but broad public searches could still seq-scan populated `search_documents`. | Partial public/latest and public/title-prefix indexes keep broad search/autocomplete bounded. | `search:2`, unchanged |
 
 Fixture p95 should not materially change from these SQL-only additions. The DB
 impact is expected to appear only in configured PostgreSQL runs through stable
@@ -114,6 +114,34 @@ The `post_id` suffix matches the keyset tie-breaker used by `PostReader`.
 Included columns cover current body/revision pointers and render metadata while
 keeping hidden/deleted posts out of the hot read path.
 
+### `idx_search_documents_public_latest`
+
+Supports broad public search queries that match many documents but still need a
+bounded latest-first result:
+
+```sql
+WHERE visibility = 'public'
+  AND permission_scope = 'public'
+ORDER BY indexed_at DESC
+```
+
+The index is partial because private/member-only search documents must never
+participate in public discovery paths.
+
+### `idx_search_documents_public_title_prefix`
+
+Supports permission-safe autocomplete prefix lookup:
+
+```sql
+WHERE visibility = 'public'
+  AND permission_scope = 'public'
+  AND title_normalized LIKE 'prefix%'
+ORDER BY title_normalized ASC
+```
+
+This complements the trigram index. Trigram remains useful for fuzzy search;
+the prefix index is for deterministic autocomplete evidence.
+
 ## Query Budget Status
 
 `script/query-plan-check` now requires the forum, notification, abuse-control
@@ -129,7 +157,7 @@ script/query-plan-check
 Local `script/query-plan-check` result:
 
 ```text
-query-plan-check status=ok indexes=23 offset_violations=0 db_evidence=ok
+query-plan-check status=ok indexes=25 offset_violations=0 db_evidence=ok
 ```
 
 The production evidence gate adds
@@ -147,6 +175,21 @@ remain bounded under repeated hostile requests.
 Local `script/query-budget --check` passed against the synchronized PostgreSQL
 evidence database.
 
+## Load Observability Evidence
+
+The production load hardening pass adds observed DB query counters to configured
+HTTP benchmark output. Current Postgres.app evidence, with deterministic
+profiles and 5 measured iterations after 1 warmup, shows no budget mismatch and
+no duplicate SQL fingerprints on mapped hot paths:
+
+| Profile | Route | p95 ms | Max DB queries | Duplicate queries |
+| --- | --- | ---: | ---: | ---: |
+| small | `/t/018f1004-0001-7000-8000-000000000001` | 2.818 | 2 | 0 |
+| medium | `/t/018f1004-0001-7000-8000-000000000001` | 3.552 | 2 | 0 |
+| hot-thread | `/t/018f1004-0001-7000-8000-000000000001` | 6.279 | 2 | 0 |
+| medium | `/search?q=performance` | 2.173 | 1 | 0 |
+| hot-thread | `/search?q=performance` | 3.987 | 1 | 0 |
+
 ## PostgreSQL Follow-up
 
 After `script/bootstrap-deps --postgres` and a reachable PostgreSQL instance,
@@ -159,7 +202,7 @@ script/benchmark-http --configured --iterations 20 --warmup 3
 script/query-plan-evidence --check
 ```
 
-The next DB-backed report should include `EXPLAIN (ANALYZE, BUFFERS)` for:
+The DB-backed report now includes `EXPLAIN (ANALYZE, BUFFERS)` for:
 
 * latest public thread list;
 * category thread list;

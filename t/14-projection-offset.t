@@ -16,7 +16,7 @@ use GPForum::Test::ProjectionSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 17;
+const my $EXPECTED_TESTS => 20;
 const my $EVENT_EPOCH    => 1_716_463_940;
 const my $EXPECTED_LAG   => 60;
 
@@ -68,6 +68,21 @@ my $current = $tracker->record_progress(
 
 is( $current->{lag_seconds}, 0,         'current projection has zero lag' );
 is( $current->{status},      'current', 'current projection is current' );
+
+my $replayed = $tracker->record_progress(
+    'notifications',
+    {
+        event_id         => 'event-2',
+        event_created_at => '2026-05-23T12:00:00Z',
+    }
+);
+
+is( $replayed->{last_event_id},
+    'event-2', 'replayed projection event preserves last event id' );
+is( $tracker->observe_lag('notifications')->{last_event_id},
+    undef, 'lag observation does not expose canonical event payload' );
+is( scalar keys %{ $resultset->rows },
+    2, 'projection replay updates one offset row per projection' );
 
 my $failed = $tracker->mark_failed('feed');
 

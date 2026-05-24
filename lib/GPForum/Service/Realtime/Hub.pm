@@ -53,15 +53,24 @@ sub broadcast {
     my ( $self, $channel, $payload ) = @_;
 
     my @subscribers = $self->registry->subscribers($channel);
+    my $delivered   = 0;
+    my $failed      = 0;
 
     for my $subscriber (@subscribers) {
-        _send_json( $subscriber->{connection}, $payload );
+        my $sent = _send_json( $subscriber->{connection}, $payload );
+        if ($sent) {
+            $delivered++;
+        }
+        else {
+            $failed++;
+        }
     }
 
     return {
         ok        => 1,
         channel   => $channel,
-        delivered => scalar @subscribers,
+        delivered => $delivered,
+        failed    => $failed,
     };
 }
 
@@ -115,7 +124,7 @@ sub _send_json {
 
     return if !$connection;
 
-    return $connection->send( { json => $payload } );
+    return eval { return $connection->send( { json => $payload } ); };
 }
 
 sub _channel {

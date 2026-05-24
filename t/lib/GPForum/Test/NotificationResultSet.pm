@@ -10,13 +10,16 @@ use GPForum::Test::NotificationSearch;
 
 our $VERSION = '0.001';
 
-has created    => sub { return []; };
-has rows       => sub { return {}; };
-has last_query => sub { return {}; };
-has last_attrs => sub { return {}; };
+has created     => sub { return []; };
+has fail_create => 0;
+has rows        => sub { return {}; };
+has last_query  => sub { return {}; };
+has last_attrs  => sub { return {}; };
 
 sub create {
     my ( $self, $row ) = @_;
+
+    die 'notification create failed' if $self->fail_create;
 
     my $object = GPForum::Test::NotificationRow->new( data => $row );
     push @{ $self->created }, $row;

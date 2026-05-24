@@ -47,8 +47,10 @@ use GPForum::Service::Moderation::ReviewReader;
 use GPForum::Service::Moderation::SuspensionStore;
 use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Notification::SubscriptionStore;
+use GPForum::Service::Operations::DbQueryStats;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
+use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Operations::RateLimiter::PostgreSQLStore;
 use GPForum::Service::Operations::Readiness;
@@ -74,15 +76,21 @@ sub startup {
     $self->secrets( [ $config->session_secret ] );
     $self->mode( $config->environment );
     _configure_browser_security( $self, $config );
-    _configure_session_guard($self);
 
     $self->helper( gp_config         => sub { return $config; } );
     $self->helper( gp_runtime        => sub { return $runtime; } );
     $self->helper( gp_runtime_policy => sub { return $runtime_policy; } );
+    my $db_query_stats = GPForum::Service::Operations::DbQueryStats->new;
+    $self->helper( gp_db_query_stats => sub { return $db_query_stats; } );
     my $schema;
+    my $schema_query_stats_attached;
     $self->helper(
         gp_schema => sub {
             $schema ||= GPForum::Schema->connect_from_config($config);
+            if ( !$schema_query_stats_attached ) {
+                $schema_query_stats_attached =
+                  $db_query_stats->attach_to_schema($schema);
+            }
             return $schema;
         }
     );
@@ -206,6 +214,7 @@ sub startup {
                 runtime            => $runtime,
                 runtime_policy     => $runtime_policy,
                 schema             => $controller->gp_schema,
+                db_query_stats     => $controller->gp_db_query_stats,
                 realtime_hub       => $controller->gp_realtime_hub,
                 rate_limiter       => $controller->gp_rate_limiter,
                 security_telemetry => $controller->gp_security_telemetry,
@@ -459,6 +468,8 @@ sub startup {
     );
 
     GPForum::Log->configure( $self, $config );
+    _configure_db_query_observer($self);
+    _configure_session_guard($self);
 
     my $routes = $self->routes;
 
@@ -608,6 +619,44 @@ sub _configure_browser_security {
     return;
 }
 
+sub _configure_db_query_observer {
+    my ($application) = @_;
+
+    $application->hook(
+        before_dispatch => sub {
+            my ($controller) = @_;
+
+            my $stats = $controller->gp_db_query_stats;
+            my $token = $stats->start_request(
+                {
+                    route => $controller->req->url->path->to_string,
+                }
+            );
+            $controller->stash( gp_db_query_stats_token => $token );
+        }
+    );
+
+    $application->hook(
+        after_dispatch => sub {
+            my ($controller) = @_;
+
+            my $stats  = $controller->gp_db_query_stats;
+            my $token  = $controller->stash('gp_db_query_stats_token');
+            my $record = $stats->finish_request(
+                $token,
+                {
+                    route         => _current_route_name($controller),
+                    endpoint_name => _query_budget_endpoint($controller),
+                    status        => $controller->res->code || 0,
+                }
+            );
+            _record_query_budget_observation( $stats, $record );
+        }
+    );
+
+    return;
+}
+
 sub _configure_session_guard {
     my ($application) = @_;
 
@@ -717,6 +766,65 @@ sub _current_route_name {
     my ($controller) = @_;
 
     return eval { return $controller->current_route; } || 'unknown';
+}
+
+sub _query_budget_endpoint {
+    my ($controller) = @_;
+
+    my $route        = _current_route_name($controller);
+    my %endpoint_for = (
+        home                         => 'home',
+        categories                   => 'categories',
+        category                     => 'category_threads',
+        thread                       => 'thread_view',
+        thread_canonical             => 'thread_view',
+        thread_create                => 'thread_create',
+        reply_create                 => 'reply_create',
+        thread_report                => 'report_create',
+        post_report                  => 'report_create',
+        moderation_reports           => 'moderation_reports',
+        moderation_actions           => 'moderation_actions',
+        moderation_suspensions       => 'moderation_suspensions',
+        moderation_report_assign     => 'report_update',
+        moderation_report_resolve    => 'report_update',
+        moderation_post_hide         => 'moderation_action',
+        moderation_post_restore      => 'moderation_action',
+        moderation_thread_lock       => 'moderation_action',
+        moderation_thread_unlock     => 'moderation_action',
+        moderation_action_reverse    => 'moderation_action',
+        moderation_user_suspend      => 'user_suspension',
+        moderation_suspension_revoke => 'user_suspension',
+        forum_search                 => 'search',
+        search_autocomplete          => 'search_autocomplete',
+        admin_dashboard              => 'admin_dashboard',
+        admin_roles                  => 'admin_roles',
+        admin_role_create            => 'admin_role_update',
+        admin_permission_create      => 'admin_role_update',
+        admin_role_permission_attach => 'admin_role_update',
+        admin_user_roles             => 'admin_user_roles',
+        admin_role_bind              => 'admin_role_update',
+        admin_role_binding_revoke    => 'admin_role_update',
+        admin_audit                  => 'admin_audit',
+    );
+
+    return $endpoint_for{$route};
+}
+
+sub _record_query_budget_observation {
+    my ( $stats, $record ) = @_;
+
+    return if !$record || !$record->{endpoint_name};
+
+    my $observation = GPForum::Service::Operations::QueryBudget->new->observe(
+        $record->{endpoint_name},
+        {
+            queries      => $record->{queries},
+            transactions => $record->{transactions},
+        }
+    );
+    $stats->record_budget_observation( $record->{request_id}, $observation );
+
+    return;
 }
 
 1;

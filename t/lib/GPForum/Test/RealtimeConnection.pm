@@ -12,9 +12,12 @@ BEGIN {
 }
 
 has sent => sub { return []; };
+has fail => 0;
 
 sub _send_payload {
     my ( $self, $payload ) = @_;
+
+    die 'realtime send failed' if $self->fail;
 
     push @{ $self->sent }, $payload;
 

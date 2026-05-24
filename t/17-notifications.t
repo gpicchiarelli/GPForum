@@ -20,7 +20,7 @@ use GPForum::Test::PermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 67;
+const my $EXPECTED_TESTS => 71;
 const my $LIST_LIMIT     => 10;
 
 plan tests => $EXPECTED_TESTS;
@@ -258,6 +258,41 @@ is( $fanout->{attempted},           1, 'fanout attempts subscribed users' );
 is( scalar @{ $fanout->{created} }, 1, 'fanout creates notifications' );
 is( scalar @{ $notifications->created },
     2, 'fanout inserts another notification row' );
+
+my $failing_notifications =
+  GPForum::Test::NotificationResultSet->new( fail_create => 1 );
+my $failure_schema = GPForum::Test::NotificationSchema->new(
+    resultsets => {
+        Subscription           => $subscriptions,
+        NotificationPreference => $preferences,
+        Notification           => $failing_notifications,
+        NotificationRead       => $reads,
+        NotificationInbox      => $inbox,
+    },
+);
+my $degraded_dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    schema             => $failure_schema,
+    clock              => $clock,
+    id_service         => GPForum::Test::Id->new,
+    subscription_store => $subscription_store,
+);
+my $degraded_fanout = $degraded_dispatcher->fanout_to_subscribers(
+    {
+        target_type       => 'thread',
+        target_id         => 'thread-1',
+        source_type       => 'post',
+        source_id         => 'post-failure',
+        notification_type => 'reply',
+    }
+);
+ok( $degraded_fanout->{ok},
+    'notification fanout remains non-authoritative on dispatcher failure' );
+is( $degraded_fanout->{attempted},
+    1, 'degraded fanout still records attempted recipient' );
+is( scalar @{ $degraded_fanout->{created} },
+    0, 'degraded fanout does not report failed notification as created' );
+is( scalar @{ $degraded_fanout->{failed} },
+    1, 'degraded fanout records failed notification delivery' );
 
 my $excluded_fanout = $dispatcher->fanout_to_subscribers(
     {

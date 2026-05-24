@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
 
 use GPForum::Service::Clock;
@@ -60,23 +61,39 @@ sub fanout_to_subscribers {
       $self->subscription_store->subscribers_for( $input->{target_type},
         $input->{target_id}, );
     my @created;
+    my @failed;
 
     my $attempted = 0;
     for my $recipient_user_id (@recipients) {
         next if _excluded_recipient( $recipient_user_id, $input );
 
         $attempted++;
-        my $result = $self->create_notification(
-            {
-                %{$input}, recipient_user_id => $recipient_user_id,
-            }
-        );
+        my $result = eval {
+            return $self->create_notification(
+                {
+                    %{$input}, recipient_user_id => $recipient_user_id,
+                }
+            );
+        };
+        if ( !$result ) {
+            push @failed,
+              {
+                recipient_user_id => $recipient_user_id,
+                error             => "$EVAL_ERROR",
+              };
+            next;
+        }
         if ( $result->{ok} ) {
             push @created, $result;
         }
     }
 
-    return { ok => 1, attempted => $attempted, created => \@created };
+    return {
+        ok        => 1,
+        attempted => $attempted,
+        created   => \@created,
+        failed    => \@failed,
+    };
 }
 
 sub list_for_user {

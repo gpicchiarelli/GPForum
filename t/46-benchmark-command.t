@@ -15,7 +15,7 @@ use GPForum::Command::Benchmark;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 22;
+const my $EXPECTED_TESTS => 24;
 const my $HTTP_OK        => 200;
 
 plan tests => $EXPECTED_TESTS;
@@ -39,6 +39,11 @@ like(
     qr/query_budget=categories:3/msx,
     'benchmark text reports query budget contract'
 );
+like(
+    $text,
+    qr/db_queries=not-observed/msx,
+    'benchmark text reports unobserved DB query state'
+);
 like( $text, qr/statuses=200:2/msx, 'benchmark text reports status counts' );
 
 my $json_report = $command->benchmark_report(
@@ -55,6 +60,8 @@ is( $report->{routes}[0]{status_codes}{$HTTP_OK},
     1, 'benchmark JSON reports status map' );
 is( $report->{routes}[0]{query_budget}{max_queries},
     2, 'benchmark JSON reports query budget contract' );
+is( $report->{routes}[0]{db_queries}{observed},
+    0, 'benchmark JSON reports DB query observation state' );
 
 my ( $baseline_handle, $baseline_path ) = tempfile();
 print {$baseline_handle} $json_text or die 'failed to write baseline';

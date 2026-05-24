@@ -16,7 +16,7 @@ use GPForum::Test::QueryPlanEvidenceDbh;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 28;
+const my $EXPECTED_TESTS => 30;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -191,6 +191,25 @@ close $run_ok_stdout or die 'failed to close run output capture';
 my $run_ok_report = decode_json($run_ok_output);
 is( $run_ok_report->{mode},    'postgres', 'run reports postgres mode' );
 is( $run_ok_report->{analyze}, 0,          'run supports no-analyze mode' );
+
+my $profile_output = q{};
+open my $profile_stdout, '>', \$profile_output
+  or die 'failed to capture profile output';
+{
+    local *STDOUT = $profile_stdout;
+    is(
+        GPForum::Command::QueryPlanEvidence->new->run(
+            '--dry-run',  '--json', '--profile', 'hot-thread',
+            '--endpoint', 'thread_view'
+        ),
+        0,
+        'run supports dataset profile metadata'
+    );
+}
+close $profile_stdout or die 'failed to close profile output capture';
+my $profile_report = decode_json($profile_output);
+is( $profile_report->{dataset}{profile},
+    'hot-thread', 'profile metadata is reflected in JSON' );
 
 my $run_fail_output = q{};
 open my $run_fail_stdout, '>', \$run_fail_output

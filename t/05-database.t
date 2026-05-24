@@ -20,8 +20,8 @@ use GPForum::Test::MigrationSchema;
 our $VERSION = '0.001';
 
 const my $EXPECTED_TESTS               => 397;
-const my $EXPECTED_MIGRATIONS          => 16;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 45;
+const my $EXPECTED_MIGRATIONS          => 17;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 48;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
