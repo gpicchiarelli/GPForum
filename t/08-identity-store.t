@@ -12,10 +12,11 @@ use lib 't/lib';
 use GPForum::Test::Id;
 use GPForum::Test::Schema;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Password;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 16;
+const my $EXPECTED_TESTS => 26;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -31,6 +32,7 @@ my $registration = {
         username         => 'giacomo',
         display_name     => 'Giacomo Picchiarelli',
         email_normalized => 'giacomo@example.test',
+        password_hash    => 'argon2id-hash',
         status           => 'pending',
         trust_level      => 0,
     },
@@ -64,6 +66,74 @@ is(
     'event and audit share a correlation id'
 );
 is( $schema->transaction_count, 1, 'registration uses one transaction' );
+
+my $password_service = GPForum::Service::Password->new;
+my $login_schema     = GPForum::Test::Schema->new(
+    users => [
+        {
+            id               => 'user-1',
+            username         => 'giacomo',
+            display_name     => 'Giacomo Picchiarelli',
+            email_normalized => 'giacomo@example.test',
+            status           => 'active',
+        },
+    ],
+    credentials => [
+        {
+            user_id     => 'user-1',
+            type        => 'password',
+            secret_hash =>
+              $password_service->hash_password('correct horse battery staple'),
+            created_at => '2026-05-23T12:00:00Z',
+            revoked_at => undef,
+        },
+    ],
+);
+my $login_store = GPForum::Service::Identity::Store->new(
+    schema     => $login_schema,
+    id_service => GPForum::Test::Id->new,
+);
+
+my $login = $login_store->authenticate_login(
+    {
+        identifier      => 'GIACOMO@example.test',
+        password        => 'correct horse battery staple',
+        request_address => '198.51.100.10',
+        user_agent      => 'TestAgent',
+    }
+);
+
+ok( $login->{ok}, 'valid login is accepted' );
+is( $login->{user_id},    'user-1', 'login returns authenticated user id' );
+is( $login->{session_id}, 'generated-1', 'login creates session id' );
+is( scalar @{ $login_schema->created_for('Session') },
+    1, 'login persists a server-side session' );
+isnt( $login_schema->created_for('Session')->[0]{ip_hash},
+    '198.51.100.10', 'login stores hashed request address' );
+is( $login_schema->transaction_count,
+    1, 'login session creation uses one transaction' );
+
+my $failed_login = $login_store->authenticate_login(
+    {
+        identifier => 'giacomo',
+        password   => 'wrong password',
+    }
+);
+ok( !$failed_login->{ok}, 'wrong password is rejected' );
+is( $failed_login->{error},
+    'invalid_credentials', 'login failure remains non-enumerative' );
+
+my $revoked = $login_store->revoke_session(
+    {
+        session_id => 'generated-1',
+        user_id    => 'user-1',
+    }
+);
+ok( $revoked->{ok}, 'logout revokes server-side session' );
+ok(
+    $login_schema->sessions->[0]{revoked_at},
+    'revoked session records revocation timestamp'
+);
 
 my $duplicate_schema = GPForum::Test::Schema->new(
     existing_usernames => { giacomo                => 1 },

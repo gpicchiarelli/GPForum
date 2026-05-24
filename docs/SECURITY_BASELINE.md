@@ -77,11 +77,8 @@ request addresses are SHA-256 hashed before entering audit metadata.
 
 ## Residual Risks
 
-* Credential verification and persistent login sessions are still not fully
-  implemented; login currently records and rotates the cookie-session payload
-  for the accepted login request boundary only.
-* Server-side session revocation exists in the schema, but identity web login
-  does not yet create or rotate a persistent `sessions` row.
+* Email verification is still not implemented; registration creates accounts
+  that can authenticate before a verification workflow is added.
 * The rate limiter is still process-local and disposable; PostgreSQL-backed
   rate limiting remains a future optional hardening layer.
 * Raw post body rendering in `templates/forum/thread.html.ep` assumes the
@@ -92,9 +89,9 @@ request addresses are SHA-256 hashed before entering audit metadata.
 
 ## Next Security Priorities
 
-1. Implement persistence-backed login with Argon2id verification and server-side
-   session row rotation.
+1. Add email verification and account activation policy on top of the existing
+   identity schema.
 2. Add PostgreSQL-backed optional rate-limit storage for multi-process
    deployments.
-3. Add explicit audit rows for failed credential verification once credential
-   verification is wired.
+3. Add explicit audit rows for failed credential verification with careful
+   anti-enumeration and rate-limit behavior.

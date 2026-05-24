@@ -4,19 +4,28 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base;
+use POSIX qw(strftime);
 
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Password;
+use GPForum::Service::SessionToken;
 
 our $VERSION = '0.001';
 
 const my $USER_AGGREGATE => 'user';
 const my $SCHEMA_VERSION => 1;
+const my $SESSION_DAYS   => 30;
+const my $DAY_SECONDS    => 86_400;
 
-has schema     => undef;
-has clock      => sub { return GPForum::Service::Clock->new; };
-has id_service => sub { return GPForum::Service::Id->new; };
+has schema          => undef;
+has clock           => sub { return GPForum::Service::Clock->new; };
+has id_service      => sub { return GPForum::Service::Id->new; };
+has password        => sub { return GPForum::Service::Password->new; };
+has session_tokens  => sub { return GPForum::Service::SessionToken->new; };
+has session_seconds => sub { return $SESSION_DAYS * $DAY_SECONDS; };
 
 sub create_registration {
     my ( $self, $registration ) = @_;
@@ -60,6 +69,7 @@ sub _insert_registration {
 
     my $user       = $registration->{user};
     my $credential = $registration->{credential};
+    $user->{password_hash} ||= $credential->{secret_hash};
 
     my $created_user = $self->schema->resultset('User')->create($user);
 
@@ -78,6 +88,115 @@ sub _insert_registration {
     $self->_record_audit( $user, $correlation_id );
 
     return { user => $created_user };
+}
+
+sub authenticate_login {
+    my ( $self, $input ) = @_;
+
+    my $identifier = _normalize_identifier( $input->{identifier} );
+    my $password   = $input->{password};
+    my $user       = $self->_find_login_user($identifier);
+
+    return _invalid_login() if !$user;
+    return _invalid_login()
+      if ( _column( $user, 'status' ) || q{} ) eq 'deleted';
+
+    my $credential =
+      $self->_active_password_credential( _column( $user, 'id' ) );
+    return _invalid_login() if !$credential;
+    return _invalid_login()
+      if !$self->password->verify_password( $password,
+        _column( $credential, 'secret_hash' ) );
+
+    my $session = $self->_create_session( $user, $input );
+
+    return {
+        ok         => 1,
+        session    => $session->{session},
+        session_id => _column( $session->{session}, 'session_id' ),
+        user       => $user,
+        user_id    => _column( $user, 'id' ),
+    };
+}
+
+sub revoke_session {
+    my ( $self, $input ) = @_;
+
+    my $session_id = $input->{session_id};
+    my $user_id    = $input->{user_id};
+    return { ok => 0, error => 'not_found' }
+      if !defined $session_id || !length $session_id;
+
+    my %query = ( session_id => $session_id );
+    $query{user_id} = $user_id if defined $user_id && length $user_id;
+
+    my $session = $self->schema->resultset('Session')->find( \%query );
+    return { ok => 0, error => 'not_found' } if !$session;
+
+    _update_row( $session, { revoked_at => $self->clock->now_iso8601 } );
+
+    return { ok => 1, session => $session };
+}
+
+sub _find_login_user {
+    my ( $self, $identifier ) = @_;
+
+    return if !length $identifier;
+
+    my $users = $self->schema->resultset('User');
+
+    return $users->find( { email_normalized => $identifier } )
+      if $identifier =~ /[@]/msx;
+
+    return $users->find( { username => $identifier } );
+}
+
+sub _active_password_credential {
+    my ( $self, $user_id ) = @_;
+
+    return if !defined $user_id || !length $user_id;
+
+    return $self->schema->resultset('Credential')->search(
+        {
+            revoked_at => undef,
+            type       => 'password',
+            user_id    => $user_id,
+        },
+        {
+            order_by => { -desc => 'created_at' },
+            rows     => 1,
+        }
+    )->single;
+}
+
+sub _create_session {
+    my ( $self, $user, $input ) = @_;
+
+    return $self->schema->txn_do(
+        sub {
+            my $raw_token  = $self->session_tokens->issue_token;
+            my $created_at = $self->clock->now_iso8601;
+            my $expires_at =
+              _iso8601_from_epoch(
+                $self->clock->now_epoch + $self->session_seconds );
+            my $session = $self->schema->resultset('Session')->create(
+                {
+                    session_id   => $self->id_service->uuid,
+                    user_id      => _column( $user, 'id' ),
+                    session_hash =>
+                      $self->session_tokens->hash_token($raw_token),
+                    created_at      => $created_at,
+                    last_seen_at    => $created_at,
+                    expires_at      => $expires_at,
+                    revoked_at      => undef,
+                    ip_hash         => _hash_value( $input->{request_address} ),
+                    user_agent_hash => _hash_value( $input->{user_agent} ),
+                }
+            );
+
+            return { session => $session };
+        }
+    );
 }
 
 sub _record_event {
@@ -123,6 +242,64 @@ sub _record_audit {
     );
 
     return;
+}
+
+sub _normalize_identifier {
+    my ($value) = @_;
+
+    return lc _trim($value);
+}
+
+sub _trim {
+    my ($value) = @_;
+
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}
+
+sub _invalid_login {
+    return { ok => 0, error => 'invalid_credentials' };
+}
+
+sub _column {
+    my ( $row, $column ) = @_;
+
+    return $row->{$column}           if ref $row eq 'HASH';
+    return $row->get_column($column) if $row && $row->can('get_column');
+
+    return;
+}
+
+sub _update_row {
+    my ( $row, $values ) = @_;
+
+    if ( ref $row eq 'HASH' ) {
+        for my $key ( keys %{$values} ) {
+            $row->{$key} = $values->{$key};
+        }
+        return $row;
+    }
+
+    return $row->update($values);
+}
+
+sub _hash_value {
+    my ($value) = @_;
+
+    return if !defined $value || !length $value;
+
+    return sha256_hex($value);
+}
+
+sub _iso8601_from_epoch {
+    my ($epoch) = @_;
+
+    return strftime '%Y-%m-%dT%H:%M:%SZ', gmtime $epoch;
 }
 
 1;

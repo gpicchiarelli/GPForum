@@ -18,7 +18,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 31;
+const my $EXPECTED_TESTS => 33;
 const my $DEFAULT_LIMIT  => 25;
 const my $MAX_LIMIT      => 100;
 const my $REQUEST_LIMIT  => 2;
@@ -40,6 +40,14 @@ is( $bounded_plan->{limit}, $MAX_LIMIT, 'page window clamps max limit' );
 
 my $low_plan = $page_window->plan( { limit => 0 } );
 is( $low_plan->{limit}, 1, 'page window clamps minimum limit' );
+
+my $invalid_limit_plan = $page_window->plan( { limit => 'many' } );
+is( $invalid_limit_plan->{limit},
+    $DEFAULT_LIMIT, 'page window defaults invalid limit' );
+
+my $invalid_cursor_plan = $page_window->plan( { after => 'not-a-cursor' } );
+is( $invalid_cursor_plan->{after},
+    undef, 'page window ignores malformed cursor' );
 
 my $thread_rows = [
     _row(

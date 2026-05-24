@@ -21,7 +21,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 35;
+const my $EXPECTED_TESTS         => 36;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -279,6 +279,15 @@ my $deleted_category_reader =
     schema => $deleted_category_schema );
 is( $deleted_category_reader->find_category('category-deleted'),
     undef, 'deleted category is not visible' );
+
+my $invalid_limit_category_reader =
+  GPForum::Service::Forum::CategoryReader->new( schema => $schema );
+is(
+    $invalid_limit_category_reader->list_categories( { limit => 'wide-open' } )
+      ->[0]->get_column('category_id'),
+    'category-1',
+    'category reader defaults invalid limits'
+);
 
 sub _row {
     my ($data) = @_;

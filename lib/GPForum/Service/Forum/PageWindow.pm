@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English      qw(-no_match_vars);
 use MIME::Base64 qw(decode_base64url encode_base64url);
 use Mojo::Base -base;
 
@@ -50,6 +51,7 @@ sub _bounded_limit {
     my ($requested) = @_;
 
     return $DEFAULT_LIMIT if !defined $requested;
+    return $DEFAULT_LIMIT if $requested !~ /\A [[:digit:]]+ \z/msx;
     return $MIN_LIMIT     if $requested < $MIN_LIMIT;
     return $MAX_LIMIT     if $requested > $MAX_LIMIT;
 
@@ -70,7 +72,11 @@ sub _decode_cursor {
 
     return if !defined $cursor || !length $cursor;
 
-    my @parts = split /[|]/msx, decode_base64url($cursor), $CURSOR_PARTS;
+    my $decoded = eval { decode_base64url($cursor) };
+    return if $EVAL_ERROR || !defined $decoded;
+
+    my @parts = split /[|]/msx, $decoded, $CURSOR_PARTS;
+    return if @parts != $CURSOR_PARTS;
 
     return {
         sort_value => $parts[0],

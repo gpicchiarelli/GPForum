@@ -9,18 +9,19 @@ use Mojo::Base 'Mojolicious::Controller';
 
 our $VERSION = '0.001';
 
-const my $HTTP_ACCEPTED    => 202;
-const my $HTTP_BAD_REQUEST => 400;
-const my $HTTP_FORBIDDEN   => 403;
-const my $HTTP_NOT_FOUND   => 404;
-const my $HTTP_OK          => 200;
-const my $HTTP_TOO_MANY    => 429;
-const my $PROFILE_THREADS  => 10;
-const my $LOGIN_LIMIT      => 10;
-const my $LOGOUT_LIMIT     => 20;
-const my $REGISTER_LIMIT   => 5;
-const my $SHORT_WINDOW     => 60;
-const my $LONG_WINDOW      => 300;
+const my $HTTP_ACCEPTED     => 202;
+const my $HTTP_BAD_REQUEST  => 400;
+const my $HTTP_FORBIDDEN    => 403;
+const my $HTTP_NOT_FOUND    => 404;
+const my $HTTP_OK           => 200;
+const my $HTTP_TOO_MANY     => 429;
+const my $HTTP_UNAUTHORIZED => 401;
+const my $PROFILE_THREADS   => 10;
+const my $LOGIN_LIMIT       => 10;
+const my $LOGOUT_LIMIT      => 20;
+const my $REGISTER_LIMIT    => 5;
+const my $SHORT_WINDOW      => 60;
+const my $LONG_WINDOW       => 300;
 
 sub register_form {
     my ($self) = @_;
@@ -105,12 +106,15 @@ sub login {
         errors   => $errors,
     ) if keys %{$errors};
 
-    _rotate_login_session($self);
+    my $authenticated = _authenticate_login($self);
+    return _invalid_login($self) if !$authenticated->{ok};
+
+    _apply_login_session( $self, $authenticated );
     _record_identity_audit(
         $self,
         'record_login_request',
         {
-            actor_id        => $self->session('user_id'),
+            actor_id        => $authenticated->{user_id},
             identifier      => $self->param('identifier'),
             outcome         => 'accepted',
             request_address => _request_address($self),
@@ -131,11 +135,14 @@ sub logout {
     return _rate_limited($self)
       if !_identity_allowed( $self, 'identity.logout' );
 
+    my $session_id = $self->session('session_id');
+    my $user_id    = $self->session('user_id');
+    _revoke_login_session( $self, $session_id, $user_id );
     _record_identity_audit(
         $self,
         'record_logout_request',
         {
-            actor_id        => $self->session('user_id'),
+            actor_id        => $user_id,
             request_address => _request_address($self),
         }
     );
@@ -261,12 +268,61 @@ sub _window_for {
     return $LONG_WINDOW;
 }
 
-sub _rotate_login_session {
+sub _authenticate_login {
     my ($controller) = @_;
 
-    $controller->session( login_rotation => $controller->gp_id->uuid );
+    my $result = eval {
+        return $controller->gp_identity_store->authenticate_login(
+            {
+                identifier      => $controller->param('identifier'),
+                password        => $controller->param('password'),
+                request_address => _request_address($controller),
+                user_agent      => $controller->req->headers->user_agent
+                  || 'unknown',
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        $controller->app->log->warn("login degraded: $EVAL_ERROR");
+        return { ok => 0 };
+    }
+
+    return $result;
+}
+
+sub _apply_login_session {
+    my ( $controller, $authenticated ) = @_;
+
+    $controller->session(
+        login_rotation => $controller->gp_id->uuid,
+        session_id     => $authenticated->{session_id},
+        user_id        => $authenticated->{user_id},
+    );
 
     return;
+}
+
+sub _revoke_login_session {
+    my ( $controller, $session_id, $user_id ) = @_;
+
+    return if !defined $session_id || !length $session_id;
+
+    my $result = eval {
+        return $controller->gp_identity_store->revoke_session(
+            {
+                session_id => $session_id,
+                user_id    => $user_id,
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        $controller->app->log->warn("logout revocation degraded: $EVAL_ERROR");
+        return;
+    }
+
+    return $result;
 }
 
 sub _record_identity_audit {
@@ -313,6 +369,29 @@ sub _rate_limited {
     return $controller->render(
         text   => 'Too many requests',
         status => $HTTP_TOO_MANY,
+    );
+}
+
+sub _invalid_login {
+    my ($controller) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                error  => 'login request could not be accepted',
+                status => 'unauthorized',
+            },
+            status => $HTTP_UNAUTHORIZED,
+        );
+    }
+
+    return $controller->render(
+        template => 'identity/login',
+        status   => $HTTP_UNAUTHORIZED,
+        values   => { identifier => $controller->param('identifier') || q{} },
+        errors   => {
+            login => 'login request could not be accepted',
+        },
     );
 }
 

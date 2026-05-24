@@ -122,15 +122,19 @@ sub mark_read {
 
     my $read_resultset  = $self->schema->resultset('NotificationRead');
     my $inbox_resultset = $self->schema->resultset('NotificationInbox');
-    $read_resultset->update_or_create($read);
-    $inbox_resultset->find(
+    my $inbox           = $inbox_resultset->find(
         {
             notification_id   => $notification_id,
             recipient_user_id => $recipient_user_id,
         }
-    )->update( { read_at => $read_at } );
+    );
 
-    return $read;
+    return { ok => 0, error => 'not_found' } if !$inbox;
+
+    $read_resultset->update_or_create($read);
+    $inbox->update( { read_at => $read_at } );
+
+    return { ok => 1, %{$read} };
 }
 
 sub _can_notify {

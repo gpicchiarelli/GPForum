@@ -13,6 +13,9 @@ has created            => sub { return {}; };
 has transactions       => 0;
 has existing_usernames => sub { return {}; };
 has existing_emails    => sub { return {}; };
+has users              => sub { return []; };
+has credentials        => sub { return []; };
+has sessions           => sub { return []; };
 
 sub resultset {
     my ( $self, $name ) = @_;

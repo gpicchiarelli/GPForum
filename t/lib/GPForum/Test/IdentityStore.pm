@@ -13,6 +13,8 @@ const my $AT_SIGN => chr $AT_CODE;
 
 has missing_profile => 0;
 has duplicate       => 0;
+has invalid_login   => 0;
+has revoked         => sub { return []; };
 
 sub create_registration {
     my ( $self, $registration ) = @_;
@@ -27,6 +29,35 @@ sub create_registration {
       if $self->duplicate;
 
     return { ok => 1, user => $registration->{user} };
+}
+
+sub authenticate_login {
+    my ( $self, $input ) = @_;
+
+    return { ok => 0, error => 'invalid_credentials' }
+      if $self->invalid_login;
+
+    return {
+        ok         => 1,
+        session    => { session_id => 'session-1', user_id => 'user-1' },
+        session_id => 'session-1',
+        user       => { id => 'user-1', username => 'giacomo_forum' },
+        user_id    => 'user-1',
+    };
+}
+
+sub revoke_session {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->revoked }, { %{$input} };
+
+    return {
+        ok      => 1,
+        session => {
+            session_id => $input->{session_id},
+            user_id    => $input->{user_id},
+        },
+    };
 }
 
 sub public_profile {

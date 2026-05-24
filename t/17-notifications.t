@@ -20,7 +20,7 @@ use GPForum::Test::PermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 65;
+const my $EXPECTED_TESTS => 67;
 const my $LIST_LIMIT     => 10;
 
 plan tests => $EXPECTED_TESTS;
@@ -316,5 +316,10 @@ is(
     '2026-05-23T12:00:00Z',
     'inbox read projection is updated'
 );
+
+my $missing_read = $dispatcher->mark_read( 'missing', 'user-1' );
+ok( !$missing_read->{ok}, 'missing notification read is rejected' );
+is( $missing_read->{error},
+    'not_found', 'missing notification read is explicit' );
 
 1;

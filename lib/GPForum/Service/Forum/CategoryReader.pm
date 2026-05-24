@@ -79,7 +79,10 @@ sub _bounded_limit {
     my ($requested) = @_;
 
     return $DEFAULT_LIMIT if !defined $requested;
+    return $DEFAULT_LIMIT if $requested !~ /\A [[:digit:]]+ \z/msx;
+    return $DEFAULT_LIMIT if $requested < 1;
     return $MAX_LIMIT     if $requested > $MAX_LIMIT;
+
     return int $requested;
 }
 

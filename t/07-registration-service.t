@@ -12,7 +12,7 @@ use GPForum::Service::Identity::Registration;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 11;
+const my $EXPECTED_TESTS => 12;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -68,6 +68,11 @@ is(
 );
 is( $valid->{registration}{user}{email_normalized},
     'giacomo@example.test', 'email is normalized' );
+like(
+    $valid->{registration}{user}{password_hash},
+    qr/\A \x{24} argon2id \x{24} /msx,
+    'user row carries schema-compatible password hash'
+);
 is( $valid->{registration}{credential}{type},
     'password', 'password credential is prepared' );
 like(

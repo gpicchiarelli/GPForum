@@ -12,6 +12,7 @@ our $VERSION = '0.001';
 const my $HTTP_OK           => 200;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
+const my $HTTP_NOT_FOUND    => 404;
 const my $HTTP_TOO_MANY     => 429;
 const my $HTTP_SERVER_ERROR => 500;
 const my $DEFAULT_LIMIT     => 25;
@@ -59,7 +60,8 @@ sub mark_read {
             $self->param('notification_id'), $user_id );
     };
 
-    return _system_failure($self) if $EVAL_ERROR;
+    return _system_failure($self)                        if $EVAL_ERROR;
+    return _not_found( $self, 'notification not found' ) if !$read->{ok};
 
     if ( _wants_json($self) ) {
         return $self->render(
@@ -278,6 +280,20 @@ sub _rate_limited {
             status => 'rate_limited',
             title  => 'Too many requests',
             error  => 'too many requests',
+        }
+    );
+}
+
+sub _not_found {
+    my ( $controller, $error ) = @_;
+
+    return _render_error(
+        $controller,
+        $HTTP_NOT_FOUND,
+        {
+            status => 'not_found',
+            title  => 'Not found',
+            error  => $error,
         }
     );
 }

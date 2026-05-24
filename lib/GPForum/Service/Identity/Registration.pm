@@ -27,24 +27,27 @@ sub prepare {
     return { ok => 0, errors => $errors, values => $values }
       if keys %{$errors};
 
+    my $credential = $self->_password_credential($values);
+
     return {
         ok           => 1,
         registration => {
-            user       => $self->_user_record($values),
-            credential => $self->_password_credential($values),
+            user       => $self->_user_record( $values, $credential ),
+            credential => $credential,
             audit      => { event_type => 'user.registered' },
         },
     };
 }
 
 sub _user_record {
-    my ( $self, $values ) = @_;
+    my ( $self, $values, $credential ) = @_;
 
     return {
         id                => $self->id_service->uuid,
         username          => $values->{username},
         display_name      => $values->{display_name},
         email_normalized  => $values->{email_normalized},
+        password_hash     => $credential->{secret_hash},
         status            => 'pending',
         trust_level       => 0,
         email_verified_at => undef,

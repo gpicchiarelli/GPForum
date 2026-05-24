@@ -16,13 +16,14 @@ use GPForum::Test::IdentitySecurityAudit;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 72;
-const my $HTTP_OK          => 200;
-const my $HTTP_ACCEPTED    => 202;
-const my $HTTP_BAD_REQUEST => 400;
-const my $HTTP_FORBIDDEN   => 403;
-const my $HTTP_NOT_FOUND   => 404;
-const my $HTTP_TOO_MANY    => 429;
+const my $EXPECTED_TESTS    => 77;
+const my $HTTP_OK           => 200;
+const my $HTTP_ACCEPTED     => 202;
+const my $HTTP_BAD_REQUEST  => 400;
+const my $HTTP_FORBIDDEN    => 403;
+const my $HTTP_NOT_FOUND    => 404;
+const my $HTTP_TOO_MANY     => 429;
+const my $HTTP_UNAUTHORIZED => 401;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -118,6 +119,31 @@ $test->text_is( 'h1' => 'Login request accepted' );
 is( scalar @{ $audit->records }, 1, 'login request is audited' );
 is( $audit->records->[0]{method},
     'record_login_request', 'login audit method is explicit' );
+
+my $invalid_login_test = Test::Mojo->new('GPForum');
+$invalid_login_test->app->helper(
+    gp_identity_store => sub {
+        return GPForum::Test::IdentityStore->new( invalid_login => 1 );
+    }
+);
+$invalid_login_test->app->helper(
+    gp_identity_security_audit => sub {
+        return GPForum::Test::IdentitySecurityAudit->new;
+    }
+);
+$invalid_login_test->get_ok('/login');
+my $invalid_login_token = _csrf_token($invalid_login_test);
+$invalid_login_test->post_ok(
+    '/login' => form => {
+        csrf_token => $invalid_login_token,
+        identifier => 'giacomo_forum',
+        password   => 'wrong password',
+    }
+);
+$invalid_login_test->status_is($HTTP_UNAUTHORIZED);
+$invalid_login_test->content_like(
+    qr/login [ ] request [ ] could [ ] not [ ] be [ ] accepted/msx);
+$invalid_login_test->content_unlike(qr/invalid_credentials/msx);
 
 $test->post_ok('/logout');
 $test->status_is($HTTP_FORBIDDEN);

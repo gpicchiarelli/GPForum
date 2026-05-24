@@ -3,6 +3,9 @@
 
 <section>
   <h1>Login</h1>
+  % if ($errors->{login}) {
+    <p role="alert"><%= $errors->{login} %></p>
+  % }
   <form method="post" action="<%= url_for('login_submit') %>">
     <%= csrf_field %>
     <label>

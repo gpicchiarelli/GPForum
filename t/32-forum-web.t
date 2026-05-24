@@ -18,7 +18,7 @@ use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 136;
+const my $EXPECTED_TESTS       => 139;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
@@ -192,6 +192,15 @@ $test->post_ok(
 $test->status_is($HTTP_OK);
 $test->json_is( '/status'               => 'read' );
 $test->json_is( '/read/notification_id' => 'notification-1' );
+
+$test->post_ok(
+    '/notifications/missing/read' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $session_csrf,
+      }
+);
+$test->status_is($HTTP_NOT_FOUND);
+$test->json_is( '/status' => 'not_found' );
 
 $test->post_ok(
     '/t/thread-1/bookmark' => { Accept => 'application/json' } => form => {

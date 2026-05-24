@@ -518,7 +518,10 @@ sub list_page_for_recipient {
 sub mark_read {
     my ( $self, $notification_id, $recipient_user_id ) = @_;
 
+    return { ok => 0, error => 'not_found' } if $notification_id eq 'missing';
+
     return {
+        ok                => 1,
         notification_id   => $notification_id,
         recipient_user_id => $recipient_user_id,
         read_at           => '2026-05-23T12:00:00Z',
