@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 46;
+const my $EXPECTED_TESTS => 50;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -39,10 +39,14 @@ for my $required_file (
     docs/PERFORMANCE_BASELINE.md
     prompt/44.txt
     bin/gpforum-benchmark
+    bin/gpforum-seed-performance-data
     script/bench-http
+    script/benchmark-http
     script/cpan-license-check
     script/perltidy-check
+    script/profile-nytprof
     script/query-budget
+    script/seed-performance-data
     )
   )
 {

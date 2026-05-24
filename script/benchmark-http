@@ -1,0 +1,56 @@
+#!/bin/sh
+set -eu
+
+configured=0
+has_route=0
+
+for argument in "$@"; do
+    if [ "$argument" = "--configured" ]; then
+        configured=1
+    fi
+    if [ "$argument" = "--route" ]; then
+        has_route=1
+    fi
+done
+
+if [ "$configured" -eq 1 ]; then
+    carton exec perl -Ilib -MGPForum::Config -MGPForum::Schema -e '
+        use strict;
+        use warnings;
+        my $ok = eval {
+            my $config = GPForum::Config->from_environment;
+            my $schema = GPForum::Schema->connect_from_config($config);
+            $schema->storage->dbh->selectrow_array("SELECT 1");
+            return 1;
+        };
+        if (!$ok) {
+            my $error = $@ || "unknown database error";
+            print STDERR "script/benchmark-http: PostgreSQL database unavailable. ";
+            print STDERR "Run script/bootstrap-deps --postgres, apply migrations, ";
+            print STDERR "and run script/seed-performance-data. Error: $error";
+            exit 2;
+        }
+    '
+fi
+
+if [ "$has_route" -eq 1 ]; then
+    exec carton exec bin/gpforum-benchmark "$@"
+fi
+
+if [ "$configured" -eq 1 ]; then
+    category_id="${GPFORUM_BENCHMARK_CATEGORY_ID:-018f1001-0001-7000-8000-000000000001}"
+    thread_id="${GPFORUM_BENCHMARK_THREAD_ID:-018f1004-0001-7000-8000-000000000001}"
+else
+    category_id="${GPFORUM_BENCHMARK_CATEGORY_ID:-category-1}"
+    thread_id="${GPFORUM_BENCHMARK_THREAD_ID:-thread-1}"
+fi
+
+exec carton exec bin/gpforum-benchmark "$@" \
+    --route / \
+    --route /categories \
+    --route "/c/$category_id" \
+    --route "/t/$thread_id" \
+    --route /search?q=performance \
+    --route /health \
+    --route /health/ready \
+    --route /metrics

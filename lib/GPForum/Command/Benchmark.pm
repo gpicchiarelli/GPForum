@@ -12,6 +12,7 @@ use Test::Mojo;
 use Time::HiRes qw(time);
 
 use GPForum::Benchmark::FixtureServices;
+use GPForum::Service::Operations::QueryBudget;
 
 our $VERSION = '0.001';
 
@@ -23,12 +24,19 @@ const my $P50                => 50;
 const my $P95                => 95;
 const my $P99                => 99;
 const my $MIN_ELAPSED        => 0.000_001;
+const my %ROUTE_ENDPOINT => (
+    q{/}             => 'home',
+    q{/categories}   => 'categories',
+    q{/health}       => undef,
+    q{/health/live}  => undef,
+    q{/health/ready} => undef,
+    q{/metrics}      => undef,
+);
 const my @DEFAULT_ROUTES => (
     q{/},                 q{/categories},
     q{/c/category-1},     q{/t/thread-1},
-    q{/search?q=welcome}, q{/login},
-    q{/feed.atom},        q{/health/live},
-    q{/metrics},
+    q{/search?q=welcome}, q{/health},
+    q{/health/ready},     q{/metrics},
 );
 
 has app_class => 'GPForum';
@@ -151,6 +159,7 @@ sub _summary {
         p99_ms       => _rounded( _percentile( \@sorted, $P99 ) ),
         max_ms       => _rounded( $sorted[-1] || 0 ),
         status_codes => $statuses,
+        query_budget => _query_budget($route),
     };
 }
 
@@ -191,6 +200,7 @@ sub _route_line {
       'p95_ms=' . $route->{p95_ms},
       'p99_ms=' . $route->{p99_ms},
       'max_ms=' . $route->{max_ms},
+      'query_budget=' . _query_budget_text( $route->{query_budget} ),
       'statuses=' . _statuses( $route->{status_codes} ),
       "\n";
 }
@@ -200,6 +210,38 @@ sub _statuses {
 
     return join q{,},
       map { $_ . q{:} . $statuses->{$_} } sort keys %{$statuses};
+}
+
+sub _query_budget {
+    my ($route) = @_;
+
+    my $endpoint_name = _endpoint_name($route);
+    my $budget;
+    if ( defined $endpoint_name ) {
+        $budget =
+          GPForum::Service::Operations::QueryBudget->new->budget_for(
+            $endpoint_name);
+    }
+
+    return $budget;
+}
+
+sub _endpoint_name {
+    my ($route) = @_;
+
+    return 'category_threads' if $route =~ m{\A /c/}msx;
+    return 'thread_view'      if $route =~ m{\A /t/}msx;
+    return 'search'           if $route =~ m{\A /search}msx;
+
+    return $ROUTE_ENDPOINT{$route};
+}
+
+sub _query_budget_text {
+    my ($budget) = @_;
+
+    return 'none' if !$budget;
+
+    return $budget->{endpoint_name} . q{:} . $budget->{max_queries};
 }
 
 sub _options {
