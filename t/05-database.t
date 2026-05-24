@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 382;
-const my $EXPECTED_MIGRATIONS          => 13;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 36;
+const my $EXPECTED_TESTS               => 390;
+const my $EXPECTED_MIGRATIONS          => 14;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 39;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -33,6 +33,7 @@ const my $IMPORT_EXPORT_INDEX          => 9;
 const my $PLUGINS_INDEX                => 10;
 const my $PERSONAL_FEED_INDEX          => 11;
 const my $PUBLIC_PROFILE_INDEX         => 12;
+const my $HOT_PATH_INDEX               => 13;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -1288,6 +1289,49 @@ like(
     $public_profile_sql,
     qr/WHERE [ ] deleted_at [ ] IS [ ] NULL/msx,
     'public profile migration uses a partial public-thread index'
+);
+
+my $hot_path_sql = path( $summary->[$HOT_PATH_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$HOT_PATH_INDEX]->{description},
+    'hot path indexes',
+    'hot path index migration description is parsed'
+);
+like(
+    $hot_path_sql,
+    qr/idx_threads_public_activity/msx,
+    'hot path migration indexes public latest threads'
+);
+like(
+    $hot_path_sql,
+    qr/idx_threads_category_activity_visible_locked/msx,
+    'hot path migration indexes category thread keyset order'
+);
+like(
+    $hot_path_sql,
+    qr/idx_posts_visible_thread_position/msx,
+    'hot path migration indexes visible post keyset order'
+);
+like(
+    $hot_path_sql,
+    qr/moderation_state [ ] IN [ ] [(] 'visible', [ ] 'locked' [)]/msx,
+    'hot path migration keeps locked readable threads in partial index'
+);
+like(
+    $hot_path_sql,
+qr/ON [ ] posts [ ] [(] thread_id, [ ] position [ ] ASC, [ ] post_id [ ] ASC [)]/msx,
+    'hot path migration matches post reader ordering'
+);
+like(
+    $hot_path_sql,
+    qr/INCLUDE [ ] [(] category_id, [ ] author_user_id, [ ] title/msx,
+    'hot path migration covers latest thread list metadata'
+);
+like(
+    $hot_path_sql,
+    qr/WHERE [ ] deleted_at [ ] IS [ ] NULL/msx,
+    'hot path migration keeps indexes partial on live rows'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

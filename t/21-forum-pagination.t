@@ -18,7 +18,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 28;
+const my $EXPECTED_TESTS => 31;
 const my $DEFAULT_LIMIT  => 25;
 const my $MAX_LIMIT      => 100;
 const my $REQUEST_LIMIT  => 2;
@@ -121,8 +121,12 @@ is(
     $REQUEST_LIMIT + 1,
     'thread reader fetches limit plus one'
 );
+is( $thread_resultset->last_attrs->{order_by}[0]{-desc},
+    'pinned', 'thread reader keeps pinned threads first' );
 is( $thread_resultset->last_attrs->{order_by}[1]{-desc},
     'last_activity_at', 'thread reader uses activity keyset order' );
+is( $thread_resultset->last_attrs->{order_by}[2]{-desc},
+    'thread_id', 'thread reader uses thread id tie breaker' );
 
 my $next_category_page = $thread_reader->list_category_threads(
     {
@@ -165,6 +169,8 @@ is(
 );
 is( $post_resultset->last_attrs->{order_by}[0]{-asc},
     'position', 'post reader uses stable position order' );
+is( $post_resultset->last_attrs->{order_by}[1]{-asc},
+    'post_id', 'post reader uses post id tie breaker' );
 
 $post_reader->list_thread_posts(
     {

@@ -21,7 +21,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 33;
+const my $EXPECTED_TESTS         => 35;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -148,6 +148,10 @@ ok(
 );
 is( $schema->resultset('Thread')->last_attrs->{columns}[0],
     'thread_id', 'home page reader uses explicit thread columns' );
+is( $schema->resultset('Thread')->last_attrs->{order_by}[0]{-desc},
+    'last_activity_at', 'home page reader uses latest activity order' );
+is( $schema->resultset('Thread')->last_attrs->{order_by}[1]{-desc},
+    'thread_id', 'home page reader uses thread id tie breaker' );
 
 my $visible_post_schema = GPForum::Test::ForumReadSchema->new(
     resultsets => {
