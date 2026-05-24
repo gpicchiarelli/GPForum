@@ -14,9 +14,9 @@ tool, or new infrastructure is required.
 | GPForum OS profile | darwin, kqueue |
 | Reported CPU count | 1 |
 | Perl | v5.42.2 darwin-thread-multi-2level |
-| Benchmark mode used locally | fixture services through `Test::Mojo` |
+| Benchmark mode used locally | fixture services and configured PostgreSQL through `Test::Mojo` |
 | Cache posture | one warmup request per route; fixture/local warm cache is declared |
-| PostgreSQL local status | optional `DBD::Pg` is not installed in this Carton tree |
+| PostgreSQL local status | PostgreSQL 18.4 from Postgres.app verified through an isolated evidence cluster |
 
 ## Harness Commands
 
@@ -83,9 +83,8 @@ Local dry-run command:
 script/seed-performance-data --dry-run --json
 ```
 
-Local real seed attempt failed clearly because `DBD::Pg` is not installed. This
-is expected on the current workstation until `script/bootstrap-deps --postgres`
-is run and PostgreSQL is reachable.
+Local real seed now passes against a PostgreSQL 18.4 Postgres.app evidence
+cluster on `127.0.0.1:55432`.
 
 ## Fixture HTTP Baseline
 
@@ -148,10 +147,31 @@ fixture mode. That is a measurement result, not an optimization instruction.
 4. Benchmark harness memory sampling through `ps`.
 5. DBIx::Class resultset/result-source load path during app startup.
 
+## Configured PostgreSQL Baseline
+
+Command:
+
+```sh
+script/benchmark-http --configured --check --iterations 20 --warmup 3
+```
+
+Environment: PostgreSQL 18.4 from Postgres.app, isolated evidence cluster,
+`small` seed, `GPFORUM_WEB_PROCESSES=1`.
+
+| Endpoint | Status | p50 ms | p95 ms | p99 ms | req/s | Query budget |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `/` | 200 | 2.820 | 4.003 | 4.003 | 322.908 | home:5 |
+| `/categories` | 200 | 1.223 | 1.641 | 1.641 | 754.690 | categories:3 |
+| `/c/018f1001-0001-7000-8000-000000000001` | 200 | 2.310 | 2.949 | 2.949 | 408.205 | category_threads:5 |
+| `/t/018f1004-0001-7000-8000-000000000001` | 200 | 4.329 | 5.105 | 5.105 | 221.998 | thread_view:8 |
+| `/search?q=performance` | 200 | 1.852 | 2.702 | 2.702 | 499.227 | search:2 |
+| `/search/autocomplete?q=per` | 200 | 1.860 | 2.255 | 2.255 | 516.235 | search_autocomplete:2 |
+| `/health` | 200 | 1.172 | 1.388 | 1.388 | 812.283 | none |
+| `/health/ready` | 200 | 3.178 | 3.728 | 3.728 | 301.514 | none |
+| `/metrics` | 200 | 3.135 | 3.653 | 3.653 | 312.418 | none |
+
 ## Current Limits
 
-* PostgreSQL-backed benchmark execution is implemented but not run locally
-  because optional `DBD::Pg` is absent.
 * Fixture mode measures route/rendering shape and framework overhead; it does
   not measure PostgreSQL latency.
 * Query count values in the fixture table are budget contracts, not observed DB

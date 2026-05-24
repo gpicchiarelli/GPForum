@@ -97,10 +97,15 @@ Failure rules are intentionally conservative:
 | Nested loop | fail above 5,000 estimated/actual rows |
 | Pagination | fail on SQL page-skipping in hot queries |
 
-Local DB-backed result on this workstation: not executed, because this Carton
-tree does not include optional `DBD::Pg`. The script fails with a clear
-PostgreSQL setup message. CI installs PostgreSQL dependencies before running
-the DB-backed evidence gate.
+Local DB-backed result on this workstation: passing against PostgreSQL 18.4
+from Postgres.app, using an isolated evidence cluster on `127.0.0.1:55432`,
+the deterministic `small` seed, and `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`.
+
+```text
+query-plan-check status=ok indexes=23 offset_violations=0 db_evidence=ok
+query_plan_evidence status=ok mode=postgres analyze=1
+endpoints=11 violations=none warnings=none
+```
 
 Dry-run evidence:
 
@@ -149,6 +154,21 @@ script/seed-benchmark --profile small
 script/benchmark-http --configured --check --iterations 20 --warmup 3
 ```
 
+Latest configured PostgreSQL result, with PostgreSQL 18.4 from Postgres.app,
+isolated evidence cluster, `small` seed, and `GPFORUM_WEB_PROCESSES=1`:
+
+| Endpoint | Status | p50 ms | p95 ms | p99 ms | req/s | Budget |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `/` | 200 | 2.820 | 4.003 | 4.003 | 322.908 | home:5 |
+| `/categories` | 200 | 1.223 | 1.641 | 1.641 | 754.690 | categories:3 |
+| `/c/018f1001-0001-7000-8000-000000000001` | 200 | 2.310 | 2.949 | 2.949 | 408.205 | category_threads:5 |
+| `/t/018f1004-0001-7000-8000-000000000001` | 200 | 4.329 | 5.105 | 5.105 | 221.998 | thread_view:8 |
+| `/search?q=performance` | 200 | 1.852 | 2.702 | 2.702 | 499.227 | search:2 |
+| `/search/autocomplete?q=per` | 200 | 1.860 | 2.255 | 2.255 | 516.235 | search_autocomplete:2 |
+| `/health` | 200 | 1.172 | 1.388 | 1.388 | 812.283 | none |
+| `/health/ready` | 200 | 3.178 | 3.728 | 3.728 | 301.514 | none |
+| `/metrics` | 200 | 3.135 | 3.653 | 3.653 | 312.418 | none |
+
 Thresholds are deliberately loose release gates, not performance promises:
 
 | Endpoint class | p95 limit | p99 limit | Minimum req/s |
@@ -191,8 +211,6 @@ seed data, DB plans, and configured HTTP paths work together.
 
 ## Current Limits
 
-* Local workstation evidence is fixture-only until optional `DBD::Pg` is
-  installed through `script/bootstrap-deps --postgres`.
 * Query count values in fixture HTTP output are release-budget contracts, not
   observed DB query counters.
 * DB-backed query-plan evidence detects plan-shape risks; it is not a full

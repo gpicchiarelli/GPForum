@@ -29,8 +29,9 @@ sub list_thread_posts {
         $query,
         {
             prefetch => ['current_body'],
-            order_by => [ { -asc => 'position' }, { -asc => 'post_id' }, ],
-            rows     => $plan->{fetch_rows},
+            order_by =>
+              [ { -asc => 'me.position' }, { -asc => 'me.post_id' }, ],
+            rows => $plan->{fetch_rows},
         }
     );
 

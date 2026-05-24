@@ -176,9 +176,9 @@ is(
     'post reader fetches limit plus one'
 );
 is( $post_resultset->last_attrs->{order_by}[0]{-asc},
-    'position', 'post reader uses stable position order' );
+    'me.position', 'post reader uses stable position order' );
 is( $post_resultset->last_attrs->{order_by}[1]{-asc},
-    'post_id', 'post reader uses post id tie breaker' );
+    'me.post_id', 'post reader uses post id tie breaker' );
 
 $post_reader->list_thread_posts(
     {

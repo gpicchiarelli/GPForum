@@ -58,21 +58,21 @@ The current local baseline passes:
 | `script/architecture-check` | passing |
 | `script/query-plan-check` | passing with 23 indexed hot-path checks and DB-backed evidence when `GPFORUM_DATABASE_DSN` is configured |
 | `script/query-plan-evidence --dry-run` | passing |
-| `script/query-plan-evidence --check` | attempted locally; fails clearly because optional `DBD::Pg` is not installed; enforced in CI after PostgreSQL setup and deterministic seed |
+| `script/query-plan-evidence --check` | passing against a seeded PostgreSQL 18.4 Postgres.app evidence database |
 | `script/cpan-license-check` | passing |
 | `script/coverage` | passing |
-| `script/query-budget --check` | attempted locally; fails in this Carton tree because optional `DBD::Pg` is not installed; enforced in CI with `script/bootstrap-deps --postgres` |
+| `script/query-budget --check` | passing against synchronized PostgreSQL-backed query budget rows |
 
 Latest full test suite at baseline time:
 
 ```text
-Files=55, Tests=2762, Result=PASS
+Files=55, Tests=2767, Result=PASS
 ```
 
 Latest coverage gate at baseline time:
 
 ```text
-Total coverage: 93.1%
+Total coverage: 93.0%
 ```
 
 Remote GitHub Actions were triggered for this baseline commit, but GitHub did
@@ -99,8 +99,8 @@ The repository currently has 55 `.t` files covering:
 ## Areas Scoperte
 
 * PostgreSQL benchmark seed exists with deterministic `small`, `medium`, and
-  `hot-thread` profiles, but local DB-backed execution still requires optional
-  `DBD::Pg`.
+  `hot-thread` profiles; the local Postgres.app evidence run has verified the
+  `small` profile materially.
 * Security hardening now includes PostgreSQL-backed rate-limit storage,
   observable local fallback, session-expiry enforcement, duplicate-report
   blocking and mention fanout limits.
@@ -108,8 +108,8 @@ The repository currently has 55 `.t` files covering:
   evidence command; `script/query-plan-check` invokes it automatically when a
   database DSN is configured and CI runs it after migrations and seed data.
 * Realtime remains process-local and covered as an enhancement boundary.
-* CI validates migrations on PostgreSQL, but local baseline without PostgreSQL
-  does not run `script/query-budget --check` unless a database is configured.
+* CI validates migrations on PostgreSQL; local `script/query-budget --check`
+  requires an installed PostgreSQL driver and a configured evidence database.
 * Coverage is strong overall, but benchmark fixture support has lower line
   coverage because it exists mainly to support measurement harnesses.
 

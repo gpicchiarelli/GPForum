@@ -129,7 +129,13 @@ sub _resultset_check {
 
     eval {
         my $resultset = $self->schema->resultset($name);
-        $resultset->search( {}, { rows => 1 } );
+        my $probe     = $resultset->search( {}, { rows => 1 } );
+        if ( $probe && $probe->can('next') ) {
+            $probe->next;
+        }
+        elsif ( $probe && $probe->can('single') ) {
+            $probe->single;
+        }
         1;
     } or return _failed_check( lc $name, $started, $EVAL_ERROR );
 

@@ -90,11 +90,10 @@ sub _thread {
         category_id      => _column( $row, 'category_id' ),
         created_at       => _column( $row, 'created_at' ),
         deleted_at       => _column( $row, 'deleted_at' ),
-        hidden_at        => _column( $row, 'hidden_at' ),
         last_activity_at => _column( $row, 'last_activity_at' ),
         moderation_state => _column( $row, 'moderation_state' ),
         pinned           => _column( $row, 'pinned' ),
-        safe_excerpt     => _column( $row, 'safe_excerpt' ),
+        safe_excerpt     => scalar _optional_column( $row, 'safe_excerpt' ),
         slug             => _column( $row, 'slug' ),
         thread_id        => _column( $row, 'thread_id' ),
         title            => _column( $row, 'title' ),
@@ -112,6 +111,20 @@ sub _column {
       if ref $row eq 'HASH';
 
     return;
+}
+
+sub _optional_column {
+    my ( $row, $name ) = @_;
+
+    if ( ref $row && $row->can('result_source') ) {
+        my $source = $row->result_source;
+        return
+             if $source
+          && $source->can('has_column')
+          && !$source->has_column($name);
+    }
+
+    return _column( $row, $name );
 }
 
 sub _bounded_limit {

@@ -21,6 +21,7 @@ has query_budget_resultset => sub {
 
     return $resultset;
 };
+has search_count => 0;
 
 sub storage {
     my ($self) = @_;
@@ -48,6 +49,14 @@ sub resultset {
 }
 
 sub search {
+    my ($self) = @_;
+
+    $self->search_count( $self->search_count + 1 );
+
+    return $self;
+}
+
+sub single {
     return;
 }
 

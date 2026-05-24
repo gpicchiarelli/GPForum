@@ -51,14 +51,14 @@ script/query-plan-check
 
 Result:
 
-* full test suite passed: 55 files, 2762 tests;
+* full test suite passed: 55 files, 2767 tests;
 * `script/architecture-check` passed;
 * `script/query-plan-check` passed with 23 indexed query plans, 0 `OFFSET`
   violations, and DB-backed evidence activation when a DSN is configured;
 * `git diff --check` passed.
 
-`script/query-budget --check` still requires a configured PostgreSQL runtime and
-`DBD::Pg` in the local Carton tree.
+`script/query-budget --check` now passes when pointed at the local Postgres.app
+evidence database with synchronized budget rows.
 
 ## Negative Coverage Added
 
@@ -95,8 +95,8 @@ request addresses are SHA-256 hashed before entering audit metadata.
   that can authenticate before a verification workflow is added.
 * Local fallback rate limiting is still process-local and is acceptable only as
   degraded mode.
-* DB-backed security evidence still requires `DBD::Pg` and migration
-  `016_security_abuse_hardening` applied.
+* DB-backed security evidence requires migration `016_security_abuse_hardening`
+  and has been smoke-tested against the local Postgres.app evidence database.
 * Raw post body rendering in `templates/forum/thread.html.ep` assumes the
   `PostComposer`/`post_bodies.body_rendered_safe` sanitizer boundary. That
   invariant is tested, but a future richer renderer must keep the same contract.

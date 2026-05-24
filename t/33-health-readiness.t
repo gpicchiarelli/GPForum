@@ -18,17 +18,18 @@ use GPForum::Test::ReadinessSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS              => 17;
+const my $EXPECTED_TESTS              => 18;
 const my $CHECK_COUNT                 => 9;
 const my $ENDPOINT_BUDGET_CHECK_INDEX => 7;
 const my $QUERY_BUDGET_DRIFT_INDEX    => 8;
 
 plan tests => $EXPECTED_TESTS;
 
-my $ready = GPForum::Service::Operations::Readiness->new(
+my $ready_schema = GPForum::Test::ReadinessSchema->new;
+my $ready        = GPForum::Service::Operations::Readiness->new(
     environment => 'test',
     runtime     => GPForum::Test::ReadinessRuntime->new,
-    schema      => GPForum::Test::ReadinessSchema->new,
+    schema      => $ready_schema,
 )->check;
 
 is( $ready->{status},        'ok',   'readiness succeeds when db checks pass' );
@@ -50,6 +51,8 @@ is( $ready->{checks}[$QUERY_BUDGET_DRIFT_INDEX]{name},
     'query_budget_drift', 'readiness checks query budget drift' );
 is( $ready->{checks}[$QUERY_BUDGET_DRIFT_INDEX]{status},
     'ok', 'readiness accepts synchronized query budgets' );
+is( $ready_schema->search_count,
+    3, 'readiness executes bounded resultset probes' );
 ok( defined $ready->{latency_ms}, 'readiness reports latency' );
 
 my $failed = GPForum::Service::Operations::Readiness->new(

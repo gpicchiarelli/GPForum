@@ -96,13 +96,13 @@ Latest local hardening verification:
 | `script/perltidy-check` | passed |
 | `script/perlcritic --severity 5` | passed |
 | `script/architecture-check` | passed |
-| `script/query-plan-check` | passed with 23 indexed hot-path checks; DB evidence skipped locally without DSN |
-| `carton exec prove -lr t` | passed: 55 files, 2762 tests |
-| `script/coverage` | passed: total coverage 93.1% |
+| `script/query-plan-check` | passed with 23 indexed hot-path checks and DB-backed evidence |
+| `carton exec prove -lr t` | passed: 55 files, 2767 tests |
+| `script/coverage` | passed: total coverage 93.0% |
 | `script/query-plan-evidence --dry-run` | passed |
 | `script/benchmark-http --fixture --check --iterations 5 --warmup 1` | passed |
 | `script/bench-hotpaths --iterations 1 --warmup 0 --route /health` | passed |
-| `script/query-budget --check` | requires optional `DBD::Pg` and a configured PostgreSQL runtime; not runnable in this local Carton tree |
+| `script/query-budget --check` | passed against synchronized PostgreSQL-backed query budget rows |
 
 ## PostgreSQL Rate Limit Storage
 
@@ -122,7 +122,7 @@ limits coherent across GPForum web workers.
   mode.
 * PostgreSQL-backed rate-limit checks require the `016_security_abuse_hardening`
   migration to be applied.
-* DB-backed denial and rate-limit evidence still needs a seeded PostgreSQL run
-  on an environment with `DBD::Pg`.
+* DB-backed denial and rate-limit evidence now has a seeded PostgreSQL local
+  smoke; broader medium/hot-thread abuse evidence remains future hardening work.
 * Advanced bot heuristics and device/session anomaly detection remain future
   hardening work.

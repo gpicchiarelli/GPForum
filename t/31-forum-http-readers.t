@@ -21,7 +21,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 36;
+const my $EXPECTED_TESTS         => 40;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -129,6 +129,8 @@ is( scalar @{ $home->{latest_threads}{items} },
     1, 'home page reader applies thread limit' );
 is( $home->{latest_threads}{items}[0]{thread_id},
     'thread-1', 'home page reader maps latest public thread' );
+ok( !exists $home->{latest_threads}{items}[0]{hidden_at},
+    'home page reader thread view model matches canonical thread columns' );
 ok(
     $home->{latest_threads}{next_cursor},
     'home page reader exposes keyset cursor'
@@ -148,6 +150,11 @@ ok(
 );
 is( $schema->resultset('Thread')->last_attrs->{columns}[0],
     'thread_id', 'home page reader uses explicit thread columns' );
+ok(
+    !grep { $_ eq 'hidden_at' }
+      @{ $schema->resultset('Thread')->last_attrs->{columns} },
+    'home page reader only requests canonical thread columns'
+);
 is( $schema->resultset('Thread')->last_attrs->{order_by}[0]{-desc},
     'last_activity_at', 'home page reader uses latest activity order' );
 is( $schema->resultset('Thread')->last_attrs->{order_by}[1]{-desc},
@@ -199,6 +206,10 @@ is( $page->{thread}->get_column('thread_id'),
     'thread-1', 'thread page includes thread' );
 is( scalar @{ $page->{posts}{items} }, 1, 'thread page applies post limit' );
 ok( $page->{posts}{next_cursor}, 'thread page exposes post cursor' );
+is( $schema->resultset('Post')->last_attrs->{order_by}[0]{-asc},
+    'me.position', 'post reader qualifies position ordering' );
+is( $schema->resultset('Post')->last_attrs->{order_by}[1]{-asc},
+    'me.post_id', 'post reader qualifies post id ordering after prefetch' );
 
 my $missing_page = $detail_reader->thread_page( { thread_id => 'missing' } );
 ok( !$missing_page->{ok}, 'missing thread page is not ok' );

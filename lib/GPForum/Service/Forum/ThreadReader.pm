@@ -63,7 +63,7 @@ sub list_public_threads {
                 qw(
                   thread_id category_id author_user_id title slug pinned
                   visibility moderation_state last_activity_at created_at
-                  deleted_at hidden_at
+                  deleted_at
                 )
             ],
             order_by =>

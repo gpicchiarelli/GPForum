@@ -17,11 +17,11 @@ Local command used for the prior baseline:
 script/benchmark-http --fixture --iterations 5 --warmup 1
 ```
 
-The local workstation does not currently have optional `DBD::Pg` installed in
-the Carton tree, so PostgreSQL-backed p95 and observed query counters were not
-available locally. Fixture p95 numbers are still useful as a route/rendering
-regression guard, while this patch hardens the measured hot endpoint query
-topology before any runtime optimization.
+The local workstation now has a material PostgreSQL evidence path using
+PostgreSQL 18.4 from Postgres.app. Fixture p95 numbers are still useful as a
+route/rendering regression guard, while PostgreSQL-backed runs prove the real
+DBIx::Class query topology, migrations, seed data, readiness probes and
+configured HTTP paths together.
 
 ## Findings
 
@@ -129,7 +129,7 @@ script/query-plan-check
 Local `script/query-plan-check` result:
 
 ```text
-query-plan-check status=ok indexes=23 offset_violations=0 db_evidence=skipped
+query-plan-check status=ok indexes=23 offset_violations=0 db_evidence=ok
 ```
 
 The production evidence gate adds
@@ -144,9 +144,8 @@ windows and `idx_reports_reporter_target_open` for duplicate open-report
 detection. Both support abuse-control checks that run before writes and must
 remain bounded under repeated hostile requests.
 
-Local `script/query-budget --check` could not reach the budget table because
-`DBD::Pg` is not installed in this Carton tree. The check remains a CI/runtime
-gate for configured PostgreSQL environments.
+Local `script/query-budget --check` passed against the synchronized PostgreSQL
+evidence database.
 
 ## PostgreSQL Follow-up
 
