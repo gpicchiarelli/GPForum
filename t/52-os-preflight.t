@@ -39,6 +39,8 @@ is( $report->{status},            'ok',    'Linux OS preflight is healthy' );
 is( $report->{os}{event_backend}, 'epoll', 'Linux declares epoll backend' );
 is( $report->{resources}{file_descriptor_limit},
     4096, 'preflight reports file descriptor limit' );
+is( $report->{recommendations}{ulimit_nofile}{recommended_minimum},
+    1024, 'preflight reports recommended ulimit floor' );
 ok(
     $report->{sockets}{keepalive}{enabled},
     'preflight reports keepalive policy'
@@ -114,6 +116,9 @@ my $low_fd_resource = GPForum::Test::OSResourceSnapshot->new(
     snapshot_data => {
         open_file_descriptors => 4,
         file_descriptor_limit => 64,
+        swap_pressure         => {
+            status => 'ok',
+        },
     },
 );
 my $low_fd = GPForum::OS::Preflight->from_runtime(
@@ -127,6 +132,23 @@ ok(
     _has_check_status( $low_fd, 'file_descriptor_limit', 'degraded' ),
     'low file descriptor limit is reported by a dedicated check'
 );
+
+my $swap_resource = GPForum::Test::OSResourceSnapshot->new(
+    snapshot_data => {
+        open_file_descriptors => 4,
+        file_descriptor_limit => 4096,
+        swap_pressure         => {
+            status => 'high',
+        },
+    },
+);
+my $swap_report = GPForum::OS::Preflight->from_runtime(
+    _runtime_for_os(
+        GPForum::OS::Linux->new( resource_probe => $swap_resource )
+    )
+)->report;
+ok( _has_check_status( $swap_report, 'swap_pressure', 'degraded' ),
+    'high swap pressure degrades OS preflight' );
 
 my $tiny_runtime = GPForum::Runtime->new(
     web_processes      => 3,

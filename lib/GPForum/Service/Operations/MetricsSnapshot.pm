@@ -24,8 +24,9 @@ has realtime_hub        => undef;
 has projection_trackers => sub { return []; };
 has query_budget =>
   sub { return GPForum::Service::Operations::QueryBudget->new; };
-has runtime    => undef;
-has started_at => sub { return time; };
+has runtime        => undef;
+has runtime_policy => undef;
+has started_at     => sub { return time; };
 
 sub collect {
     my ($self) = @_;
@@ -37,20 +38,21 @@ sub collect {
             pid            => $PROCESS_ID,
             uptime_seconds => int( time - $self->started_at ),
         },
-        runtime            => $runtime ? $runtime->as_hash : {},
-        os                 => $self->_runtime_os_snapshot,
-        os_features        => $self->_runtime_os_features,
-        os_sockets         => $self->_runtime_os_sockets,
-        os_processes       => $self->_runtime_os_processes,
-        os_preflight       => $self->_runtime_os_preflight,
-        local_caches       => $self->_local_caches,
-        realtime           => $self->_realtime,
-        rate_limits        => $self->_rate_limits,
-        projections        => $self->_projections,
-        query_budgets      => $self->_query_budgets,
-        query_budget_drift => $self->_query_budget_drift,
-        database           => $self->_database,
-        outbox             => $self->_outbox,
+        runtime             => $runtime ? $runtime->as_hash : {},
+        os                  => $self->_runtime_os_snapshot,
+        os_features         => $self->_runtime_os_features,
+        os_sockets          => $self->_runtime_os_sockets,
+        os_processes        => $self->_runtime_os_processes,
+        os_preflight        => $self->_runtime_os_preflight,
+        runtime_enforcement => $self->_runtime_enforcement,
+        local_caches        => $self->_local_caches,
+        realtime            => $self->_realtime,
+        rate_limits         => $self->_rate_limits,
+        projections         => $self->_projections,
+        query_budgets       => $self->_query_budgets,
+        query_budget_drift  => $self->_query_budget_drift,
+        database            => $self->_database,
+        outbox              => $self->_outbox,
     };
 }
 
@@ -98,6 +100,14 @@ sub _runtime_os_preflight {
         runtime => $self->runtime,
         $self->_os_preflight_settings,
     )->check;
+}
+
+sub _runtime_enforcement {
+    my ($self) = @_;
+
+    return {} if !$self->runtime_policy;
+
+    return $self->runtime_policy->report;
 }
 
 sub _os_preflight_settings {

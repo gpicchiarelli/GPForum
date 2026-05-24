@@ -56,14 +56,15 @@ sub report {
     my @checks = $self->_checks($context);
 
     return {
-        status    => _overall_status( \@checks ),
-        os        => $context->{os},
-        runtime   => $context->{runtime},
-        resources => $context->{os}{resources} || {},
-        features  => $context->{features},
-        sockets   => $context->{sockets},
-        processes => $context->{processes},
-        checks    => \@checks,
+        status          => _overall_status( \@checks ),
+        os              => $context->{os},
+        runtime         => $context->{runtime},
+        resources       => $context->{os}{resources} || {},
+        recommendations => $self->_recommendations,
+        features        => $context->{features},
+        sockets         => $context->{sockets},
+        processes       => $context->{processes},
+        checks          => \@checks,
     };
 }
 
@@ -99,6 +100,7 @@ sub human_lines {
         _os_line($report),
         _runtime_line($report),
         _resource_line($report),
+        _recommendation_line($report),
         @{ _feature_lines($report) },
         @{ _socket_lines($report) },
         @{ _process_lines($report) },
@@ -132,6 +134,8 @@ sub _checks {
         $self->_web_worker_check($context),
         $self->_open_file_descriptor_check($context),
         $self->_file_descriptor_limit_check($context),
+        $self->_file_descriptor_usage_check($context),
+        _swap_pressure_check($context),
         _feature_support_check($context),
         _socket_policy_check($context),
         _process_policy_check($context),
@@ -238,6 +242,35 @@ sub _file_descriptor_limit_check {
     return _ok_check('file_descriptor_limit');
 }
 
+sub _file_descriptor_usage_check {
+    my ( $self, $context ) = @_;
+
+    my $resources = $context->{os}{resources} || {};
+    return _ok_check('file_descriptor_usage')
+      if !defined $resources->{file_descriptor_limit}
+      || !defined $resources->{open_file_descriptors};
+
+    my $ratio =
+      $resources->{open_file_descriptors} / $resources->{file_descriptor_limit};
+    return _degraded_check( 'file_descriptor_usage',
+        'open file descriptor usage is above 80 percent' )
+      if $ratio > 0.8;
+
+    return _ok_check('file_descriptor_usage');
+}
+
+sub _swap_pressure_check {
+    my ($context) = @_;
+
+    my $swap = ( $context->{os}{resources} || {} )->{swap_pressure} || {};
+    return _degraded_check( 'swap_pressure', 'swap usage is high' )
+      if ( $swap->{status} || q{} ) eq 'high';
+    return _degraded_check( 'swap_pressure', 'swap usage is elevated' )
+      if ( $swap->{status} || q{} ) eq 'warning';
+
+    return _ok_check('swap_pressure');
+}
+
 sub _feature_support_check {
     my ($context) = @_;
 
@@ -249,6 +282,27 @@ sub _feature_support_check {
     }
 
     return _ok_check('features');
+}
+
+sub _recommendations {
+    my ($self) = @_;
+
+    return {
+        ulimit_nofile => {
+            recommended_minimum => $self->minimum_file_descriptor_limit,
+            rationale => 'web sockets, DB handles, logs, uploads, and workers',
+        },
+        postgresql => {
+            application_name  => 'gpforum',
+            statement_timeout =>
+              'set per role; web paths should remain bounded',
+            idle_in_transaction_session_timeout =>
+              'required to prevent stuck web transactions',
+            lock_timeout =>
+              'use conservative timeouts for online migration safety',
+            sslmode => 'prefer in development, require in production',
+        },
+    };
 }
 
 sub _socket_policy_check {
@@ -358,7 +412,19 @@ sub _resource_line {
       'open_file_descriptors='
       . _known_or_unknown( $resources->{open_file_descriptors} ),
       'file_descriptor_limit='
-      . _known_or_unknown( $resources->{file_descriptor_limit} );
+      . _known_or_unknown( $resources->{file_descriptor_limit} ),
+      'swap_pressure='
+      . _known_or_unknown( ( $resources->{swap_pressure} || {} )->{status} );
+}
+
+sub _recommendation_line {
+    my ($report) = @_;
+
+    return join q{ },
+      'recommendations',
+      'ulimit_nofile_min='
+      . $report->{recommendations}{ulimit_nofile}{recommended_minimum},
+      'postgresql=statement_timeout,idle_transaction_timeout,lock_timeout';
 }
 
 sub _feature_lines {

@@ -17,6 +17,7 @@ sub snapshot {
     return {
         open_file_descriptors => $self->open_file_descriptors,
         file_descriptor_limit => $self->file_descriptor_limit,
+        swap_pressure         => $self->swap_pressure,
     };
 }
 
@@ -41,6 +42,52 @@ sub file_descriptor_limit {
     return if !$limit || $limit < 1;
 
     return $limit;
+}
+
+sub swap_pressure {
+    my ($self) = @_;
+
+    my $linux = _linux_swap_pressure();
+    return $linux if $linux;
+
+    return {
+        status => 'unknown',
+        reason => 'portable swap pressure probe unavailable',
+    };
+}
+
+sub _linux_swap_pressure {
+    my $path = '/proc/meminfo';
+    return if !-r $path;
+
+    open my $handle, '<', $path or return;
+    my %values;
+    while ( my $line = <$handle> ) {
+        if ( $line =~ /\A (SwapTotal|SwapFree): \s+ ([0-9]+) /msx ) {
+            $values{$1} = int $2;
+        }
+    }
+    close $handle or return;
+
+    return if !$values{SwapTotal};
+
+    my $used_ratio =
+      ( $values{SwapTotal} - ( $values{SwapFree} || 0 ) ) / $values{SwapTotal};
+
+    return {
+        status     => _swap_status($used_ratio),
+        used_ratio => sprintf '%.3f',
+        $used_ratio,
+    };
+}
+
+sub _swap_status {
+    my ($used_ratio) = @_;
+
+    return 'high'    if $used_ratio >= 0.8;
+    return 'warning' if $used_ratio >= 0.5;
+
+    return 'ok';
 }
 
 sub _fd_paths {

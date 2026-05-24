@@ -14,10 +14,14 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 31;
+const my $EXPECTED_TESTS            => 44;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
+const my $CUSTOM_RUNTIME_BACKLOG    => 256;
+const my $CUSTOM_RUNTIME_CLIENTS    => 80;
+const my $CUSTOM_RUNTIME_REQUESTS   => 120;
+const my $CUSTOM_RUNTIME_TIMEOUT    => 20;
 const my $CUSTOM_MIN_OS_WORKERS     => 2;
 const my $CUSTOM_MAX_OPEN_FDS       => 128;
 const my $CUSTOM_CACHE_MAX_ENTRIES  => 64;
@@ -37,6 +41,17 @@ my %environment = (
     GPFORUM_WEB_PROCESSES                => $CUSTOM_WEB_PROCESSES,
     GPFORUM_WORKER_PROCESSES             => $CUSTOM_WORKER_PROCESSES,
     GPFORUM_REALTIME_PROCESSES           => $CUSTOM_REALTIME_PROCESSES,
+    GPFORUM_RUNTIME_LISTEN               => 'http://127.0.0.1:9000',
+    GPFORUM_RUNTIME_WORKER_POLICY        => 'configured',
+    GPFORUM_RUNTIME_MAX_WEB_PER_CPU      => 3,
+    GPFORUM_RUNTIME_BACKLOG              => $CUSTOM_RUNTIME_BACKLOG,
+    GPFORUM_RUNTIME_CLIENTS              => $CUSTOM_RUNTIME_CLIENTS,
+    GPFORUM_RUNTIME_REQUESTS             => $CUSTOM_RUNTIME_REQUESTS,
+    GPFORUM_RUNTIME_KEEP_ALIVE_TIMEOUT   => $CUSTOM_RUNTIME_TIMEOUT,
+    GPFORUM_RUNTIME_INACTIVITY_TIMEOUT   => $CUSTOM_RUNTIME_TIMEOUT,
+    GPFORUM_RUNTIME_GRACEFUL_TIMEOUT     => $CUSTOM_RUNTIME_TIMEOUT,
+    GPFORUM_RUNTIME_PROXY                => 0,
+    GPFORUM_RUNTIME_PID_FILE             => '/tmp/gpforum-test.pid',
     GPFORUM_OS_REUSEPORT                 => 'off',
     GPFORUM_OS_SENDFILE                  => 'on',
     GPFORUM_OS_WORKER_PRIORITY           => 'auto',
@@ -68,6 +83,27 @@ is( $config->realtime_processes,
     $CUSTOM_REALTIME_PROCESSES, 'realtime process count loads from env' );
 is( $runtime->as_hash->{web_processes},
     $CUSTOM_WEB_PROCESSES, 'runtime mirrors web process count' );
+is_deeply( $config->runtime_listen_locations,
+    ['http://127.0.0.1:9000'], 'runtime listen locations split from env' );
+is( $config->runtime_worker_policy,
+    'configured', 'runtime worker policy loads from env' );
+is( $config->runtime_max_web_per_cpu,
+    3, 'runtime max web per CPU loads from env' );
+is( $config->runtime_backlog,
+    $CUSTOM_RUNTIME_BACKLOG, 'runtime backlog loads from env' );
+is( $config->runtime_clients,
+    $CUSTOM_RUNTIME_CLIENTS, 'runtime clients load from env' );
+is( $config->runtime_requests,
+    $CUSTOM_RUNTIME_REQUESTS, 'runtime requests load from env' );
+is( $config->runtime_keep_alive,
+    $CUSTOM_RUNTIME_TIMEOUT, 'runtime keep-alive timeout loads from env' );
+is( $config->runtime_inactivity,
+    $CUSTOM_RUNTIME_TIMEOUT, 'runtime inactivity timeout loads from env' );
+is( $config->runtime_graceful_timeout,
+    $CUSTOM_RUNTIME_TIMEOUT, 'runtime graceful timeout loads from env' );
+is( $config->runtime_proxy, 0, 'runtime proxy flag loads from env' );
+is( $config->runtime_pid_file, '/tmp/gpforum-test.pid',
+    'runtime pid file loads from env' );
 is( $config->os_reuseport, 'off', 'OS reuseport flag loads from env' );
 is( $config->os_sendfile,  'on',  'OS sendfile flag loads from env' );
 is( $config->os_worker_priority,
@@ -106,6 +142,22 @@ throws_ok(
     },
     qr/\A os_reuseport [ ] must [ ] be [ ] auto, [ ] on, [ ] or [ ] off/msx,
     'invalid OS feature flag fails validation',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( runtime_worker_policy => 'mystery' )->validate;
+    },
+qr/\A runtime_worker_policy [ ] must [ ] be [ ] configured [ ] or [ ] cap-to-cpu/msx,
+    'invalid runtime worker policy fails validation',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( runtime_proxy => 2 )->validate;
+    },
+    qr/\A runtime_proxy [ ] must [ ] be [ ] 0 [ ] or [ ] 1/msx,
+    'runtime proxy must be boolean integer',
 );
 
 throws_ok(

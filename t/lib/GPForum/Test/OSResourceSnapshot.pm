@@ -11,6 +11,9 @@ has snapshot_data => sub {
     return {
         open_file_descriptors => 4,
         file_descriptor_limit => 4096,
+        swap_pressure         => {
+            status => 'ok',
+        },
     };
 };
 

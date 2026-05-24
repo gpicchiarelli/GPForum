@@ -20,6 +20,21 @@ const my $DEFAULT_DATABASE_PASSWORD       => q{};
 const my $DEFAULT_WEB_PROCESSES           => 4;
 const my $DEFAULT_WORKER_PROCESSES        => 2;
 const my $DEFAULT_REALTIME_PROCESSES      => 1;
+const my $DEFAULT_RUNTIME_LISTEN          => 'http://*:8080';
+const my $DEFAULT_RUNTIME_WORKER_POLICY   => 'cap-to-cpu';
+const my $DEFAULT_RUNTIME_MAX_WEB_PER_CPU => 2;
+const my $DEFAULT_RUNTIME_BACKLOG         => 128;
+const my $DEFAULT_RUNTIME_CLIENTS         => 100;
+const my $DEFAULT_RUNTIME_REQUESTS        => 100;
+const my $DEFAULT_RUNTIME_KEEP_ALIVE      => 10;
+const my $DEFAULT_RUNTIME_INACTIVITY      => 30;
+const my $DEFAULT_RUNTIME_GRACEFUL        => 15;
+const my $DEFAULT_RUNTIME_HEARTBEAT_INT   => 3;
+const my $DEFAULT_RUNTIME_HEARTBEAT_TO    => 2;
+const my $DEFAULT_RUNTIME_UPGRADE         => 45;
+const my $DEFAULT_RUNTIME_SPARE           => 1;
+const my $DEFAULT_RUNTIME_PROXY           => 1;
+const my $DEFAULT_RUNTIME_PID_FILE        => 'hypnotoad.pid';
 const my $DEFAULT_OS_FEATURE_SETTING      => 'auto';
 const my $DEFAULT_OS_AFFINITY             => 'off';
 const my $DEFAULT_OS_MIN_WORKERS          => 1;
@@ -31,23 +46,41 @@ const my $MAXIMUM_PROCESS_COUNT           => 512;
 const my $MINIMUM_OS_THRESHOLD            => 1;
 const my %VALID_OS_FEATURE_SETTING        => map { $_ => 1 } qw(auto on off);
 const my %VALID_OS_AFFINITY               => map { $_ => 1 } qw(off manual);
+const my %VALID_RUNTIME_WORKER_POLICY => map { $_ => 1 }
+  qw(configured cap-to-cpu);
 
-has environment                  => sub { return $DEFAULT_ENVIRONMENT; };
-has log_level                    => sub { return $DEFAULT_LOG_LEVEL; };
-has public_base_url              => sub { return $DEFAULT_PUBLIC_BASE_URL; };
-has session_secret               => sub { return $DEFAULT_SESSION_SECRET; };
-has database_dsn                 => sub { return $DEFAULT_DATABASE_DSN; };
-has database_user                => sub { return $DEFAULT_DATABASE_USER; };
-has database_password            => sub { return $DEFAULT_DATABASE_PASSWORD; };
-has web_processes                => sub { return $DEFAULT_WEB_PROCESSES; };
-has worker_processes             => sub { return $DEFAULT_WORKER_PROCESSES; };
-has realtime_processes           => sub { return $DEFAULT_REALTIME_PROCESSES; };
-has os_reuseport                 => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_sendfile                  => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_worker_priority           => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_static_xsendfile          => sub { return $DEFAULT_OS_FEATURE_SETTING; };
-has os_affinity                  => sub { return $DEFAULT_OS_AFFINITY; };
-has os_min_recommended_workers   => sub { return $DEFAULT_OS_MIN_WORKERS; };
+has environment             => sub { return $DEFAULT_ENVIRONMENT; };
+has log_level               => sub { return $DEFAULT_LOG_LEVEL; };
+has public_base_url         => sub { return $DEFAULT_PUBLIC_BASE_URL; };
+has session_secret          => sub { return $DEFAULT_SESSION_SECRET; };
+has database_dsn            => sub { return $DEFAULT_DATABASE_DSN; };
+has database_user           => sub { return $DEFAULT_DATABASE_USER; };
+has database_password       => sub { return $DEFAULT_DATABASE_PASSWORD; };
+has web_processes           => sub { return $DEFAULT_WEB_PROCESSES; };
+has worker_processes        => sub { return $DEFAULT_WORKER_PROCESSES; };
+has realtime_processes      => sub { return $DEFAULT_REALTIME_PROCESSES; };
+has runtime_listen          => sub { return $DEFAULT_RUNTIME_LISTEN; };
+has runtime_worker_policy   => sub { return $DEFAULT_RUNTIME_WORKER_POLICY; };
+has runtime_max_web_per_cpu => sub { return $DEFAULT_RUNTIME_MAX_WEB_PER_CPU; };
+has runtime_backlog         => sub { return $DEFAULT_RUNTIME_BACKLOG; };
+has runtime_clients         => sub { return $DEFAULT_RUNTIME_CLIENTS; };
+has runtime_requests        => sub { return $DEFAULT_RUNTIME_REQUESTS; };
+has runtime_keep_alive      => sub { return $DEFAULT_RUNTIME_KEEP_ALIVE; };
+has runtime_inactivity      => sub { return $DEFAULT_RUNTIME_INACTIVITY; };
+has runtime_graceful_timeout => sub { return $DEFAULT_RUNTIME_GRACEFUL; };
+has runtime_heartbeat_interval =>
+  sub { return $DEFAULT_RUNTIME_HEARTBEAT_INT; };
+has runtime_heartbeat_timeout  => sub { return $DEFAULT_RUNTIME_HEARTBEAT_TO; };
+has runtime_upgrade_timeout    => sub { return $DEFAULT_RUNTIME_UPGRADE; };
+has runtime_spare_processes    => sub { return $DEFAULT_RUNTIME_SPARE; };
+has runtime_proxy              => sub { return $DEFAULT_RUNTIME_PROXY; };
+has runtime_pid_file           => sub { return $DEFAULT_RUNTIME_PID_FILE; };
+has os_reuseport               => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_sendfile                => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_worker_priority         => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_static_xsendfile        => sub { return $DEFAULT_OS_FEATURE_SETTING; };
+has os_affinity                => sub { return $DEFAULT_OS_AFFINITY; };
+has os_min_recommended_workers => sub { return $DEFAULT_OS_MIN_WORKERS; };
 has os_max_open_file_descriptors => sub { return $DEFAULT_OS_MAX_OPEN_FDS; };
 has local_cache_max_entries => sub { return $DEFAULT_LOCAL_CACHE_MAX_ENTRIES; };
 has category_cache_ttl_seconds => sub { return $DEFAULT_CATEGORY_CACHE_TTL; };
@@ -90,6 +123,67 @@ sub from_environment {
         realtime_processes => _env_integer(
             $environment, 'GPFORUM_REALTIME_PROCESSES',
             $DEFAULT_REALTIME_PROCESSES
+        ),
+        runtime_listen => _env_value(
+            $environment, 'GPFORUM_RUNTIME_LISTEN', $DEFAULT_RUNTIME_LISTEN
+        ),
+        runtime_worker_policy => _env_value(
+            $environment, 'GPFORUM_RUNTIME_WORKER_POLICY',
+            $DEFAULT_RUNTIME_WORKER_POLICY
+        ),
+        runtime_max_web_per_cpu => _env_integer(
+            $environment,
+            'GPFORUM_RUNTIME_MAX_WEB_PER_CPU',
+            $DEFAULT_RUNTIME_MAX_WEB_PER_CPU
+        ),
+        runtime_backlog => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_BACKLOG',
+            $DEFAULT_RUNTIME_BACKLOG
+        ),
+        runtime_clients => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_CLIENTS',
+            $DEFAULT_RUNTIME_CLIENTS
+        ),
+        runtime_requests => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_REQUESTS',
+            $DEFAULT_RUNTIME_REQUESTS
+        ),
+        runtime_keep_alive => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_KEEP_ALIVE_TIMEOUT',
+            $DEFAULT_RUNTIME_KEEP_ALIVE
+        ),
+        runtime_inactivity => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_INACTIVITY_TIMEOUT',
+            $DEFAULT_RUNTIME_INACTIVITY
+        ),
+        runtime_graceful_timeout => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_GRACEFUL_TIMEOUT',
+            $DEFAULT_RUNTIME_GRACEFUL
+        ),
+        runtime_heartbeat_interval => _env_integer(
+            $environment,
+            'GPFORUM_RUNTIME_HEARTBEAT_INTERVAL',
+            $DEFAULT_RUNTIME_HEARTBEAT_INT
+        ),
+        runtime_heartbeat_timeout => _env_integer(
+            $environment,
+            'GPFORUM_RUNTIME_HEARTBEAT_TIMEOUT',
+            $DEFAULT_RUNTIME_HEARTBEAT_TO
+        ),
+        runtime_upgrade_timeout => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_UPGRADE_TIMEOUT',
+            $DEFAULT_RUNTIME_UPGRADE
+        ),
+        runtime_spare_processes => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_SPARE_PROCESSES',
+            $DEFAULT_RUNTIME_SPARE
+        ),
+        runtime_proxy => _env_integer(
+            $environment, 'GPFORUM_RUNTIME_PROXY', $DEFAULT_RUNTIME_PROXY
+        ),
+        runtime_pid_file => _env_value(
+            $environment, 'GPFORUM_RUNTIME_PID_FILE',
+            $DEFAULT_RUNTIME_PID_FILE
         ),
         os_reuseport => _env_value(
             $environment, 'GPFORUM_OS_REUSEPORT',
@@ -146,6 +240,29 @@ sub validate {
     _require_process_count( 'web_processes',      $self->web_processes );
     _require_process_count( 'worker_processes',   $self->worker_processes );
     _require_process_count( 'realtime_processes', $self->realtime_processes );
+    _require_non_empty( 'runtime_listen',   $self->runtime_listen );
+    _require_non_empty( 'runtime_pid_file', $self->runtime_pid_file );
+    _require_runtime_worker_policy( $self->runtime_worker_policy );
+    _require_positive_integer( 'runtime_max_web_per_cpu',
+        $self->runtime_max_web_per_cpu );
+    _require_positive_integer( 'runtime_backlog',  $self->runtime_backlog );
+    _require_positive_integer( 'runtime_clients',  $self->runtime_clients );
+    _require_positive_integer( 'runtime_requests', $self->runtime_requests );
+    _require_positive_integer( 'runtime_keep_alive',
+        $self->runtime_keep_alive );
+    _require_positive_integer( 'runtime_inactivity',
+        $self->runtime_inactivity );
+    _require_positive_integer( 'runtime_graceful_timeout',
+        $self->runtime_graceful_timeout );
+    _require_positive_integer( 'runtime_heartbeat_interval',
+        $self->runtime_heartbeat_interval );
+    _require_positive_integer( 'runtime_heartbeat_timeout',
+        $self->runtime_heartbeat_timeout );
+    _require_positive_integer( 'runtime_upgrade_timeout',
+        $self->runtime_upgrade_timeout );
+    _require_positive_integer( 'runtime_spare_processes',
+        $self->runtime_spare_processes );
+    _require_boolean_integer( 'runtime_proxy', $self->runtime_proxy );
     _require_os_feature_setting( 'os_reuseport', $self->os_reuseport );
     _require_os_feature_setting( 'os_sendfile',  $self->os_sendfile );
     _require_os_feature_setting( 'os_worker_priority',
@@ -192,6 +309,14 @@ sub os_preflight_settings {
     };
 }
 
+sub runtime_listen_locations {
+    my ($self) = @_;
+
+    return [ grep { length }
+          map { _trim($_) } split /,/msx,
+        $self->runtime_listen ];
+}
+
 sub database_connect_info {
     my ($self) = @_;
 
@@ -206,6 +331,31 @@ sub database_connect_info {
             pg_enable_utf8 => 1,
         },
     );
+}
+
+sub _require_runtime_worker_policy {
+    my ($value) = @_;
+
+    croak 'runtime_worker_policy must be configured or cap-to-cpu'
+      if !exists $VALID_RUNTIME_WORKER_POLICY{$value};
+
+    return;
+}
+
+sub _require_boolean_integer {
+    my ( $name, $value ) = @_;
+
+    croak "$name must be 0 or 1"
+      if $value != 0 && $value != 1;
+
+    return;
+}
+
+sub _trim {
+    my ($value) = @_;
+
+    $value =~ s/\A\s+|\s+\z//gmsx;
+    return $value;
 }
 
 sub _env_value {

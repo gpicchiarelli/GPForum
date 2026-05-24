@@ -36,6 +36,13 @@ jobs:
           test -f docs/OPERATIONAL_BASELINE.md
           test -f docs/PERFORMANCE_BASELINE.md
           test -f docs/OS_OPTIMIZATION.md
+          test -f docs/OS_RUNTIME_ENFORCEMENT.md
+          test -f docs/DEPLOYMENT.md
+          test -f deploy/systemd/gpforum.service
+          test -f deploy/freebsd/gpforum
+          test -f deploy/launchd/com.gpforum.app.plist
+          test -f deploy/nginx/gpforum.conf
+          test -f deploy/caddy/Caddyfile
           test -f .github/CODEOWNERS
           test -f .github/pull_request_template.md
           test -f .github/dependabot.yml

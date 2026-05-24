@@ -18,10 +18,10 @@ use GPForum::Test::ReadinessSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS              => 16;
-const my $CHECK_COUNT                 => 8;
-const my $ENDPOINT_BUDGET_CHECK_INDEX => 6;
-const my $QUERY_BUDGET_DRIFT_INDEX    => 7;
+const my $EXPECTED_TESTS              => 17;
+const my $CHECK_COUNT                 => 9;
+const my $ENDPOINT_BUDGET_CHECK_INDEX => 7;
+const my $QUERY_BUDGET_DRIFT_INDEX    => 8;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -42,6 +42,8 @@ is( $ready->{checks}[1]{status}, 'ok',     'runtime readiness check passes' );
 is( $ready->{checks}[2]{name}, 'os_preflight', 'readiness checks OS posture' );
 is( $ready->{checks}[2]{status},
     'ok', 'readiness accepts complete OS posture' );
+is( $ready->{checks}[3]{name},
+    'runtime_enforcement', 'readiness checks runtime enforcement posture' );
 is( $ready->{checks}[$ENDPOINT_BUDGET_CHECK_INDEX]{name},
     'endpointquerybudget', 'readiness checks query budget resultset' );
 is( $ready->{checks}[$QUERY_BUDGET_DRIFT_INDEX]{name},

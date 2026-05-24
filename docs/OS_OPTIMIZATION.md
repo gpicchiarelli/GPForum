@@ -113,6 +113,8 @@ Current GPForum behavior:
 - exposes OS posture through `/metrics`;
 - checks OS posture through readiness and platform checks;
 - provides `script/gpforum-os-preflight` for human and JSON diagnostics;
+- configures Hypnotoad workers, backlog, keep-alive, graceful shutdown, and
+  supported reuseport listen URLs through `GPForum::OS::RuntimePolicy`;
 - reports degradation when requested OS features are unsupported;
 - reports conservative warnings for excessive web worker counts and low file
   descriptor limits.
@@ -123,8 +125,11 @@ Current GPForum behavior deliberately does not:
 - raise file descriptor limits;
 - require root;
 - pin CPU affinity;
-- configure systemd, rc.d, launchd, or Hypnotoad automatically;
-- apply socket options outside the Mojolicious/Hypnotoad runtime.
+- install or modify systemd, rc.d, or launchd units automatically;
+- patch kernel socket behavior outside the Mojolicious/Hypnotoad runtime.
+
+See also [OS_RUNTIME_ENFORCEMENT.md](OS_RUNTIME_ENFORCEMENT.md) and
+[DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Supervisor Boundary
 

@@ -17,10 +17,11 @@ our $VERSION = '0.001';
 const my $MILLISECONDS_PER_SECOND => 1000;
 const my $MAX_ERROR_LENGTH        => 240;
 
-has clock       => sub { return GPForum::Service::Clock->new; };
-has environment => 'development';
-has runtime     => undef;
-has schema      => undef;
+has clock          => sub { return GPForum::Service::Clock->new; };
+has environment    => 'development';
+has runtime        => undef;
+has runtime_policy => undef;
+has schema         => undef;
 
 sub check {
     my ($self) = @_;
@@ -30,6 +31,7 @@ sub check {
         $self->_db_check,
         $self->_runtime_check,
         $self->_os_preflight_check,
+        $self->_runtime_enforcement_check,
         $self->_resultset_check('EventLog'),
         $self->_resultset_check('OutboxMessage'),
         $self->_resultset_check('ProjectionGeneration'),
@@ -91,6 +93,22 @@ sub _os_preflight_check {
         status     => $preflight->{status},
         latency_ms => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
         checks     => $preflight->{checks},
+    };
+}
+
+sub _runtime_enforcement_check {
+    my ($self) = @_;
+
+    return _ok_check( 'runtime_enforcement', time )
+      if !$self->runtime_policy;
+
+    my $started = time;
+    my $check   = $self->runtime_policy->readiness_check;
+    return {
+        name       => $check->{name},
+        status     => $check->{status},
+        latency_ms => int( ( time - $started ) * $MILLISECONDS_PER_SECOND ),
+        report     => $check->{report},
     };
 }
 

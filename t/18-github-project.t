@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 50;
+const my $EXPECTED_TESTS => 63;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -37,13 +37,25 @@ for my $required_file (
     docs/CPAN_LICENSE_REVIEW.md
     docs/OPERATIONAL_BASELINE.md
     docs/PERFORMANCE_BASELINE.md
+    docs/OS_OPTIMIZATION.md
+    docs/OS_RUNTIME_ENFORCEMENT.md
+    docs/DEPLOYMENT.md
+    deploy/systemd/gpforum.service
+    deploy/systemd/gpforum-unix-socket.service
+    deploy/freebsd/gpforum
+    deploy/launchd/com.gpforum.app.plist
+    deploy/nginx/gpforum.conf
+    deploy/nginx/gpforum-unix-socket.conf
+    deploy/caddy/Caddyfile
     prompt/44.txt
     bin/gpforum-benchmark
+    bin/gpforum-os-preflight
     bin/gpforum-seed-performance-data
     script/bench-http
     script/benchmark-http
     script/cpan-license-check
     script/perltidy-check
+    script/gpforum-os-preflight
     script/profile-nytprof
     script/query-budget
     script/seed-performance-data
@@ -92,6 +104,11 @@ like(
     $ci,
     qr/script\/query-budget [ ] --check/msx,
     'CI checks query budget through script wrapper'
+);
+like(
+    $ci,
+    qr/script\/gpforum-os-preflight [ ] --json/msx,
+    'CI runs OS preflight'
 );
 like(
     $ci,

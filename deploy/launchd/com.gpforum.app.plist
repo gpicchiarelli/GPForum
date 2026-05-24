@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gpforum.app</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/gpforum</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GPFORUM_ENV</key>
+    <string>production</string>
+    <key>MOJO_MODE</key>
+    <string>production</string>
+    <key>GPFORUM_RUNTIME_LISTEN</key>
+    <string>http://127.0.0.1:8080</string>
+  </dict>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/gpforum/local/bin/carton</string>
+    <string>exec</string>
+    <string>hypnotoad</string>
+    <string>-f</string>
+    <string>/opt/gpforum/bin/gpforum</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+</dict>
+</plist>

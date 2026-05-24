@@ -7,6 +7,7 @@ use Mojo::Base 'Mojolicious';
 
 use GPForum::Config;
 use GPForum::Log;
+use GPForum::OS::RuntimePolicy;
 use GPForum::Runtime;
 use GPForum::Schema;
 use GPForum::Service::Clock;
@@ -60,16 +61,21 @@ our $VERSION = '0.001';
 sub startup {
     my ($self) = @_;
 
-    my $config    = GPForum::Config->from_environment;
-    my $runtime   = GPForum::Runtime->from_config($config);
+    my $config  = GPForum::Config->from_environment;
+    my $runtime = GPForum::Runtime->from_config($config);
+    my $runtime_policy =
+      GPForum::OS::RuntimePolicy->new( config => $config, runtime => $runtime );
     my $root_path = q{/};
 
+    $self->config( hypnotoad => $runtime_policy->hypnotoad_config );
+    $self->config( gpforum_runtime_enforcement => $runtime_policy->report );
     $self->secrets( [ $config->session_secret ] );
     $self->mode( $config->environment );
     _configure_browser_security( $self, $config );
 
-    $self->helper( gp_config  => sub { return $config; } );
-    $self->helper( gp_runtime => sub { return $runtime; } );
+    $self->helper( gp_config         => sub { return $config; } );
+    $self->helper( gp_runtime        => sub { return $runtime; } );
+    $self->helper( gp_runtime_policy => sub { return $runtime_policy; } );
     my $schema;
     $self->helper(
         gp_schema => sub {
@@ -176,11 +182,12 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Operations::MetricsSnapshot->new(
-                runtime      => $runtime,
-                schema       => $controller->gp_schema,
-                realtime_hub => $controller->gp_realtime_hub,
-                rate_limiter => $controller->gp_rate_limiter,
-                local_caches => [ $controller->gp_local_cache ],
+                runtime        => $runtime,
+                runtime_policy => $runtime_policy,
+                schema         => $controller->gp_schema,
+                realtime_hub   => $controller->gp_realtime_hub,
+                rate_limiter   => $controller->gp_rate_limiter,
+                local_caches   => [ $controller->gp_local_cache ],
             );
         }
     );
@@ -189,9 +196,10 @@ sub startup {
             my ($controller) = @_;
 
             return GPForum::Service::Operations::Readiness->new(
-                environment => $config->environment,
-                runtime     => $runtime,
-                schema      => $controller->gp_schema,
+                environment    => $config->environment,
+                runtime        => $runtime,
+                runtime_policy => $runtime_policy,
+                schema         => $controller->gp_schema,
             );
         }
     );
