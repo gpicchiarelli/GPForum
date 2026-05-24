@@ -133,6 +133,69 @@ subtest 'normal users cannot cross admin or moderation boundaries' => sub {
     $test->status_is( $HTTP_FORBIDDEN, 'normal user cannot moderate content' );
 };
 
+subtest 'expired sessions do not authorize protected routes' => sub {
+    my $test = _security_test_app();
+    _install_test_session_route($test);
+
+    $test->get_ok('/__test/expired-session/user-normal');
+    $test->status_is($HTTP_OK);
+    $test->get_ok( '/notifications' => { Accept => 'application/json' } );
+    $test->status_is( $HTTP_UNAUTHORIZED,
+        'expired session cannot read notification inbox' );
+};
+
+subtest 'moderator identity without permission remains forbidden' => sub {
+    my $test = _security_test_app();
+    _install_test_session_route($test);
+    $test->get_ok('/__test/session/moderator-1');
+    $test->status_is($HTTP_OK);
+
+    my $token = _csrf_token($test);
+    $test->app->helper(
+        gp_permission_gate => sub {
+            return GPForum::Test::DenyPermissionGate->new;
+        }
+    );
+
+    $test->get_ok(
+        '/moderation/suspensions' => { Accept => 'application/json' } );
+    $test->status_is( $HTTP_FORBIDDEN,
+        'moderator label alone cannot view suspension queue' );
+    $test->post_ok(
+        '/moderation/users/user-2/suspend' =>
+          { Accept => 'application/json' } => form => {
+            csrf_token => $token,
+            reason     => 'forbidden',
+          }
+    );
+    $test->status_is( $HTTP_FORBIDDEN,
+        'moderator label alone cannot suspend users' );
+};
+
+subtest 'public discovery surfaces do not leak restricted fixture content' =>
+  sub {
+    my $test = _security_test_app();
+
+    $test->get_ok('/feed.atom');
+    $test->status_is($HTTP_OK);
+    $test->content_unlike(
+        qr/private [ ] text [ ] must [ ] not [ ] leak/msx,
+        'Atom feed excludes hidden thread excerpt'
+    );
+
+    $test->get_ok('/sitemap.xml');
+    $test->status_is($HTTP_OK);
+    $test->content_unlike( qr/thread-hidden/msx,
+        'sitemap excludes hidden thread URL' );
+
+    $test->get_ok( '/search?q=hidden' => { Accept => 'application/json' } );
+    $test->status_is($HTTP_OK);
+    $test->content_unlike(
+        qr/private [ ] text [ ] must [ ] not [ ] leak/msx,
+        'search response excludes restricted fixture excerpt'
+    );
+  };
+
 done_testing();
 
 sub _security_test_app {
@@ -201,6 +264,16 @@ sub _install_test_session_route {
             my ($controller) = @_;
 
             $controller->session( user_id => $controller->param('user_id') );
+            return $controller->render( json => { ok => 1 } );
+        }
+    );
+    my $expired = $test->app->routes->get('/__test/expired-session/:user_id');
+    $expired->to(
+        cb => sub {
+            my ($controller) = @_;
+
+            $controller->session( user_id => $controller->param('user_id') );
+            $controller->session( expires => 1 );
             return $controller->render( json => { ok => 1 } );
         }
     );

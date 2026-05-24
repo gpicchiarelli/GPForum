@@ -75,10 +75,19 @@ jobs:
         run: carton exec prove -lr t
 
       - name: Run benchmark smoke
-        run: carton exec bin/gpforum-benchmark --fixture --iterations 2 --warmup 1 --route /health/live --route /categories
+        run: carton exec bin/gpforum-benchmark --fixture --check --iterations 2 --warmup 1 --route /health/live --route /categories
 
       - name: Apply database migrations
         run: carton exec bin/gpforum-migrate --apply
+
+      - name: Seed production evidence dataset
+        run: script/seed-benchmark --profile small
+
+      - name: Run query plan evidence
+        run: script/query-plan-evidence --check
+
+      - name: Run configured benchmark smoke
+        run: script/benchmark-http --configured --check --iterations 3 --warmup 1 --route /categories --route /health/ready
 
       - name: Sync query budget catalog
         run: script/query-budget --sync

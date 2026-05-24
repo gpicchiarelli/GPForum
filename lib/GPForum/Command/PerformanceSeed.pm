@@ -20,6 +20,9 @@ const my $DEFAULT_USERS            => 5;
 const my $DEFAULT_CATEGORIES       => 3;
 const my $DEFAULT_THREADS          => 12;
 const my $DEFAULT_POSTS_PER_THREAD => 8;
+const my $PROFILE_SMALL            => 'small';
+const my $PROFILE_MEDIUM           => 'medium';
+const my $PROFILE_HOT_THREAD       => 'hot-thread';
 const my $FAMILY_SPACE             => 0x1000;
 const my $FAMILY_CATEGORY          => 0x1001;
 const my $FAMILY_USER              => 0x1002;
@@ -30,6 +33,13 @@ const my $FAMILY_BODY              => 0x1006;
 const my $FAMILY_REVISION          => 0x1007;
 const my $FAMILY_SEARCH            => 0x1008;
 const my $FAMILY_NOTIFICATION      => 0x1009;
+const my $FAMILY_ROLE              => 0x100a;
+const my $FAMILY_PERMISSION        => 0x100b;
+const my $FAMILY_ROLE_BINDING      => 0x100c;
+const my $FAMILY_BOOKMARK          => 0x100d;
+const my $FAMILY_SUBSCRIPTION      => 0x100e;
+const my $FAMILY_REPORT            => 0x100f;
+const my $FAMILY_MODERATION_ACTION => 0x1010;
 const my $HTTP_EXIT_USAGE          => 2;
 const my $SEARCH_DOCUMENT_VERSION  => 1;
 const my $THREAD_VERSION           => 1;
@@ -103,13 +113,18 @@ sub _insert_dataset {
 
     _insert_space($dbh);
     _insert_users( $dbh, $plan );
+    _insert_roles_and_permissions( $dbh, $plan );
     _insert_sessions( $dbh, $plan );
     _insert_categories( $dbh, $plan );
     _insert_threads_and_posts( $dbh, $plan );
     _insert_category_stats( $dbh, $plan );
     _insert_read_state( $dbh, $plan );
+    _insert_bookmarks( $dbh, $plan );
+    _insert_subscriptions( $dbh, $plan );
     _insert_notifications( $dbh, $plan );
     _insert_feed_items( $dbh, $plan );
+    _insert_reports( $dbh, $plan );
+    _insert_moderation_actions( $dbh, $plan );
 
     return;
 }
@@ -162,6 +177,130 @@ sub _insert_users {
             _timestamp($number),
             _timestamp($number),
             _timestamp($number),
+        );
+    }
+
+    return;
+}
+
+sub _insert_roles_and_permissions {
+    my ( $dbh, $plan ) = @_;
+
+    _insert_roles($dbh);
+    _insert_permissions($dbh);
+    _insert_role_permissions($dbh);
+    _insert_role_bindings( $dbh, $plan );
+
+    return;
+}
+
+sub _insert_roles {
+    my ($dbh) = @_;
+
+    my @roles = (
+        [ 1, 'administrator', 'Performance administrator' ],
+        [ 2, 'moderator',     'Performance moderator' ],
+        [ 3, 'member',        'Performance member' ],
+    );
+
+    for my $role (@roles) {
+        $dbh->do(
+            q{
+                INSERT INTO roles (role_id, name, description, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT (role_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    description = EXCLUDED.description
+            },
+            undef, _role_id( $role->[0] ), $role->[1], $role->[2],
+            _timestamp(0),
+        );
+    }
+
+    return;
+}
+
+sub _insert_permissions {
+    my ($dbh) = @_;
+
+    my @permissions = (
+        [ 1, 'admin.view',        'admin',      'view' ],
+        [ 2, 'role.manage',       'role',       'manage' ],
+        [ 3, 'moderation.view',   'moderation', 'view' ],
+        [ 4, 'moderation.action', 'moderation', 'action' ],
+        [ 5, 'forum.write',       'forum',      'write' ],
+        [ 6, 'report.create',     'report',     'create' ],
+    );
+
+    for my $permission (@permissions) {
+        $dbh->do(
+            q{
+                INSERT INTO permissions
+                    (permission_id, name, resource_type, action, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT (permission_id) DO UPDATE SET
+                    name = EXCLUDED.name,
+                    resource_type = EXCLUDED.resource_type,
+                    action = EXCLUDED.action
+            },
+            undef,
+            _permission_id( $permission->[0] ),
+            $permission->[1],
+            $permission->[2],
+            $permission->[3],
+            _timestamp(0),
+        );
+    }
+
+    return;
+}
+
+sub _insert_role_permissions {
+    my ($dbh) = @_;
+
+    my @role_permissions = (
+        [ 1, 1 ], [ 1, 2 ], [ 1, 3 ], [ 1, 4 ], [ 1, 5 ], [ 1, 6 ],
+        [ 2, 3 ], [ 2, 4 ], [ 2, 6 ], [ 3, 5 ], [ 3, 6 ],
+    );
+
+    for my $grant (@role_permissions) {
+        $dbh->do(
+            q{
+                INSERT INTO role_permissions
+                    (role_id, permission_id, created_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT (role_id, permission_id) DO NOTHING
+            },
+            undef, _role_id( $grant->[0] ), _permission_id( $grant->[1] ),
+            _timestamp(0),
+        );
+    }
+
+    return;
+}
+
+sub _insert_role_bindings {
+    my ( $dbh, $plan ) = @_;
+
+    for my $user_number ( 1 .. $plan->{dataset}{users} ) {
+        my $role_number = _role_number_for_user($user_number);
+        $dbh->do(
+            q{
+                INSERT INTO role_bindings
+                    (binding_id, user_id, role_id, resource_type, resource_id,
+                     space_id, created_by_user_id, created_at)
+                VALUES (?, ?, ?, 'space', NULL, ?, ?, ?)
+                ON CONFLICT (binding_id) DO UPDATE SET
+                    role_id = EXCLUDED.role_id,
+                    revoked_at = NULL
+            },
+            undef,
+            _uuid( $FAMILY_ROLE_BINDING, $user_number ),
+            _user_id($user_number),
+            _role_id($role_number),
+            $SPACE_ID,
+            _user_id(1),
+            _timestamp($user_number),
         );
     }
 
@@ -523,6 +662,57 @@ sub _upsert_read_state {
     return;
 }
 
+sub _insert_bookmarks {
+    my ( $dbh, $plan ) = @_;
+
+    for my $number ( 1 .. $plan->{dataset}{bookmarks} ) {
+        $dbh->do(
+            q{
+                INSERT INTO bookmarks
+                    (bookmark_id, user_id, target_type, target_id, note,
+                     created_at)
+                VALUES (?, ?, 'thread', ?, ?, ?)
+                ON CONFLICT (user_id, target_type, target_id) DO UPDATE SET
+                    note = EXCLUDED.note,
+                    deleted_at = NULL
+            },
+            undef,
+            _uuid( $FAMILY_BOOKMARK, $number ),
+            _user_id( _user_number( $plan, $number ) ),
+            _thread_id( _thread_number( $plan, $number ) ),
+            'benchmark bookmark ' . $number,
+            _timestamp( 450 + $number ),
+        );
+    }
+
+    return;
+}
+
+sub _insert_subscriptions {
+    my ( $dbh, $plan ) = @_;
+
+    for my $number ( 1 .. $plan->{dataset}{subscriptions} ) {
+        $dbh->do(
+            q{
+                INSERT INTO subscriptions
+                    (subscription_id, user_id, target_type, target_id,
+                     preference, created_at)
+                VALUES (?, ?, 'thread', ?, 'all', ?)
+                ON CONFLICT (user_id, target_type, target_id) DO UPDATE SET
+                    preference = EXCLUDED.preference,
+                    revoked_at = NULL
+            },
+            undef,
+            _uuid( $FAMILY_SUBSCRIPTION, $number ),
+            _user_id( _user_number( $plan, $number ) ),
+            _thread_id( _thread_number( $plan, $number ) ),
+            _timestamp( 470 + $number ),
+        );
+    }
+
+    return;
+}
+
 sub _insert_notifications {
     my ( $dbh, $plan ) = @_;
 
@@ -592,10 +782,81 @@ sub _insert_feed_items {
     return;
 }
 
+sub _insert_reports {
+    my ( $dbh, $plan ) = @_;
+
+    for my $number ( 1 .. $plan->{dataset}{reports} ) {
+        my $target_type = $number % 2 ? 'thread' : 'post';
+        my $target_id =
+          $target_type eq 'thread'
+          ? _thread_id( _thread_number( $plan, $number ) )
+          : _uuid( $FAMILY_POST,
+            _post_key( $plan, _thread_number( $plan, $number ), 1 ) );
+        $dbh->do(
+            q{
+                INSERT INTO reports
+                    (report_id, reporter_user_id, target_type, target_id,
+                     reason, details, status, assigned_moderator_user_id,
+                     created_at)
+                VALUES (?, ?, ?, ?, 'spam', ?, 'open', ?, ?)
+                ON CONFLICT (report_id) DO UPDATE SET
+                    status = EXCLUDED.status,
+                    details = EXCLUDED.details
+            },
+            undef,
+            _uuid( $FAMILY_REPORT, $number ),
+            _user_id( _user_number( $plan, $number ) ),
+            $target_type,
+            $target_id,
+            'benchmark report ' . $number,
+            _user_id( _minimum( $plan->{dataset}{users}, 2 ) ),
+            _timestamp( 700 + $number ),
+        );
+    }
+
+    return;
+}
+
+sub _insert_moderation_actions {
+    my ( $dbh, $plan ) = @_;
+
+    for my $number ( 1 .. $plan->{dataset}{moderation_actions} ) {
+        $dbh->do(
+            q{
+                INSERT INTO moderation_actions
+                    (moderation_action_id, actor_user_id, action_type,
+                     target_type, target_id, reason, metadata, created_at)
+                VALUES (?, ?, 'post.reviewed', 'post', ?, ?,
+                        '{}'::jsonb, ?)
+                ON CONFLICT (moderation_action_id) DO UPDATE SET
+                    reason = EXCLUDED.reason,
+                    metadata = EXCLUDED.metadata
+            },
+            undef,
+            _uuid( $FAMILY_MODERATION_ACTION, $number ),
+            _user_id( _minimum( $plan->{dataset}{users}, 2 ) ),
+            _uuid(
+                $FAMILY_POST,
+                _post_key( $plan, _thread_number( $plan, $number ), 1 )
+            ),
+            'benchmark moderation action ' . $number,
+            _timestamp( 730 + $number ),
+        );
+    }
+
+    return;
+}
+
 sub _assert_migrated {
     my ($dbh) = @_;
 
-    for my $table (qw(users categories threads posts thread_read_state)) {
+    for my $table (
+        qw(
+        users roles permissions role_bindings categories threads posts
+        thread_read_state bookmarks subscriptions reports moderation_actions
+        )
+      )
+    {
         my $exists = $dbh->selectrow_array( q{SELECT to_regclass(?)},
             undef, 'public.' . $table );
         croak
@@ -615,18 +876,31 @@ sub _plan {
     my $posts_per_thread = $options->{posts_per_thread};
     my $posts            = $threads * $posts_per_thread;
     my $notifications    = $users * 3;
+    my $bookmarks        = $users;
+    my $subscriptions    = $users;
+    my $reports          = _minimum( $threads, $users * 2 );
+    my $moderation       = _minimum( $threads, $users );
 
     return {
         status  => $options->{dry_run} ? 'dry-run' : 'seeded',
+        profile => $options->{profile},
         dataset => {
-            users            => $users,
-            categories       => $categories,
-            threads          => $threads,
-            posts_per_thread => $posts_per_thread,
-            posts            => $posts,
-            sessions         => $users,
-            read_states      => $users * _minimum( $threads, 3 ),
-            notifications    => $notifications,
+            users              => $users,
+            categories         => $categories,
+            threads            => $threads,
+            posts_per_thread   => $posts_per_thread,
+            posts              => $posts,
+            sessions           => $users,
+            roles              => 3,
+            permissions        => 6,
+            role_bindings      => $users,
+            read_states        => $users * _minimum( $threads, 3 ),
+            bookmarks          => $bookmarks,
+            subscriptions      => $subscriptions,
+            notifications      => $notifications,
+            feed_items         => $threads,
+            reports            => $reports,
+            moderation_actions => $moderation,
         },
         routes => _routes(),
     };
@@ -653,6 +927,7 @@ sub _options {
         categories       => $DEFAULT_CATEGORIES,
         threads          => $DEFAULT_THREADS,
         posts_per_thread => $DEFAULT_POSTS_PER_THREAD,
+        profile          => $PROFILE_SMALL,
         format           => 'text',
         dry_run          => 0,
         help             => 0,
@@ -661,6 +936,7 @@ sub _options {
     while (@arguments) {
         _consume_option( $options, \@arguments );
     }
+    _apply_profile($options);
 
     return $options;
 }
@@ -673,19 +949,26 @@ sub _consume_option {
         '--dry-run' => sub { $options->{dry_run} = 1; },
         '--json'    => sub { $options->{format}  = 'json'; },
         '--help'    => sub { $options->{help}    = 1; },
-        '--users'   => sub {
-            $options->{users} = _positive_integer( shift @{$arguments} );
+        '--profile' => sub {
+            $options->{profile} = _profile( shift @{$arguments} );
+        },
+        '--users' => sub {
+            $options->{users}   = _positive_integer( shift @{$arguments} );
+            $options->{profile} = 'custom';
         },
         '--categories' => sub {
             $options->{categories} =
               _positive_integer( shift @{$arguments} );
+            $options->{profile} = 'custom';
         },
         '--threads' => sub {
             $options->{threads} = _positive_integer( shift @{$arguments} );
+            $options->{profile} = 'custom';
         },
         '--posts-per-thread' => sub {
             $options->{posts_per_thread} =
               _positive_integer( shift @{$arguments} );
+            $options->{profile} = 'custom';
         },
     );
 
@@ -715,14 +998,19 @@ sub _text_report {
     my $dataset = $report->{dataset};
 
     return join q{},
-      'performance_seed status=', $report->{status},         "\n",
-      'users=',                   $dataset->{users},         q{ },
-      'categories=',              $dataset->{categories},    q{ },
-      'threads=',                 $dataset->{threads},       q{ },
-      'posts=',                   $dataset->{posts},         q{ },
-      'sessions=',                $dataset->{sessions},      q{ },
-      'read_states=',             $dataset->{read_states},   q{ },
-      'notifications=',           $dataset->{notifications}, "\n",
+      'performance_seed status=', $report->{status},              "\n",
+      'profile=',                 $report->{profile},             "\n",
+      'users=',                   $dataset->{users},              q{ },
+      'categories=',              $dataset->{categories},         q{ },
+      'threads=',                 $dataset->{threads},            q{ },
+      'posts=',                   $dataset->{posts},              q{ },
+      'sessions=',                $dataset->{sessions},           q{ },
+      'read_states=',             $dataset->{read_states},        q{ },
+      'notifications=',           $dataset->{notifications},      q{ },
+      'bookmarks=',               $dataset->{bookmarks},          q{ },
+      'subscriptions=',           $dataset->{subscriptions},      q{ },
+      'reports=',                 $dataset->{reports},            q{ },
+      'moderation_actions=',      $dataset->{moderation_actions}, "\n",
       'category_route=',          $report->{routes}{category}, "\n",
       'thread_route=',            $report->{routes}{thread},   "\n",
       'search_route=',            $report->{routes}{search},   "\n";
@@ -736,7 +1024,7 @@ sub _print_usage {
 
 sub _usage {
     return
-'Usage: script/seed-performance-data [--dry-run] [--json] [--users N] [--categories N] [--threads N] [--posts-per-thread N]';
+'Usage: script/seed-performance-data [--dry-run] [--json] [--profile small|medium|hot-thread] [--users N] [--categories N] [--threads N] [--posts-per-thread N]';
 }
 
 sub _seed_error {
@@ -771,6 +1059,18 @@ sub _category_id {
     return _uuid( $FAMILY_CATEGORY, $number );
 }
 
+sub _role_id {
+    my ($number) = @_;
+
+    return _uuid( $FAMILY_ROLE, $number );
+}
+
+sub _permission_id {
+    my ($number) = @_;
+
+    return _uuid( $FAMILY_PERMISSION, $number );
+}
+
 sub _thread_id {
     my ($number) = @_;
 
@@ -781,6 +1081,52 @@ sub _user_id {
     my ($number) = @_;
 
     return _uuid( $FAMILY_USER, $number );
+}
+
+sub _role_number_for_user {
+    my ($user_number) = @_;
+
+    return 1 if $user_number == 1;
+    return 2 if $user_number == 2;
+
+    return 3;
+}
+
+sub _profile {
+    my ($value) = @_;
+
+    croak _usage()
+      if !defined $value
+      || ( $value ne $PROFILE_SMALL
+        && $value ne $PROFILE_MEDIUM
+        && $value ne $PROFILE_HOT_THREAD );
+
+    return $value;
+}
+
+sub _apply_profile {
+    my ($options) = @_;
+
+    return if $options->{profile} eq 'custom';
+    return if $options->{profile} eq $PROFILE_SMALL;
+
+    if ( $options->{profile} eq $PROFILE_MEDIUM ) {
+        $options->{users}            = 25;
+        $options->{categories}       = 8;
+        $options->{threads}          = 120;
+        $options->{posts_per_thread} = 15;
+        return;
+    }
+
+    if ( $options->{profile} eq $PROFILE_HOT_THREAD ) {
+        $options->{users}            = 10;
+        $options->{categories}       = 3;
+        $options->{threads}          = 30;
+        $options->{posts_per_thread} = 120;
+        return;
+    }
+
+    return;
 }
 
 sub _category_number {

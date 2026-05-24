@@ -62,6 +62,12 @@ carton exec nytprofcsv -f var/profile/route-nytprof.out.<pid> --out var/profile/
 | read-state rows | 15 |
 | notifications | 15 |
 
+The production evidence gate extends this seed through
+`script/seed-benchmark --profile small|medium|hot-thread`. The default `small`
+profile preserves the counts above and additionally seeds roles, permissions,
+role bindings, bookmarks, subscriptions, feed items, reports, and moderation
+actions.
+
 Deterministic seeded routes:
 
 | Route | Path |
@@ -92,14 +98,14 @@ Process memory reported by `ps`: `memory_rss_kb=1312`.
 
 | Endpoint | Status | p50 ms | p95 ms | p99 ms | req/s | Query budget |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| `/` | 200 | 2.172 | 2.255 | 2.255 | 462.784 | home:5 |
-| `/categories` | 200 | 1.034 | 1.121 | 1.121 | 935.268 | categories:3 |
-| `/c/category-1` | 200 | 2.070 | 2.199 | 2.199 | 472.768 | category_threads:5 |
-| `/t/thread-1` | 200 | 1.448 | 1.584 | 1.584 | 647.349 | thread_view:8 |
-| `/search?q=performance` | 200 | 1.303 | 1.343 | 1.343 | 781.965 | search:2 |
-| `/health` | 200 | 1.012 | 1.139 | 1.139 | 934.227 | none |
-| `/health/ready` | 503 | 3.420 | 3.572 | 3.572 | 288.884 | none |
-| `/metrics` | 200 | 0.538 | 0.547 | 0.547 | 1766.171 | none |
+| `/` | 200 | 2.233 | 2.425 | 2.425 | 453.880 | home:5 |
+| `/categories` | 200 | 1.096 | 1.375 | 1.375 | 786.658 | categories:3 |
+| `/c/category-1` | 200 | 2.169 | 2.557 | 2.557 | 426.840 | category_threads:5 |
+| `/t/thread-1` | 200 | 1.660 | 1.692 | 1.692 | 582.413 | thread_view:8 |
+| `/search?q=performance` | 200 | 1.279 | 1.295 | 1.295 | 742.171 | search:2 |
+| `/health` | 200 | 1.071 | 1.127 | 1.127 | 906.132 | none |
+| `/health/ready` | 503 | 3.558 | 4.041 | 4.041 | 264.019 | none |
+| `/metrics` | 200 | 0.543 | 0.621 | 0.621 | 1700.164 | none |
 
 `/health/ready` returns `503` in fixture mode because no configured PostgreSQL
 connection is available. That is a readiness signal, not a benchmark harness
@@ -149,6 +155,8 @@ fixture mode. That is a measurement result, not an optimization instruction.
 * Query count values in the fixture table are budget contracts, not observed DB
   counters.
 * No optimization has been performed from these numbers yet.
+* Thresholded benchmark checks and DB-backed query plan evidence are documented
+  in `docs/PERFORMANCE_EVIDENCE.md`.
 
 ## Acceptance
 

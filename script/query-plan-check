@@ -28,6 +28,7 @@ my @required_indexes = (
     [ outbox_ready          => 'idx_outbox_messages_ready' ],
     [ notification_recipient => 'idx_notifications_recipient_created_at' ],
     [ notification_brin      => 'idx_notifications_created_at_brin' ],
+    [ notification_inbox     => 'idx_notification_inbox_recipient_created' ],
     [ feed_ranked           => 'idx_user_feed_items_ranked' ],
     [ feed_user_created     => 'idx_user_feed_items_user_created' ],
 );

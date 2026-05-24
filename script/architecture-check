@@ -21,11 +21,19 @@ check_os_specific_logic() {
     fi
 }
 
+check_query_topology_gate() {
+    if ! script/query-plan-check >/dev/null; then
+        echo "architecture-check: query topology/static hot-path gate failed" >&2
+        status=1
+    fi
+}
+
 for file in lib/GPForum/Controller/*.pm; do
     [ -f "$file" ] || continue
     check_controller_forbidden_persistence "$file"
 done
 
 check_os_specific_logic
+check_query_topology_gate
 
 exit "$status"

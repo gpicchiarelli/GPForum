@@ -73,7 +73,7 @@ Result:
 * `script/perltidy-check` passed;
 * `script/perlcritic --severity 5` passed;
 * `script/architecture-check` passed;
-* `script/query-plan-check` passed with 20 indexed query plans and 0
+* `script/query-plan-check` passed with 21 indexed query plans and 0
   `OFFSET` violations.
 
 `script/query-budget --check` still requires the PostgreSQL test runtime and

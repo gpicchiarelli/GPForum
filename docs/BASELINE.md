@@ -30,6 +30,7 @@ script/perltidy-check
 script/perlcritic --severity 5
 script/architecture-check
 script/query-plan-check
+script/query-plan-evidence --check
 carton exec prove -lr t
 script/query-budget --check
 script/coverage
@@ -54,7 +55,9 @@ The current local baseline passes:
 | `script/perlcritic --severity 5` | passing |
 | `script/perltidy-check` | passing |
 | `script/architecture-check` | passing |
-| `script/query-plan-check` | passing |
+| `script/query-plan-check` | passing with 21 indexed hot-path checks |
+| `script/query-plan-evidence --dry-run` | passing |
+| `script/query-plan-evidence --check` | attempted locally; fails clearly because optional `DBD::Pg` is not installed; enforced in CI after PostgreSQL setup and deterministic seed |
 | `script/cpan-license-check` | passing |
 | `script/coverage` | passing |
 | `script/query-budget --check` | attempted locally; fails in this Carton tree because optional `DBD::Pg` is not installed; enforced in CI with `script/bootstrap-deps --postgres` |
@@ -62,13 +65,13 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=49, Tests=2504, Result=PASS
+Files=54, Tests=2709, Result=PASS
 ```
 
 Latest coverage gate at baseline time:
 
 ```text
-Total coverage: 93.3%
+Total coverage: 93.0%
 ```
 
 Remote GitHub Actions were triggered for this baseline commit, but GitHub did
@@ -77,7 +80,7 @@ execution. No repository failure log was produced by the remote runner.
 
 ## Tests Present
 
-The repository currently has 49 `.t` files covering:
+The repository currently has 54 `.t` files covering:
 
 * load/config/health/home;
 * identity registration, web forms, profile, session token service;
@@ -94,9 +97,11 @@ The repository currently has 49 `.t` files covering:
 
 ## Areas Scoperte
 
-* No PostgreSQL-backed benchmark seed exists yet.
-* Query plan verification is currently static plus index-discipline based; it is
-  not yet `EXPLAIN (ANALYZE, BUFFERS)` on a populated database.
+* PostgreSQL benchmark seed exists with deterministic `small`, `medium`, and
+  `hot-thread` profiles, but local DB-backed execution still requires optional
+  `DBD::Pg`.
+* Query plan verification now has a DB-backed `EXPLAIN (ANALYZE, BUFFERS)`
+  evidence command, enforced in CI after migrations and seed data.
 * Realtime remains process-local and covered as an enhancement boundary.
 * CI validates migrations on PostgreSQL, but local baseline without PostgreSQL
   does not run `script/query-budget --check` unless a database is configured.
@@ -105,15 +110,16 @@ The repository currently has 49 `.t` files covering:
 
 ## Technical Debt
 
-* Add deterministic PostgreSQL seed data for realistic hot-path benchmarks.
-* Add DB-backed query plan checks for thread view, category listing, search,
-  feed, health/ready and metrics.
-* Expand negative authorization tests for admin, moderation and session expiry.
-* Add thresholded benchmark comparison once seed data exists.
+* Add archived medium-profile PostgreSQL evidence output once local/remote
+  runner PostgreSQL execution is available.
+* Add observed DB query counters to configured HTTP benchmark output.
+* Continue expanding negative authorization tests for edge combinations around
+  admin, moderation and session expiry.
+* Promote hot-thread benchmark evidence to a longer manual/nightly gate.
 * Keep `docs/CPAN_LICENSE_REVIEW.md` synchronized with every `cpanfile` change.
 
 ## Next Priorities
 
-1. DB-backed benchmark seed plus `EXPLAIN` query plan gate.
-2. Security hardening tests for session expiry, admin denial and moderator denial.
+1. Run medium-profile DB-backed evidence and archive JSON reports.
+2. Add observed DB query counting around configured HTTP benchmark routes.
 3. Coverage cleanup for benchmark fixture/support modules or documented exclusion.

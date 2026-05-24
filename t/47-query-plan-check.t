@@ -22,7 +22,7 @@ like(
     qr/query-plan-check [ ] status=ok/msx,
     'query plan check passes'
 );
-like( $output, qr/indexes=20/msx,
+like( $output, qr/indexes=21/msx,
     'query plan check covers required hot path indexes' );
 
 my $ci = path('.github/workflows/ci.yml')->slurp;

@@ -48,7 +48,7 @@ Result:
 
 * full test suite passed: 51 files, 2568 tests;
 * `script/architecture-check` passed;
-* `script/query-plan-check` passed with 20 indexed query plans and 0
+* `script/query-plan-check` passed with 21 indexed query plans and 0
   `OFFSET` violations;
 * `git diff --check` passed.
 
@@ -63,6 +63,11 @@ The security hardening test suite now covers:
   admin, and moderation POST routes;
 * missing-CSRF requests to every current POST route;
 * normal-user denial across admin and moderation boundaries;
+* expired-session denial for protected notification reads;
+* moderator-looking sessions without explicit permission denied on suspension
+  queues and suspension writes;
+* hidden fixture content excluded from public Atom, sitemap, and search
+  surfaces;
 * duplicate registration responses that do not disclose whether the username or
   email already exists;
 * login/register rate limiting;

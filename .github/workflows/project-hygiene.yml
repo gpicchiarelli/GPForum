@@ -35,6 +35,7 @@ jobs:
           test -f docs/CPAN_LICENSE_REVIEW.md
           test -f docs/OPERATIONAL_BASELINE.md
           test -f docs/PERFORMANCE_BASELINE.md
+          test -f docs/PERFORMANCE_EVIDENCE.md
           test -f docs/OS_OPTIMIZATION.md
           test -f docs/OS_RUNTIME_ENFORCEMENT.md
           test -f docs/DEPLOYMENT.md
@@ -52,6 +53,8 @@ jobs:
           test -x script/perltidy-check
           test -x script/gpforum-os-preflight
           test -x script/query-plan-check
+          test -x script/query-plan-evidence
+          test -x script/seed-benchmark
 
       - name: No backup artifacts
         run: |

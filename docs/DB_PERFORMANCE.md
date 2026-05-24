@@ -128,8 +128,14 @@ script/query-plan-check
 Local `script/query-plan-check` result:
 
 ```text
-query-plan-check status=ok indexes=20 offset_violations=0
+query-plan-check status=ok indexes=21 offset_violations=0
 ```
+
+The production evidence gate adds
+`idx_notification_inbox_recipient_created` for the existing notification inbox
+reader. That reader filters by `recipient_user_id` and orders by
+`created_at DESC, notification_id DESC`; without this index, populated inboxes
+would require avoidable sort work on a user hot path.
 
 Local `script/query-budget --check` could not reach the budget table because
 `DBD::Pg` is not installed in this Carton tree. The check remains a CI/runtime
@@ -142,7 +148,9 @@ rerun:
 
 ```sh
 script/seed-performance-data
+script/seed-benchmark --profile medium
 script/benchmark-http --configured --iterations 20 --warmup 3
+script/query-plan-evidence --check
 ```
 
 The next DB-backed report should include `EXPLAIN (ANALYZE, BUFFERS)` for:
@@ -150,4 +158,5 @@ The next DB-backed report should include `EXPLAIN (ANALYZE, BUFFERS)` for:
 * latest public thread list;
 * category thread list;
 * thread post list;
-* search projection query.
+* search projection query;
+* feed, notification inbox, moderation queue, readiness and metrics evidence.

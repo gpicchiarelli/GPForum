@@ -24,6 +24,9 @@ const my $P50                => 50;
 const my $P95                => 95;
 const my $P99                => 99;
 const my $MIN_ELAPSED        => 0.000_001;
+const my $DEFAULT_P95_LIMIT  => 1_000;
+const my $DEFAULT_P99_LIMIT  => 2_000;
+const my $DEFAULT_MIN_RPS    => 1;
 const my %ROUTE_ENDPOINT => (
     q{/}             => 'home',
     q{/categories}   => 'categories',
@@ -31,6 +34,14 @@ const my %ROUTE_ENDPOINT => (
     q{/health/live}  => undef,
     q{/health/ready} => undef,
     q{/metrics}      => undef,
+);
+const my %THRESHOLD_BY_ENDPOINT => (
+    home       => { p95_ms => 750, p99_ms => 1_500, min_req_per_sec => 1 },
+    categories => { p95_ms => 500, p99_ms => 1_000, min_req_per_sec => 1 },
+    category_threads =>
+      { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
+    thread_view => { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
+    search      => { p95_ms => 1_000, p99_ms => 2_000, min_req_per_sec => 1 },
 );
 const my @DEFAULT_ROUTES => (
     q{/},                 q{/categories},
@@ -50,7 +61,7 @@ sub run {
     print $self->format_report( $report, $options->{format} )
       or croak 'failed to write benchmark report';
 
-    return 0;
+    return $options->{check} && $report->{status} ne 'ok' ? 1 : 0;
 }
 
 sub benchmark_report {
@@ -92,6 +103,7 @@ sub _benchmark {
 
     return {
         mode       => $options->{fixture} ? 'fixture' : 'configured',
+        status     => _overall_status( \@reports ),
         iterations => $options->{iterations},
         warmup     => $options->{warmup},
         routes     => \@reports,
@@ -148,18 +160,25 @@ sub _request_sample {
 sub _summary {
     my ( $route, $latencies, $statuses, $elapsed ) = @_;
 
-    my @sorted = sort { $a <=> $b } @{$latencies};
+    my @sorted    = sort { $a <=> $b } @{$latencies};
+    my $p50       = _percentile( \@sorted, $P50 );
+    my $p95       = _percentile( \@sorted, $P95 );
+    my $p99       = _percentile( \@sorted, $P99 );
+    my $rps       = scalar(@sorted) / _nonzero($elapsed);
+    my $threshold = _threshold_for($route);
 
     return {
         route        => $route,
+        status       => _threshold_status( $p95, $p99, $rps, $threshold ),
         requests     => scalar @sorted,
-        req_per_sec  => _rounded( scalar(@sorted) / _nonzero($elapsed) ),
-        p50_ms       => _rounded( _percentile( \@sorted, $P50 ) ),
-        p95_ms       => _rounded( _percentile( \@sorted, $P95 ) ),
-        p99_ms       => _rounded( _percentile( \@sorted, $P99 ) ),
+        req_per_sec  => _rounded($rps),
+        p50_ms       => _rounded($p50),
+        p95_ms       => _rounded($p95),
+        p99_ms       => _rounded($p99),
         max_ms       => _rounded( $sorted[-1] || 0 ),
         status_codes => $statuses,
         query_budget => _query_budget($route),
+        threshold    => $threshold,
     };
 }
 
@@ -173,7 +192,8 @@ sub _report_text {
     my ($report) = @_;
 
     my $text =
-"mode=$report->{mode} iterations=$report->{iterations} warmup=$report->{warmup}"
+        "mode=$report->{mode} status=$report->{status}"
+      . " iterations=$report->{iterations} warmup=$report->{warmup}"
       . " pid=$report->{process}{pid}"
       . q{ memory_rss_kb=}
       . (
@@ -194,12 +214,14 @@ sub _route_line {
 
     return join q{ },
       'route=' . $route->{route},
+      'status=' . $route->{status},
       'requests=' . $route->{requests},
       'req_per_sec=' . $route->{req_per_sec},
       'p50_ms=' . $route->{p50_ms},
       'p95_ms=' . $route->{p95_ms},
       'p99_ms=' . $route->{p99_ms},
       'max_ms=' . $route->{max_ms},
+      'threshold=' . _threshold_text( $route->{threshold} ),
       'query_budget=' . _query_budget_text( $route->{query_budget} ),
       'statuses=' . _statuses( $route->{status_codes} ),
       "\n";
@@ -244,11 +266,57 @@ sub _query_budget_text {
     return $budget->{endpoint_name} . q{:} . $budget->{max_queries};
 }
 
+sub _threshold_for {
+    my ($route) = @_;
+
+    my $endpoint_name = _endpoint_name($route);
+    my $threshold =
+      defined $endpoint_name ? $THRESHOLD_BY_ENDPOINT{$endpoint_name} : undef;
+    $threshold ||= {
+        p95_ms          => $DEFAULT_P95_LIMIT,
+        p99_ms          => $DEFAULT_P99_LIMIT,
+        min_req_per_sec => $DEFAULT_MIN_RPS,
+    };
+
+    return { %{$threshold} };
+}
+
+sub _threshold_status {
+    my ( $p95, $p99, $rps, $threshold ) = @_;
+
+    return 'fail'
+      if $p95 > $threshold->{p95_ms}
+      || $p99 > $threshold->{p99_ms}
+      || $rps < $threshold->{min_req_per_sec};
+
+    return 'ok';
+}
+
+sub _threshold_text {
+    my ($threshold) = @_;
+
+    return join q{,},
+      'p95_ms<=' . $threshold->{p95_ms},
+      'p99_ms<=' . $threshold->{p99_ms},
+      'req_per_sec>=' . $threshold->{min_req_per_sec};
+}
+
+sub _overall_status {
+    my ($routes) = @_;
+
+    for my $route ( @{$routes} ) {
+        return 'fail' if $route->{status} ne 'ok';
+    }
+
+    return 'ok';
+}
+
 sub _options {
     my (@arguments) = @_;
 
     my $options = {
         fixture    => 1,
+        check      => 0,
         format     => 'text',
         iterations => $DEFAULT_ITERATIONS,
         warmup     => $DEFAULT_WARMUP,
@@ -275,6 +343,7 @@ sub _consume_option {
         '--fixture'    => sub { $options->{fixture} = 1; },
         '--configured' => sub { $options->{fixture} = 0; },
         '--json'       => sub { $options->{format}  = 'json'; },
+        '--check'      => sub { $options->{check}   = 1; },
         '--iterations' => sub {
             $options->{iterations} =
               _positive_integer( shift @{$arguments} );
@@ -376,7 +445,7 @@ sub _resident_set_kb {
 
 sub _usage {
     return
-'Usage: bin/gpforum-benchmark [--fixture|--configured] [--json] [--iterations N] [--warmup N] [--route /path] ...';
+'Usage: bin/gpforum-benchmark [--fixture|--configured] [--json] [--check] [--iterations N] [--warmup N] [--route /path] ...';
 }
 
 1;

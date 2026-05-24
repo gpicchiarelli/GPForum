@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 63;
+const my $EXPECTED_TESTS => 69;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -37,6 +37,7 @@ for my $required_file (
     docs/CPAN_LICENSE_REVIEW.md
     docs/OPERATIONAL_BASELINE.md
     docs/PERFORMANCE_BASELINE.md
+    docs/PERFORMANCE_EVIDENCE.md
     docs/OS_OPTIMIZATION.md
     docs/OS_RUNTIME_ENFORCEMENT.md
     docs/DEPLOYMENT.md
@@ -50,6 +51,8 @@ for my $required_file (
     prompt/44.txt
     bin/gpforum-benchmark
     bin/gpforum-os-preflight
+    bin/gpforum-query-plan-evidence
+    bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
     script/bench-http
     script/benchmark-http
@@ -58,6 +61,8 @@ for my $required_file (
     script/gpforum-os-preflight
     script/profile-nytprof
     script/query-budget
+    script/query-plan-evidence
+    script/seed-benchmark
     script/seed-performance-data
     )
   )
@@ -104,6 +109,11 @@ like(
     $ci,
     qr/script\/query-budget [ ] --check/msx,
     'CI checks query budget through script wrapper'
+);
+like(
+    $ci,
+    qr/script\/query-plan-evidence [ ] --check/msx,
+    'CI checks DB-backed query plan evidence'
 );
 like(
     $ci,
