@@ -26,7 +26,7 @@ where the next conservative work should land.
 | Search/discovery | MVP funzionante | metadata/feed leakage | keep anti-leak tests near every new discovery path |
 | Realtime | contract-only/MVP boundary | process-local behavior only | keep fallback documented and non-authoritative |
 | Benchmarks | incompleto | no p50/p95/p99 baseline | add deterministic local HTTP benchmark harness |
-| Query topology | MVP funzionante | budget exists but needs CI enforcement against a real DB | run migrations and query-budget check in CI |
+| Query topology | MVP funzionante | budget exists but needs CI enforcement against a real DB | run migrations, query-budget check, and query-plan check in CI |
 | CPAN governance | incompleto | new dependency can bypass review | require license review rows for every `cpanfile` dependency |
 | Formatting | MVP funzionante | no non-mutating perltidy CI gate | add `script/perltidy-check` |
 
@@ -36,7 +36,7 @@ where the next conservative work should land.
    dependency review, query budget, and local platform check.
 2. Add deterministic local HTTP benchmark harness for hot SSR/API routes.
 3. Add documented benchmark thresholds and report format.
-4. Add query-plan check scaffolding for selected hot queries.
+4. Keep `script/query-plan-check` synchronized with selected hot queries and indexes.
 5. Add negative authorization tests for admin/moderation boundaries.
 6. Extend security tests around CSRF/rate-limit/session expiry paths.
 7. Keep feed/sitemap/metadata anti-leak tests aligned with every discovery

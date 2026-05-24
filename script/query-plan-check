@@ -1,0 +1,135 @@
+#!/usr/bin/env perl
+package main;
+
+use strict;
+use warnings;
+
+use Carp qw(croak);
+use English qw(-no_match_vars);
+
+our $VERSION = '0.001';
+
+my @required_indexes = (
+    [ category_listing      => 'idx_categories_space_position' ],
+    [ thread_listing        => 'idx_threads_category_activity' ],
+    [ thread_posts          => 'idx_posts_visible_thread' ],
+    [ search_vector         => 'idx_search_documents_vector' ],
+    [ search_title_trigram  => 'idx_search_documents_title_trgm' ],
+    [ session_lookup        => 'idx_sessions_lookup' ],
+    [ session_active        => 'idx_sessions_active' ],
+    [ event_log_aggregate   => 'idx_event_log_aggregate_created_at' ],
+    [ event_log_brin        => 'idx_event_log_created_at_brin' ],
+    [ audit_actor           => 'idx_audit_log_actor_created_at' ],
+    [ audit_brin            => 'idx_audit_log_created_at_brin' ],
+    [ outbox_dispatch       => 'idx_outbox_messages_dispatch' ],
+    [ outbox_ready          => 'idx_outbox_messages_ready' ],
+    [ notification_recipient => 'idx_notifications_recipient_created_at' ],
+    [ notification_brin      => 'idx_notifications_created_at_brin' ],
+    [ feed_ranked           => 'idx_user_feed_items_ranked' ],
+    [ feed_user_created     => 'idx_user_feed_items_user_created' ],
+);
+
+my $migration_sql = _migration_sql();
+my @missing;
+
+for my $check (@required_indexes) {
+    my ( $name, $index ) = @{$check};
+    if ( $migration_sql !~ /\b \Q$index\E \b/msx ) {
+        push @missing, "$name:$index";
+    }
+}
+
+my @offset_violations = _offset_violations();
+
+if (@missing || @offset_violations) {
+    print 'query-plan-check status=fail'
+      . ' missing_indexes=' . join( q{,}, @missing )
+      . ' offset_violations=' . join( q{,}, @offset_violations ) . "\n"
+      or croak 'failed to write query plan check result';
+    exit 1;
+}
+
+print 'query-plan-check status=ok indexes=' . scalar(@required_indexes)
+  . " offset_violations=0\n"
+  or croak 'failed to write query plan check result';
+
+exit 0;
+
+sub _migration_sql {
+    my $content = q{};
+
+    for my $file ( sort glob 'migrations/*.sql' ) {
+        $content .= _slurp($file);
+        $content .= "\n";
+    }
+
+    return $content;
+}
+
+sub _offset_violations {
+    my @violations;
+
+    for my $file ( _scan_files() ) {
+        my $line_number = 0;
+        for my $line ( split /\n/msx, _slurp($file) ) {
+            $line_number++;
+            next if $line =~ /query-plan-check/msx;
+            next if $line !~ /\b OFFSET \b|-> \s* search .* offset/msx;
+
+            push @violations, "$file:$line_number";
+        }
+    }
+
+    return @violations;
+}
+
+sub _scan_files {
+    my @files;
+
+    for my $root (qw(lib templates)) {
+        next if !-d $root;
+        push @files, _files_under($root);
+    }
+
+    return @files;
+}
+
+sub _files_under {
+    my ($root) = @_;
+
+    my @files;
+    my @pending = ($root);
+
+    while (@pending) {
+        my $path = shift @pending;
+        if ( -d $path ) {
+            opendir my $directory, $path
+              or croak "failed to read directory $path";
+            push @pending,
+              map  { "$path/$_" }
+              grep { $_ ne q{.} && $_ ne q{..} } readdir $directory;
+            closedir $directory
+              or croak "failed to close directory $path";
+            next;
+        }
+
+        push @files, $path if $path =~ /[.](?:pm|ep)\z/msx;
+    }
+
+    return @files;
+}
+
+sub _slurp {
+    my ($file) = @_;
+
+    open my $handle, '<', $file
+      or croak "failed to read $file";
+
+    local $/ = undef;
+    my $content = <$handle>;
+
+    close $handle
+      or croak "failed to close $file";
+
+    return $content;
+}

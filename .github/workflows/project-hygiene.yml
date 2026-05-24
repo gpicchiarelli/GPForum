@@ -42,6 +42,7 @@ jobs:
           test -x script/bench-http
           test -x script/cpan-license-check
           test -x script/perltidy-check
+          test -x script/query-plan-check
 
       - name: No backup artifacts
         run: |

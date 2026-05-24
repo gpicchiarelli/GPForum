@@ -65,6 +65,9 @@ jobs:
       - name: Run architecture boundary check
         run: script/architecture-check
 
+      - name: Run query plan check
+        run: script/query-plan-check
+
       - name: Run tests
         run: script/test
 
