@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
 our $VERSION = '0.001';
@@ -13,7 +14,13 @@ const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FORBIDDEN   => 403;
 const my $HTTP_NOT_FOUND   => 404;
 const my $HTTP_OK          => 200;
+const my $HTTP_TOO_MANY    => 429;
 const my $PROFILE_THREADS  => 10;
+const my $LOGIN_LIMIT      => 10;
+const my $LOGOUT_LIMIT     => 20;
+const my $REGISTER_LIMIT   => 5;
+const my $SHORT_WINDOW     => 60;
+const my $LONG_WINDOW      => 300;
 
 sub register_form {
     my ($self) = @_;
@@ -30,6 +37,8 @@ sub register {
 
     return _csrf_failure($self)
       if $self->validation->csrf_protect->has_error('csrf_token');
+    return _rate_limited($self)
+      if !_identity_allowed( $self, 'identity.register' );
 
     my $result = $self->gp_registration->prepare(
         {
@@ -54,7 +63,7 @@ sub register {
         template => 'identity/register',
         status   => $HTTP_BAD_REQUEST,
         values   => $result->{values},
-        errors   => $stored->{errors},
+        errors   => _non_enumerative_registration_errors( $stored->{errors} ),
     ) if !$stored->{ok};
 
     return $self->render(
@@ -79,6 +88,8 @@ sub login {
 
     return _csrf_failure($self)
       if $self->validation->csrf_protect->has_error('csrf_token');
+    return _rate_limited($self)
+      if !_identity_allowed( $self, 'identity.login' );
 
     my $errors = _login_errors(
         {
@@ -94,6 +105,18 @@ sub login {
         errors   => $errors,
     ) if keys %{$errors};
 
+    _rotate_login_session($self);
+    _record_identity_audit(
+        $self,
+        'record_login_request',
+        {
+            actor_id        => $self->session('user_id'),
+            identifier      => $self->param('identifier'),
+            outcome         => 'accepted',
+            request_address => _request_address($self),
+        }
+    );
+
     return $self->render(
         template => 'identity/login_accepted',
         status   => $HTTP_ACCEPTED,
@@ -105,6 +128,18 @@ sub logout {
 
     return _csrf_failure($self)
       if $self->validation->csrf_protect->has_error('csrf_token');
+    return _rate_limited($self)
+      if !_identity_allowed( $self, 'identity.logout' );
+
+    _record_identity_audit(
+        $self,
+        'record_logout_request',
+        {
+            actor_id        => $self->session('user_id'),
+            request_address => _request_address($self),
+        }
+    );
+    $self->session( expires => 1 );
 
     return $self->render(
         template => 'identity/logout_accepted',
@@ -185,6 +220,100 @@ sub _login_errors {
     }
 
     return \%errors;
+}
+
+sub _identity_allowed {
+    my ( $controller, $action ) = @_;
+
+    my $decision = $controller->gp_rate_limiter->check(
+        {
+            scope          => 'identity_http',
+            actor_id       => _identity_actor($controller),
+            action         => $action,
+            limit          => _limit_for($action),
+            window_seconds => _window_for($action),
+        }
+    );
+
+    return $decision->{ok};
+}
+
+sub _identity_actor {
+    my ($controller) = @_;
+
+    return $controller->session('user_id') || _request_address($controller);
+}
+
+sub _limit_for {
+    my ($action) = @_;
+
+    return $REGISTER_LIMIT if $action eq 'identity.register';
+    return $LOGOUT_LIMIT   if $action eq 'identity.logout';
+
+    return $LOGIN_LIMIT;
+}
+
+sub _window_for {
+    my ($action) = @_;
+
+    return $SHORT_WINDOW if $action eq 'identity.logout';
+
+    return $LONG_WINDOW;
+}
+
+sub _rotate_login_session {
+    my ($controller) = @_;
+
+    $controller->session( login_rotation => $controller->gp_id->uuid );
+
+    return;
+}
+
+sub _record_identity_audit {
+    my ( $controller, $method, $input ) = @_;
+
+    my $result =
+      eval { return $controller->gp_identity_security_audit->$method($input); };
+
+    if ($EVAL_ERROR) {
+        $controller->app->log->warn("identity audit degraded: $EVAL_ERROR");
+        return;
+    }
+
+    return $result;
+}
+
+sub _non_enumerative_registration_errors {
+    my ($errors) = @_;
+
+    return $errors if !$errors || !keys %{$errors};
+
+    return { registration => 'registration request could not be accepted', };
+}
+
+sub _request_address {
+    my ($controller) = @_;
+
+    return $controller->tx->remote_address || 'unknown';
+}
+
+sub _rate_limited {
+    my ($controller) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json => {
+                error  => 'too many requests',
+                status => 'rate_limited',
+            },
+            status => $HTTP_TOO_MANY,
+        );
+    }
+
+    return $controller->render(
+        text   => 'Too many requests',
+        status => $HTTP_TOO_MANY,
+    );
 }
 
 sub _csrf_failure {

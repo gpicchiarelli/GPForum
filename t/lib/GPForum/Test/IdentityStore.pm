@@ -12,9 +12,19 @@ const my $AT_CODE => 64;
 const my $AT_SIGN => chr $AT_CODE;
 
 has missing_profile => 0;
+has duplicate       => 0;
 
 sub create_registration {
     my ( $self, $registration ) = @_;
+
+    return {
+        ok     => 0,
+        errors => {
+            email    => 'email is already registered',
+            username => 'username is already registered',
+        },
+      }
+      if $self->duplicate;
 
     return { ok => 1, user => $registration->{user} };
 }

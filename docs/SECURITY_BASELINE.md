@@ -1,0 +1,100 @@
+# GPForum Security Baseline
+
+Date: 2026-05-24.
+
+This is commit 4 security hardening. It strengthens existing HTTP workflows
+without adding new product features, external services, Redis, OpenSearch, or a
+new authentication architecture.
+
+## Scope
+
+| Area | Status after this commit |
+| --- | --- |
+| CSRF | Every current server-rendered POST form includes `csrf_field`; every current POST route is covered by functional missing-token tests. |
+| Session cookies | Development cookies are `HttpOnly` and `SameSite=Lax`; production cookies are additionally `Secure`. |
+| Login/register/logout | CSRF protected, rate limited, generic rate-limit errors, non-enumerative duplicate-registration response, login/logout audit hooks. |
+| Session rotation | Existing cookie-session payload is changed on accepted login through a rotation marker; logout expires the browser session. |
+| Admin authorization | Anonymous requests return `401`; permission-denied users return `403`; POST routes require CSRF before authorization checks. |
+| Moderation authorization | Anonymous requests return `401`; permission-denied users return `403`; POST routes require CSRF before authorization checks. |
+| Forum write authorization | Thread/reply/read/bookmark/subscription/report POSTs require CSRF and an authenticated session. |
+| Audit | Registration, thread, post, report, admin role binding, moderation actions, suspension actions, login requests, and logout requests have audit paths. |
+| Escaping | Templates use escaped output by default; raw post body rendering remains restricted to the sanitized body boundary. |
+
+## Commands
+
+Security-focused commands:
+
+```sh
+carton exec prove -lr t/06-identity-web.t t/43-moderation-web.t t/44-admin-web.t t/48-browser-security.t t/50-security-hardening.t
+script/perlcritic --severity 5
+script/perltidy-check
+```
+
+Result:
+
+* security-focused test set passed: 6 files, 413 tests;
+* `script/perlcritic --severity 5` passed;
+* `script/perltidy-check` passed.
+
+Full baseline commands:
+
+```sh
+carton exec prove -lr t
+script/architecture-check
+script/query-plan-check
+```
+
+Result:
+
+* full test suite passed: 51 files, 2568 tests;
+* `script/architecture-check` passed;
+* `script/query-plan-check` passed with 20 indexed query plans and 0
+  `OFFSET` violations;
+* `git diff --check` passed.
+
+`script/query-budget --check` still requires a configured PostgreSQL runtime and
+`DBD::Pg` in the local Carton tree.
+
+## Negative Coverage Added
+
+The security hardening test suite now covers:
+
+* anonymous valid-CSRF requests to authenticated-only forum, notification,
+  admin, and moderation POST routes;
+* missing-CSRF requests to every current POST route;
+* normal-user denial across admin and moderation boundaries;
+* duplicate registration responses that do not disclose whether the username or
+  email already exists;
+* login/register rate limiting;
+* login/logout audit hook invocation;
+* cookie `HttpOnly`, `SameSite`, and production `Secure` flags.
+
+## Sensitive Audit Behavior
+
+`GPForum::Service::Identity::SecurityAudit` records login/logout audit rows
+without storing raw identifiers or request addresses. Login identifiers and
+request addresses are SHA-256 hashed before entering audit metadata.
+
+## Residual Risks
+
+* Credential verification and persistent login sessions are still not fully
+  implemented; login currently records and rotates the cookie-session payload
+  for the accepted login request boundary only.
+* Server-side session revocation exists in the schema, but identity web login
+  does not yet create or rotate a persistent `sessions` row.
+* The rate limiter is still process-local and disposable; PostgreSQL-backed
+  rate limiting remains a future optional hardening layer.
+* Raw post body rendering in `templates/forum/thread.html.ep` assumes the
+  `PostComposer`/`post_bodies.body_rendered_safe` sanitizer boundary. That
+  invariant is tested, but a future richer renderer must keep the same contract.
+* Audit hash-chain fields exist, but external checkpoint notarization is not yet
+  implemented.
+
+## Next Security Priorities
+
+1. Implement persistence-backed login with Argon2id verification and server-side
+   session row rotation.
+2. Add PostgreSQL-backed optional rate-limit storage for multi-process
+   deployments.
+3. Add explicit audit rows for failed credential verification once credential
+   verification is wired.

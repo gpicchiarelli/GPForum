@@ -38,6 +38,7 @@ use GPForum::Service::Admin::RoleBindingStore;
 use GPForum::Service::Admin::RoleCatalog;
 use GPForum::Service::Identity::ProfileReader;
 use GPForum::Service::Identity::Registration;
+use GPForum::Service::Identity::SecurityAudit;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
@@ -134,6 +135,14 @@ sub startup {
     );
     $self->helper( gp_registration =>
           sub { return GPForum::Service::Identity::Registration->new; } );
+    $self->helper(
+        gp_identity_security_audit => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Identity::SecurityAudit->new(
+                schema => $controller->gp_schema );
+        }
+    );
     $self->helper(
         gp_identity_store => sub {
             return GPForum::Service::Identity::Store->new(

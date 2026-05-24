@@ -3,6 +3,9 @@
 
 <section>
   <h1>Create account</h1>
+  % if ($errors->{registration}) {
+    <p role="alert"><%= $errors->{registration} %></p>
+  % }
   <form method="post" action="<%= url_for('register_submit') %>">
     <%= csrf_field %>
     <label>
