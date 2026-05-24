@@ -127,6 +127,19 @@ The convenience wrapper for the same thresholded hot-path fixture gate is:
 script/bench-hotpaths
 ```
 
+Saved baseline regression checks are supported with:
+
+```sh
+script/benchmark-http --configured --json --write-baseline /tmp/gpforum-benchmark-baseline.json
+script/benchmark-http --configured --check --baseline /tmp/gpforum-benchmark-baseline.json
+```
+
+`--baseline` compares p95, p99 and req/s route-by-route. The default regression
+tolerance is `0.25` (25%); it can be changed with `--regression-tolerance`.
+Routes missing from the saved baseline fail the check so benchmark coverage
+does not shrink silently. Baseline comparison is optional so ad-hoc runs still
+work without a saved historical file.
+
 Latest local fixture result:
 
 | Endpoint | Status | p50 ms | p95 ms | p99 ms | req/s | Budget |

@@ -40,6 +40,17 @@ Run the same route set against configured PostgreSQL state:
 script/benchmark-http --configured --iterations 20 --warmup 3
 ```
 
+Write and check a saved benchmark baseline:
+
+```sh
+script/benchmark-http --configured --json --write-baseline /tmp/gpforum-benchmark-baseline.json
+script/benchmark-http --configured --check --baseline /tmp/gpforum-benchmark-baseline.json
+```
+
+The saved-baseline check compares p95, p99 and req/s route-by-route with a
+default `0.25` tolerance. A route missing from the saved baseline fails the
+check, which prevents benchmark coverage from shrinking silently.
+
 Profile a route with Devel::NYTProf:
 
 ```sh

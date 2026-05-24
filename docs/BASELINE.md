@@ -59,6 +59,7 @@ The current local baseline passes:
 | `script/query-plan-check` | passing with 23 indexed hot-path checks and DB-backed evidence when `GPFORUM_DATABASE_DSN` is configured |
 | `script/query-plan-evidence --dry-run` | passing |
 | `script/query-plan-evidence --check` | passing against a seeded PostgreSQL 18.4 Postgres.app evidence database |
+| saved benchmark baseline check | passing with `script/benchmark-http --fixture --check --baseline ...` |
 | `script/cpan-license-check` | passing |
 | `script/coverage` | passing |
 | `script/query-budget --check` | passing against synchronized PostgreSQL-backed query budget rows |
@@ -66,7 +67,7 @@ The current local baseline passes:
 Latest full test suite at baseline time:
 
 ```text
-Files=55, Tests=2767, Result=PASS
+Files=55, Tests=2776, Result=PASS
 ```
 
 Latest coverage gate at baseline time:

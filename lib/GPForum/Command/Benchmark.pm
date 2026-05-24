@@ -6,7 +6,7 @@ use warnings;
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
-use JSON::MaybeXS qw(encode_json);
+use JSON::MaybeXS qw(decode_json encode_json);
 use Mojo::Base -base;
 use Test::Mojo;
 use Time::HiRes qw(time);
@@ -61,6 +61,9 @@ sub run {
     my $options = _options(@arguments);
     my $report  = $self->_benchmark_with_options($options);
 
+    _write_baseline( $options->{write_baseline}, $report )
+      if defined $options->{write_baseline};
+
     print $self->format_report( $report, $options->{format} )
       or croak 'failed to write benchmark report';
 
@@ -91,7 +94,11 @@ sub _benchmark_with_options {
         _install_fixture_services($test);
     }
 
-    return $self->_benchmark( $test, $options );
+    my $report = $self->_benchmark( $test, $options );
+    _compare_baseline( $report, $options )
+      if defined $options->{baseline};
+
+    return $report;
 }
 
 sub _benchmark {
@@ -225,6 +232,7 @@ sub _route_line {
       'p99_ms=' . $route->{p99_ms},
       'max_ms=' . $route->{max_ms},
       'threshold=' . _threshold_text( $route->{threshold} ),
+      'regression=' . _regression_text( $route->{regression} ),
       'query_budget=' . _query_budget_text( $route->{query_budget} ),
       'statuses=' . _statuses( $route->{status_codes} ),
       "\n";
@@ -315,16 +323,144 @@ sub _overall_status {
     return 'ok';
 }
 
+sub _compare_baseline {
+    my ( $report, $options ) = @_;
+
+    my $baseline = _read_baseline( $options->{baseline} );
+    my %baseline_by_route =
+      map { $_->{route} => $_ } @{ $baseline->{routes} || [] };
+
+    for my $route ( @{ $report->{routes} } ) {
+        _compare_route_to_baseline(
+            $route,
+            $baseline_by_route{ $route->{route} },
+            $options->{regression_tolerance},
+        );
+    }
+
+    $report->{baseline} = {
+        path                 => $options->{baseline},
+        regression_tolerance => $options->{regression_tolerance},
+    };
+    $report->{status} = _overall_status( $report->{routes} );
+
+    return;
+}
+
+sub _compare_route_to_baseline {
+    my ( $route, $baseline, $tolerance ) = @_;
+
+    if ( !$baseline ) {
+        $route->{regression} = {
+            status     => 'missing',
+            violations => [
+                {
+                    metric   => 'route',
+                    observed => $route->{route},
+                    allowed  => 'present-in-baseline',
+                    baseline => undef,
+                },
+            ],
+        };
+        $route->{status} = 'fail';
+        return;
+    }
+
+    my @violations;
+    _add_upper_violation( \@violations, $route, $baseline, $tolerance,
+        'p95_ms' );
+    _add_upper_violation( \@violations, $route, $baseline, $tolerance,
+        'p99_ms' );
+    _add_lower_violation( \@violations, $route, $baseline, $tolerance,
+        'req_per_sec' );
+
+    $route->{regression} = {
+        status     => @violations ? 'fail' : 'ok',
+        violations => \@violations,
+    };
+    $route->{status} = 'fail' if @violations;
+
+    return;
+}
+
+sub _add_upper_violation {
+    my ( $violations, $route, $baseline, $tolerance, $metric ) = @_;
+
+    my $allowed = $baseline->{$metric} * ( 1 + $tolerance );
+    return if $route->{$metric} <= $allowed;
+
+    push @{$violations},
+      {
+        metric   => $metric,
+        observed => $route->{$metric},
+        allowed  => _rounded($allowed),
+        baseline => $baseline->{$metric},
+      };
+
+    return;
+}
+
+sub _add_lower_violation {
+    my ( $violations, $route, $baseline, $tolerance, $metric ) = @_;
+
+    return if !$baseline->{$metric};
+
+    my $allowed = $baseline->{$metric} * ( 1 - $tolerance );
+    return if $route->{$metric} >= $allowed;
+
+    push @{$violations},
+      {
+        metric   => $metric,
+        observed => $route->{$metric},
+        allowed  => _rounded($allowed),
+        baseline => $baseline->{$metric},
+      };
+
+    return;
+}
+
+sub _regression_text {
+    my ($regression) = @_;
+
+    return 'not-checked' if !$regression;
+    return $regression->{status};
+}
+
+sub _read_baseline {
+    my ($path) = @_;
+
+    open my $handle, '<', $path
+      or croak "failed to read benchmark baseline $path: $ERRNO";
+    local $INPUT_RECORD_SEPARATOR = undef;
+    my $json = <$handle>;
+    close $handle or croak "failed to close benchmark baseline $path: $ERRNO";
+
+    return decode_json($json);
+}
+
+sub _write_baseline {
+    my ( $path, $report ) = @_;
+
+    open my $handle, '>', $path
+      or croak "failed to write benchmark baseline $path: $ERRNO";
+    print {$handle} _report_json($report)
+      or croak "failed to write benchmark baseline $path: $ERRNO";
+    close $handle or croak "failed to close benchmark baseline $path: $ERRNO";
+
+    return;
+}
+
 sub _options {
     my (@arguments) = @_;
 
     my $options = {
-        fixture    => 1,
-        check      => 0,
-        format     => 'text',
-        iterations => $DEFAULT_ITERATIONS,
-        warmup     => $DEFAULT_WARMUP,
-        routes     => [],
+        fixture              => 1,
+        check                => 0,
+        format               => 'text',
+        iterations           => $DEFAULT_ITERATIONS,
+        regression_tolerance => 0.25,
+        warmup               => $DEFAULT_WARMUP,
+        routes               => [],
     };
 
     while (@arguments) {
@@ -358,6 +494,16 @@ sub _consume_option {
         },
         '--route' => sub {
             push @{ $options->{routes} }, _route( shift @{$arguments} );
+        },
+        '--baseline' => sub {
+            $options->{baseline} = _path( shift @{$arguments} );
+        },
+        '--write-baseline' => sub {
+            $options->{write_baseline} = _path( shift @{$arguments} );
+        },
+        '--regression-tolerance' => sub {
+            $options->{regression_tolerance} =
+              _non_negative_number( shift @{$arguments} );
         },
     );
 
@@ -433,6 +579,25 @@ sub _route {
     return $value;
 }
 
+sub _path {
+    my ($value) = @_;
+
+    croak _usage() if !defined $value || !length $value;
+
+    return $value;
+}
+
+sub _non_negative_number {
+    my ($value) = @_;
+
+    croak _usage()
+      if !defined $value
+      || $value !~
+      /\A (?: [[:digit:]]+ (?: [.] [[:digit:]]+ )? | [.] [[:digit:]]+ ) \z/msx;
+
+    return 0 + $value;
+}
+
 sub _resident_set_kb {
     open my $process, q{-|}, q{ps}, q{-o}, q{rss=}, q{-p}, $PROCESS_ID
       or return;
@@ -449,7 +614,7 @@ sub _resident_set_kb {
 
 sub _usage {
     return
-'Usage: bin/gpforum-benchmark [--fixture|--configured] [--json] [--check] [--iterations N] [--warmup N] [--route /path] ...';
+'Usage: bin/gpforum-benchmark [--fixture|--configured] [--json] [--check] [--iterations N] [--warmup N] [--route /path] [--baseline file] [--write-baseline file] [--regression-tolerance N] ...';
 }
 
 1;
