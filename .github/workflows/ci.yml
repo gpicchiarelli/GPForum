@@ -16,6 +16,23 @@ jobs:
     name: Perl quality gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=127.0.0.1;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
 
     steps:
       - name: Checkout
@@ -24,7 +41,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cpanminus libpq-dev
+          sudo apt-get install -y cpanminus libpq-dev postgresql-client
           sudo cpanm --notest Carton
 
       - name: Install Perl dependencies
@@ -33,15 +50,41 @@ jobs:
       - name: Verify dependency lock
         run: carton check
 
+      - name: Check CPAN license review
+        run: script/cpan-license-check
+
       - name: Check whitespace
         run: git diff --check
+
+      - name: Check Perl formatting
+        run: script/perltidy-check
 
       - name: Run Perl::Critic
         run: script/perlcritic
 
+      - name: Run architecture boundary check
+        run: script/architecture-check
+
       - name: Run tests
         run: script/test
+
+      - name: Apply database migrations
+        run: carton exec bin/gpforum-migrate --apply
+
+      - name: Sync query budget catalog
+        run: carton exec bin/gpforum-query-budget --sync
+
+      - name: Check query budget catalog
+        run: carton exec bin/gpforum-query-budget --check
+
+      - name: Run platform check
+        run: carton exec bin/gpforum-platform-check --with-db
 
       - name: Run coverage gate
         run: script/coverage
 
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gpforum-cover-db
+          path: cover_db/

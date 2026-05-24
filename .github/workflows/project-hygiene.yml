@@ -32,10 +32,14 @@ jobs:
           test -f GOVERNANCE.md
           test -f ROADMAP.md
           test -f CHANGELOG.md
+          test -f docs/CPAN_LICENSE_REVIEW.md
+          test -f docs/OPERATIONAL_BASELINE.md
           test -f .github/CODEOWNERS
           test -f .github/pull_request_template.md
           test -f .github/dependabot.yml
           test -f docs/adr/0000-template.md
+          test -x script/cpan-license-check
+          test -x script/perltidy-check
 
       - name: No backup artifacts
         run: |
@@ -45,4 +49,3 @@ jobs:
         run: |
           grep -q 'GitHub Project Success Contract' prompt/44.txt
           grep -q 'GitHub project success surface' README.md
-

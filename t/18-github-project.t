@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 27;
+const my $EXPECTED_TESTS => 38;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -33,7 +33,11 @@ for my $required_file (
     CHANGELOG.md
     docs/adr/README.md
     docs/adr/0000-template.md
+    docs/CPAN_LICENSE_REVIEW.md
+    docs/OPERATIONAL_BASELINE.md
     prompt/44.txt
+    script/cpan-license-check
+    script/perltidy-check
     )
   )
 {
@@ -46,9 +50,40 @@ my $prompt     = path('prompt/44.txt')->slurp;
 my $readme     = path('README.md')->slurp;
 my $governance = path('GOVERNANCE.md')->slurp;
 
-like( $ci, qr/script\/perlcritic/msx, 'CI runs Perl::Critic' );
-like( $ci, qr/script\/test/msx,       'CI runs tests' );
-like( $ci, qr/script\/coverage/msx,   'CI runs coverage' );
+like( $ci, qr/script\/perlcritic/msx,     'CI runs Perl::Critic' );
+like( $ci, qr/script\/test/msx,           'CI runs tests' );
+like( $ci, qr/script\/coverage/msx,       'CI runs coverage' );
+like( $ci, qr/script\/perltidy-check/msx, 'CI checks Perl formatting' );
+like(
+    $ci,
+    qr/script\/architecture-check/msx,
+    'CI runs architecture boundary check'
+);
+like(
+    $ci,
+    qr/script\/cpan-license-check/msx,
+    'CI runs dependency license review check'
+);
+like(
+    $ci,
+    qr/gpforum-migrate [ ] --apply/msx,
+    'CI applies migrations against PostgreSQL'
+);
+like(
+    $ci,
+    qr/gpforum-query-budget [ ] --check/msx,
+    'CI checks query budget drift'
+);
+like(
+    $ci,
+    qr/gpforum-platform-check [ ] --with-db/msx,
+    'CI runs database-backed platform check'
+);
+like(
+    $ci,
+    qr/actions\/upload-artifact\@v4/msx,
+    'CI uploads coverage artifacts'
+);
 like(
     $pull,
     qr/Architecture [ ] Alignment/msx,
