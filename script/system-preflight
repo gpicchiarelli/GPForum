@@ -1,0 +1,35 @@
+#!/bin/sh
+set -eu
+
+missing=0
+
+need() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "missing: $1"
+        missing=1
+    else
+        printf 'ok: %s -> %s\n' "$1" "$(command -v "$1")"
+    fi
+}
+
+need perl
+need carton
+need perlcritic
+
+if command -v carton >/dev/null 2>&1; then
+    carton exec perl -Ilib -MGPForum::Runtime -MGPForum::Service::Operations::OSPreflight -e 'my $runtime = GPForum::Runtime->new; my $os = $runtime->os_profile; my $preflight = GPForum::Service::Operations::OSPreflight->new(runtime => $runtime)->check; print "ok: gpforum_os -> ", $os->name, "\n"; print "ok: gpforum_event_backend -> ", $os->event_backend, "\n"; print "ok: gpforum_workers -> ", $os->recommended_worker_count, "\n"; print "ok: gpforum_os_preflight -> ", $preflight->{status}, "\n";'
+fi
+
+if ! command -v pg_config >/dev/null 2>&1; then
+    echo "missing: pg_config"
+    echo "Install PostgreSQL client development files before enabling the cpanfile postgres feature."
+    echo "Debian/Ubuntu: apt install libpq-dev"
+    echo "FreeBSD: pkg install postgresql16-client"
+    echo "macOS: install PostgreSQL or libpq and ensure pg_config is in PATH"
+    missing=1
+else
+    printf 'ok: pg_config -> %s\n' "$(command -v pg_config)"
+    pg_config --version
+fi
+
+exit "$missing"

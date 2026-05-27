@@ -1,0 +1,11 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use lib 'lib';
+
+use GPForum::Command::QueryPlanEvidence;
+
+our $VERSION = '0.001';
+
+exit GPForum::Command::QueryPlanEvidence->new->run(@ARGV);

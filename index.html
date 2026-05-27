@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="GPForum is an independent, Perl-native community platform designed for long-term governance, resilience, and operational clarity.">
+    <meta name="theme-color" content="#111412">
+    <meta property="og:title" content="GPForum">
+    <meta property="og:description" content="An independent forum platform for durable communities, explicit governance, and serious operations.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="assets/img/gpforum-hero.png">
+    <title>GPForum - Independent Community Infrastructure</title>
+    <link rel="icon" href="assets/img/gpforum-mark.svg" type="image/svg+xml">
+    <link rel="manifest" href="site.webmanifest">
+    <link rel="stylesheet" href="assets/css/site.css">
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" data-header>
+      <a class="brand" href="#top" aria-label="GPForum home">
+        <img class="brand-mark" src="assets/img/gpforum-mark.svg" alt="" aria-hidden="true">
+        <span class="brand-name">GPForum</span>
+      </a>
+      <nav class="site-nav" aria-label="Primary navigation">
+        <a href="#platform">Platform</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#governance">Governance</a>
+        <a href="#roadmap">Roadmap</a>
+      </nav>
+      <a class="nav-action" href="prompt/1.txt">Read the constitution</a>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top" aria-labelledby="hero-title">
+        <img class="hero-image" src="assets/img/gpforum-hero.png" alt="A grounded operations room for an independent community platform, with subtle discussion networks and infrastructure dashboards.">
+        <div class="hero-shade" aria-hidden="true"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Independent community infrastructure</p>
+          <h1 id="hero-title">GPForum</h1>
+          <p class="hero-copy">
+            A Perl-native forum platform for communities that need durable discussion,
+            explicit governance, serious moderation, and infrastructure that can be operated for years.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button button-primary" href="#architecture">Explore the architecture</a>
+            <a class="button button-secondary" href="prompt/28.txt">Start implementation</a>
+          </div>
+          <dl class="hero-metrics" aria-label="Platform principles">
+            <div>
+              <dt>43</dt>
+              <dd>prompt constitutions</dd>
+            </div>
+            <div>
+              <dt>BSD-3</dt>
+              <dd>licensed foundation</dd>
+            </div>
+            <div>
+              <dt>Perl</dt>
+              <dd>native by design</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
+      <section class="proof-band" aria-label="Core positioning">
+        <div class="proof-inner">
+          <span>PostgreSQL authoritative</span>
+          <span>Mojolicious SSR</span>
+          <span>Minion workers</span>
+          <span>PostgreSQL FTS</span>
+          <span>Redis optional</span>
+        </div>
+      </section>
+
+      <section class="section split-section" id="platform">
+        <div class="section-kicker">Platform</div>
+        <div class="section-heading">
+          <h2>Built for communities that outlive trends.</h2>
+          <p>
+            GPForum treats a forum as civic software: conversations, policy,
+            moderation, search, events, and operations are all first-class parts
+            of the system.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card">
+            <h3>Durable discussion</h3>
+            <p>Spaces, categories, threads, posts, revisions, archival, and search are modeled as long-lived community assets.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Operational moderation</h3>
+            <p>Reports, scoped staff authority, reversible actions, audit logs, and policy versioning keep governance visible.</p>
+          </article>
+          <article class="feature-card">
+            <h3>Independent stack</h3>
+            <p>Modern Perl, Mojolicious, DBIx::Class, PostgreSQL full-text search, Minion, and a Redis-optional coordination model.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section architecture-section" id="architecture">
+        <div class="section-kicker">Architecture</div>
+        <div class="section-heading">
+          <h2>A modular monolith with distributed instincts.</h2>
+          <p>
+            The design favors explicit boundaries, stateless app nodes, event tables,
+            asynchronous projections, observable workers, and cache layers that can be rebuilt.
+          </p>
+        </div>
+        <div class="architecture-map" aria-label="GPForum architecture layers">
+          <div class="layer layer-edge">
+            <span>Edge</span>
+            <strong>Nginx or HAProxy</strong>
+          </div>
+          <div class="layer layer-app">
+            <span>Application</span>
+            <strong>Mojolicious nodes</strong>
+          </div>
+          <div class="layer layer-domain">
+            <span>Domain</span>
+            <strong>Identity, discussion, moderation, authorization</strong>
+          </div>
+          <div class="layer layer-data">
+            <span>Persistence</span>
+            <strong>PostgreSQL, event log, audit log</strong>
+          </div>
+          <div class="layer layer-derived">
+            <span>Derived systems</span>
+            <strong>Minion, PostgreSQL FTS, local caches, realtime</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="section governance-section" id="governance">
+        <div class="section-kicker">Governance</div>
+        <div class="governance-layout">
+          <div>
+            <h2>The rules are part of the product.</h2>
+            <p>
+              GPForum does not bury moderation inside ad hoc admin screens. Policy,
+              trust, role scope, auditability, appeals, content lifecycle, and privacy
+              rights are documented as architecture.
+            </p>
+          </div>
+          <div class="principle-list">
+            <article>
+              <span>01</span>
+              <h3>Deny by default</h3>
+              <p>Authorization evaluates actor, action, target, scope, resource state, and user state.</p>
+            </article>
+            <article>
+              <span>02</span>
+              <h3>Events tell the truth</h3>
+              <p>Durable domain events drive projections, notifications, replay, and audit investigation.</p>
+            </article>
+            <article>
+              <span>03</span>
+              <h3>Privacy is operational</h3>
+              <p>Retention, deletion, export, consent, search visibility, and breach readiness are explicit.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section roadmap-section" id="roadmap">
+        <div class="section-kicker">Roadmap</div>
+        <div class="section-heading">
+          <h2>From constitution to running system.</h2>
+          <p>
+            The repo now has enough architecture to start implementation without turning the first codebase into guesswork.
+          </p>
+        </div>
+        <ol class="roadmap">
+          <li>
+            <span>Milestone 0</span>
+            <strong>Project skeleton</strong>
+            <p>Mojolicious app, DBIx::Class schema shell, migrations, logging, health, tests, and Perl::Critic.</p>
+          </li>
+          <li>
+            <span>Milestone 1</span>
+            <strong>Identity</strong>
+            <p>Registration, login, logout, sessions, revocation, CSRF, and account status checks.</p>
+          </li>
+          <li>
+            <span>Milestone 2</span>
+            <strong>Core forum</strong>
+            <p>Spaces, categories, threads, posts, revisions, pagination, and safe server-rendered composition.</p>
+          </li>
+          <li>
+            <span>Milestone 3</span>
+            <strong>Moderation</strong>
+            <p>RBAC, ABAC ownership checks, reports, scoped staff authority, hidden content, and audit trails.</p>
+          </li>
+        </ol>
+      </section>
+
+      <section class="final-cta" aria-labelledby="final-title">
+        <div>
+          <p class="eyebrow">Ready for implementation</p>
+          <h2 id="final-title">Start from the bootstrap prompt.</h2>
+          <p>
+            The next meaningful step is Milestone 0: generate the Mojolicious project skeleton under the constraints already committed here.
+          </p>
+        </div>
+        <a class="button button-primary" href="prompt/28.txt">Open bootstrap prompt</a>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div>
+        <strong>GPForum</strong>
+        <span>Independent community infrastructure, licensed BSD-3.</span>
+      </div>
+      <div class="footer-links">
+        <a href="LICENSE">License</a>
+        <a href="README.md">Prompt index</a>
+        <a href="prompt/39.txt">Governance</a>
+      </div>
+    </footer>
+
+    <script src="assets/js/site.js"></script>
+  </body>
+</html>

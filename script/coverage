@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+if [ ! -d t ] || ! find t -type f -name '*.t' | grep -q .; then
+    echo "No tests found."
+    exit 0
+fi
+
+rm -rf cover_db
+HARNESS_PERL_SWITCHES=-MDevel::Cover carton exec prove -lr t "$@"
+exec carton exec -- cover -select_re '^(lib/GPForum|t)/'

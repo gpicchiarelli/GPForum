@@ -1,0 +1,111 @@
+#!/usr/bin/env perl
+package main;
+
+use strict;
+use warnings;
+
+use Carp qw(croak);
+
+our $VERSION = '0.001';
+
+my $review_file = 'docs/CPAN_LICENSE_REVIEW.md';
+my @cpanfiles = qw(cpanfile cpanfile.postgres);
+
+my $review = _slurp($review_file);
+my @dependencies = _dependencies(@cpanfiles);
+my %rows = _review_rows($review);
+
+my @missing;
+my @blocked;
+
+for my $dependency (@dependencies) {
+    if ( !exists $rows{$dependency} ) {
+        push @missing, $dependency;
+        next;
+    }
+
+    my $decision = $rows{$dependency}{decision};
+    if ( $decision ne 'allowed' && $decision ne 'dev-only allowed' ) {
+        push @blocked, $dependency . q{:} . $decision;
+    }
+}
+
+if (@missing || @blocked) {
+    print 'cpan-license-check status=fail'
+      . ' missing=' . join( q{,}, @missing )
+      . ' blocked=' . join( q{,}, @blocked ) . "\n"
+      or croak 'failed to write CPAN license result';
+    exit 1;
+}
+
+print 'cpan-license-check status=ok reviewed=' . scalar(@dependencies) . "\n"
+  or croak 'failed to write CPAN license result';
+
+exit 0;
+
+sub _dependencies {
+    my (@files) = @_;
+
+    my @dependencies;
+
+    for my $file (@files) {
+        next if !-f $file;
+
+        my $content = _slurp($file);
+        while ( $content =~ /^[ \t]* requires [ \t]+ '([^']+)'/gmsx ) {
+            push @dependencies, $1;
+        }
+    }
+
+    return @dependencies;
+}
+
+sub _review_rows {
+    my ($content) = @_;
+
+    my %rows;
+    for my $line ( split /\n/msx, $content ) {
+        next if $line !~ /\A [|]/msx;
+        next if $line =~ /\A [|] [ ]* Module [ ]* [|]/msx;
+        next if $line =~ /\A [|] [-: ]+ [|]/msx;
+
+        my @cells = map { _trim($_) } split /[|]/msx, $line;
+        next if @cells < 6;
+
+        my $module = $cells[1];
+        next if !defined $module || !length $module;
+
+        $rows{$module} = {
+            scope    => $cells[2],
+            license  => $cells[3],
+            risk     => $cells[4],
+            decision => $cells[5],
+        };
+    }
+
+    return %rows;
+}
+
+sub _slurp {
+    my ($file) = @_;
+
+    open my $handle, '<', $file
+      or croak "failed to read $file";
+
+    local $/ = undef;
+    my $content = <$handle>;
+
+    close $handle
+      or croak "failed to close $file";
+
+    return $content;
+}
+
+sub _trim {
+    my ($value) = @_;
+
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}

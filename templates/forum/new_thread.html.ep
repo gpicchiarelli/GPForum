@@ -1,0 +1,67 @@
+% layout 'default';
+% title t('forum.new_thread_title') . ' - ' . t('app.name');
+% my $field_errors = stash('errors') || {};
+% my $form_values = stash('values') || {};
+% my $selected_category = stash('selected_category_id') || $form_values->{category_id} || q{};
+% my $has_errors = keys %{$field_errors} ? 1 : 0;
+% my $category_error_attrs = $field_errors->{category_id} ? ' aria-invalid="true" aria-describedby="thread-category-error"' : q{};
+% my $title_error_attrs = $field_errors->{title} ? ' aria-invalid="true" aria-describedby="thread-title-error"' : q{};
+% my $body_error_attrs = $field_errors->{body_source} ? ' aria-invalid="true" aria-describedby="thread-body-error"' : q{};
+% my $visibility_error_attrs = $field_errors->{visibility} ? ' aria-invalid="true" aria-describedby="thread-visibility-error"' : q{};
+
+<section aria-labelledby="new-thread-heading">
+  <p><a href="<%= url_for('categories') %>"><%= t('nav.categories') %></a></p>
+  <h1 id="new-thread-heading"><%= t('forum.new_thread_title') %></h1>
+  % if ($has_errors) {
+    <div id="thread-error-summary" class="form-error-summary" role="alert" tabindex="-1">
+      <p><%= t('forum.new_thread_error_summary') %></p>
+      <ul>
+        % if ($field_errors->{category_id}) {
+          <li><a href="#thread-category"><%= $field_errors->{category_id} %></a></li>
+        % }
+        % if ($field_errors->{title}) {
+          <li><a href="#thread-title"><%= $field_errors->{title} %></a></li>
+        % }
+        % if ($field_errors->{body_source}) {
+          <li><a href="#thread-body"><%= $field_errors->{body_source} %></a></li>
+        % }
+        % if ($field_errors->{visibility}) {
+          <li><a href="#thread-visibility"><%= $field_errors->{visibility} %></a></li>
+        % }
+      </ul>
+    </div>
+  % }
+  <form method="post" action="<%= url_for('thread_create') %>"<%== $has_errors ? ' aria-describedby="thread-error-summary"' : q{} %>>
+    <%= csrf_field %>
+    <label for="thread-category"><%= t('search.category') %></label>
+    <select id="thread-category" name="category_id" required<%== $category_error_attrs %>>
+      % for my $category (@{$categories}) {
+        <option value="<%= $category->{category_id} %>"<%= $category->{category_id} eq $selected_category ? ' selected' : '' %>><%= $category->{title} %></option>
+      % }
+    </select>
+    % if ($field_errors->{category_id}) {
+      <p id="thread-category-error" class="field-error"><%= $field_errors->{category_id} %></p>
+    % }
+    <label for="thread-title"><%= t('forum.thread_title') %></label>
+    <input id="thread-title" name="title" value="<%= $form_values->{title} // q{} %>" required<%== $title_error_attrs %>>
+    % if ($field_errors->{title}) {
+      <p id="thread-title-error" class="field-error"><%= $field_errors->{title} %></p>
+    % }
+    <label for="thread-body"><%= t('forum.thread_body') %></label>
+    <textarea id="thread-body" name="body_source" rows="10" required<%== $body_error_attrs %>><%= $form_values->{body_source} // q{} %></textarea>
+    % if ($field_errors->{body_source}) {
+      <p id="thread-body-error" class="field-error"><%= $field_errors->{body_source} %></p>
+    % }
+    <label for="thread-visibility"><%= t('forum.visibility') %></label>
+    <select id="thread-visibility" name="visibility"<%== $visibility_error_attrs %>>
+      % my $visibility = $form_values->{visibility} || 'public';
+      <option value="public"<%= $visibility eq 'public' ? ' selected' : '' %>><%= t('forum.visibility_public') %></option>
+      <option value="members"<%= $visibility eq 'members' ? ' selected' : '' %>><%= t('forum.visibility_members') %></option>
+      <option value="private"<%= $visibility eq 'private' ? ' selected' : '' %>><%= t('forum.visibility_private') %></option>
+    </select>
+    % if ($field_errors->{visibility}) {
+      <p id="thread-visibility-error" class="field-error"><%= $field_errors->{visibility} %></p>
+    % }
+    <button type="submit"><%= t('forum.create_thread') %></button>
+  </form>
+</section>

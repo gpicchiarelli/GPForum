@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+
+exec carton exec bin/gpforum-seed-performance-data "$@"

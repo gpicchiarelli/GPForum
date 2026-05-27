@@ -1,0 +1,244 @@
+GPForum - Permission Matrix & Authorization Rules Constitution
+
+Prompt 52 alignment: permission matrix changes MUST answer the mandatory
+authorization questions for read, write, moderate, delete, restore, move,
+search, subscribe, and export. Permission rules MUST remain explicit,
+visibility-aware, moderation-aware, audit-backed, and anti-leak.
+
+This document defines the initial permission matrix, role model, ABAC rules, and authorization evaluation expectations for GPForum.
+
+This specification is mandatory for implementation.
+
+---
+
+Authorization Philosophy
+
+Authorization MUST be deny-by-default.
+
+Every sensitive action MUST evaluate:
+
+* actor;
+* action;
+* target;
+* scope;
+* resource state;
+* user state;
+* moderation state.
+
+Frontend visibility MUST NOT be treated as authorization.
+
+---
+
+Base Roles
+
+Canonical initial roles:
+
+* anonymous
+* member
+* trusted_member
+* moderator
+* space_moderator
+* administrator
+* owner
+
+Roles MUST be scope-aware where applicable.
+
+Global administrator power MUST be minimized and audited.
+
+---
+
+Core Permissions
+
+Identity permissions:
+
+* user.register
+* user.login
+* user.logout
+* user.view_profile
+* user.edit_self
+* user.manage_security_self
+* user.suspend
+* user.ban
+
+Forum permissions:
+
+* space.view
+* space.create
+* space.edit
+* category.view
+* category.create
+* category.edit
+* thread.view
+* thread.create
+* thread.reply
+* thread.edit_own
+* thread.edit_any
+* thread.lock
+* thread.move
+* thread.archive
+* post.view
+* post.create
+* post.edit_own
+* post.edit_any
+* post.hide
+* post.delete_soft
+* post.restore
+
+Moderation permissions:
+
+* report.create
+* report.view_queue
+* report.assign
+* report.resolve
+* moderation.action.create
+* moderation.action.reverse
+* quarantine.review
+
+Operational permissions:
+
+* admin.view_dashboard
+* admin.manage_roles
+* admin.manage_policies
+* admin.view_audit_log
+* admin.run_maintenance
+
+---
+
+Anonymous Rules
+
+Anonymous users MAY:
+
+* view public spaces;
+* view public categories;
+* view public threads;
+* view public posts;
+* register;
+* login.
+
+Anonymous users MUST NOT:
+
+* create threads;
+* create posts;
+* report content unless explicitly enabled;
+* access restricted spaces;
+* access moderation state;
+* access admin interfaces.
+
+---
+
+Member Rules
+
+Members MAY:
+
+* create threads in allowed categories;
+* reply to open threads;
+* edit own posts within policy;
+* subscribe to permitted targets;
+* report content;
+* manage own profile and security settings.
+
+Members MUST NOT:
+
+* bypass locked thread state;
+* see hidden moderation details;
+* edit other users' posts;
+* change category policies;
+* view reports.
+
+---
+
+Trusted Member Rules
+
+Trusted members MAY receive:
+
+* higher rate limits;
+* reduced pre-moderation;
+* attachment privileges;
+* additional community features.
+
+Trusted status MUST NOT grant staff authority by itself.
+
+---
+
+Moderator Rules
+
+Moderators MAY:
+
+* view moderation queue within scope;
+* hide and restore content within scope;
+* lock and unlock threads within scope;
+* move threads within scope;
+* review reports within scope;
+* quarantine content within scope.
+
+Moderators MUST NOT:
+
+* grant themselves authority;
+* modify global security policy;
+* access unrelated private data;
+* perform unaudited actions.
+
+---
+
+Administrator Rules
+
+Administrators MAY:
+
+* manage site configuration;
+* manage roles and policies;
+* view operational dashboards;
+* perform maintenance actions;
+* inspect audit logs.
+
+Administrative actions MUST be strongly audited.
+
+Administrator authority SHOULD be separable from moderation authority.
+
+---
+
+Owner Rules
+
+Owner authority is exceptional.
+
+Owner actions MUST be:
+
+* rare;
+* audited;
+* protected by strong authentication;
+* operationally visible.
+
+Owner authority MUST NOT be required for routine moderation.
+
+---
+
+ABAC Constraints
+
+Authorization MUST account for resource state.
+
+Examples:
+
+* locked threads reject normal replies;
+* archived categories reject normal thread creation;
+* suspended users cannot post;
+* banned users cannot authenticate into normal workflows;
+* quarantined content cannot render publicly;
+* deleted content is visible only to authorized staff where policy allows.
+
+Ownership MAY grant edit rights only when policy permits.
+
+Ownership MUST NOT override moderation restrictions.
+
+---
+
+Decision Output
+
+Authorization checks SHOULD return:
+
+* allow or deny;
+* reason code;
+* policy source;
+* correlation id where applicable.
+
+User-facing denial messages MUST be safe and non-leaky.
+
+Operational logs SHOULD include enough context for audit.

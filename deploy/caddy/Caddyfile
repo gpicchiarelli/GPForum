@@ -1,0 +1,13 @@
+forum.example.com {
+    encode zstd gzip
+
+    handle_path /assets/* {
+        root * /opt/gpforum/public/assets
+        file_server
+        header Cache-Control "public, max-age=604800"
+    }
+
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

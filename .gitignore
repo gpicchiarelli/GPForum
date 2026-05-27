@@ -1,0 +1,6 @@
+.DS_Store
+/.carton/
+/local/
+/cover_db/
+/var/profile/
+nytprof.out*

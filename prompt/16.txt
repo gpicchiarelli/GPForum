@@ -1,0 +1,554 @@
+GPForum — Software Engineering, Architecture Governance & Development Constitution
+
+Prompt 45 alignment: GPForum architecture MUST be preserved through verifiable
+invariants, explicit contracts, release gates, migration discipline, and
+architecture checks. Intent alone is insufficient. Every new bounded context,
+store, worker, plugin hook, projection, or authoritative workflow MUST document
+its invariants and testing expectations.
+
+Prompt 48 alignment: the core MUST remain small and stable. Features that are
+not universally necessary belong in plugins, capabilities, or optional
+subsystems. Controllers MUST validate, authorize, dispatch, and render only.
+Plugin capability boundaries, cache disposability, PostgreSQL authority, and
+moderation-as-core are mandatory architectural discipline.
+
+Prompt 50 alignment: GPForum implementation MUST now preserve core operational
+integrity on every change. Each workflow change MUST identify canonical state,
+emitted events, projection effects, audit records, affected indexes, enforced
+permissions, failure modes, rebuildability, replayability, and operational
+scaling before it is accepted.
+
+This document defines the mandatory software engineering philosophy, architectural governance model, engineering discipline, repository organization, code ownership principles, refactoring rules, review standards, documentation expectations, and long-term maintainability strategy of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Engineering Philosophy
+
+GPForum is:
+
+* a long-term distributed systems project;
+* a security-first platform;
+* an operationally sustainable architecture;
+* a Perl-native engineering ecosystem.
+
+Engineering decisions MUST prioritize:
+
+* maintainability;
+* operational predictability;
+* architectural coherence;
+* explicitness;
+* auditability;
+* long-term sustainability.
+
+The project MUST avoid:
+
+* accidental complexity;
+* architecture drift;
+* uncontrolled abstraction;
+* framework-driven chaos;
+* novelty-driven engineering.
+
+⸻
+
+Architecture Governance Philosophy
+
+Architecture is authoritative.
+
+The platform MUST remain:
+
+* constitution-driven;
+* invariant-aware;
+* operationally disciplined.
+
+All engineering decisions MUST comply with:
+
+* constitutions;
+* ADRs;
+* architectural constraints;
+* operational principles.
+
+No implementation convenience may override:
+
+* security;
+* observability;
+* scalability;
+* maintainability.
+
+⸻
+
+Repository Philosophy
+
+The repository is:
+
+* a long-lived engineering artifact;
+* an operational system;
+* an architectural contract.
+
+The repository MUST remain:
+
+* structured;
+* predictable;
+* navigable;
+* auditable.
+
+The repository MUST avoid:
+
+* dumping grounds;
+* uncontrolled helpers;
+* architectural ambiguity.
+
+⸻
+
+Recommended Repository Structure
+
+Recommended layout:
+
+apps/
+bin/
+conf/
+docs/
+lib/
+sql/
+themes/
+assets/
+t/
+tools/
+
+Recommended Perl namespace structure:
+
+GPForum::Domain
+GPForum::Application
+GPForum::Infrastructure
+GPForum::Web
+GPForum::Realtime
+GPForum::Worker
+GPForum::Security
+GPForum::Search
+
+⸻
+
+Layering Philosophy
+
+The platform MUST maintain:
+
+* explicit architectural layers.
+
+Recommended layering:
+
+* Domain
+* Application
+* Infrastructure
+* Transport/Delivery
+* Rendering
+
+Dependencies MUST flow inward.
+
+Business logic MUST remain infrastructure-independent.
+
+⸻
+
+Domain Isolation
+
+The domain layer MUST:
+
+* remain persistence-independent;
+* remain transport-independent;
+* remain rendering-independent.
+
+The domain layer MUST NOT depend on:
+
+* Mojolicious;
+* DBIx::Class internals;
+* HTTP details;
+* websocket transport logic.
+
+⸻
+
+Infrastructure Isolation
+
+Infrastructure concerns MUST remain isolated.
+
+Examples:
+
+* database access
+* optional Redis/KeyDB access
+* PostgreSQL-native search integration
+* optional external search integration
+* filesystem integration
+* object storage integration
+
+Infrastructure MUST remain:
+
+* replaceable;
+* bounded;
+* operationally explicit.
+
+⸻
+
+Application Service Philosophy
+
+Application services SHOULD:
+
+* orchestrate workflows;
+* enforce use-case boundaries;
+* coordinate infrastructure interaction.
+
+Application services MUST NOT:
+
+* become giant god services;
+* absorb unrelated workflows.
+
+Application root classes MUST NOT compensate by becoming god class
+applications.
+
+The root application class MUST wire application services, not replace them.
+
+⸻
+
+Thin Controller Rule
+
+Controllers MUST remain:
+
+* thin;
+* orchestration-oriented;
+* validation-aware;
+* authorization-aware.
+
+Controllers MUST NOT:
+
+* contain business logic;
+* contain persistence orchestration;
+* implement hidden workflow complexity.
+
+⸻
+
+Naming Philosophy
+
+Names MUST remain:
+
+* explicit;
+* descriptive;
+* semantically meaningful.
+
+Forbidden naming:
+
+* Utils
+* Helpers
+* Common
+* Misc
+* Temp
+
+Preferred naming:
+
+* CreateThread
+* PermissionEvaluator
+* SearchIndexer
+* NotificationDispatcher
+
+⸻
+
+Module Size Philosophy
+
+Modules MUST remain:
+
+* bounded;
+* understandable;
+* responsibility-focused.
+
+The architecture MUST avoid:
+
+* giant god modules;
+* hidden coupling;
+* uncontrolled inheritance hierarchies.
+
+⸻
+
+Complexity Philosophy
+
+Complexity MUST remain:
+
+* measurable;
+* minimized;
+* decomposed.
+
+The platform MUST prioritize:
+
+* small composable units;
+* explicit workflows;
+* predictable execution paths.
+
+Complexity accumulation MUST be treated as technical debt.
+
+⸻
+
+Refactoring Philosophy
+
+Refactoring is mandatory.
+
+Refactoring MUST prioritize:
+
+* simplification;
+* decomposition;
+* invariant preservation;
+* operational clarity.
+
+Refactoring MUST NOT:
+
+* silently alter behavior;
+* bypass tests;
+* bypass architectural rules.
+
+⸻
+
+Technical Debt Philosophy
+
+Technical debt MUST remain:
+
+* visible;
+* documented;
+* reviewable;
+* intentionally accepted.
+
+Hidden architectural debt is prohibited.
+
+⸻
+
+Architectural Drift Prevention
+
+The platform MUST actively resist:
+
+* uncontrolled coupling;
+* framework leakage;
+* abstraction sprawl;
+* dependency explosion;
+* hidden infrastructure assumptions.
+
+Architectural consistency is mandatory.
+
+⸻
+
+ADR Philosophy
+
+Architectural Decision Records SHOULD exist for:
+
+* major architecture changes;
+* persistence changes;
+* infrastructure changes;
+* protocol changes;
+* distributed systems behavior.
+
+ADRs MUST include:
+
+* context;
+* decision;
+* consequences;
+* alternatives considered.
+
+⸻
+
+Documentation Philosophy
+
+Critical systems MUST remain documented.
+
+Documentation SHOULD include:
+
+* architectural intent;
+* invariants;
+* failure assumptions;
+* operational expectations;
+* scaling assumptions.
+
+The platform MUST remain understandable by future maintainers.
+
+⸻
+
+Code Review Philosophy
+
+Code review is mandatory.
+
+Reviews MUST evaluate:
+
+* correctness;
+* architectural compliance;
+* security;
+* maintainability;
+* observability;
+* scalability impact.
+
+Reviews MUST reject:
+
+* hidden complexity;
+* unclear ownership;
+* unsafe shortcuts;
+* undocumented architectural violations.
+
+⸻
+
+Testing Philosophy
+
+Testing is mandatory engineering infrastructure.
+
+Critical workflows MUST support:
+
+* unit testing;
+* integration testing;
+* regression testing;
+* distributed systems testing.
+
+Testing MUST remain:
+
+* deterministic;
+* reproducible;
+* automation-friendly.
+
+⸻
+
+Engineering Ownership
+
+Ownership MUST remain:
+
+* explicit;
+* reviewable;
+* operationally accountable.
+
+Critical systems SHOULD have:
+
+* maintainers;
+* operational owners;
+* architectural stewards.
+
+⸻
+
+Dependency Philosophy
+
+Dependencies MUST remain:
+
+* intentional;
+* minimal;
+* reviewed;
+* operationally justified.
+
+The platform MUST avoid:
+
+* dependency sprawl;
+* abandoned libraries;
+* unnecessary frameworks.
+
+⸻
+
+Backwards Compatibility
+
+Backwards compatibility SHOULD remain:
+
+* intentional;
+* documented;
+* operationally evaluated.
+
+Breaking changes MUST:
+
+* remain explicit;
+* support migration planning;
+* support rollback where feasible.
+
+⸻
+
+Feature Development Philosophy
+
+Features MUST:
+
+* align with architecture;
+* preserve invariants;
+* remain observable;
+* remain testable.
+
+Features MUST NOT:
+
+* bypass constitutions;
+* introduce hidden authority;
+* compromise operational sustainability.
+
+⸻
+
+Security Engineering
+
+Security is an engineering requirement.
+
+All development MUST:
+
+* minimize attack surface;
+* validate input;
+* preserve auditability;
+* preserve authorization integrity.
+
+Security shortcuts are prohibited.
+
+⸻
+
+Operational Awareness
+
+Engineers MUST consider:
+
+* deployment behavior;
+* rollback behavior;
+* observability impact;
+* scaling impact;
+* replay behavior;
+* failure modes.
+
+Operational sustainability is part of engineering quality.
+
+⸻
+
+Distributed Systems Awareness
+
+All engineering MUST assume:
+
+* node failure;
+* retries;
+* replay;
+* eventual consistency;
+* propagation delay;
+* asynchronous execution.
+
+Distributed assumptions MUST remain explicit.
+
+⸻
+
+Build vs Buy Philosophy
+
+The platform SHOULD:
+
+* prefer mature stable primitives;
+* avoid unnecessary reinvention.
+
+The platform MUST avoid:
+
+* framework worship;
+* dependency-driven architecture;
+* novelty engineering.
+
+Technology choices MUST remain:
+
+* operationally justified;
+* maintainable for years.
+
+⸻
+
+Long-Term Engineering Goal
+
+GPForum software engineering culture MUST remain:
+
+* disciplined;
+* constitution-driven;
+* maintainable;
+* security-focused;
+* operationally sustainable;
+* architecturally coherent.
+
+Engineering is not feature accumulation.
+
+Engineering is controlled long-term system design.
+
+All future development MUST comply with this constitution.

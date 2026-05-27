@@ -1,0 +1,55 @@
+% layout 'default';
+% title t('admin.user_roles') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-user-roles-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-user-roles-heading',
+    component_title => t('admin.user_roles') %>
+
+  <form method="post" action="<%= url_for('admin_role_bind', user_id => $user_id) %>">
+    <%= csrf_field %>
+    <label for="binding-role-id"><%= t('admin.role_id') %></label>
+    <input id="binding-role-id" name="role_id" required>
+    <label for="binding-resource-type"><%= t('admin.resource_type') %></label>
+    <input id="binding-resource-type" name="resource_type" value="global" required>
+    <label for="binding-resource-id"><%= t('admin.resource_id') %></label>
+    <input id="binding-resource-id" name="resource_id">
+    <label for="binding-space-id"><%= t('admin.space_id') %></label>
+    <input id="binding-space-id" name="space_id">
+    <button type="submit"><%= t('admin.bind_role') %></button>
+  </form>
+
+  % if (@{$bindings}) {
+    <ol class="ui-card-list" aria-label="<%= t('admin.user_role_bindings') %>">
+      % for my $binding (@{$bindings}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="binding-<%= $binding->{binding_id} %>-heading">
+            <h2 id="binding-<%= $binding->{binding_id} %>-heading">
+              <%= t('admin.role') %> <%= $binding->{role_id} %>
+            </h2>
+            <dl>
+              <dt><%= t('common.user') %></dt>
+              <dd><%= $binding->{user_id} %></dd>
+              <dt><%= t('admin.scope') %></dt>
+              <dd><%= $binding->{resource_type} %> <%= $binding->{resource_id} || '' %></dd>
+              <dt><%= t('common.created') %></dt>
+              <dd><time datetime="<%= $binding->{created_at} %>"><%= $binding->{created_at} %></time></dd>
+              <dt><%= t('admin.revoked') %></dt>
+              <dd><%= $binding->{revoked_at} || t('common.no') %></dd>
+            </dl>
+            % if (!$binding->{revoked_at}) {
+              <form method="post" action="<%= url_for('admin_role_binding_revoke', binding_id => $binding->{binding_id}) %>">
+                <%= csrf_field %>
+                <button type="submit"><%= t('admin.revoke_role_binding') %></button>
+              </form>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'user-role-bindings-empty-heading',
+      component_title => t('admin.no_role_bindings') %>
+  % }
+</section>

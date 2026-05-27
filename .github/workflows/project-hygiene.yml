@@ -1,0 +1,72 @@
+name: Project Hygiene
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Repository hygiene
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Required project files
+        run: |
+          test -f README.md
+          test -f LICENSE
+          test -f SECURITY.md
+          test -f CONTRIBUTING.md
+          test -f CODE_OF_CONDUCT.md
+          test -f SUPPORT.md
+          test -f GOVERNANCE.md
+          test -f ROADMAP.md
+          test -f CHANGELOG.md
+          test -f docs/CPAN_LICENSE_REVIEW.md
+          test -f docs/OPERATIONAL_BASELINE.md
+          test -f docs/PERFORMANCE_BASELINE.md
+          test -f docs/PERFORMANCE_EVIDENCE.md
+          test -f docs/OBSERVABILITY.md
+          test -f docs/OS_OPTIMIZATION.md
+          test -f docs/OS_RUNTIME_ENFORCEMENT.md
+          test -f docs/OS_RUNTIME_EVIDENCE.md
+          test -f docs/DEPLOYMENT.md
+          test -f docs/DEPLOYMENT_EVIDENCE.md
+          test -f deploy/systemd/gpforum.service
+          test -f deploy/freebsd/gpforum
+          test -f deploy/launchd/com.gpforum.app.plist
+          test -f deploy/nginx/gpforum.conf
+          test -f deploy/caddy/Caddyfile
+          test -f .github/CODEOWNERS
+          test -f .github/pull_request_template.md
+          test -f .github/dependabot.yml
+          test -f docs/adr/0000-template.md
+          test -x script/bench-http
+          test -x script/bench-hotpaths
+          test -x script/bench-hypnotoad
+          test -x script/bench-hypnotoad-scaling
+          test -x script/cpan-license-check
+          test -x script/perltidy-check
+          test -x script/gpforum-os-preflight
+          test -x script/query-plan-check
+          test -x script/query-plan-evidence
+          test -x script/seed-benchmark
+
+      - name: No backup artifacts
+        run: |
+          ! find . -name '*.bak' -print | grep .
+
+      - name: Prompt alignment marker
+        run: |
+          grep -q 'GitHub Project Success Contract' prompt/44.txt
+          grep -q 'GitHub project success surface' README.md

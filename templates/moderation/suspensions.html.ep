@@ -1,0 +1,76 @@
+% layout 'default';
+% title t('moderation.suspensions') . ' - ' . t('app.name');
+
+<section aria-labelledby="moderation-suspensions-heading">
+  <%= include 'components/page_header',
+    heading_id => 'moderation-suspensions-heading',
+    component_title => t('moderation.suspensions') %>
+  <form method="get" action="<%= url_for('moderation_suspensions') %>">
+    <label for="suspension-status"><%= t('admin.status') %></label>
+    <select id="suspension-status" name="status">
+      <option value="active" <%= $status eq 'active' ? 'selected' : '' %>><%= ui_label('state', 'active') %></option>
+      <option value="all" <%= $status eq 'all' ? 'selected' : '' %>><%= ui_label('state', 'all') %></option>
+    </select>
+    <label for="suspension-user-id"><%= t('moderation.user_id') %></label>
+    <input id="suspension-user-id" name="user_id" value="<%= $user_id || '' %>">
+    <button type="submit"><%= t('common.filter') %></button>
+  </form>
+
+  % if (@{$suspensions}) {
+    <ol class="ui-card-list" aria-label="<%= t('moderation.active_suspension_list') %>">
+      % for my $suspension (@{$suspensions}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="suspension-<%= $suspension->{suspension_id} %>-heading">
+            <h2 id="suspension-<%= $suspension->{suspension_id} %>-heading">
+              <%= ui_label('target', 'user') %> <%= $suspension->{user_id} %>
+            </h2>
+            <dl>
+              <dt><%= t('common.reason') %></dt>
+              <dd><%= $suspension->{reason} %></dd>
+              <dt><%= t('common.actor') %></dt>
+              <dd><%= $suspension->{actor_user_id} %></dd>
+              <dt><%= t('moderation.valid_from') %></dt>
+              <dd><time datetime="<%= $suspension->{valid_from} %>"><%= $suspension->{valid_from} %></time></dd>
+              <dt><%= t('moderation.valid_to') %></dt>
+              <dd>
+                % if ($suspension->{valid_to}) {
+                  <time datetime="<%= $suspension->{valid_to} %>"><%= $suspension->{valid_to} %></time>
+                % } else {
+                  <%= t('state.indefinite') %>
+                % }
+              </dd>
+              <dt><%= t('moderation.reversed') %></dt>
+              <dd>
+                % if ($suspension->{revoked_at}) {
+                  <time datetime="<%= $suspension->{revoked_at} %>"><%= $suspension->{revoked_at} %></time>
+                % } else {
+                  <%= t('common.no') %>
+                % }
+              </dd>
+            </dl>
+            % if (!$suspension->{revoked_at}) {
+              <form method="post" action="<%= url_for('moderation_suspension_revoke', suspension_id => $suspension->{suspension_id}) %>">
+                <%= csrf_field %>
+                <label for="suspension-<%= $suspension->{suspension_id} %>-revoke-reason"><%= t('common.reason') %></label>
+                <input id="suspension-<%= $suspension->{suspension_id} %>-revoke-reason" name="reason" required>
+                <button type="submit"><%= t('moderation.revoke_suspension') %></button>
+              </form>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+    % if ($next_cursor) {
+      <%= include 'components/pagination',
+        label => t('moderation.active_suspension_list'),
+        items => ui_next_page(
+          href => url_for('moderation_suspensions')->query(after => $next_cursor, status => $status, user_id => $user_id),
+          label => t('moderation.next_suspensions'),
+        ) %>
+    % }
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'moderation-suspensions-empty-heading',
+      component_title => t('moderation.no_suspensions_match') %>
+  % }
+</section>

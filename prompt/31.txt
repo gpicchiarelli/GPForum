@@ -1,0 +1,151 @@
+GPForum - Admin Console & Staff Operations Constitution
+
+Prompt 46 alignment: admin and staff operations MUST be accessible. Admin
+dashboards, audit viewers, moderation oversight, emergency controls, filters,
+tables, dialogs, and bulk actions MUST be keyboard-operable, semantic,
+screen-reader compatible, focus-safe, and WCAG 2.2 AA compliant.
+
+Prompt 52 alignment: admin and staff workflows MUST be audit-backed,
+permission-scoped, moderation-safe, replay-aware, anti-leak, and protected from
+silent privilege escalation. Staff screens MUST not expose restricted content
+unless the actor is explicitly authorized for that scope.
+
+This document defines the mandatory admin console architecture, staff workflows, administrative boundaries, emergency controls, and operational visibility requirements for GPForum.
+
+This specification is mandatory.
+
+---
+
+Admin Philosophy
+
+The admin console is a privileged operational surface.
+
+It MUST prioritize:
+
+* least privilege;
+* auditability;
+* clarity;
+* safe defaults;
+* reversible operations;
+* separation between moderation and infrastructure administration.
+
+It MUST avoid:
+
+* hidden superuser actions;
+* unaudited mutation;
+* broad destructive controls;
+* exposing secrets;
+* mixing routine community work with emergency operations.
+
+---
+
+Admin Areas
+
+The admin console SHOULD include:
+
+* dashboard;
+* user management;
+* role and permission management;
+* moderation oversight;
+* audit log viewer;
+* worker queue status;
+* search index status;
+* cache and projection status;
+* configuration view;
+* emergency controls.
+
+Each area MUST require explicit permission.
+
+---
+
+User Management
+
+Staff MAY need to:
+
+* view account status;
+* view security event summary;
+* suspend account;
+* ban account;
+* revoke sessions;
+* reset trust state;
+* inspect public content history.
+
+Staff MUST NOT see password hashes, raw secrets, or private tokens.
+
+---
+
+Role Management
+
+Role changes MUST be:
+
+* scoped;
+* audited;
+* attributable;
+* reversible where safe.
+
+The UI MUST make scope visible before granting authority.
+
+---
+
+Audit Viewer
+
+Audit views MUST support:
+
+* filtering by actor;
+* filtering by target;
+* filtering by action;
+* filtering by time;
+* correlation id lookup.
+
+Audit records MUST not be editable through normal admin UI.
+
+---
+
+Operational Dashboard
+
+Dashboard SHOULD display:
+
+* application health;
+* worker backlog;
+* failed jobs;
+* search indexing lag;
+* recent deploy version;
+* error rates;
+* moderation queue size;
+* abuse pressure indicators.
+
+Dashboard data MUST be safe for the viewer's permission level.
+
+---
+
+Emergency Controls
+
+Emergency controls MAY include:
+
+* temporary registration closure;
+* temporary posting slowdown;
+* attachment quarantine mode;
+* digest pause;
+* webhook pause;
+* search indexing pause.
+
+Emergency controls MUST be:
+
+* temporary;
+* audited;
+* visible to administrators;
+* documented by runbook;
+* reversible.
+
+---
+
+Admin Authentication
+
+Admin access SHOULD require:
+
+* active session;
+* strong authentication;
+* MFA where supported;
+* recent re-authentication for dangerous actions.
+
+Admin routes MUST never rely on obscurity.

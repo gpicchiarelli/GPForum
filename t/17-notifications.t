@@ -1,0 +1,563 @@
+package main;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use Test::More;
+
+use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Service::Notification::Dispatcher;
+use GPForum::Service::Notification::PreferenceStore;
+use GPForum::Service::Notification::Renderer;
+use GPForum::Service::Notification::SubscriptionStore;
+use GPForum::Service::Outbox::DomainEventTransport;
+use GPForum::Service::Realtime::Hub;
+use GPForum::Test::FixedClock;
+use GPForum::Test::Id;
+use GPForum::Test::NotificationResultSet;
+use GPForum::Test::NotificationSchema;
+use GPForum::Test::OutboxPayloadRow;
+use GPForum::Test::PermissionEngine;
+use GPForum::Test::RealtimeConnection;
+use GPForum::Worker::Handler::NotificationDispatch;
+
+our $VERSION = '0.001';
+
+const my $LIST_LIMIT => 10;
+
+my $subscriptions = GPForum::Test::NotificationResultSet->new;
+my $preferences   = GPForum::Test::NotificationResultSet->new;
+my $notifications = GPForum::Test::NotificationResultSet->new;
+my $reads         = GPForum::Test::NotificationResultSet->new;
+my $inbox         = GPForum::Test::NotificationResultSet->new;
+my $schema        = GPForum::Test::NotificationSchema->new(
+    resultsets => {
+        Subscription           => $subscriptions,
+        NotificationPreference => $preferences,
+        Notification           => $notifications,
+        NotificationRead       => $reads,
+        NotificationInbox      => $inbox,
+    },
+);
+my $clock = GPForum::Test::FixedClock->new;
+
+my $subscription_store = GPForum::Service::Notification::SubscriptionStore->new(
+    schema     => $schema,
+    clock      => $clock,
+    id_service => GPForum::Test::Id->new,
+);
+my $subscription = $subscription_store->subscribe(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+
+is( $subscription->{subscription_id},
+    'generated-1', 'subscription id is generated' );
+is( $subscription->{user_id},     'user-1', 'subscription stores user' );
+is( $subscription->{target_type}, 'thread', 'subscription stores target type' );
+is( $subscription->{target_id},   'thread-1', 'subscription stores target id' );
+is( $subscription->{preference},  'all', 'subscription defaults preference' );
+is( $subscription->{created_at},
+    '2026-05-23T12:00:00Z', 'subscription stores creation time' );
+is( scalar @{ $subscriptions->created }, 1, 'subscription row is created' );
+
+my $subscription_status =
+  $subscription_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $subscription_status->{subscribed}, 1, 'subscription status is active' );
+is( $subscription_status->{muted}, 0, 'subscription status starts unmuted' );
+is( $subscription_status->{subscription_id},
+    'generated-1', 'subscription status exposes id' );
+
+my $saved_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'mentions',
+    }
+);
+is( $saved_subscription->{subscription_id},
+    'generated-1', 'saving an existing subscription is idempotent' );
+is( $saved_subscription->{preference},
+    'mentions', 'idempotent subscription save updates preference' );
+is( scalar @{ $subscriptions->created },
+    1, 'idempotent subscription save does not insert a duplicate' );
+
+my $muted = $subscription_store->mute('generated-1');
+is( $muted->{muted_at}, '2026-05-23T12:00:00Z', 'subscription can be muted' );
+my $revoked = $subscription_store->revoke('generated-1');
+is( $revoked->{revoked_at},
+    '2026-05-23T12:00:00Z', 'subscription can be revoked' );
+
+my $revoked_status =
+  $subscription_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $revoked_status->{subscribed},
+    0, 'revoked subscription status is inactive' );
+
+my $restored_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'all',
+    }
+);
+is( $restored_subscription->{subscription_id},
+    'generated-1', 'save restores revoked subscription' );
+is( $restored_subscription->{revoked_at},
+    undef, 'restored subscription clears revocation' );
+
+my $target_muted = $subscription_store->mute_for_user_target(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+ok( $target_muted->{ok}, 'subscription can be muted by target' );
+is( $target_muted->{muted_at},
+    '2026-05-23T12:00:00Z', 'target mute records timestamp' );
+
+my $unmuted_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'all',
+    }
+);
+is( $unmuted_subscription->{preference},
+    'all', 'save restores muted subscription preference' );
+is( $unmuted_subscription->{muted_at}, undef, 'save clears muted state' );
+
+my $target_revoked = $subscription_store->revoke_for_user_target(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+ok( $target_revoked->{ok}, 'subscription can be revoked by target' );
+is( $target_revoked->{revoked_at},
+    '2026-05-23T12:00:00Z', 'target revoke records timestamp' );
+
+my $active_subscription = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'all',
+    }
+);
+is( $active_subscription->{muted_at}, undef, 'active restore clears mute' );
+is( $active_subscription->{revoked_at},
+    undef, 'active restore clears revocation' );
+
+my $subscribers =
+  [ $subscription_store->subscribers_for( 'thread', 'thread-1' ) ];
+is_deeply( $subscribers, ['user-1'], 'subscribers can be listed' );
+
+my $preference_store = GPForum::Service::Notification::PreferenceStore->new(
+    schema => $schema,
+    clock  => $clock,
+);
+my $preference = $preference_store->set_preference(
+    {
+        user_id          => 'user-1',
+        channel          => 'email',
+        enabled          => 1,
+        digest_frequency => 'daily',
+    }
+);
+
+is( $preference->{user_id}, 'user-1', 'preference stores user' );
+is( $preference->{channel}, 'email',  'preference stores channel' );
+is( $preference->{enabled}, 1,        'preference stores enabled flag' );
+is( $preference->{digest_frequency},
+    'daily', 'preference stores digest frequency' );
+is( $preference->{updated_at},
+    '2026-05-23T12:00:00Z', 'preference stores update time' );
+is( scalar @{ $preferences->created }, 1, 'preference row is upserted' );
+is_deeply( [ $preference_store->enabled_channels('user-1') ],
+    ['email'], 'enabled channels can be listed' );
+
+my $renderer           = GPForum::Service::Notification::Renderer->new;
+my $reply_presentation = $renderer->render_inbox_item(
+    'it',
+    {
+        notification_type => 'reply',
+        source_type       => 'post',
+        source_id         => 'post-1',
+        payload           => { thread_id => 'thread-1', post_id => 'post-1' },
+    }
+);
+is(
+    $reply_presentation->{title},
+    'Nuova risposta in una discussione seguita',
+    'reply notification title is localized for inbox rendering'
+);
+is(
+    $reply_presentation->{email}{subject},
+    'Nuova risposta in una discussione seguita',
+    'reply email subject uses the same localized notification template'
+);
+
+my $mention_presentation = $renderer->render_inbox_item(
+    'en',
+    {
+        notification_type => 'mention',
+        source_type       => 'post',
+        source_id         => 'post-2',
+        payload           => { thread_id => 'thread-1', post_id => 'post-2' },
+    }
+);
+is(
+    $mention_presentation->{title},
+    'You were mentioned',
+    'mention notification title is localized'
+);
+is(
+    $mention_presentation->{email}{subject},
+    'You were mentioned on GPForum',
+    'mention email subject is localized'
+);
+
+my $follow_presentation = $renderer->render_inbox_item(
+    'it',
+    {
+        notification_type => 'follow',
+        source_type       => 'thread',
+        source_id         => 'thread-1',
+        payload           => { thread_id => 'thread-1' },
+    }
+);
+is(
+    $follow_presentation->{email}{subject},
+    'Nuova attivita in una discussione seguita',
+    'follow email subject is localized'
+);
+
+my $fallback_presentation = $renderer->render_inbox_item(
+    'zz',
+    {
+        notification_type => 'unknown',
+        source_type       => 'post',
+        source_id         => 'post-3',
+        payload           => {},
+    }
+);
+is( $fallback_presentation->{title},
+    'Notification', 'unsupported locale and type use safe fallback text' );
+
+my $rendered_mention = $renderer->render_mention(
+    'it',
+    {
+        mention_id          => 'mention-1',
+        source_type         => 'post',
+        source_id           => 'post-1',
+        actor_id            => 'user-2',
+        actor_username      => 'reply_author',
+        actor_profile_label => '@reply_author',
+        actor_display_name  => 'Reply Author',
+        mentioned_user_id   => 'user-1',
+        mentioned_username  => 'giacomo',
+    }
+);
+is( $rendered_mention->{by_label},
+    'Menzione da', 'mention list label is localized' );
+is(
+    $rendered_mention->{email}{subject},
+    '@reply_author ti ha menzionato su GPForum',
+    'mention-specific email subject includes localized actor context'
+);
+
+my $realtime_hub        = GPForum::Service::Realtime::Hub->new;
+my $realtime_connection = GPForum::Test::RealtimeConnection->new;
+$realtime_hub->register_connection( 'notification-connection',
+    { user_id => 'user-1' },
+    $realtime_connection );
+$realtime_hub->subscribe(
+    {
+        connection_id => 'notification-connection',
+        actor         => { user_id => 'user-1' },
+        channel       => 'notifications:user-1',
+    }
+);
+
+my $dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    schema             => $schema,
+    clock              => $clock,
+    id_service         => GPForum::Test::Id->new,
+    permission_engine  => GPForum::Test::PermissionEngine->new,
+    realtime_hub       => $realtime_hub,
+    subscription_store => $subscription_store,
+);
+my $created = $dispatcher->create_notification(
+    {
+        recipient_user_id => 'user-1',
+        source_type       => 'post',
+        source_id         => 'post-1',
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-1' },
+    }
+);
+
+ok( $created->{ok}, 'notification is created' );
+like(
+    $created->{notification}{notification_id},
+    qr/\A [[:xdigit:]-]+ \z/msx,
+    'notification id is deterministic UUID-shaped'
+);
+is( $created->{notification}{recipient_user_id},
+    'user-1', 'notification stores recipient' );
+is( $created->{notification}{source_type},
+    'post', 'notification stores source type' );
+is( $created->{notification}{source_id},
+    'post-1', 'notification stores source id' );
+is( $created->{notification}{notification_type},
+    'reply', 'notification stores type' );
+is( $created->{notification}{payload}{thread_id},
+    'thread-1', 'notification stores payload' );
+ok( $created->{idempotency_key},
+    'notification delivery exposes idempotency key' );
+is( scalar @{ $notifications->created }, 1, 'notification row is inserted' );
+is( scalar @{ $inbox->created },   1, 'inbox projection row is inserted' );
+is( $created->{inbox}{rank_score}, 0, 'inbox uses default rank' );
+is( $created->{unread_count}, 1, 'notification create reports unread count' );
+is( $realtime_connection->sent->[0]{json}{type},
+    'notification.badge', 'notification create broadcasts badge update' );
+is( $realtime_connection->sent->[0]{json}{unread_count},
+    1, 'notification create badge includes unread count' );
+
+my $duplicate = $dispatcher->create_notification(
+    {
+        recipient_user_id => 'user-1',
+        source_type       => 'post',
+        source_id         => 'post-1',
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-1' },
+    }
+);
+ok( $duplicate->{ok},        'duplicate delivery succeeds' );
+ok( $duplicate->{duplicate}, 'duplicate delivery is identified' );
+is( scalar @{ $notifications->created },
+    1, 'duplicate delivery does not insert notification row' );
+is( scalar @{ $inbox->created },
+    1, 'duplicate delivery does not insert inbox row' );
+
+my $denied_dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    schema            => $schema,
+    clock             => $clock,
+    id_service        => GPForum::Test::Id->new,
+    permission_engine => GPForum::Test::PermissionEngine->new(
+        denied => { 'user-denied' => 1 },
+    ),
+);
+my $denied = $denied_dispatcher->create_notification(
+    {
+        recipient_user_id => 'user-denied',
+        source_type       => 'post',
+        source_id         => 'post-2',
+        notification_type => 'reply',
+    }
+);
+
+ok( !$denied->{ok}, 'permission denied notification is skipped' );
+is( $denied->{skipped}, 'permission_denied',
+    'permission denied reason is explicit' );
+
+my $fanout = $dispatcher->fanout_to_subscribers(
+    {
+        target_type       => 'thread',
+        target_id         => 'thread-1',
+        source_type       => 'post',
+        source_id         => 'post-3',
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-1' },
+    }
+);
+
+ok( $fanout->{ok}, 'fanout succeeds' );
+is( $fanout->{attempted},           1, 'fanout attempts subscribed users' );
+is( scalar @{ $fanout->{created} }, 1, 'fanout creates notifications' );
+is( scalar @{ $notifications->created },
+    2, 'fanout inserts another notification row' );
+is( $dispatcher->unread_count_for_user('user-1'),
+    2, 'unread count includes direct and fanout notifications' );
+is( $realtime_connection->sent->[-1]{json}{unread_count},
+    2, 'fanout broadcasts updated unread badge' );
+
+my $duplicate_fanout = $dispatcher->fanout_to_subscribers(
+    {
+        target_type       => 'thread',
+        target_id         => 'thread-1',
+        source_type       => 'post',
+        source_id         => 'post-3',
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-1' },
+    }
+);
+ok( $duplicate_fanout->{ok}, 'duplicate fanout succeeds' );
+is( scalar @{ $duplicate_fanout->{created} },
+    0, 'duplicate fanout creates no new notification' );
+is( scalar @{ $duplicate_fanout->{duplicates} },
+    1, 'duplicate fanout reports duplicate delivery' );
+is( scalar @{ $notifications->created },
+    2, 'duplicate fanout does not add rows' );
+
+my $transport = GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            dispatcher => $dispatcher
+        ),
+    ],
+);
+my $outbox_message = GPForum::Test::OutboxPayloadRow->new(
+    data => {
+        payload => {
+            event_id       => 'event-reply-1',
+            event_type     => 'post.created',
+            aggregate_type => 'post',
+            aggregate_id   => 'post-5',
+            actor_id       => 'user-author',
+            domain_payload => { thread_id => 'thread-1' },
+        },
+    },
+);
+my $outbox_delivery = $transport->dispatch($outbox_message);
+ok( $outbox_delivery->{ok}, 'outbox event dispatch succeeds' );
+is( $outbox_delivery->{handlers},
+    1, 'outbox event dispatches notification handler' );
+is( scalar @{ $notifications->created },
+    3, 'outbox event fanout persists notification' );
+is( $dispatcher->unread_count_for_user('user-1'),
+    3, 'outbox event fanout updates unread count' );
+is( $realtime_connection->sent->[-1]{json}{unread_count},
+    3, 'outbox event fanout pushes badge update' );
+
+my $duplicate_outbox_delivery = $transport->dispatch($outbox_message);
+ok( $duplicate_outbox_delivery->{ok},
+    'duplicate outbox event dispatch succeeds' );
+is( scalar @{ $notifications->created },
+    3, 'duplicate outbox event does not add rows' );
+
+my $failing_notifications =
+  GPForum::Test::NotificationResultSet->new( fail_create => 1 );
+my $failure_schema = GPForum::Test::NotificationSchema->new(
+    resultsets => {
+        Subscription           => $subscriptions,
+        NotificationPreference => $preferences,
+        Notification           => $failing_notifications,
+        NotificationRead       => $reads,
+        NotificationInbox      => $inbox,
+    },
+);
+my $degraded_dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    schema             => $failure_schema,
+    clock              => $clock,
+    id_service         => GPForum::Test::Id->new,
+    subscription_store => $subscription_store,
+);
+my $degraded_fanout = $degraded_dispatcher->fanout_to_subscribers(
+    {
+        target_type       => 'thread',
+        target_id         => 'thread-1',
+        source_type       => 'post',
+        source_id         => 'post-failure',
+        notification_type => 'reply',
+    }
+);
+ok( $degraded_fanout->{ok},
+    'notification fanout remains non-authoritative on dispatcher failure' );
+is( $degraded_fanout->{attempted},
+    1, 'degraded fanout still records attempted recipient' );
+is( scalar @{ $degraded_fanout->{created} },
+    0, 'degraded fanout does not report failed notification as created' );
+is( scalar @{ $degraded_fanout->{failed} },
+    1, 'degraded fanout records failed notification delivery' );
+
+my $excluded_fanout = $dispatcher->fanout_to_subscribers(
+    {
+        target_type                => 'thread',
+        target_id                  => 'thread-1',
+        source_type                => 'post',
+        source_id                  => 'post-4',
+        notification_type          => 'reply',
+        excluded_recipient_user_id => 'user-1',
+        payload                    => { thread_id => 'thread-1' },
+    }
+);
+
+ok( $excluded_fanout->{ok}, 'fanout with excluded actor succeeds' );
+is( $excluded_fanout->{attempted},
+    0, 'fanout excludes the actor from attempts' );
+is( scalar @{ $excluded_fanout->{created} },
+    0, 'fanout does not notify excluded actor' );
+
+my $listed = $dispatcher->list_for_user( 'user-1', $LIST_LIMIT );
+
+is( scalar @{$listed}, 3, 'notification inbox can be listed' );
+is( $inbox->last_query->{recipient_user_id},
+    'user-1', 'notification list filters recipient' );
+is( $inbox->last_attrs->{rows}, $LIST_LIMIT,
+    'notification list applies limit' );
+is( $inbox->last_attrs->{prefetch},
+    'notification', 'notification list prefetches payload row' );
+
+my $notification_page =
+  $dispatcher->list_page_for_user( 'user-1', { limit => $LIST_LIMIT } );
+is( scalar @{ $notification_page->{items} },
+    3, 'notification page returns inbox rows' );
+is( $notification_page->{next_cursor},
+    undef, 'notification page omits cursor when complete' );
+is(
+    $inbox->last_attrs->{rows},
+    $LIST_LIMIT + 1,
+    'notification page fetches one extra row'
+);
+
+my $read =
+  $dispatcher->mark_read( $created->{notification}{notification_id}, 'user-1' );
+
+is(
+    $read->{notification_id},
+    $created->{notification}{notification_id},
+    'read state records notification'
+);
+is( $read->{recipient_user_id}, 'user-1',     'read state records recipient' );
+is( $read->{read_at}, '2026-05-23T12:00:00Z', 'read state records timestamp' );
+is( scalar @{ $reads->created }, 1,           'read row is upserted' );
+is(
+    $inbox->find(
+        {
+            recipient_user_id => 'user-1',
+            notification_id   => $created->{notification}{notification_id},
+        }
+    )->get_column('read_at'),
+    '2026-05-23T12:00:00Z',
+    'inbox read projection is updated'
+);
+is( $read->{unread_count}, 2, 'mark read returns updated unread count' );
+is( $realtime_connection->sent->[-1]{json}{unread_count},
+    2, 'mark read broadcasts updated unread badge' );
+
+my $duplicate_read =
+  $dispatcher->mark_read( $created->{notification}{notification_id}, 'user-1' );
+ok( $duplicate_read->{duplicate}, 'duplicate mark-read is idempotent' );
+is( scalar @{ $reads->created },
+    1, 'duplicate mark-read does not insert another read row' );
+
+my $missing_read = $dispatcher->mark_read( 'missing', 'user-1' );
+ok( !$missing_read->{ok}, 'missing notification read is rejected' );
+is( $missing_read->{error},
+    'not_found', 'missing notification read is explicit' );
+
+done_testing();
+
+1;

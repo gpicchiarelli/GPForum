@@ -1,0 +1,302 @@
+GPForum - Redis-Free Architecture Exploration Memo
+
+This document records the architectural reasoning that led to the PostgreSQL-centric, Redis-optional coordination model formalized in the cache and coordination constitution.
+
+---
+
+Puoi farlo.
+Ma allora devi cambiare completamente filosofia architetturale.
+
+Perché senza Redis stai dicendo:
+
+PostgreSQL + Perl diventano
+sia persistence layer
+sia distributed coordination layer
+sia cache orchestration layer
+
+Ed è una scelta molto interessante.
+
+Onestamente:
+
+* più difficile;
+* ma molto più elegante;
+* molto più coerente col tuo approccio Perl-first.
+
+⸻
+
+1. Architettura nuova
+
+Diventa:
+
+PostgreSQL
++
+Perl event orchestration
++
+shared memory local caches
++
+event propagation
+
+senza Redis.
+
+⸻
+
+2. Cosa usi al posto di Redis
+
+PostgreSQL LISTEN/NOTIFY
+
+PostgreSQL LISTEN/NOTIFY￼
+
+Questo diventa:
+
+distributed pub/sub backbone
+
+Esempio:
+
+Node A
+→ NOTIFY post_created
+Node B
+→ invalida cache locale
+Node C
+→ websocket update
+
+⸻
+
+3. Cache locali per nodo
+
+Ogni nodo Perl mantiene:
+
+in-memory local caches
+
+con:
+
+* TTL brevi;
+* invalidazione event-driven;
+* rebuild rapido.
+
+Questo è MOLTO efficiente.
+
+⸻
+
+4. Filosofia nuova
+
+NON:
+
+centralized distributed cache
+
+MA:
+
+coordinated local caches
+
+che è un pattern molto elegante.
+
+⸻
+
+5. Vantaggi enormi
+
+Meno moving parts
+
+Niente:
+
+* Redis cluster;
+* Redis failover;
+* Redis persistence;
+* Redis memory tuning.
+
+⸻
+
+Architettura più pura
+
+Diventa:
+
+Perl
++
+PostgreSQL
+
+come backbone totale.
+
+Molto Unix-like.
+
+⸻
+
+Coerenza migliore
+
+Le cache:
+
+* sono locali;
+* disposable;
+* sincronizzate da eventi.
+
+⸻
+
+6. Svantaggi
+
+Più complesso lato Perl
+
+Devi implementare:
+
+* cache invalidation;
+* local coordination;
+* replay;
+* stale policies.
+
+⸻
+
+LISTEN/NOTIFY non è Kafka
+
+Ha limiti:
+
+* payload piccoli;
+* throughput limitato;
+* transient.
+
+Quindi:
+
+NOTIFY = signaling
+
+NON:
+
+event persistence
+
+L’event persistence resta:
+
+event_log
+
+⸻
+
+7. Architettura corretta senza Redis
+
+Canonical state
+
+PostgreSQL
+
+⸻
+
+Event persistence
+
+event_log
+
+⸻
+
+Distributed signaling
+
+LISTEN/NOTIFY
+
+⸻
+
+Local caches
+
+Per-node memory caches
+
+⸻
+
+Realtime sync
+
+Perl websocket nodes
+
+⸻
+
+8. Cache in Perl
+
+Puoi usare:
+
+* CHI;
+* Mojo::Cache;
+* custom LRU;
+* shared memory;
+* mmap eventualmente.
+
+Ma io probabilmente farei:
+
+cache subsystem custom GPForum
+
+perché:
+
+* permission-aware;
+* event-driven;
+* projection-aware.
+
+⸻
+
+9. Pattern molto elegante
+
+Workflow
+
+post.created
+↓
+event_log append
+↓
+NOTIFY
+↓
+nodes invalidate local caches
+↓
+workers rebuild projections
+↓
+websocket propagation
+
+Questa è:
+
+vera architettura distributed Perl-native
+
+⸻
+
+10. Il punto CRITICO
+
+Le cache devono essere:
+
+fully disposable
+
+Sempre.
+
+Se perdi tutte le cache:
+
+* nessun problema;
+* replay;
+* rebuild;
+* riparti.
+
+⸻
+
+11. E sinceramente?
+
+Questa architettura:
+
+* PostgreSQL-centric;
+* Perl-orchestrated;
+* local-cache coordinated;
+
+è molto più raffinata di:
+
+“metti Redis ovunque”
+
+che oggi fanno tutti.
+
+⸻
+
+12. Quello che farei io
+
+SÌ
+
+* PostgreSQL LISTEN/NOTIFY
+* local caches
+* event_log
+* projection rebuild
+* Perl orchestration
+
+NO
+
+* Redis as database
+* giant distributed cache mesh
+* opaque cache clusters
+
+⸻
+
+13. Risultato finale
+
+GPForum diventerebbe:
+
+PostgreSQL-centric
+Perl-native
+event-driven
+distributed coordination platform
+
+che è una direzione architetturale molto forte e molto coerente con tutto quello che hai costruito finora.

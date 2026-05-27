@@ -1,0 +1,97 @@
+% layout 'default';
+% title t('moderation.reports') . ' - ' . t('app.name');
+
+<section aria-labelledby="moderation-reports-heading">
+  <%= include 'components/page_header',
+    heading_id => 'moderation-reports-heading',
+    component_title => t('moderation.reports') %>
+  <form method="get" action="<%= url_for('moderation_reports') %>">
+    <label for="report-status"><%= t('admin.status') %></label>
+    <select id="report-status" name="status">
+      <option value="open" <%= $status eq 'open' ? 'selected' : '' %>><%= ui_label('state', 'open') %></option>
+      <option value="triaged" <%= $status eq 'triaged' ? 'selected' : '' %>><%= ui_label('state', 'triaged') %></option>
+      <option value="resolved" <%= $status eq 'resolved' ? 'selected' : '' %>><%= ui_label('state', 'resolved') %></option>
+      <option value="rejected" <%= $status eq 'rejected' ? 'selected' : '' %>><%= ui_label('state', 'rejected') %></option>
+    </select>
+    <button type="submit"><%= t('common.filter') %></button>
+  </form>
+
+  % if (@{$reports}) {
+    <ol class="ui-card-list" aria-label="<%= t('moderation.report_queue') %>">
+      % for my $report (@{$reports}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="report-<%= $report->{report_id} %>-heading">
+            <h2 id="report-<%= $report->{report_id} %>-heading">
+              <%= ui_label('target', $report->{target_type}) %> <%= t('moderation.reports') %>
+            </h2>
+            <dl>
+              <dt><%= t('common.reason') %></dt>
+              <dd><%= $report->{reason} %></dd>
+              <dt><%= t('common.details') %></dt>
+              <dd><%= $report->{details} || t('common.none') %></dd>
+              <dt><%= t('admin.status') %></dt>
+              <dd><%= ui_label('state', $report->{status}) %></dd>
+              <dt><%= t('common.actor') %></dt>
+              <dd><%= $report->{assigned_moderator_user_id} || t('common.unassigned') %></dd>
+              <dt><%= t('common.target') %></dt>
+              <dd><%= ui_label('target', $report->{target_type}) %>: <%= $report->{target_id} %></dd>
+              <dt><%= t('common.created') %></dt>
+              <dd><time datetime="<%= $report->{created_at} %>"><%= $report->{created_at} %></time></dd>
+            </dl>
+            % if ($report->{target_type} eq 'post') {
+              <form method="post" action="<%= url_for('moderation_post_hide', post_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <label for="report-<%= $report->{report_id} %>-post-reason"><%= t('common.reason') %></label>
+                <input id="report-<%= $report->{report_id} %>-post-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <button type="submit"><%= t('moderation.hide_post') %></button>
+              </form>
+            % }
+            % if ($report->{target_type} eq 'thread') {
+              <form method="post" action="<%= url_for('moderation_thread_lock', thread_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <label for="report-<%= $report->{report_id} %>-thread-reason"><%= t('common.reason') %></label>
+                <input id="report-<%= $report->{report_id} %>-thread-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <button type="submit"><%= t('moderation.lock_thread') %></button>
+              </form>
+            % }
+            % if ($report->{target_type} eq 'user') {
+              <form method="post" action="<%= url_for('moderation_user_suspend', user_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <label for="report-<%= $report->{report_id} %>-user-reason"><%= t('common.reason') %></label>
+                <input id="report-<%= $report->{report_id} %>-user-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <label for="report-<%= $report->{report_id} %>-valid-to"><%= t('moderation.valid_to') %></label>
+                <input id="report-<%= $report->{report_id} %>-valid-to" name="valid_to">
+                <button type="submit"><%= t('moderation.suspend_user') %></button>
+              </form>
+            % }
+            <form method="post" action="<%= url_for('moderation_report_assign', report_id => $report->{report_id}) %>">
+              <%= csrf_field %>
+              <button type="submit"><%= t('moderation.assign_to_me') %></button>
+            </form>
+            % if ($report->{assigned_moderator_user_id}) {
+              <form method="post" action="<%= url_for('moderation_report_release', report_id => $report->{report_id}) %>">
+                <%= csrf_field %>
+                <button type="submit"><%= t('moderation.release_claim') %></button>
+              </form>
+            % }
+            <form method="post" action="<%= url_for('moderation_report_resolve', report_id => $report->{report_id}) %>">
+              <%= csrf_field %>
+              <label for="report-<%= $report->{report_id} %>-resolution"><%= t('moderation.resolution') %></label>
+              <select id="report-<%= $report->{report_id} %>-resolution" name="resolution" required>
+                <option value="no_action"><%= ui_label('moderation.resolution', 'no_action') %></option>
+                <option value="content_hidden"><%= ui_label('moderation.resolution', 'content_hidden') %></option>
+                <option value="user_warned"><%= ui_label('moderation.resolution', 'user_warned') %></option>
+                <option value="escalated"><%= ui_label('moderation.resolution', 'escalated') %></option>
+              </select>
+              <button type="submit"><%= t('moderation.resolve_report') %></button>
+            </form>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'moderation-reports-empty-heading',
+      component_title => t('moderation.no_reports_match') %>
+  % }
+</section>

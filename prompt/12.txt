@@ -1,0 +1,488 @@
+GPForum — API, Integration & External Interface Constitution
+
+This document defines the mandatory API architecture, external integration model, interface stability philosophy, serialization standards, authentication requirements, rate limiting rules, federation boundaries, and long-term interoperability principles of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+API Philosophy
+
+APIs are:
+
+* authoritative external contracts;
+* integration surfaces;
+* security boundaries;
+* operational interfaces.
+
+The API layer MUST prioritize:
+
+* stability;
+* explicitness;
+* auditability;
+* security;
+* versionability;
+* operational predictability.
+
+The platform MUST avoid:
+
+* implicit behavior;
+* undocumented side effects;
+* unstable response structures;
+* authorization ambiguity.
+
+⸻
+
+External Interface Philosophy
+
+External interfaces MUST remain:
+
+* deterministic;
+* documented;
+* permission-aware;
+* rate-limited;
+* observable.
+
+All external consumers MUST be treated as:
+
+* untrusted;
+* potentially hostile;
+* operationally unpredictable.
+
+⸻
+
+API Architecture
+
+The platform SHOULD expose:
+
+* HTTP APIs;
+* websocket APIs;
+* administrative APIs;
+* integration APIs.
+
+APIs MUST remain:
+
+* server-authoritative;
+* validation-aware;
+* authorization-aware.
+
+Business authority MUST remain server-side.
+
+⸻
+
+Versioning Philosophy
+
+APIs MUST support:
+
+* explicit versioning.
+
+Versioning SHOULD remain:
+
+* stable;
+* predictable;
+* backwards-aware where feasible.
+
+Breaking changes MUST:
+
+* remain explicit;
+* remain documented;
+* support migration planning.
+
+⸻
+
+Serialization Philosophy
+
+Preferred serialization:
+
+* JSON.
+
+Serialization MUST remain:
+
+* deterministic;
+* explicit;
+* schema-aware.
+
+Responses MUST avoid:
+
+* hidden fields;
+* unstable ordering assumptions;
+* implicit data expansion.
+
+⸻
+
+API Payload Philosophy
+
+Payloads SHOULD contain:
+
+* stable identifiers;
+* explicit timestamps;
+* explicit pagination metadata;
+* permission-aware visibility.
+
+Payloads SHOULD avoid:
+
+* giant nested structures;
+* uncontrolled expansion;
+* hidden side effects.
+
+⸻
+
+API Authentication
+
+APIs MUST require:
+
+* explicit authentication where appropriate.
+
+Authentication MAY support:
+
+* session authentication;
+* token authentication;
+* API keys;
+* OAuth-compatible workflows.
+
+Administrative APIs MUST require:
+
+* elevated authentication.
+
+⸻
+
+Authorization Enforcement
+
+All APIs MUST:
+
+* enforce authorization server-side;
+* validate resource ownership;
+* validate permission scope;
+* remain deny-by-default.
+
+Frontend visibility MUST NOT define authorization.
+
+⸻
+
+API Rate Limiting
+
+All external APIs MUST support:
+
+* rate limiting;
+* abuse throttling;
+* request quotas;
+* anomaly detection.
+
+Rate limits MAY vary by:
+
+* authentication level;
+* trust level;
+* endpoint category;
+* operational role.
+
+⸻
+
+Pagination Philosophy
+
+All collection APIs MUST:
+
+* paginate;
+* expose bounded responses;
+* avoid unbounded scans.
+
+Pagination MUST remain:
+
+* deterministic;
+* cursor-safe where appropriate;
+* scalable.
+
+Unbounded collection responses are prohibited.
+
+⸻
+
+Filtering & Querying
+
+Filtering MUST remain:
+
+* explicit;
+* validated;
+* bounded.
+
+The API layer MUST avoid:
+
+* unrestricted query execution;
+* unsafe search injection;
+* arbitrary backend exposure.
+
+⸻
+
+API Error Philosophy
+
+Errors MUST remain:
+
+* structured;
+* machine-readable;
+* security-aware.
+
+Errors MUST NOT leak:
+
+* stack traces;
+* SQL;
+* infrastructure details;
+* sensitive operational state.
+
+Recommended fields:
+
+* error_code
+* message
+* correlation_id
+
+⸻
+
+Idempotency
+
+Mutating APIs SHOULD support:
+
+* idempotency where appropriate.
+
+Critical workflows MUST tolerate:
+
+* retries;
+* replay attempts;
+* duplicate delivery.
+
+⸻
+
+Websocket API Philosophy
+
+Realtime APIs MUST:
+
+* authenticate websocket connections;
+* authorize subscriptions;
+* validate event payloads;
+* support reconnect workflows.
+
+Websocket APIs MUST remain:
+
+* eventually consistent;
+* replay-tolerant;
+* abuse-aware.
+
+⸻
+
+Event API Philosophy
+
+The platform MAY expose:
+
+* event streams;
+* webhook integrations;
+* external notification systems.
+
+Event interfaces MUST remain:
+
+* replay-aware;
+* permission-aware;
+* rate-limited.
+
+⸻
+
+Webhook Philosophy
+
+Webhook systems MUST:
+
+* support retry;
+* support signature validation;
+* support replay protection;
+* remain observable.
+
+Webhooks MUST remain:
+
+* asynchronous;
+* idempotent-aware;
+* security-focused.
+
+⸻
+
+Federation Philosophy
+
+Federation is OPTIONAL.
+
+If federation is implemented:
+
+* trust boundaries MUST remain explicit;
+* remote authority MUST remain constrained;
+* local governance MUST remain authoritative.
+
+Federation MUST NOT:
+
+* bypass authorization;
+* bypass moderation;
+* bypass auditability.
+
+⸻
+
+Third-Party Integration
+
+Integrations MUST remain:
+
+* permission-scoped;
+* revocable;
+* auditable.
+
+Third-party integrations MUST support:
+
+* token revocation;
+* operational monitoring;
+* abuse mitigation.
+
+⸻
+
+API Stability
+
+Public APIs SHOULD prioritize:
+
+* compatibility;
+* predictable evolution;
+* explicit deprecation.
+
+Deprecated behavior MUST:
+
+* remain documented;
+* remain time-bounded;
+* support migration planning.
+
+⸻
+
+Search APIs
+
+Search APIs MUST:
+
+* enforce authorization;
+* remain rate-limited;
+* avoid unrestricted backend exposure.
+
+Search responses MUST remain:
+
+* permission-filtered;
+* pagination-aware;
+* abuse-resistant.
+
+⸻
+
+Administrative APIs
+
+Administrative APIs MUST:
+
+* remain isolated;
+* require elevated permissions;
+* remain fully auditable.
+
+Administrative interfaces MUST support:
+
+* MFA enforcement;
+* operational attribution;
+* correlation tracking.
+
+⸻
+
+Upload APIs
+
+Upload workflows MUST:
+
+* validate MIME type;
+* validate size;
+* support scanning workflows;
+* avoid unsafe execution.
+
+Uploads MUST remain:
+
+* asynchronous where appropriate;
+* operationally isolated.
+
+⸻
+
+API Observability
+
+API infrastructure MUST expose:
+
+* request latency;
+* error rates;
+* abuse metrics;
+* rate-limit triggers;
+* authorization failures.
+
+API behavior MUST remain observable.
+
+⸻
+
+Schema Philosophy
+
+API schemas SHOULD remain:
+
+* explicit;
+* documented;
+* testable;
+* version-aware.
+
+Implicit response mutation SHOULD be avoided.
+
+⸻
+
+Documentation Philosophy
+
+External interfaces MUST remain:
+
+* documented;
+* reproducible;
+* testable.
+
+Documentation MUST include:
+
+* authentication requirements;
+* authorization expectations;
+* rate-limit behavior;
+* error semantics.
+
+⸻
+
+Security Philosophy for Integrations
+
+All external integrations MUST assume:
+
+* hostile clients;
+* replay attempts;
+* abuse automation;
+* malformed payloads.
+
+External interfaces MUST remain:
+
+* defensive;
+* observable;
+* rate-limited.
+
+⸻
+
+Operational Philosophy
+
+API systems MUST prioritize:
+
+* operational predictability;
+* bounded resource usage;
+* abuse resistance;
+* graceful degradation.
+
+The platform MUST avoid:
+
+* uncontrolled external amplification.
+
+⸻
+
+Long-Term Interface Goal
+
+GPForum APIs and integrations MUST remain:
+
+* stable;
+* auditable;
+* secure;
+* scalable;
+* distributed-safe;
+* operationally sustainable.
+
+External interfaces are permanent architectural contracts.
+
+All future APIs and integrations MUST comply with this constitution.

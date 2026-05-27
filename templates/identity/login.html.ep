@@ -1,0 +1,43 @@
+% layout 'default';
+% title t('auth.login_title') . ' - ' . t('app.name');
+% my $has_errors = keys %{$errors} ? 1 : 0;
+% my $identifier_error_attrs = $errors->{identifier} ? ' aria-invalid="true" aria-describedby="login-identifier-error"' : q{};
+% my $password_error_attrs = $errors->{password} ? ' aria-invalid="true" aria-describedby="login-password-error"' : q{};
+
+<section aria-labelledby="login-heading">
+  <h1 id="login-heading"><%= t('auth.login_title') %></h1>
+  % if ($errors->{login}) {
+    <p id="login-form-error" class="field-error" role="alert"><%= $errors->{login} %></p>
+  % }
+  % if ($has_errors) {
+    <div id="login-error-summary" class="form-error-summary" role="alert" tabindex="-1">
+      <p><%= t('form.error_summary') %></p>
+      <ul>
+        % if ($errors->{identifier}) {
+          <li><a href="#login-identifier"><%= $errors->{identifier} %></a></li>
+        % }
+        % if ($errors->{password}) {
+          <li><a href="#login-password"><%= $errors->{password} %></a></li>
+        % }
+      </ul>
+    </div>
+  % }
+  <form method="post" action="<%= url_for('login_submit') %>"<%== $has_errors ? ' aria-describedby="login-error-summary"' : q{} %>>
+    <%= csrf_field %>
+    <label for="login-identifier">
+      <%= t('auth.username_or_email') %>
+    </label>
+    <input id="login-identifier" name="identifier" value="<%= $values->{identifier} // q{} %>" autocomplete="username"<%== $identifier_error_attrs %>>
+    % if ($errors->{identifier}) {
+      <p id="login-identifier-error" class="field-error"><%= $errors->{identifier} %></p>
+    % }
+    <label for="login-password">
+      <%= t('auth.password') %>
+    </label>
+    <input id="login-password" name="password" type="password" autocomplete="current-password"<%== $password_error_attrs %>>
+    % if ($errors->{password}) {
+      <p id="login-password-error" class="field-error"><%= $errors->{password} %></p>
+    % }
+    <button type="submit"><%= t('auth.login') %></button>
+  </form>
+</section>

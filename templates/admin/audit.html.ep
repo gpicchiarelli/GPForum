@@ -1,0 +1,52 @@
+% layout 'default';
+% title t('admin.audit') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-audit-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-audit-heading',
+    component_title => t('admin.audit') %>
+  <form method="get" action="<%= url_for('admin_audit') %>">
+    <label for="audit-target-type"><%= t('common.target_type') %></label>
+    <input id="audit-target-type" name="target_type" value="<%= $target_type || '' %>">
+    <label for="audit-target-id"><%= t('common.target_id') %></label>
+    <input id="audit-target-id" name="target_id" value="<%= $target_id || '' %>">
+    <button type="submit"><%= t('common.filter') %></button>
+  </form>
+
+  % if (@{$audit_rows}) {
+    <ol class="ui-card-list" aria-label="<%= t('admin.audit_log') %>">
+      % for my $row (@{$audit_rows}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="audit-<%= $row->{audit_id} %>-heading">
+            <h2 id="audit-<%= $row->{audit_id} %>-heading"><%= $row->{action} %></h2>
+            <dl>
+              <dt><%= t('common.actor') %></dt>
+              <dd><%= $row->{actor_id} || t('common.system') %></dd>
+              <dt><%= t('common.target') %></dt>
+              <dd><%= ui_label('target', $row->{target_type} || 'system') %>: <%= $row->{target_id} || '' %></dd>
+              <dt><%= t('common.created') %></dt>
+              <dd><time datetime="<%= $row->{created_at} %>"><%= $row->{created_at} %></time></dd>
+              <dt><%= t('common.correlation') %></dt>
+              <dd><%= $row->{correlation_id} %></dd>
+              % if (@{ $row->{metadata_items} || [] }) {
+                <dt><%= t('admin.audit_metadata') %></dt>
+                <dd>
+                  <dl aria-label="<%= t('admin.audit_metadata_label') %>">
+                    % for my $item (@{ $row->{metadata_items} }) {
+                      <dt><%= $item->{name} %></dt>
+                      <dd><%= $item->{value} %></dd>
+                    % }
+                  </dl>
+                </dd>
+              % }
+            </dl>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'admin-audit-empty-heading',
+      component_title => t('admin.no_audit_rows_match') %>
+  % }
+</section>

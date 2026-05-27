@@ -1,0 +1,404 @@
+GPForum - Initial Database Schema & Persistence Blueprint Constitution
+
+Prompt 45 alignment: schema evolution MUST be invariant-aware. New tables and
+columns MUST identify whether they are canonical, derived, disposable,
+rebuildable, or operational metadata. Persistence changes MUST preserve replay,
+authorization, audit, and projection rebuild guarantees.
+
+This document defines the initial database blueprint for GPForum, including core tables, relationships, indexing expectations, partitioning direction, and persistence invariants.
+
+This specification is a starting blueprint and MUST evolve through migrations and ADRs.
+
+---
+
+Schema Philosophy
+
+The database MUST start small but structurally correct.
+
+The initial schema MUST support:
+
+* users;
+* sessions;
+* spaces;
+* categories;
+* threads;
+* posts;
+* revisions;
+* roles and permissions;
+* moderation;
+* events;
+* notifications;
+* attachments;
+* audit logs.
+
+The schema MUST avoid:
+
+* giant unbounded mutable tables without partition strategy;
+* implicit boolean privilege flags;
+* hidden destructive deletion;
+* business-critical JSON blobs without indexed canonical columns.
+
+---
+
+Identity Tables
+
+users:
+
+* id
+* username
+* display_name
+* email_normalized
+* password_hash
+* status
+* trust_level
+* version
+* permission_version
+* created_at
+* updated_at
+* deleted_at
+
+sessions:
+
+* session_id
+* user_id
+* session_hash
+* created_at
+* last_seen_at
+* expires_at
+* revoked_at
+* ip_hash
+* user_agent_hash
+
+credentials:
+
+* id
+* user_id
+* type
+* secret_hash
+* created_at
+* revoked_at
+
+---
+
+Forum Structure Tables
+
+spaces:
+
+* id
+* slug
+* title
+* description
+* visibility
+* sort_order
+* created_at
+* archived_at
+
+categories:
+
+* id
+* space_id
+* slug
+* title
+* description
+* visibility
+* posting_policy
+* sort_order
+* created_at
+* archived_at
+
+threads:
+
+* id
+* category_id
+* author_user_id
+* title
+* slug
+* visibility
+* moderation_state
+* version
+* visibility_version
+* permission_version
+* last_activity_at
+* created_at
+* updated_at
+* archived_at
+* deleted_at
+
+posts:
+
+* id
+* thread_id
+* author_user_id
+* current_body_id
+* current_revision_id
+* visibility
+* moderation_state
+* version
+* visibility_version
+* permission_version
+* position
+* created_at
+* updated_at
+* hidden_at
+* locked_at
+* deleted_at
+
+post_bodies:
+
+* id
+* post_id
+* body_format
+* body_source
+* body_rendered_safe
+* source_hash
+* created_at
+
+post_revisions:
+
+* id
+* post_id
+* author_user_id
+* body_format
+* body_source
+* body_rendered_safe
+* edit_reason
+* created_at
+
+Thread lists MUST NOT load post body text. Lists read heads and projections;
+detail pages load bodies explicitly.
+
+Derived counters MUST live in thread_counters and category_stats projections
+unless an ADR accepts a transactional projection column.
+
+---
+
+Authorization Tables
+
+roles:
+
+* id
+* name
+* description
+* created_at
+
+permissions:
+
+* id
+* name
+* description
+
+role_permissions:
+
+* role_id
+* permission_id
+
+role_bindings:
+
+* id
+* user_id
+* role_id
+* scope_type
+* scope_id
+* created_by_user_id
+* created_at
+* revoked_at
+
+resource_policies:
+
+* id
+* resource_type
+* resource_id
+* policy_key
+* policy_value
+* created_at
+* updated_at
+
+---
+
+Moderation Tables
+
+reports:
+
+* id
+* reporter_user_id
+* target_type
+* target_id
+* reason
+* details
+* status
+* assigned_moderator_user_id
+* created_at
+* resolved_at
+
+moderation_actions:
+
+* id
+* actor_user_id
+* action_type
+* target_type
+* target_id
+* reason
+* metadata
+* created_at
+* reversed_at
+* reversed_by_user_id
+
+suspensions:
+
+* id
+* user_id
+* actor_user_id
+* reason
+* starts_at
+* ends_at
+* created_at
+* revoked_at
+
+---
+
+Event And Audit Tables
+
+event_log:
+
+* event_id
+* event_type
+* schema_version
+* aggregate_type
+* aggregate_id
+* actor_id
+* correlation_id
+* causation_id
+* idempotency_key
+* payload
+* metadata
+* created_at
+
+audit_log:
+
+* id
+* actor_user_id
+* action
+* target_type
+* target_id
+* ip_hash
+* user_agent_hash
+* metadata
+* created_at
+
+event_log SHOULD be append-only.
+
+audit_log SHOULD be append-only.
+
+---
+
+Notification Tables
+
+subscriptions:
+
+* id
+* user_id
+* target_type
+* target_id
+* preference
+* created_at
+* muted_at
+* revoked_at
+
+notifications:
+
+* id
+* user_id
+* type
+* source_type
+* source_id
+* payload
+* read_at
+* created_at
+
+notification_delivery_attempts:
+
+* id
+* notification_id
+* channel
+* status
+* attempted_at
+* error_code
+
+---
+
+Attachment Tables
+
+attachments:
+
+* id
+* owner_user_id
+* object_key
+* original_filename
+* media_type
+* byte_size
+* checksum
+* state
+* created_at
+* deleted_at
+
+attachment_links:
+
+* id
+* attachment_id
+* target_type
+* target_id
+* created_at
+
+attachment_variants:
+
+* id
+* attachment_id
+* variant_type
+* object_key
+* media_type
+* byte_size
+* created_at
+
+---
+
+Indexing Expectations
+
+The schema MUST include indexes for:
+
+* username lookup;
+* email lookup;
+* active sessions by user;
+* categories by space;
+* threads by category and last activity;
+* posts by thread and creation time;
+* reports by status;
+* role bindings by user and scope;
+* events by aggregate and creation time;
+* notifications by user and read state.
+
+---
+
+Partitioning Direction
+
+The following tables SHOULD be evaluated for partitioning:
+
+* event_log;
+* audit_log;
+* notifications;
+
+users, threads, categories, and sessions MUST NOT be partitioned without an ADR
+and measured operational need.
+
+Partitioning strategy MUST be decided before any high-volume append table reaches
+operational scale.
+
+---
+
+Migration Rule
+
+Every schema change MUST be:
+
+* migration-driven;
+* reviewable;
+* rollback-aware where possible;
+* compatible with running application nodes during deployment when feasible.

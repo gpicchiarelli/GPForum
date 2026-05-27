@@ -1,0 +1,153 @@
+GPForum - Email, Notification Delivery & Communication Constitution
+
+Prompt 46 alignment: notification and email surfaces MUST be accessible.
+Notification inboxes, badges, read/unread state, digests, unsubscribe flows, and
+realtime notification updates MUST expose accessible text/state and MUST NOT
+rely on badge-only, color-only, or disruptive live-region behavior.
+
+Prompt 53 alignment: digests, feed emails, notification excerpts, and
+syndication-adjacent communication MUST remain permission-aware,
+moderation-aware, deletion-aware, anti-leak, rate-limited, and derived from
+safe canonical or projection state.
+
+This document defines the mandatory email architecture, verification flows, password reset flows, digest delivery, notification channels, unsubscribe behavior, and delivery observability for GPForum.
+
+This specification is mandatory.
+
+---
+
+Communication Philosophy
+
+Outbound communication is a user trust boundary.
+
+GPForum MUST send messages that are:
+
+* expected;
+* permission-aware;
+* rate-limited;
+* auditable;
+* privacy-safe;
+* unsubscribe-aware where applicable.
+
+The platform MUST avoid:
+
+* leaking private content in email;
+* sending duplicate messages during retries;
+* exposing moderation secrets;
+* relying on email as a secure identity proof after account compromise.
+
+---
+
+Email Use Cases
+
+Email MAY be used for:
+
+* account verification;
+* password reset;
+* security alerts;
+* notification delivery;
+* digest delivery;
+* moderation notifications;
+* policy updates.
+
+Security-sensitive email MUST use short-lived signed tokens.
+
+---
+
+Delivery Architecture
+
+Email delivery MUST be asynchronous.
+
+HTTP requests MUST NOT block on provider delivery.
+
+Delivery attempts MUST record:
+
+* message type;
+* recipient user;
+* provider;
+* status;
+* attempted_at;
+* error code;
+* correlation id.
+
+Retries MUST be idempotent.
+
+---
+
+Templates
+
+Email templates MUST be:
+
+* versioned;
+* localizable;
+* plaintext-compatible;
+* HTML-safe where HTML email exists.
+
+Templates MUST NOT include:
+
+* raw unsafe user HTML;
+* secret tokens in logs;
+* private content beyond the minimum required.
+
+---
+
+Verification
+
+Email verification MUST:
+
+* create a short-lived token;
+* store token hash, not raw token;
+* bind token to user and purpose;
+* expire token;
+* emit audit events.
+
+Verification links MUST be single-purpose.
+
+---
+
+Password Reset
+
+Password reset MUST:
+
+* avoid confirming whether an email exists;
+* use short-lived hashed tokens;
+* revoke active sessions after successful reset where policy requires;
+* emit security events;
+* rate-limit requests.
+
+---
+
+Digests
+
+Digest delivery SHOULD:
+
+* respect subscriptions;
+* respect notification preferences;
+* respect visibility at generation time;
+* avoid duplicate content;
+* support unsubscribe.
+
+Digest generation MUST be asynchronous.
+
+---
+
+Bounce And Complaint Handling
+
+The platform SHOULD support:
+
+* bounce processing;
+* complaint processing;
+* delivery suppression;
+* provider webhook signature validation.
+
+Users with failing email delivery SHOULD not cause unbounded retry loops.
+
+---
+
+Unsubscribe
+
+Non-security notification emails MUST support unsubscribe.
+
+Unsubscribe links MUST be scoped and safe.
+
+Security alerts SHOULD remain deliverable unless the account email is invalid or policy requires suppression.

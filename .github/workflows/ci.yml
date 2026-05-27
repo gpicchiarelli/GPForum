@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  perl:
+    name: Perl quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=127.0.0.1;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cpanminus libpq-dev postgresql-client
+          sudo cpanm --notest Carton
+
+      - name: Install Perl dependencies
+        run: script/bootstrap-deps --postgres
+
+      - name: Verify dependency lock
+        run: carton check
+
+      - name: Check CPAN license review
+        run: script/cpan-license-check
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Check Perl formatting
+        run: script/perltidy-check
+
+      - name: Run Perl::Critic
+        run: script/perlcritic --severity 5
+
+      - name: Apply database migrations
+        run: carton exec bin/gpforum-migrate --apply
+
+      - name: Seed production evidence dataset
+        run: script/seed-benchmark --profile small
+
+      - name: Run architecture boundary check
+        run: script/architecture-check
+
+      - name: Run query plan check
+        run: script/query-plan-check
+
+      - name: Run OS preflight
+        run: script/gpforum-os-preflight --json
+
+      - name: Run tests
+        run: carton exec prove -lr t
+
+      - name: Run benchmark smoke
+        run: carton exec bin/gpforum-benchmark --fixture --check --iterations 2 --warmup 1 --route /health/live --route /categories
+
+      - name: Run query plan evidence
+        run: script/query-plan-evidence --check
+
+      - name: Run configured benchmark smoke
+        run: script/benchmark-http --configured --check --iterations 3 --warmup 1 --route /categories --route /health/ready
+
+      - name: Run Hypnotoad benchmark smoke
+        run: script/bench-hypnotoad --check --profile small --workers 2 --iterations 2 --warmup 1 --no-compare --route /categories --route /health/ready
+
+      - name: Sync query budget catalog
+        run: script/query-budget --sync
+
+      - name: Check query budget catalog
+        run: script/query-budget --check
+
+      - name: Run platform check
+        run: carton exec bin/gpforum-platform-check --with-db
+
+      - name: Run coverage gate
+        run: script/coverage
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: gpforum-cover-db
+          path: cover_db/

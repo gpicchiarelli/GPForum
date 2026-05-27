@@ -1,0 +1,34 @@
+[Unit]
+Description=GPForum Hypnotoad application
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=gpforum
+Group=gpforum
+WorkingDirectory=/opt/gpforum
+Environment=MOJO_MODE=production
+Environment=GPFORUM_ENV=production
+Environment=GPFORUM_RUNTIME_LISTEN=http://127.0.0.1:8080
+Environment=GPFORUM_RUNTIME_WORKER_POLICY=cap-to-cpu
+Environment=GPFORUM_RUNTIME_BACKLOG=256
+Environment=GPFORUM_OS_REUSEPORT=auto
+Environment=GPFORUM_OS_SENDFILE=auto
+Environment=GPFORUM_OS_STATIC_XSENDFILE=auto
+ExecStartPre=/opt/gpforum/script/gpforum-os-preflight --strict --json
+ExecStart=/opt/gpforum/local/bin/carton exec hypnotoad /opt/gpforum/bin/gpforum
+ExecReload=/opt/gpforum/local/bin/carton exec hypnotoad /opt/gpforum/bin/gpforum
+ExecStop=/bin/kill -QUIT $MAINPID
+PIDFile=/opt/gpforum/hypnotoad.pid
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/gpforum
+
+[Install]
+WantedBy=multi-user.target
