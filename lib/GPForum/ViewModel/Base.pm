@@ -52,6 +52,21 @@ sub string {
     return "$value";
 }
 
+sub stable_id {
+    my ( $self, @parts ) = @_;
+
+    my @tokens;
+    for my $part (@parts) {
+        my $token = $self->string($part);
+        $token =~ s/[^A-Za-z0-9_.:-]+/-/gmsx;
+        $token =~ s/\A-+//msx;
+        $token =~ s/-+\z//msx;
+        push @tokens, $token if length $token;
+    }
+
+    return join q{-}, @tokens;
+}
+
 sub field_error_attrs {
     my ( $self, %input ) = @_;
 

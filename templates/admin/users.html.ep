@@ -26,8 +26,8 @@
     <ol class="ui-card-list" aria-label="<%= t('admin.user_list') %>">
       % for my $user (@{$users}) {
         <li class="ui-card-list__item">
-          <article aria-labelledby="admin-user-<%= $user->{id} %>-heading">
-            <h2 id="admin-user-<%= $user->{id} %>-heading"><%= $user->{username} %></h2>
+          <article aria-labelledby="<%= $user->{ui}{heading_id} %>">
+            <h2 id="<%= $user->{ui}{heading_id} %>"><%= $user->{username} %></h2>
             <dl>
               <dt><%= t('admin.display_name') %></dt>
               <dd><%= $user->{display_name} %></dd>
@@ -41,7 +41,7 @@
               <dd><time datetime="<%= $user->{created_at} %>"><%= $user->{created_at} %></time></dd>
             </dl>
             <p><a href="<%= url_for('admin_user_roles', user_id => $user->{id}) %>"><%= t('admin.roles') %></a></p>
-            <p><a href="<%= url_for('admin_audit')->query(target_type => 'user', target_id => $user->{id}) %>"><%= t('admin.audit') %></a></p>
+            <p><a href="<%= url_for('admin_audit')->query(target_type => $user->{ui}{audit_link_target_type}, target_id => $user->{id}) %>"><%= t('admin.audit') %></a></p>
           </article>
         </li>
       % }

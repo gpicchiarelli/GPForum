@@ -290,10 +290,10 @@ sub users {
     return _render_payload(
         $self,
         'admin/users',
-        {
+        $self->gp_admin_view_model->users_page(
             status => $status,
             users  => $users,
-        },
+        ),
         $HTTP_OK,
     );
 }
@@ -322,10 +322,10 @@ sub jobs {
     return _render_payload(
         $self,
         'admin/jobs',
-        {
+        $self->gp_admin_view_model->jobs_page(
             jobs   => $jobs,
             status => $status,
-        },
+        ),
         $HTTP_OK,
     );
 }
@@ -344,14 +344,9 @@ sub status {
         return _system_failure($self);
     }
 
-    return _render_payload(
-        $self,
-        'admin/status',
-        {
-            admin_status => $status,
-        },
-        $HTTP_OK,
-    );
+    return _render_payload( $self, 'admin/status',
+        $self->gp_admin_view_model->status_page( admin_status => $status ),
+        $HTTP_OK, );
 }
 
 sub _authorized_write_user_id {

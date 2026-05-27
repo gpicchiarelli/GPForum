@@ -64,7 +64,8 @@ $test->element_exists(q{a[href="/admin/users/user-1/roles"]});
 
 _get_json_ok( $test, '/admin/users' );
 $test->status_is($HTTP_OK);
-$test->json_is( '/users/0/username' => 'admin_user' );
+$test->json_is( '/users/0/username'      => 'admin_user' );
+$test->json_is( '/users/0/ui/heading_id' => 'admin-user-user-1-heading' );
 
 $test->get_ok('/admin/jobs');
 $test->status_is($HTTP_OK);
@@ -75,6 +76,8 @@ _get_json_ok( $test, '/admin/jobs' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/jobs/outbox_messages/0/job_type' => 'notification.dispatch' );
 $test->json_is( '/jobs/dead_letters/0/error_class' => 'worker_failed' );
+$test->json_is(
+    '/jobs/outbox_messages/0/ui/heading_id' => 'outbox-outbox-1-heading' );
 
 $test->get_ok('/admin/status');
 $test->status_is($HTTP_OK);
@@ -85,6 +88,8 @@ _get_json_ok( $test, '/admin/status' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/admin_status/readiness/status'          => 'ok' );
 $test->json_is( '/admin_status/query_budget_drift/status' => 'ok' );
+$test->json_is( '/readiness/status'                       => 'ok' );
+$test->json_is( '/query_budget_rows/0/endpoint' => 'admin_dashboard' );
 
 $test->get_ok('/admin/roles');
 $test->status_is($HTTP_OK);

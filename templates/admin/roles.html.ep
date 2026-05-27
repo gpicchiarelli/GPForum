@@ -42,10 +42,10 @@
       component_title => t('admin.roles') %>
     % if (@{$roles}) {
       <ol class="ui-card-list" aria-label="<%= t('admin.role_list') %>">
-        % for my $role (@{$roles}) {
-          <li class="ui-card-list__item">
-            <article aria-labelledby="role-<%= $role->{role_id} %>-heading">
-              <h3 id="role-<%= $role->{role_id} %>-heading"><%= $role->{name} %></h3>
+      % for my $role (@{$roles}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="<%= $role->{ui}{heading_id} %>">
+            <h3 id="<%= $role->{ui}{heading_id} %>"><%= $role->{name} %></h3>
               <p><%= $role->{description} %></p>
               <form method="post" action="<%= url_for('admin_role_permission_attach', role_id => $role->{role_id}) %>">
                 <%= csrf_field %>

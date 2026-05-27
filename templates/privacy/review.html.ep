@@ -14,8 +14,8 @@
       <ol class="ui-card-list" aria-label="<%= t('privacy.pending_deletion_requests') %>">
         % for my $request (@{$deletion_requests}) {
           <li class="ui-card-list__item">
-            <article aria-labelledby="review-deletion-<%= $request->{deletion_request_id} %>-heading">
-              <h3 id="review-deletion-<%= $request->{deletion_request_id} %>-heading"><%= $request->{requester_user_id} %></h3>
+            <article aria-labelledby="<%= $request->{ui}{heading_id} %>">
+              <h3 id="<%= $request->{ui}{heading_id} %>"><%= $request->{requester_user_id} %></h3>
               <p>
                 <%= $request->{resource_type} %>
                 <%= $request->{resource_id} %>
@@ -55,8 +55,8 @@
       <ol class="ui-card-list" aria-label="<%= t('privacy.pending_erasure_jobs') %>">
         % for my $job (@{$erasure_jobs}) {
           <li class="ui-card-list__item">
-            <article aria-labelledby="erasure-job-<%= $job->{erasure_job_id} %>-heading">
-              <h3 id="erasure-job-<%= $job->{erasure_job_id} %>-heading"><%= ui_label('state', $job->{status}) %></h3>
+            <article aria-labelledby="<%= $job->{ui}{heading_id} %>">
+              <h3 id="<%= $job->{ui}{heading_id} %>"><%= ui_label('state', $job->{status}) %></h3>
               <p>
                 <%= $job->{deletion_request_id} %>
                 <time datetime="<%= $job->{scheduled_at} %>"><%= $job->{scheduled_at} %></time>

@@ -20,8 +20,8 @@
     <ol class="ui-card-list" aria-label="<%= t('moderation.report_queue') %>">
       % for my $report (@{$reports}) {
         <li class="ui-card-list__item">
-          <article aria-labelledby="report-<%= $report->{report_id} %>-heading">
-            <h2 id="report-<%= $report->{report_id} %>-heading">
+          <article aria-labelledby="<%= $report->{ui}{heading_id} %>">
+            <h2 id="<%= $report->{ui}{heading_id} %>">
               <%= ui_label('target', $report->{target_type}) %> <%= t('moderation.reports') %>
             </h2>
             <dl>
@@ -41,26 +41,26 @@
             % if ($report->{target_type} eq 'post') {
               <form method="post" action="<%= url_for('moderation_post_hide', post_id => $report->{target_id}) %>">
                 <%= csrf_field %>
-                <label for="report-<%= $report->{report_id} %>-post-reason"><%= t('common.reason') %></label>
-                <input id="report-<%= $report->{report_id} %>-post-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <label for="<%= $report->{ui}{post_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $report->{ui}{post_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
                 <button type="submit"><%= t('moderation.hide_post') %></button>
               </form>
             % }
             % if ($report->{target_type} eq 'thread') {
               <form method="post" action="<%= url_for('moderation_thread_lock', thread_id => $report->{target_id}) %>">
                 <%= csrf_field %>
-                <label for="report-<%= $report->{report_id} %>-thread-reason"><%= t('common.reason') %></label>
-                <input id="report-<%= $report->{report_id} %>-thread-reason" name="reason" value="<%= $report->{reason} %>" required>
+                <label for="<%= $report->{ui}{thread_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $report->{ui}{thread_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
                 <button type="submit"><%= t('moderation.lock_thread') %></button>
               </form>
             % }
             % if ($report->{target_type} eq 'user') {
               <form method="post" action="<%= url_for('moderation_user_suspend', user_id => $report->{target_id}) %>">
                 <%= csrf_field %>
-                <label for="report-<%= $report->{report_id} %>-user-reason"><%= t('common.reason') %></label>
-                <input id="report-<%= $report->{report_id} %>-user-reason" name="reason" value="<%= $report->{reason} %>" required>
-                <label for="report-<%= $report->{report_id} %>-valid-to"><%= t('moderation.valid_to') %></label>
-                <input id="report-<%= $report->{report_id} %>-valid-to" name="valid_to">
+                <label for="<%= $report->{ui}{user_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $report->{ui}{user_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
+                <label for="<%= $report->{ui}{valid_to_id} %>"><%= t('moderation.valid_to') %></label>
+                <input id="<%= $report->{ui}{valid_to_id} %>" name="valid_to">
                 <button type="submit"><%= t('moderation.suspend_user') %></button>
               </form>
             % }
@@ -76,8 +76,8 @@
             % }
             <form method="post" action="<%= url_for('moderation_report_resolve', report_id => $report->{report_id}) %>">
               <%= csrf_field %>
-              <label for="report-<%= $report->{report_id} %>-resolution"><%= t('moderation.resolution') %></label>
-              <select id="report-<%= $report->{report_id} %>-resolution" name="resolution" required>
+              <label for="<%= $report->{ui}{resolution_id} %>"><%= t('moderation.resolution') %></label>
+              <select id="<%= $report->{ui}{resolution_id} %>" name="resolution" required>
                 <option value="no_action"><%= ui_label('moderation.resolution', 'no_action') %></option>
                 <option value="content_hidden"><%= ui_label('moderation.resolution', 'content_hidden') %></option>
                 <option value="user_warned"><%= ui_label('moderation.resolution', 'user_warned') %></option>

@@ -1,20 +1,9 @@
 % layout 'default';
 % title t('auth.register_title') . ' - ' . t('app.name');
-% my $error_fields = [
-%   { name => 'username', id => 'register-username' },
-%   { name => 'display_name', id => 'register-display-name' },
-%   { name => 'email', id => 'register-email' },
-%   { name => 'password', id => 'register-password' },
-% ];
-% my $has_field_errors = grep { $errors->{ $_->{name} } } @{$error_fields};
-% my $username_error_attrs = $errors->{username} ? ' aria-invalid="true" aria-describedby="register-username-error"' : q{};
-% my $display_name_error_attrs = $errors->{display_name} ? ' aria-invalid="true" aria-describedby="register-display-name-error"' : q{};
-% my $email_error_attrs = $errors->{email} ? ' aria-invalid="true" aria-describedby="register-email-error"' : q{};
-% my $password_error_attrs = $errors->{password} ? ' aria-invalid="true" aria-describedby="register-password-error"' : q{};
-% my $form_described_by = $has_field_errors ? 'register-error-summary' : $errors->{registration} ? 'register-form-error' : q{};
+% my $form_described_by = $ui->{described_by} || q{};
 
 <section aria-labelledby="register-heading">
-  <h1 id="register-heading"><%= t('auth.register_title') %></h1>
+  <h1 id="<%= $ui->{heading_id} %>"><%= t('auth.register_title') %></h1>
   % if ($errors->{registration}) {
     <%= include 'components/field_error', field_id => 'register-form-error', message => $errors->{registration}, role => 'alert' %>
   % }
@@ -24,26 +13,17 @@
     fields => $error_fields %>
   <form method="post" action="<%= url_for('register_submit') %>"<%== length $form_described_by ? ' aria-describedby="' . $form_described_by . '"' : q{} %>>
     <%= csrf_field %>
-    <label for="register-username">
-      <%= t('auth.username') %>
-    </label>
-    <input id="register-username" name="username" value="<%= $values->{username} // q{} %>" autocomplete="username"<%== $username_error_attrs %>>
-    <%= include 'components/field_error', field_id => 'register-username-error', message => $errors->{username} %>
-    <label for="register-display-name">
-      <%= t('auth.display_name') %>
-    </label>
-    <input id="register-display-name" name="display_name" value="<%= $values->{display_name} // q{} %>" autocomplete="name"<%== $display_name_error_attrs %>>
-    <%= include 'components/field_error', field_id => 'register-display-name-error', message => $errors->{display_name} %>
-    <label for="register-email">
-      <%= t('auth.email') %>
-    </label>
-    <input id="register-email" name="email" value="<%= $values->{email_normalized} // q{} %>" autocomplete="email"<%== $email_error_attrs %>>
-    <%= include 'components/field_error', field_id => 'register-email-error', message => $errors->{email} %>
-    <label for="register-password">
-      <%= t('auth.password') %>
-    </label>
-    <input id="register-password" name="password" type="password" autocomplete="new-password"<%== $password_error_attrs %>>
-    <%= include 'components/field_error', field_id => 'register-password-error', message => $errors->{password} %>
+    % for my $field (@{$fields}) {
+      <label for="<%= $field->{id} %>">
+        <%= t($field->{label_key}) %>
+      </label>
+      % if ($field->{type} eq 'password') {
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>" type="password" autocomplete="<%= $field->{autocomplete} %>"<%== $field->{error_attrs} %>>
+      % } else {
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>" type="<%= $field->{type} %>" value="<%= $field->{value} %>" autocomplete="<%= $field->{autocomplete} %>"<%== $field->{error_attrs} %>>
+      % }
+      <%= include 'components/field_error', field_id => $field->{error_id}, message => $field->{error} %>
+    % }
     <button type="submit"><%= t('auth.create_account') %></button>
   </form>
 </section>

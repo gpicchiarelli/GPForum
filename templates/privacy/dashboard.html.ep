@@ -20,8 +20,8 @@
         % for my $request (@{$export_requests}) {
           % my $counts = $request->{manifest}{counts} || {};
           <li class="ui-card-list__item">
-            <article aria-labelledby="export-<%= $request->{export_request_id} %>-heading">
-              <h3 id="export-<%= $request->{export_request_id} %>-heading"><%= ui_label('state', $request->{status}) %></h3>
+            <article aria-labelledby="<%= $request->{ui}{heading_id} %>">
+              <h3 id="<%= $request->{ui}{heading_id} %>"><%= ui_label('state', $request->{status}) %></h3>
               <p>
                 <span><%= $request->{format} %></span>
                 <time datetime="<%= $request->{created_at} %>"><%= $request->{created_at} %></time>
@@ -55,8 +55,8 @@
       <ol class="ui-card-list" aria-label="<%= t('privacy.account_deletion_requests') %>">
         % for my $request (@{$deletion_requests}) {
           <li class="ui-card-list__item">
-            <article aria-labelledby="deletion-<%= $request->{deletion_request_id} %>-heading">
-              <h3 id="deletion-<%= $request->{deletion_request_id} %>-heading"><%= ui_label('state', $request->{status}) %></h3>
+            <article aria-labelledby="<%= $request->{ui}{heading_id} %>">
+              <h3 id="<%= $request->{ui}{heading_id} %>"><%= ui_label('state', $request->{status}) %></h3>
               <p>
                 <%= $request->{request_type} %>
                 <time datetime="<%= $request->{created_at} %>"><%= $request->{created_at} %></time>

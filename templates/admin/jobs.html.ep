@@ -22,8 +22,8 @@
       <ol class="ui-card-list" aria-label="<%= t('admin.outbox_list') %>">
         % for my $message (@{ $jobs->{outbox_messages} }) {
           <li>
-            <article aria-labelledby="outbox-<%= $message->{outbox_id} %>-heading">
-              <h3 id="outbox-<%= $message->{outbox_id} %>-heading"><%= $message->{job_type} %></h3>
+            <article aria-labelledby="<%= $message->{ui}{heading_id} %>">
+              <h3 id="<%= $message->{ui}{heading_id} %>"><%= $message->{job_type} %></h3>
               <dl>
                 <dt><%= t('admin.status') %></dt>
                 <dd><%= include 'components/status_badge', value => $message->{status} %></dd>
@@ -51,8 +51,8 @@
       <ol class="ui-card-list" aria-label="<%= t('admin.dead_letter_list') %>">
         % for my $letter (@{ $jobs->{dead_letters} }) {
           <li>
-            <article aria-labelledby="dead-letter-<%= $letter->{dead_letter_id} %>-heading">
-              <h3 id="dead-letter-<%= $letter->{dead_letter_id} %>-heading"><%= $letter->{error_class} %></h3>
+            <article aria-labelledby="<%= $letter->{ui}{heading_id} %>">
+              <h3 id="<%= $letter->{ui}{heading_id} %>"><%= $letter->{error_class} %></h3>
               <dl>
                 <dt><%= t('admin.source') %></dt>
                 <dd><%= $letter->{source_table} %>: <%= $letter->{source_id} %></dd>

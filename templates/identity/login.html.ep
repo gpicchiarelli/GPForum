@@ -1,16 +1,9 @@
 % layout 'default';
 % title t('auth.login_title') . ' - ' . t('app.name');
-% my $error_fields = [
-%   { name => 'identifier', id => 'login-identifier' },
-%   { name => 'password', id => 'login-password' },
-% ];
-% my $has_field_errors = grep { $errors->{ $_->{name} } } @{$error_fields};
-% my $identifier_error_attrs = $errors->{identifier} ? ' aria-invalid="true" aria-describedby="login-identifier-error"' : q{};
-% my $password_error_attrs = $errors->{password} ? ' aria-invalid="true" aria-describedby="login-password-error"' : q{};
-% my $form_described_by = $has_field_errors ? 'login-error-summary' : $errors->{login} ? 'login-form-error' : q{};
+% my $form_described_by = $ui->{described_by} || q{};
 
 <section aria-labelledby="login-heading">
-  <h1 id="login-heading"><%= t('auth.login_title') %></h1>
+  <h1 id="<%= $ui->{heading_id} %>"><%= t('auth.login_title') %></h1>
   % if ($errors->{login}) {
     <%= include 'components/field_error', field_id => 'login-form-error', message => $errors->{login}, role => 'alert' %>
   % }
@@ -20,16 +13,17 @@
     fields => $error_fields %>
   <form method="post" action="<%= url_for('login_submit') %>"<%== length $form_described_by ? ' aria-describedby="' . $form_described_by . '"' : q{} %>>
     <%= csrf_field %>
-    <label for="login-identifier">
-      <%= t('auth.username_or_email') %>
-    </label>
-    <input id="login-identifier" name="identifier" value="<%= $values->{identifier} // q{} %>" autocomplete="username"<%== $identifier_error_attrs %>>
-    <%= include 'components/field_error', field_id => 'login-identifier-error', message => $errors->{identifier} %>
-    <label for="login-password">
-      <%= t('auth.password') %>
-    </label>
-    <input id="login-password" name="password" type="password" autocomplete="current-password"<%== $password_error_attrs %>>
-    <%= include 'components/field_error', field_id => 'login-password-error', message => $errors->{password} %>
+    % for my $field (@{$fields}) {
+      <label for="<%= $field->{id} %>">
+        <%= t($field->{label_key}) %>
+      </label>
+      % if ($field->{type} eq 'password') {
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>" type="password" autocomplete="<%= $field->{autocomplete} %>"<%== $field->{error_attrs} %>>
+      % } else {
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>" type="<%= $field->{type} %>" value="<%= $field->{value} %>" autocomplete="<%= $field->{autocomplete} %>"<%== $field->{error_attrs} %>>
+      % }
+      <%= include 'components/field_error', field_id => $field->{error_id}, message => $field->{error} %>
+    % }
     <button type="submit"><%= t('auth.login') %></button>
   </form>
 </section>

@@ -104,8 +104,8 @@
       <ol class="ui-card-list" aria-label="<%= t('admin.audit_summary') %>">
         % for my $row (@{$audit_rows}) {
           <li class="ui-card-list__item">
-            <article aria-labelledby="audit-<%= $row->{audit_id} %>-heading">
-              <h3 id="audit-<%= $row->{audit_id} %>-heading"><%= $row->{action} %></h3>
+            <article aria-labelledby="<%= $row->{ui}{heading_id} %>">
+              <h3 id="<%= $row->{ui}{heading_id} %>"><%= $row->{action} %></h3>
               <p class="ui-meta">
                 <%= ui_label('target', $row->{target_type} || 'system') %>
                 <%= $row->{target_id} || '' %>

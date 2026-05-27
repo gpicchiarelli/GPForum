@@ -15,6 +15,9 @@ Use `GPForum::ViewModel::*` presenters for page and domain payload shaping.
   already-sanitized content from the forum read model.
 - Put accessibility metadata in predictable `ui` structures, for example
   `heading_id`, `described_by`, `permalink`, or `reversible`.
+- Build HTML ids through `stable_id` when values originate from rows, params, or
+  operational identifiers. This keeps SSR landmarks deterministic without
+  trusting raw database strings as DOM ids.
 - Keep localization at the presentation boundary. Use existing i18n or
   notification rendering services; do not translate user content.
 - Keep pagination metadata explicit: `next_cursor`, `has_more`, `more_limit`,
@@ -53,6 +56,13 @@ my $payload = $self->gp_forum_view_model->category_page(
     threads_page => $threads,
 );
 ```
+
+Operational surfaces should follow the same rule. For example, Admin presenters
+shape user rows, outbox messages, dead-letter rows, and operations status before
+templates render them; controllers still preserve the raw compatibility payload
+where JSON clients already expect it.
+Identity presenters own form field descriptors and error-summary wiring, while
+Moderation presenters own action/control ids for reversible workflows.
 
 ## Testing
 

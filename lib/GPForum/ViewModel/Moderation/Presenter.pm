@@ -59,9 +59,14 @@ sub suspension {
         revoked_at    => $self->column( $suspension, 'revoked_at' ),
         suspension_id => $self->column( $suspension, 'suspension_id' ),
         ui            => {
-                heading_id => 'suspension-'
-              . $self->string( $self->column( $suspension, 'suspension_id' ) )
-              . '-heading',
+            heading_id => $self->stable_id(
+                'suspension', $self->column( $suspension, 'suspension_id' ),
+                'heading'
+            ),
+            revoke_reason_id => $self->stable_id(
+                'suspension', $self->column( $suspension, 'suspension_id' ),
+                'revoke-reason'
+            ),
         },
         user_id    => $self->column( $suspension, 'user_id' ),
         valid_from => $self->column( $suspension, 'valid_from' ),
@@ -87,11 +92,27 @@ sub moderation_action {
         target_id           => $self->column( $action, 'target_id' ),
         target_type         => $self->column( $action, 'target_type' ),
         ui                  => {
-            heading_id => 'action-'
-              . $self->string(
-                $self->column( $action, 'moderation_action_id' ) )
-              . '-heading',
-            reversible => $self->column( $action, 'reversed_at' ) ? 0 : 1,
+            heading_id => $self->stable_id(
+                'action', $self->column( $action, 'moderation_action_id' ),
+                'heading'
+            ),
+            restore_reason_id => $self->stable_id(
+                'action', $self->column( $action, 'moderation_action_id' ),
+                'restore-reason'
+            ),
+            reverse_heading_id => $self->stable_id(
+                'action', $self->column( $action, 'moderation_action_id' ),
+                'reverse-heading'
+            ),
+            reverse_reason_id => $self->stable_id(
+                'action', $self->column( $action, 'moderation_action_id' ),
+                'reverse-reason'
+            ),
+            reversible       => $self->column( $action, 'reversed_at' ) ? 0 : 1,
+            unlock_reason_id => $self->stable_id(
+                'action', $self->column( $action, 'moderation_action_id' ),
+                'unlock-reason'
+            ),
         },
     };
 }
@@ -115,7 +136,16 @@ sub report {
         target_id        => $self->column( $row, 'target_id' ),
         target_type      => $self->column( $row, 'target_type' ),
         ui               => {
-            heading_id => 'report-' . $self->string($report_id) . '-heading',
+            heading_id => $self->stable_id( 'report', $report_id, 'heading' ),
+            post_reason_id =>
+              $self->stable_id( 'report', $report_id, 'post-reason' ),
+            resolution_id =>
+              $self->stable_id( 'report', $report_id, 'resolution' ),
+            thread_reason_id =>
+              $self->stable_id( 'report', $report_id, 'thread-reason' ),
+            user_reason_id =>
+              $self->stable_id( 'report', $report_id, 'user-reason' ),
+            valid_to_id => $self->stable_id( 'report', $report_id, 'valid-to' ),
         },
     };
 }

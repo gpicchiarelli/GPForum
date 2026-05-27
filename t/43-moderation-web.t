@@ -37,7 +37,9 @@ _get_json_ok( $test, '/moderation/reports' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/reports/0/report_id'   => 'report-1' );
 $test->json_is( '/reports/0/target_type' => 'post' );
-$test->json_is( '/status'                => 'open' );
+$test->json_is(
+    '/reports/0/ui/post_reason_id' => 'report-report-1-post-reason' );
+$test->json_is( '/status' => 'open' );
 my $csrf_token = _json_value( $test, 'csrf_token' );
 
 $test->get_ok('/moderation/reports');
@@ -57,7 +59,9 @@ _get_json_ok( $test, '/moderation/actions' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/actions/0/moderation_action_id' => 'action-post-hide' );
 $test->json_is( '/actions/0/action_type'          => 'post.hidden' );
-$test->json_is( '/next_cursor'                    => 'action-cursor' );
+$test->json_is( '/actions/0/ui/reverse_reason_id' =>
+      'action-action-post-hide-reverse-reason' );
+$test->json_is( '/next_cursor' => 'action-cursor' );
 
 $test->get_ok('/moderation/actions');
 $test->status_is($HTTP_OK);
@@ -70,7 +74,9 @@ _get_json_ok( $test, '/moderation/suspensions' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/suspensions/0/suspension_id' => 'suspension-1' );
 $test->json_is( '/suspensions/0/user_id'       => 'user-2' );
-$test->json_is( '/next_cursor'                 => 'suspension-cursor' );
+$test->json_is( '/suspensions/0/ui/revoke_reason_id' =>
+      'suspension-suspension-1-revoke-reason' );
+$test->json_is( '/next_cursor' => 'suspension-cursor' );
 
 $test->get_ok('/moderation/suspensions');
 $test->status_is($HTTP_OK);

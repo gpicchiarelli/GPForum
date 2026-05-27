@@ -20,8 +20,8 @@
     <ol class="ui-card-list" aria-label="<%= t('moderation.active_suspension_list') %>">
       % for my $suspension (@{$suspensions}) {
         <li class="ui-card-list__item">
-          <article aria-labelledby="suspension-<%= $suspension->{suspension_id} %>-heading">
-            <h2 id="suspension-<%= $suspension->{suspension_id} %>-heading">
+          <article aria-labelledby="<%= $suspension->{ui}{heading_id} %>">
+            <h2 id="<%= $suspension->{ui}{heading_id} %>">
               <%= ui_label('target', 'user') %> <%= $suspension->{user_id} %>
             </h2>
             <dl>
@@ -51,8 +51,8 @@
             % if (!$suspension->{revoked_at}) {
               <form method="post" action="<%= url_for('moderation_suspension_revoke', suspension_id => $suspension->{suspension_id}) %>">
                 <%= csrf_field %>
-                <label for="suspension-<%= $suspension->{suspension_id} %>-revoke-reason"><%= t('common.reason') %></label>
-                <input id="suspension-<%= $suspension->{suspension_id} %>-revoke-reason" name="reason" required>
+                <label for="<%= $suspension->{ui}{revoke_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $suspension->{ui}{revoke_reason_id} %>" name="reason" required>
                 <button type="submit"><%= t('moderation.revoke_suspension') %></button>
               </form>
             % }

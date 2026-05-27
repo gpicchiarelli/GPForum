@@ -12,6 +12,10 @@ View models accept DBIx::Class-like rows and plain hashes through
 `GPForum::ViewModel::Base`. Returned payloads must not contain blessed result
 objects. Stable UI metadata such as heading ids, field ids, anchors, and
 reversibility flags belongs in `ui` hashes.
+When a metadata value becomes a DOM id, presenters use the shared `stable_id`
+helper so IDs stay deterministic and safe even when sourced from operational
+rows such as users, outbox messages, dead letters, privacy requests, or
+attachments.
 
 Current presenter boundaries:
 
@@ -21,8 +25,14 @@ Current presenter boundaries:
   dedicated Notifications presenter for compatibility.
 - Notifications: inbox rows, mentions, localized notification presentation, and
   notification-specific heading metadata.
-- Admin, Moderation, Privacy, Identity, Attachments, and Discovery: SSR/JSON
-  payloads for their product surfaces.
+- Admin: dashboard, roles, user-role bindings, users, audit rows, async jobs,
+  dead letters, and operations status payloads.
+- Moderation: reports, action history, suspension queues, and action form
+  control ids.
+- Identity: login/register form fields, error-summary wiring, profile payloads,
+  and public activity metadata.
+- Privacy, Attachments, and Discovery: SSR/JSON payloads for their product
+  surfaces.
 
 Services must not render HTML. The only exception is already-sanitized post body
 HTML produced by the forum read model and passed through by the presenter.

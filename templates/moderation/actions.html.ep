@@ -22,8 +22,8 @@
     <ol class="ui-card-list" aria-label="<%= t('moderation.action_history') %>">
       % for my $action (@{$actions}) {
         <li class="ui-card-list__item">
-          <article aria-labelledby="action-<%= $action->{moderation_action_id} %>-heading">
-            <h2 id="action-<%= $action->{moderation_action_id} %>-heading">
+          <article aria-labelledby="<%= $action->{ui}{heading_id} %>">
+            <h2 id="<%= $action->{ui}{heading_id} %>">
               <%= include 'components/moderation_indicator',
                 namespace => 'moderation.action',
                 value => $action->{action_type} %>
@@ -49,27 +49,27 @@
             % if ($action->{target_type} eq 'post' && $action->{action_type} eq 'post.hidden') {
               <form method="post" action="<%= url_for('moderation_post_restore', post_id => $action->{target_id}) %>">
                 <%= csrf_field %>
-                <label for="action-<%= $action->{moderation_action_id} %>-restore-reason"><%= t('common.reason') %></label>
-                <input id="action-<%= $action->{moderation_action_id} %>-restore-reason" name="reason" required>
+                <label for="<%= $action->{ui}{restore_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $action->{ui}{restore_reason_id} %>" name="reason" required>
                 <button type="submit"><%= t('moderation.restore_post') %></button>
               </form>
             % }
             % if ($action->{target_type} eq 'thread' && $action->{action_type} eq 'thread.locked') {
               <form method="post" action="<%= url_for('moderation_thread_unlock', thread_id => $action->{target_id}) %>">
                 <%= csrf_field %>
-                <label for="action-<%= $action->{moderation_action_id} %>-unlock-reason"><%= t('common.reason') %></label>
-                <input id="action-<%= $action->{moderation_action_id} %>-unlock-reason" name="reason" required>
+                <label for="<%= $action->{ui}{unlock_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $action->{ui}{unlock_reason_id} %>" name="reason" required>
                 <button type="submit"><%= t('moderation.unlock_thread') %></button>
               </form>
             % }
             % if (!$action->{reversed_at}) {
               <%= include 'components/confirmation',
-                heading_id => 'action-' . $action->{moderation_action_id} . '-reverse-heading',
+                heading_id => $action->{ui}{reverse_heading_id},
                 component_title => t('moderation.reverse_action') %>
               <form method="post" action="<%= url_for('moderation_action_reverse', action_id => $action->{moderation_action_id}) %>">
                 <%= csrf_field %>
-                <label for="action-<%= $action->{moderation_action_id} %>-reverse-reason"><%= t('common.reason') %></label>
-                <input id="action-<%= $action->{moderation_action_id} %>-reverse-reason" name="reason" required>
+                <label for="<%= $action->{ui}{reverse_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $action->{ui}{reverse_reason_id} %>" name="reason" required>
                 <button type="submit"><%= t('moderation.reverse_action') %></button>
               </form>
             % }

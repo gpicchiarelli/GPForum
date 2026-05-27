@@ -23,8 +23,8 @@
     <ol class="ui-card-list" aria-label="<%= t('admin.user_role_bindings') %>">
       % for my $binding (@{$bindings}) {
         <li class="ui-card-list__item">
-          <article aria-labelledby="binding-<%= $binding->{binding_id} %>-heading">
-            <h2 id="binding-<%= $binding->{binding_id} %>-heading">
+          <article aria-labelledby="<%= $binding->{ui}{heading_id} %>">
+            <h2 id="<%= $binding->{ui}{heading_id} %>">
               <%= t('admin.role') %> <%= $binding->{role_id} %>
             </h2>
             <dl>

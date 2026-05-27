@@ -17,8 +17,8 @@
     <ol class="ui-card-list" aria-label="<%= t('admin.audit_log') %>">
       % for my $row (@{$audit_rows}) {
         <li class="ui-card-list__item">
-          <article aria-labelledby="audit-<%= $row->{audit_id} %>-heading">
-            <h2 id="audit-<%= $row->{audit_id} %>-heading"><%= $row->{action} %></h2>
+          <article aria-labelledby="<%= $row->{ui}{heading_id} %>">
+            <h2 id="<%= $row->{ui}{heading_id} %>"><%= $row->{action} %></h2>
             <dl>
               <dt><%= t('common.actor') %></dt>
               <dd><%= $row->{actor_id} || t('common.system') %></dd>
