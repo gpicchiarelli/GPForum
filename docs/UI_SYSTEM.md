@@ -27,6 +27,13 @@ localizable presentation text.
 
 | Component | Purpose |
 | --- | --- |
+| `components/site_header` | Application header shell. |
+| `components/primary_nav` | Main product navigation. |
+| `components/identity_nav` | Login/register or logout controls. |
+| `components/locale_selector` | SSR language selector. |
+| `components/breadcrumbs` | Breadcrumb navigation from `ui_breadcrumbs`. |
+| `components/flash_messages` | Flash message stack from `ui_flash_messages`. |
+| `components/site_footer` | Product footer shell. |
 | `components/page_header` | Page heading, optional description, page actions. |
 | `components/section_header` | Section heading and optional description. |
 | `components/pagination` | Screen-reader-labelled pagination links. |
@@ -54,6 +61,7 @@ components. Avoid route-local copies of:
 - status/warning banners;
 - moderation state labels;
 - notification card structure;
+- shell navigation, locale selector, breadcrumbs, and flash messages;
 - admin table scaffolding;
 - pagination link lists.
 

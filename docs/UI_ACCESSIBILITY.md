@@ -42,6 +42,8 @@ Reusable UI primitives live under `templates/components/` and are documented in
 route-local markup:
 
 - `page_header` for the page heading and top-level actions;
+- `site_header`, `primary_nav`, `identity_nav`, `locale_selector`,
+  `breadcrumbs`, `flash_messages`, and `site_footer` for the shared shell;
 - `pagination` for labelled paging navigation;
 - `empty_state` for no-results and not-yet-created states;
 - `badge` for status, moderation, job, and audit indicators;

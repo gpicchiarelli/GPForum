@@ -30,87 +30,12 @@
   </head>
   <body class="app-shell <%= ui_typography_class %>">
     <a class="skip-link" href="#content"><%= t('nav.skip_to_content') %></a>
-    <header class="site-header">
-      <div class="site-header__inner">
-      <a class="brand" href="<%= url_for('home') %>">
-        <img class="brand__mark" src="<%= url_for('/gpforum-mark.svg') %>" alt="" aria-hidden="true">
-        <span class="brand__name"><%= t('app.name') %></span>
-      </a>
-      <nav class="site-nav" aria-label="<%= t('nav.primary') %>">
-        <a href="<%= url_for('categories') %>"><%= t('nav.categories') %></a>
-        <a href="<%= url_for('new_thread') %>"><%= t('nav.start_thread') %></a>
-        <a href="<%= url_for('forum_search') %>"><%= t('nav.search') %></a>
-        % if (session('user_id')) {
-          <a href="<%= url_for('bookmarks') %>"><%= t('nav.bookmarks') %></a>
-          <a href="<%= url_for('feed') %>"><%= t('nav.feed') %></a>
-          <a href="<%= url_for('notifications') %>"><%= t('nav.notifications') %></a>
-          <a href="<%= url_for('privacy_dashboard') %>"><%= t('nav.privacy') %></a>
-        % }
-      </nav>
-      % if (session('user_id')) {
-        <form class="identity-form" method="post" action="<%= url_for('logout') %>" aria-label="<%= t('auth.logout_aria') %>">
-          <%= csrf_field %>
-          <span><%= t('auth.signed_in_as', { user_id => session('user_id') }) %></span>
-          <button type="submit"><%= t('auth.logout') %></button>
-        </form>
-      % } else {
-        <nav class="identity-nav" aria-label="<%= t('nav.identity') %>">
-          <a href="<%= url_for('register') %>"><%= t('auth.register') %></a>
-          <a href="<%= url_for('login') %>"><%= t('auth.login') %></a>
-        </nav>
-      % }
-      <form class="locale-form" method="post" action="<%= url_for('locale_update') %>" aria-label="<%= t('locale.selector_label') %>">
-        <%= csrf_field %>
-        <input type="hidden" name="return_to" value="<%= ui_return_to %>">
-        <label for="locale-selector">
-          <span><%= t('locale.choose') %></span>
-          <select id="locale-selector" name="locale">
-            % for my $option (@{ ui_locale_options() }) {
-              <option value="<%= $option->{locale} %>"<%= $option->{current} ? ' selected' : '' %>><%= $option->{native_name} %></option>
-            % }
-          </select>
-        </label>
-        <button type="submit"><%= t('locale.apply') %></button>
-      </form>
-      </div>
-    </header>
-    % my $breadcrumbs = ui_breadcrumbs;
-    % if (@{$breadcrumbs}) {
-      <nav class="breadcrumbs page-shell" aria-label="<%= t('nav.breadcrumbs') %>">
-        <ol>
-          % for my $item (@{$breadcrumbs}) {
-            <li>
-              % if ($item->{current}) {
-                <span aria-current="page"><%= $item->{label} %></span>
-              % } else {
-                <a href="<%= $item->{url} %>"><%= $item->{label} %></a>
-              % }
-            </li>
-          % }
-        </ol>
-      </nav>
-    % }
-    % my $flash_messages = ui_flash_messages;
-    % if (@{$flash_messages}) {
-      <section class="flash-stack page-shell" aria-label="<%= t('layout.flash_messages') %>">
-        % for my $message (@{$flash_messages}) {
-          <p class="flash flash--<%= $message->{type} %>" role="<%= $message->{type} eq 'error' ? 'alert' : 'status' %>"><%= $message->{message} %></p>
-        % }
-      </section>
-    % }
+    <%= include 'components/site_header' %>
+    <%= include 'components/breadcrumbs' %>
+    <%= include 'components/flash_messages' %>
     <main id="content" class="page-shell" tabindex="-1">
       <%= content %>
     </main>
-    <footer class="site-footer" aria-label="<%= t('layout.footer_label') %>">
-      <div>
-        <strong><%= t('app.name') %></strong>
-        <span><%= t('layout.footer_tagline') %></span>
-      </div>
-      <nav aria-label="<%= t('layout.footer_help') %>">
-        <a href="<%= url_for('categories') %>"><%= t('nav.categories') %></a>
-        <a href="<%= url_for('forum_search') %>"><%= t('nav.search') %></a>
-        <span><%= t('layout.footer_license') %></span>
-      </nav>
-    </footer>
+    <%= include 'components/site_footer' %>
   </body>
 </html>

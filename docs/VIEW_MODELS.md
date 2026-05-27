@@ -60,6 +60,7 @@ Presenter tests should cover:
 
 - serialization compatibility for existing fields;
 - absence of blessed row objects in returned payloads;
-- locale-aware rendering where the presenter prepares user-visible shell text;
+- locale-aware rendering where the presenter prepares user-visible shell text,
+  such as notification inbox and mention presentation;
 - accessibility metadata such as heading ids and described-by targets;
 - degraded or anonymous states when a page can render without a logged-in user.

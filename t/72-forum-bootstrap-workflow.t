@@ -73,12 +73,42 @@ is_deeply(
         }
     ),
     {
-        ok     => 0,
-        status => 'not_found',
-        error  => 'category not found',
+        error    => 'category not found',
+        ok       => 0,
+        prepared => undef,
+        status   => 'not_found',
+        stored   => undef,
     },
     'posting workflow rejects missing thread category before composing'
 );
+
+my $invalid_thread = _workflow(
+    thread_composer => GPForum::Test::ThreadComposer->new(
+        result => {
+            ok     => 0,
+            errors => { title => 'title is required' },
+            values => { title => q{} },
+        }
+    )
+);
+my $invalid_thread_result = $invalid_thread->create_thread(
+    {
+        category_id    => 'general',
+        author_user_id => 'user-1',
+        title          => q{},
+        body_source    => 'body',
+        visibility     => 'public',
+    }
+);
+is( $invalid_thread_result->{status},
+    'invalid', 'posting workflow normalizes invalid thread status' );
+is_deeply(
+    $invalid_thread_result->{prepared}{errors},
+    { title => 'title is required' },
+    'posting workflow returns prepared validation details'
+);
+is( $invalid_thread->thread_store->calls,
+    0, 'invalid thread is rejected before storage' );
 
 my $thread_workflow = _workflow();
 my $created_thread  = $thread_workflow->create_thread(
@@ -91,6 +121,11 @@ my $created_thread  = $thread_workflow->create_thread(
     }
 );
 ok( $created_thread->{ok}, 'posting workflow creates thread' );
+is( $created_thread->{status},
+    'ok', 'posting workflow normalizes successful thread status' );
+ok( $created_thread->{prepared}{ok},
+    'successful thread includes prepared data' );
+ok( $created_thread->{stored}{ok}, 'successful thread includes stored data' );
 is(
     $thread_workflow->thread_composer->last_input->{body_hash},
     sha256_hex('hello world'),
@@ -100,6 +135,30 @@ is( $thread_workflow->thread_store->calls,
     1, 'posting workflow stores created thread once' );
 is( $thread_workflow->mention_store->calls,
     1, 'posting workflow records mentions for first post' );
+
+my $thread_store_failure =
+  _workflow( thread_store => GPForum::Test::ThreadStore->new( fail => 1 ) );
+my $thread_store_failure_result = $thread_store_failure->create_thread(
+    {
+        category_id    => 'general',
+        author_user_id => 'user-1',
+        title          => 'Hello',
+        body_source    => 'body',
+        visibility     => 'public',
+    }
+);
+is( $thread_store_failure_result->{status},
+    'failed', 'posting workflow normalizes thread store failures' );
+is(
+    $thread_store_failure_result->{error},
+    'thread store failed',
+    'posting workflow returns thread store error'
+);
+
+my $missing_reply = _workflow( thread_detail_reader =>
+      GPForum::Test::ThreadDetailReader->new( thread => undef ) );
+is( $missing_reply->create_reply( { thread_id => 'missing' } )->{status},
+    'not_found', 'posting workflow rejects replies to missing threads' );
 
 my $locked_reply = _workflow(
     thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
@@ -115,9 +174,11 @@ is_deeply(
         }
     ),
     {
-        ok     => 0,
-        status => 'forbidden',
-        error  => 'thread is locked',
+        error    => 'thread is locked',
+        ok       => 0,
+        prepared => undef,
+        status   => 'forbidden',
+        stored   => undef,
     },
     'posting workflow rejects replies to locked threads'
 );
@@ -137,12 +198,61 @@ my $created_reply = $reply_workflow->create_reply(
     }
 );
 ok( $created_reply->{ok}, 'posting workflow creates reply' );
+is( $created_reply->{status},
+    'ok', 'posting workflow normalizes successful reply status' );
 is( $reply_workflow->post_composer->last_input->{position},
     3, 'reply workflow allocates next post position' );
 is( $reply_workflow->post_composer->last_input->{visibility},
     'members', 'reply workflow inherits thread visibility by default' );
 is( $reply_workflow->mention_store->last_input->{thread_id},
     'thread-1', 'reply mention recording carries thread id' );
+
+my $invalid_reply = _workflow(
+    post_composer => GPForum::Test::PostComposer->new(
+        result => {
+            ok     => 0,
+            errors => { body_source => 'body is required' },
+            values => { body_source => q{} },
+        }
+    )
+);
+is( $invalid_reply->create_reply( { thread_id => 'thread-1' } )->{status},
+    'invalid', 'posting workflow normalizes invalid reply status' );
+is( $invalid_reply->post_store->calls,
+    0, 'invalid reply is rejected before storage' );
+
+my $post_store_failure =
+  _workflow( post_store => GPForum::Test::PostStore->new( fail => 1 ) );
+my $post_store_failure_result = $post_store_failure->create_reply(
+    {
+        thread_id      => 'thread-1',
+        author_user_id => 'user-1',
+        body_source    => 'reply',
+    }
+);
+is( $post_store_failure_result->{status},
+    'failed', 'posting workflow normalizes post store failures' );
+is(
+    $post_store_failure_result->{error},
+    'post store failed',
+    'posting workflow returns post store error'
+);
+
+my $logger           = GPForum::Test::Logger->new;
+my $mention_degraded = _workflow(
+    logger        => $logger,
+    mention_store => GPForum::Test::MentionStore->new( fail => 1 ),
+);
+my $mention_degraded_result = $mention_degraded->create_reply(
+    {
+        thread_id      => 'thread-1',
+        author_user_id => 'user-1',
+        body_source    => '@user hello',
+    }
+);
+ok( $mention_degraded_result->{ok},
+    'posting workflow keeps persisted reply successful when mentions degrade' );
+is( $logger->warnings, 1, 'posting workflow logs degraded mention recording' );
 
 done_testing();
 
@@ -152,7 +262,7 @@ sub _workflow {
     return GPForum::Service::Forum::PostingWorkflow->new(
         category_reader => $override{category_reader}
           || GPForum::Test::CategoryReader->new( found => 1 ),
-        logger        => GPForum::Test::Logger->new(),
+        logger        => $override{logger} || GPForum::Test::Logger->new(),
         mention_store => $override{mention_store}
           || GPForum::Test::MentionStore->new(),
         post_composer => $override{post_composer}
@@ -189,9 +299,9 @@ sub find_category {
 package GPForum::Test::ThreadComposer;
 
 sub new {
-    my ($class) = @_;
+    my ( $class, %arguments ) = @_;
 
-    return bless { last_input => undef }, $class;
+    return bless { last_input => undef, result => $arguments{result} }, $class;
 }
 
 sub last_input {
@@ -206,6 +316,7 @@ sub prepare {
     my ( $self, $input ) = @_;
 
     $self->last_input($input);
+    return $self->{result} if $self->{result};
 
     return {
         ok      => 1,
@@ -224,9 +335,9 @@ sub prepare {
 package GPForum::Test::ThreadStore;
 
 sub new {
-    my ($class) = @_;
+    my ( $class, %arguments ) = @_;
 
-    return bless { calls => 0 }, $class;
+    return bless { calls => 0, fail => $arguments{fail} }, $class;
 }
 
 sub calls {
@@ -241,6 +352,7 @@ sub create_thread {
     my ($self) = @_;
 
     $self->calls( $self->calls + 1 );
+    die "thread store failed\n" if $self->{fail};
 
     return {
         ok     => 1,
@@ -284,9 +396,9 @@ sub next_position {
 package GPForum::Test::PostComposer;
 
 sub new {
-    my ($class) = @_;
+    my ( $class, %arguments ) = @_;
 
-    return bless { last_input => undef }, $class;
+    return bless { last_input => undef, result => $arguments{result} }, $class;
 }
 
 sub last_input {
@@ -301,6 +413,7 @@ sub prepare {
     my ( $self, $input ) = @_;
 
     $self->last_input($input);
+    return $self->{result} if $self->{result};
 
     return {
         ok      => 1,
@@ -318,9 +431,9 @@ sub prepare {
 package GPForum::Test::PostStore;
 
 sub new {
-    my ($class) = @_;
+    my ( $class, %arguments ) = @_;
 
-    return bless { calls => 0 }, $class;
+    return bless { calls => 0, fail => $arguments{fail} }, $class;
 }
 
 sub calls {
@@ -335,6 +448,7 @@ sub create_post {
     my ( $self, $command ) = @_;
 
     $self->calls( $self->calls + 1 );
+    die "post store failed\n" if $self->{fail};
 
     return {
         ok   => 1,
@@ -349,9 +463,13 @@ sub create_post {
 package GPForum::Test::MentionStore;
 
 sub new {
-    my ($class) = @_;
+    my ( $class, %arguments ) = @_;
 
-    return bless { calls => 0, last_input => undef }, $class;
+    return bless {
+        calls      => 0,
+        fail       => $arguments{fail},
+        last_input => undef,
+    }, $class;
 }
 
 sub calls {
@@ -375,6 +493,7 @@ sub record_for_source {
 
     $self->calls( $self->calls + 1 );
     $self->last_input($input);
+    die "mention failed\n" if $self->{fail};
 
     return { ok => 1 };
 }
@@ -384,11 +503,24 @@ package GPForum::Test::Logger;
 sub new {
     my ($class) = @_;
 
-    return bless {}, $class;
+    return bless { warnings => 0 }, $class;
 }
 
 sub error { return; }
-sub warn  { return; }
+
+sub warn {
+    my ($self) = @_;
+
+    $self->{warnings}++;
+
+    return;
+}
+
+sub warnings {
+    my ($self) = @_;
+
+    return $self->{warnings};
+}
 
 package GPForum::Test::Cache;
 

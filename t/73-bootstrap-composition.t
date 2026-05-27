@@ -3,6 +3,7 @@ package main;
 use strict;
 use warnings;
 
+use Mojo::File qw(path);
 use Test::Mojo;
 use Test::More;
 
@@ -23,6 +24,14 @@ for my $helper_name ( _helper_names() ) {
         "helper $helper_name resolves on controller"
     );
 }
+
+my $registered_helpers = _registered_bootstrap_helpers();
+is_deeply( _duplicate_helper_names($registered_helpers),
+    [], 'bootstrap modules register every helper name exactly once' );
+is_deeply( _missing_registered_helpers($registered_helpers),
+    [], 'expected helper list is complete against bootstrap registrations' );
+is_deeply( _unregistered_controller_helpers($registered_helpers),
+    [], 'controller helper calls are registered by bootstrap modules' );
 
 $app->routes->get('/__composition/i18n')->to(
     cb => sub {
@@ -164,11 +173,13 @@ sub _helper_names {
       gp_mention_reader
       gp_mention_store
       gp_metadata_builder
+      gp_metrics_snapshot
       gp_moderation_action_store
       gp_moderation_review_reader
       gp_moderation_view_model
       gp_notification_dispatcher
       gp_notification_renderer
+      gp_notifications_view_model
       gp_password
       gp_permission_gate
       gp_permission_review
@@ -228,6 +239,60 @@ sub _helper_names {
       ui_tone
       ui_typography_class
     );
+}
+
+sub _registered_bootstrap_helpers {
+    my %registered;
+
+    for my $file (
+        path('lib/GPForum/Bootstrap')->list->grep(qr/[.]pm\z/msx)->each )
+    {
+        my $source = $file->slurp;
+        while ( $source =~ /->helper \s* \( \s* ([A-Za-z0-9_]+)/gmsx ) {
+            push @{ $registered{$1} }, "$file";
+        }
+    }
+
+    return \%registered;
+}
+
+sub _duplicate_helper_names {
+    my ($registered) = @_;
+
+    my @duplicates = map { "$_:" . join q{,}, @{ $registered->{$_} } }
+      grep { @{ $registered->{$_} } > 1 } sort keys %{$registered};
+
+    return \@duplicates;
+}
+
+sub _missing_registered_helpers {
+    my ($registered) = @_;
+
+    my %expected   = map  { $_ => 1 } _helper_names();
+    my @missing    = grep { !$registered->{$_} } sort keys %expected;
+    my @unexpected = grep { !$expected{$_} } sort keys %{$registered};
+
+    return [ @missing, map { "unexpected:$_" } @unexpected ];
+}
+
+sub _unregistered_controller_helpers {
+    my ($registered) = @_;
+
+    my %used;
+    for my $file (
+        path('lib/GPForum/Controller')->list->grep(qr/[.]pm\z/msx)->each )
+    {
+        my $source = $file->slurp;
+        while ( $source =~
+            /->((?:gp|ui)_[A-Za-z0-9_]+|i18n_service|i18n|tc|t|l)\b/gmsx )
+        {
+            $used{$1} = 1;
+        }
+    }
+
+    my @missing = grep { !$registered->{$_} } sort keys %used;
+
+    return \@missing;
 }
 
 1;

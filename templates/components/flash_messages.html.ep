@@ -1,0 +1,9 @@
+% my $flash_messages = stash('flash_messages') || ui_flash_messages;
+
+% if (@{$flash_messages}) {
+  <section class="flash-stack page-shell" aria-label="<%= t('layout.flash_messages') %>">
+    % for my $message (@{$flash_messages}) {
+      <p class="flash flash--<%= $message->{type} %>" role="<%= $message->{type} eq 'error' ? 'alert' : 'status' %>"><%= $message->{message} %></p>
+    % }
+  </section>
+% }

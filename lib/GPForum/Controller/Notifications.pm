@@ -46,7 +46,7 @@ sub inbox {
     return _render_payload(
         $self,
         'notifications/inbox',
-        $self->gp_community_view_model->notifications_page(
+        $self->gp_notifications_view_model->notifications_page(
             locale       => $self->ui_locale,
             page         => $result->{page},
             renderer     => $self->gp_notification_renderer,
@@ -105,7 +105,7 @@ sub mentions {
     return _render_payload(
         $self,
         'notifications/mentions',
-        $self->gp_community_view_model->mentions_page(
+        $self->gp_notifications_view_model->mentions_page(
             locale   => $self->ui_locale,
             page     => $page,
             renderer => $self->gp_notification_renderer,

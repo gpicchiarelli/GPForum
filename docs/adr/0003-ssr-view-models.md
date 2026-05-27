@@ -28,9 +28,11 @@ Current presenter groups:
 - `GPForum::ViewModel::Forum::Presenter` shapes categories, threads, posts,
   search results, autocomplete suggestions, report JSON payloads, thread page
   metadata, reading summaries, engagement summaries, and new-thread form state.
-- `GPForum::ViewModel::Community::Presenter` shapes bookmarks, feed items,
-  notification inbox rows, mention rows, and localized notification
-  presentation.
+- `GPForum::ViewModel::Community::Presenter` shapes bookmarks and feed items,
+  and keeps compatibility delegates for notification surfaces.
+- `GPForum::ViewModel::Notifications::Presenter` shapes notification inbox
+  rows, mention rows, localized notification presentation, and stable
+  notification heading metadata.
 - `GPForum::ViewModel::Admin::Presenter` shapes roles, permissions, bindings,
   audit rows, dashboard summaries, and stable audit metadata items.
 - `GPForum::ViewModel::Attachment::Presenter` shapes upload response payloads
@@ -61,3 +63,12 @@ View models must not perform persistence writes or contain HTML templates. When
 they need localized strings, they call presentation/rendering services already
 owned by the UI boundary. Future presenters should preserve public JSON fields
 unless an API change is explicitly accepted.
+
+## Alternatives Rejected
+
+- Keep row-to-hash mapping in controllers: rejected because controllers became
+  harder to audit and duplicated presentation logic across routes.
+- Pass DBIx::Class rows directly to templates: rejected because templates should
+  consume stable plain data and avoid accidental persistence-layer coupling.
+- Put HTML rendering in services: rejected because services should remain usable
+  by SSR, JSON, workers, and tests without template concerns.

@@ -11,6 +11,7 @@ use GPForum::ViewModel::Discovery::Presenter;
 use GPForum::ViewModel::Forum::Presenter;
 use GPForum::ViewModel::Identity::Presenter;
 use GPForum::ViewModel::Moderation::Presenter;
+use GPForum::ViewModel::Notifications::Presenter;
 use GPForum::ViewModel::Privacy::Presenter;
 
 our $VERSION = '0.001';
@@ -30,7 +31,9 @@ sub register {
     my $forum_view_model      = GPForum::ViewModel::Forum::Presenter->new;
     my $identity_view_model   = GPForum::ViewModel::Identity::Presenter->new;
     my $moderation_view_model = GPForum::ViewModel::Moderation::Presenter->new;
-    my $privacy_view_model    = GPForum::ViewModel::Privacy::Presenter->new;
+    my $notifications_view_model =
+      GPForum::ViewModel::Notifications::Presenter->new;
+    my $privacy_view_model = GPForum::ViewModel::Privacy::Presenter->new;
 
     $application->helper( i18n_service => sub { return $i18n; } );
     $application->helper( ui_presenter => sub { return $presenter; } );
@@ -48,6 +51,9 @@ sub register {
         gp_identity_view_model => sub { return $identity_view_model; } );
     $application->helper(
         gp_moderation_view_model => sub { return $moderation_view_model; } );
+    $application->helper(
+        gp_notifications_view_model => sub { return $notifications_view_model; }
+    );
     $application->helper(
         gp_privacy_view_model => sub { return $privacy_view_model; } );
     $application->helper(

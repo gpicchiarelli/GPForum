@@ -67,3 +67,13 @@ route and helper names continue to register.
 
 Future extractions should follow the same rule: move registration only when the
 boundary is cohesive and observable through existing helpers or routes.
+
+## Alternatives Rejected
+
+- Keep all helper and route registration in `GPForum.pm`: rejected because the
+  composition root had become hard to review and easy to conflict on.
+- Convert each boundary into a Mojolicious plugin: rejected for now because the
+  project still benefits from explicit local bootstrap modules without plugin
+  lifecycle indirection.
+- Let controllers instantiate services directly: rejected because it would make
+  helper contracts implicit and weaken startup-level verification.

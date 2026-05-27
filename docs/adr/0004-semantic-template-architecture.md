@@ -65,3 +65,13 @@ Costs:
   templates, localized route rendering, and single-main landmarks.
 - `t/64-i18n.t` verifies catalog coverage for component labels in English and
   Italian.
+
+## Alternatives Rejected
+
+- Introduce a frontend framework or build pipeline: rejected because GPForum is
+  intentionally SSR-first and Perl-first.
+- Keep shell/navigation markup entirely in the base layout: rejected because the
+  layout was becoming a second monolith and repeated UI contracts were harder to
+  test.
+- Use route-local CSS for each product surface: rejected because accessibility,
+  contrast, RTL readiness, and print behavior need centralized tokens.

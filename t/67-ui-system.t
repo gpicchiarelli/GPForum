@@ -20,9 +20,10 @@ our $VERSION = '0.001';
 const my $HTTP_OK => 200;
 
 my @component_names = qw(
-  admin_table alert badge card confirmation dialog empty_state error_summary
-  field_error loading moderation_indicator notification_surface page_header
-  pagination section_header status_badge status_banner
+  admin_table alert badge breadcrumbs card confirmation dialog empty_state
+  error_summary field_error flash_messages identity_nav loading locale_selector
+  moderation_indicator notification_surface page_header pagination primary_nav
+  section_header site_footer site_header status_badge status_banner
 );
 for my $component_name (@component_names) {
     ok( -e path( 'templates/components', "$component_name.html.ep" ),
@@ -77,6 +78,14 @@ like(
 );
 unlike( _all_template_source(), qr/\sstyle=/msx,
     'SSR templates do not introduce inline CSS' );
+for my $component_name (qw(site_header breadcrumbs flash_messages site_footer))
+{
+    like(
+        path('templates/layouts/default.html.ep')->slurp,
+        qr/include [ ] 'components\/$component_name'/msx,
+        "base layout uses shared $component_name shell partial"
+    );
+}
 like(
     path('templates/identity/login.html.ep')->slurp,
     qr/components\/error_summary/msx,

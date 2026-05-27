@@ -17,6 +17,7 @@ use GPForum::ViewModel::Discovery::Presenter;
 use GPForum::ViewModel::Forum::Presenter;
 use GPForum::ViewModel::Identity::Presenter;
 use GPForum::ViewModel::Moderation::Presenter;
+use GPForum::ViewModel::Notifications::Presenter;
 use GPForum::ViewModel::Privacy::Presenter;
 
 our $VERSION = '0.001';
@@ -156,16 +157,18 @@ ok( $action->{ui}{reversible},
 my $community = GPForum::ViewModel::Community::Presenter->new;
 my $renderer  = GPForum::Service::Notification::Renderer->new(
     i18n => GPForum::Service::I18N->new );
-my $notification = $community->notification(
-    {
-        created_at        => '2026-05-23T12:00:00Z',
-        notification_id   => 'notification-1',
-        notification_type => 'mention',
-        payload           => { thread_id => 'thread-1' },
-        recipient_user_id => 'user-1',
-        source_id         => 'post-1',
-        source_type       => 'post',
-    },
+my $notifications    = GPForum::ViewModel::Notifications::Presenter->new;
+my $notification_row = {
+    created_at        => '2026-05-23T12:00:00Z',
+    notification_id   => 'notification-1',
+    notification_type => 'mention',
+    payload           => { thread_id => 'thread-1' },
+    recipient_user_id => 'user-1',
+    source_id         => 'post-1',
+    source_type       => 'post',
+};
+my $notification = $notifications->notification(
+    $notification_row,
     locale   => 'it',
     renderer => $renderer,
 );
@@ -179,8 +182,22 @@ is(
     'Sei stato menzionato su GPForum',
     'notification presenter renders locale-aware email subject'
 );
+is(
+    $notification->{ui}{heading_id},
+    'notification-notification-1-heading',
+    'notification presenter exposes stable heading metadata'
+);
+is_deeply(
+    $community->notification(
+        $notification_row,
+        locale   => 'it',
+        renderer => $renderer,
+    ),
+    $notification,
+    'community presenter keeps notification compatibility delegate'
+);
 
-my $mention = $community->mention(
+my $mention = $notifications->mention(
     {
         actor_display_name => 'Reply Author',
         actor_id           => 'user-2',
@@ -199,6 +216,9 @@ is( $mention->{actor_profile_label},
     '@reply_author', 'mention presenter prepares actor profile label' );
 is( $mention->{presentation}{by_label},
     'Mention by', 'mention presenter renders locale-aware presentation' );
+is( $mention->{ui}{heading_id},
+    'mention-mention-1-heading',
+    'mention presenter exposes stable heading metadata' );
 
 my $identity = GPForum::ViewModel::Identity::Presenter->new;
 my $login    = $identity->login_form(

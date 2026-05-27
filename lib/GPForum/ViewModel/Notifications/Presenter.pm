@@ -1,0 +1,115 @@
+package GPForum::ViewModel::Notifications::Presenter;
+
+use strict;
+use warnings;
+
+use Mojo::Base 'GPForum::ViewModel::Base';
+
+our $VERSION = '0.001';
+
+sub notifications_page {
+    my ( $self, %input ) = @_;
+
+    my $page = $input{page} || {};
+
+    return {
+        next_cursor   => $page->{next_cursor},
+        notifications => [
+            map {
+                $self->notification(
+                    $_,
+                    locale   => $input{locale},
+                    renderer => $input{renderer},
+                )
+            } @{ $page->{items} || [] }
+        ],
+        unread_count => $input{unread_count} || 0,
+    };
+}
+
+sub mentions_page {
+    my ( $self, %input ) = @_;
+
+    my $page = $input{page} || {};
+
+    return {
+        mentions => [
+            map {
+                $self->mention(
+                    $_,
+                    locale   => $input{locale},
+                    renderer => $input{renderer},
+                )
+            } @{ $page->{items} || [] }
+        ],
+        next_cursor => $page->{next_cursor},
+    };
+}
+
+sub notification {
+    my ( $self, $row, %input ) = @_;
+
+    my $notification = $self->_related_notification($row);
+    my $payload      = {
+        created_at        => $self->column( $row, 'created_at' ),
+        notification_id   => $self->column( $row, 'notification_id' ),
+        notification_type =>
+          $self->column( $notification, 'notification_type' ),
+        payload           => $self->column( $notification, 'payload' ) || {},
+        rank_score        => $self->column( $row,          'rank_score' ),
+        read_at           => $self->column( $row,          'read_at' ),
+        recipient_user_id => $self->column( $row, 'recipient_user_id' ),
+        source_id         => $self->column( $notification, 'source_id' ),
+        source_type       => $self->column( $notification, 'source_type' ),
+        ui                => {
+                heading_id => 'notification-'
+              . $self->string( $self->column( $row, 'notification_id' ) )
+              . '-heading',
+        },
+    };
+    $payload->{presentation} =
+      $input{renderer}->render_inbox_item( $input{locale}, $payload )
+      if $input{renderer};
+
+    return $payload;
+}
+
+sub mention {
+    my ( $self, $row, %input ) = @_;
+
+    my $username = $self->column( $row, 'actor_username' );
+    my $payload  = {
+        actor_display_name  => $self->column( $row, 'actor_display_name' ),
+        actor_id            => $self->column( $row, 'actor_id' ),
+        actor_profile_label => $self->profile_label($username),
+        actor_username      => $username,
+        created_at          => $self->column( $row, 'created_at' ),
+        mention_id          => $self->column( $row, 'mention_id' ),
+        mentioned_user_id   => $self->column( $row, 'mentioned_user_id' ),
+        mentioned_username  => $self->column( $row, 'mentioned_username' ),
+        source_id           => $self->column( $row, 'source_id' ),
+        source_type         => $self->column( $row, 'source_type' ),
+        ui                  => {
+                heading_id => 'mention-'
+              . $self->string( $self->column( $row, 'mention_id' ) )
+              . '-heading',
+        },
+    };
+    $payload->{presentation} =
+      $input{renderer}->render_mention( $input{locale}, $payload )
+      if $input{renderer};
+
+    return $payload;
+}
+
+sub _related_notification {
+    my ( $self, $row ) = @_;
+
+    return $row
+      if ref $row eq 'HASH' && exists $row->{notification_type};
+    return if !$row || ref $row eq 'HASH' || !$row->can('notification');
+
+    return $row->notification;
+}
+
+1;

@@ -23,7 +23,7 @@ sub create_thread {
     my ( $self, $input ) = @_;
 
     my $category_id = _trim( $input->{category_id} );
-    return { ok => 0, status => 'not_found', error => 'category not found' }
+    return _result( status => 'not_found', error => 'category not found' )
       if length $category_id
       && !$self->category_reader->find_category($category_id);
 
@@ -39,15 +39,19 @@ sub create_thread {
         }
     );
 
-    return { ok => 0, status => 'invalid', prepared => $prepared }
+    return _result( status => 'invalid', prepared => $prepared )
       if !$prepared->{ok};
 
     my $stored = $self->_store_thread( $prepared->{command} );
     return $stored if !$stored->{ok};
 
-    $self->_record_post_mentions( $stored, $prepared->{command} );
+    $self->_record_post_mentions( $stored->{stored}, $prepared->{command} );
 
-    return { ok => 1, stored => $stored };
+    return _result(
+        status   => 'ok',
+        prepared => $prepared,
+        stored   => $stored->{stored},
+    );
 }
 
 sub create_reply {
@@ -55,9 +59,9 @@ sub create_reply {
 
     my $thread =
       $self->thread_detail_reader->find_thread( $input->{thread_id} );
-    return { ok => 0, status => 'not_found', error => 'thread not found' }
+    return _result( status => 'not_found', error => 'thread not found' )
       if !$thread;
-    return { ok => 0, status => 'forbidden', error => 'thread is locked' }
+    return _result( status => 'forbidden', error => 'thread is locked' )
       if defined _column( $thread, 'locked_at' );
 
     my $prepared = $self->post_composer->prepare(
@@ -72,15 +76,19 @@ sub create_reply {
         }
     );
 
-    return { ok => 0, status => 'invalid', prepared => $prepared }
+    return _result( status => 'invalid', prepared => $prepared )
       if !$prepared->{ok};
 
     my $stored = $self->_store_post( $prepared->{command} );
     return $stored if !$stored->{ok};
 
-    $self->_record_post_mentions( $stored, $prepared->{command} );
+    $self->_record_post_mentions( $stored->{stored}, $prepared->{command} );
 
-    return { ok => 1, stored => $stored };
+    return _result(
+        status   => 'ok',
+        prepared => $prepared,
+        stored   => $stored->{stored},
+    );
 }
 
 sub _store_thread {
@@ -89,10 +97,10 @@ sub _store_thread {
     my $stored = eval { return $self->thread_store->create_thread($command); };
     if ($EVAL_ERROR) {
         $self->_log_error("thread create failed: $EVAL_ERROR");
-        return { ok => 0, status => 'failed' };
+        return _result( status => 'failed', error => 'thread store failed' );
     }
 
-    return $stored;
+    return _stored_result( $stored, 'thread store failed' );
 }
 
 sub _store_post {
@@ -101,10 +109,10 @@ sub _store_post {
     my $stored = eval { return $self->post_store->create_post($command); };
     if ($EVAL_ERROR) {
         $self->_log_error("reply create failed: $EVAL_ERROR");
-        return { ok => 0, status => 'failed' };
+        return _result( status => 'failed', error => 'post store failed' );
     }
 
-    return $stored;
+    return _stored_result( $stored, 'post store failed' );
 }
 
 sub _record_post_mentions {
@@ -148,6 +156,33 @@ sub _body_hash {
     my ($body) = @_;
 
     return sha256_hex( _trim($body) );
+}
+
+sub _stored_result {
+    my ( $stored, $fallback_error ) = @_;
+
+    return _result(
+        status => 'failed',
+        error  => $fallback_error,
+        stored => $stored,
+    ) if ref $stored ne 'HASH' || !$stored->{ok};
+
+    return _result(
+        status => 'ok',
+        stored => $stored,
+    );
+}
+
+sub _result {
+    my (%input) = @_;
+
+    return {
+        error    => $input{error},
+        ok       => ( $input{status} || q{} ) eq 'ok' ? 1 : 0,
+        prepared => $input{prepared},
+        status   => $input{status} || 'failed',
+        stored   => $input{stored},
+    };
 }
 
 sub _trim {
