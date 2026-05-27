@@ -24,7 +24,9 @@
         <li class="ui-card-list__item">
           <article aria-labelledby="action-<%= $action->{moderation_action_id} %>-heading">
             <h2 id="action-<%= $action->{moderation_action_id} %>-heading">
-              <%= ui_label('moderation.action', $action->{action_type}) %>
+              <%= include 'components/moderation_indicator',
+                namespace => 'moderation.action',
+                value => $action->{action_type} %>
             </h2>
             <dl>
               <dt><%= t('common.target') %></dt>
@@ -61,6 +63,9 @@
               </form>
             % }
             % if (!$action->{reversed_at}) {
+              <%= include 'components/confirmation',
+                heading_id => 'action-' . $action->{moderation_action_id} . '-reverse-heading',
+                component_title => t('moderation.reverse_action') %>
               <form method="post" action="<%= url_for('moderation_action_reverse', action_id => $action->{moderation_action_id}) %>">
                 <%= csrf_field %>
                 <label for="action-<%= $action->{moderation_action_id} %>-reverse-reason"><%= t('common.reason') %></label>

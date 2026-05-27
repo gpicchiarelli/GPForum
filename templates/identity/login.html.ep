@@ -1,43 +1,35 @@
 % layout 'default';
 % title t('auth.login_title') . ' - ' . t('app.name');
-% my $has_errors = keys %{$errors} ? 1 : 0;
+% my $error_fields = [
+%   { name => 'identifier', id => 'login-identifier' },
+%   { name => 'password', id => 'login-password' },
+% ];
+% my $has_field_errors = grep { $errors->{ $_->{name} } } @{$error_fields};
 % my $identifier_error_attrs = $errors->{identifier} ? ' aria-invalid="true" aria-describedby="login-identifier-error"' : q{};
 % my $password_error_attrs = $errors->{password} ? ' aria-invalid="true" aria-describedby="login-password-error"' : q{};
+% my $form_described_by = $has_field_errors ? 'login-error-summary' : $errors->{login} ? 'login-form-error' : q{};
 
 <section aria-labelledby="login-heading">
   <h1 id="login-heading"><%= t('auth.login_title') %></h1>
   % if ($errors->{login}) {
-    <p id="login-form-error" class="field-error" role="alert"><%= $errors->{login} %></p>
+    <%= include 'components/field_error', field_id => 'login-form-error', message => $errors->{login}, role => 'alert' %>
   % }
-  % if ($has_errors) {
-    <div id="login-error-summary" class="form-error-summary" role="alert" tabindex="-1">
-      <p><%= t('form.error_summary') %></p>
-      <ul>
-        % if ($errors->{identifier}) {
-          <li><a href="#login-identifier"><%= $errors->{identifier} %></a></li>
-        % }
-        % if ($errors->{password}) {
-          <li><a href="#login-password"><%= $errors->{password} %></a></li>
-        % }
-      </ul>
-    </div>
-  % }
-  <form method="post" action="<%= url_for('login_submit') %>"<%== $has_errors ? ' aria-describedby="login-error-summary"' : q{} %>>
+  <%= include 'components/error_summary',
+    summary_id => 'login-error-summary',
+    errors => $errors,
+    fields => $error_fields %>
+  <form method="post" action="<%= url_for('login_submit') %>"<%== length $form_described_by ? ' aria-describedby="' . $form_described_by . '"' : q{} %>>
     <%= csrf_field %>
     <label for="login-identifier">
       <%= t('auth.username_or_email') %>
     </label>
     <input id="login-identifier" name="identifier" value="<%= $values->{identifier} // q{} %>" autocomplete="username"<%== $identifier_error_attrs %>>
-    % if ($errors->{identifier}) {
-      <p id="login-identifier-error" class="field-error"><%= $errors->{identifier} %></p>
-    % }
+    <%= include 'components/field_error', field_id => 'login-identifier-error', message => $errors->{identifier} %>
     <label for="login-password">
       <%= t('auth.password') %>
     </label>
     <input id="login-password" name="password" type="password" autocomplete="current-password"<%== $password_error_attrs %>>
-    % if ($errors->{password}) {
-      <p id="login-password-error" class="field-error"><%= $errors->{password} %></p>
-    % }
+    <%= include 'components/field_error', field_id => 'login-password-error', message => $errors->{password} %>
     <button type="submit"><%= t('auth.login') %></button>
   </form>
 </section>

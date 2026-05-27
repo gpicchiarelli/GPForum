@@ -4,6 +4,12 @@
 % my $form_values = stash('values') || {};
 % my $selected_category = stash('selected_category_id') || $form_values->{category_id} || q{};
 % my $has_errors = keys %{$field_errors} ? 1 : 0;
+% my $error_fields = [
+%   { name => 'category_id', id => 'thread-category' },
+%   { name => 'title', id => 'thread-title' },
+%   { name => 'body_source', id => 'thread-body' },
+%   { name => 'visibility', id => 'thread-visibility' },
+% ];
 % my $category_error_attrs = $field_errors->{category_id} ? ' aria-invalid="true" aria-describedby="thread-category-error"' : q{};
 % my $title_error_attrs = $field_errors->{title} ? ' aria-invalid="true" aria-describedby="thread-title-error"' : q{};
 % my $body_error_attrs = $field_errors->{body_source} ? ' aria-invalid="true" aria-describedby="thread-body-error"' : q{};
@@ -12,25 +18,11 @@
 <section aria-labelledby="new-thread-heading">
   <p><a href="<%= url_for('categories') %>"><%= t('nav.categories') %></a></p>
   <h1 id="new-thread-heading"><%= t('forum.new_thread_title') %></h1>
-  % if ($has_errors) {
-    <div id="thread-error-summary" class="form-error-summary" role="alert" tabindex="-1">
-      <p><%= t('forum.new_thread_error_summary') %></p>
-      <ul>
-        % if ($field_errors->{category_id}) {
-          <li><a href="#thread-category"><%= $field_errors->{category_id} %></a></li>
-        % }
-        % if ($field_errors->{title}) {
-          <li><a href="#thread-title"><%= $field_errors->{title} %></a></li>
-        % }
-        % if ($field_errors->{body_source}) {
-          <li><a href="#thread-body"><%= $field_errors->{body_source} %></a></li>
-        % }
-        % if ($field_errors->{visibility}) {
-          <li><a href="#thread-visibility"><%= $field_errors->{visibility} %></a></li>
-        % }
-      </ul>
-    </div>
-  % }
+  <%= include 'components/error_summary',
+    summary_id => 'thread-error-summary',
+    summary => t('forum.new_thread_error_summary'),
+    errors => $field_errors,
+    fields => $error_fields %>
   <form method="post" action="<%= url_for('thread_create') %>"<%== $has_errors ? ' aria-describedby="thread-error-summary"' : q{} %>>
     <%= csrf_field %>
     <label for="thread-category"><%= t('search.category') %></label>
@@ -39,19 +31,13 @@
         <option value="<%= $category->{category_id} %>"<%= $category->{category_id} eq $selected_category ? ' selected' : '' %>><%= $category->{title} %></option>
       % }
     </select>
-    % if ($field_errors->{category_id}) {
-      <p id="thread-category-error" class="field-error"><%= $field_errors->{category_id} %></p>
-    % }
+    <%= include 'components/field_error', field_id => 'thread-category-error', message => $field_errors->{category_id} %>
     <label for="thread-title"><%= t('forum.thread_title') %></label>
     <input id="thread-title" name="title" value="<%= $form_values->{title} // q{} %>" required<%== $title_error_attrs %>>
-    % if ($field_errors->{title}) {
-      <p id="thread-title-error" class="field-error"><%= $field_errors->{title} %></p>
-    % }
+    <%= include 'components/field_error', field_id => 'thread-title-error', message => $field_errors->{title} %>
     <label for="thread-body"><%= t('forum.thread_body') %></label>
     <textarea id="thread-body" name="body_source" rows="10" required<%== $body_error_attrs %>><%= $form_values->{body_source} // q{} %></textarea>
-    % if ($field_errors->{body_source}) {
-      <p id="thread-body-error" class="field-error"><%= $field_errors->{body_source} %></p>
-    % }
+    <%= include 'components/field_error', field_id => 'thread-body-error', message => $field_errors->{body_source} %>
     <label for="thread-visibility"><%= t('forum.visibility') %></label>
     <select id="thread-visibility" name="visibility"<%== $visibility_error_attrs %>>
       % my $visibility = $form_values->{visibility} || 'public';
@@ -59,9 +45,7 @@
       <option value="members"<%= $visibility eq 'members' ? ' selected' : '' %>><%= t('forum.visibility_members') %></option>
       <option value="private"<%= $visibility eq 'private' ? ' selected' : '' %>><%= t('forum.visibility_private') %></option>
     </select>
-    % if ($field_errors->{visibility}) {
-      <p id="thread-visibility-error" class="field-error"><%= $field_errors->{visibility} %></p>
-    % }
+    <%= include 'components/field_error', field_id => 'thread-visibility-error', message => $field_errors->{visibility} %>
     <button type="submit"><%= t('forum.create_thread') %></button>
   </form>
 </section>

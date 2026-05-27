@@ -4,8 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use Digest::SHA qw(sha256_hex);
-use English     qw(-no_match_vars);
+use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
 our $VERSION = '0.001';
@@ -42,7 +41,7 @@ sub categories {
       $self->gp_category_reader->list_categories(
         { limit => $self->param('limit') } );
     my $payload =
-      { categories => [ map { _category_hash($_) } @{$categories} ], };
+      $self->gp_forum_view_model->categories_page( categories => $categories );
 
     return _render_payload( $self, 'forum/categories', $payload, $HTTP_OK );
 }
@@ -63,11 +62,10 @@ sub category {
         }
     );
 
-    my $payload = {
-        category    => _category_hash($category),
-        threads     => [ map { _thread_hash($_) } @{ $threads->{items} } ],
-        next_cursor => $threads->{next_cursor},
-    };
+    my $payload = $self->gp_forum_view_model->category_page(
+        category     => $category,
+        threads_page => $threads,
+    );
 
     return _render_payload( $self, 'forum/category', $payload, $HTTP_OK );
 }
@@ -85,19 +83,25 @@ sub thread {
 
     return _not_found( $self, 'thread not found' ) if !$page->{ok};
 
-    my $thread = _thread_hash( $page->{thread} );
-    my $posts  = [ map { _post_hash($_) } @{ $page->{posts}{items} } ];
-    _attach_post_attachments( $self, $posts );
-
-    my $payload = {
-        thread        => $thread,
-        posts         => $posts,
-        page_metadata =>
-          _thread_page_metadata( $self, $thread, $posts->[0] || {} ),
-        reading     => _reading_summary( $self, $page ),
-        engagement  => _engagement_summary( $self, $page->{thread} ),
-        next_cursor => $page->{posts}{next_cursor},
-    };
+    my $payload = $self->gp_forum_view_model->thread_page(
+        attachments_by_post =>
+          _attachments_for_posts( $self, $page->{posts}{items} ),
+        engagement => $self->gp_forum_view_model->engagement_summary(
+            bookmark_store     => $self->gp_bookmark_store,
+            logger             => $self->app->log,
+            subscription_store => $self->gp_subscription_store,
+            thread             => $page->{thread},
+            user_id            => _current_user_id($self),
+        ),
+        metadata_builder => $self->gp_metadata_builder,
+        page             => $page,
+        reading          => $self->gp_forum_view_model->reading_summary(
+            posts      => $page->{posts}{items},
+            read_state => $self->gp_thread_read_state,
+            thread_id  => $self->param('thread_id'),
+            user_id    => _current_user_id($self),
+        ),
+    );
 
     return _render_payload( $self, 'forum/thread', $payload, $HTTP_OK );
 }
@@ -107,14 +111,13 @@ sub new_thread_form {
 
     my $categories = $self->gp_category_reader->list_categories( {} );
 
-    my $payload = {
+    my $payload = $self->gp_forum_view_model->new_thread_form(
+        categories           => $categories,
         csrf_token           => $self->csrf_token,
-        categories           => [ map { _category_hash($_) } @{$categories} ],
         errors               => {},
-        fields               => [qw(category_id title body_source visibility)],
         selected_category_id => $self->param('category_id') || q{},
         values               => {},
-    };
+    );
 
     return _render_payload( $self, 'forum/new_thread', $payload, $HTTP_OK );
 }
@@ -125,32 +128,24 @@ sub create_thread {
     my $user_id = _write_user_id( $self, 'thread.create' );
     return if !$user_id;
 
-    my $category_id = _trim( $self->param('category_id') );
-    return _not_found( $self, 'category not found' )
-      if length $category_id
-      && !$self->gp_category_reader->find_category($category_id);
-
-    my $prepared = $self->gp_thread_composer->prepare(
+    my $result = $self->gp_posting_workflow->create_thread(
         {
-            category_id     => $category_id,
+            category_id     => $self->param('category_id'),
             author_user_id  => $user_id,
             title           => $self->param('title'),
             body_source     => $self->param('body_source'),
-            body_hash       => _body_hash( $self->param('body_source') ),
             visibility      => $self->param('visibility'),
             idempotency_key => $self->param('idempotency_key'),
         }
     );
 
-    return _thread_form_bad_request( $self, $prepared ) if !$prepared->{ok};
+    return _not_found( $self, $result->{error} )
+      if $result->{status} && $result->{status} eq 'not_found';
+    return _thread_form_bad_request( $self, $result->{prepared} )
+      if $result->{status} && $result->{status} eq 'invalid';
+    return _system_failure($self) if !$result->{ok};
 
-    my $stored = _store_thread( $self, $prepared->{command} );
-
-    return _system_failure($self) if !$stored->{ok};
-
-    _record_post_mentions( $self, $stored, $prepared->{command} );
-
-    return _created_thread_response( $self, $stored );
+    return _created_thread_response( $self, $result->{stored} );
 }
 
 sub create_reply {
@@ -159,14 +154,25 @@ sub create_reply {
     my $user_id = _write_user_id( $self, 'reply.create' );
     return if !$user_id;
 
-    my $thread = _reply_thread($self);
-    return if !$thread;
+    my $result = $self->gp_posting_workflow->create_reply(
+        {
+            thread_id       => $self->param('thread_id'),
+            author_user_id  => $user_id,
+            body_source     => $self->param('body_source'),
+            visibility      => $self->param('visibility'),
+            idempotency_key => $self->param('idempotency_key'),
+        }
+    );
 
-    my $prepared =
-      $self->gp_post_composer->prepare(
-        _reply_input( $self, $user_id, $thread ) );
+    return _not_found( $self, $result->{error} )
+      if $result->{status} && $result->{status} eq 'not_found';
+    return _forbidden( $self, $result->{error} )
+      if $result->{status} && $result->{status} eq 'forbidden';
+    return _bad_request( $self, $result->{prepared}{errors} )
+      if $result->{status} && $result->{status} eq 'invalid';
+    return _system_failure($self) if !$result->{ok};
 
-    return _post_creation_response( $self, $prepared );
+    return _created_post_response( $self, $result->{stored} );
 }
 
 sub mark_thread_read {
@@ -215,10 +221,7 @@ sub feed {
         }
     );
 
-    my $payload = {
-        feed_items  => [ map { _feed_item_hash($_) } @{ $page->{items} } ],
-        next_cursor => $page->{next_cursor},
-    };
+    my $payload = $self->gp_community_view_model->feed_page( page => $page );
 
     return _render_payload( $self, 'forum/feed', $payload, $HTTP_OK );
 }
@@ -238,10 +241,8 @@ sub bookmarks {
         }
     );
 
-    my $payload = {
-        bookmarks   => [ map { _bookmark_hash($_) } @{ $page->{items} } ],
-        next_cursor => $page->{next_cursor},
-    };
+    my $payload =
+      $self->gp_community_view_model->bookmarks_page( page => $page );
 
     return _render_payload( $self, 'forum/bookmarks', $payload, $HTTP_OK );
 }
@@ -463,159 +464,23 @@ sub _visible_thread {
     return $thread;
 }
 
-sub _reply_thread {
-    my ($controller) = @_;
-
-    my $thread_id = $controller->param('thread_id');
-    my $thread = $controller->gp_thread_detail_reader->find_thread($thread_id);
-
-    if ( !$thread ) {
-        _not_found( $controller, 'thread not found' );
-        return;
-    }
-
-    if ( defined _column( $thread, 'locked_at' ) ) {
-        _forbidden( $controller, 'thread is locked' );
-        return;
-    }
-
-    return $thread;
-}
-
-sub _reply_input {
-    my ( $controller, $user_id, $thread ) = @_;
-
-    my $thread_id = $controller->param('thread_id');
-
-    return {
-        thread_id      => $thread_id,
-        author_user_id => $user_id,
-        position    => $controller->gp_post_position->next_position($thread_id),
-        body_source => $controller->param('body_source'),
-        body_hash   => _body_hash( $controller->param('body_source') ),
-        visibility  => _reply_visibility( $controller, $thread ),
-    };
-}
-
-sub _reply_visibility {
-    my ( $controller, $thread ) = @_;
-
-    my $requested = $controller->param('visibility');
-
-    return $requested if defined $requested && length $requested;
-
-    return _column( $thread, 'visibility' );
-}
-
-sub _post_creation_response {
-    my ( $controller, $prepared ) = @_;
-
-    return _bad_request( $controller, $prepared->{errors} ) if !$prepared->{ok};
-
-    my $stored = _store_post( $controller, $prepared->{command} );
-
-    return _system_failure($controller) if !$stored->{ok};
-
-    _record_post_mentions( $controller, $stored, $prepared->{command} );
-
-    return _created_post_response( $controller, $stored );
-}
-
-sub _record_post_mentions {
-    my ( $controller, $stored, $command ) = @_;
-
-    my $post_id  = _column( $stored->{post}, 'post_id' );
-    my $actor_id = _column( $stored->{post}, 'author_user_id' )
-      || $command->{post}{author_user_id};
-
-    my $result = eval {
-        return $controller->gp_mention_store->record_for_source(
-            {
-                source_type  => 'post',
-                source_id    => $post_id,
-                actor_id     => $actor_id,
-                body_source  => $command->{body}{body_source},
-                max_mentions => 10,
-                thread_id    => $command->{post}{thread_id},
-            }
-        );
-    };
-
-    if ($EVAL_ERROR) {
-        $controller->app->log->warn("mention recording degraded: $EVAL_ERROR");
-        return;
-    }
-
-    return $result;
-}
-
-sub _attach_post_attachments {
+sub _attachments_for_posts {
     my ( $controller, $posts ) = @_;
 
-    return if !@{$posts};
+    return {} if !@{$posts};
 
     my $by_post = eval {
         return $controller->gp_attachment_store->attachments_for_posts(
-            [ map { $_->{post_id} } @{$posts} ],
+            [ map { _column( $_, 'post_id' ) } @{$posts} ],
             { viewer_user_id => _current_user_id($controller) },
         );
     };
     if ($EVAL_ERROR) {
         $controller->app->log->warn("attachment listing degraded: $EVAL_ERROR");
-        $by_post = {};
+        return {};
     }
 
-    for my $post ( @{$posts} ) {
-        $post->{attachments} = $by_post->{ $post->{post_id} } || [];
-    }
-
-    return;
-}
-
-sub _reading_summary {
-    my ( $controller, $page ) = @_;
-
-    my $user_id = _current_user_id($controller);
-    return { authenticated => 0 } if !$user_id;
-
-    return $controller->gp_thread_read_state->summary_for_page(
-        $user_id,
-        $controller->param('thread_id'),
-        $page->{posts}{items},
-    );
-}
-
-sub _engagement_summary {
-    my ( $controller, $thread ) = @_;
-
-    my $user_id = _current_user_id($controller);
-    return { authenticated => 0 } if !$user_id;
-
-    my $thread_id = _column( $thread, 'thread_id' );
-    my $summary   = eval {
-        return {
-            authenticated => 1,
-            bookmark => $controller->gp_bookmark_store->status_for_user_target(
-                $user_id, 'thread', $thread_id
-            ),
-            subscription =>
-              $controller->gp_subscription_store->status_for_user_target(
-                $user_id, 'thread', $thread_id
-              ),
-        };
-    };
-
-    if ($EVAL_ERROR) {
-        $controller->app->log->warn("engagement summary degraded: $EVAL_ERROR");
-        return {
-            authenticated => 1,
-            status        => 'degraded',
-            bookmark      => { bookmarked => 0 },
-            subscription  => { subscribed => 0, muted => 0 },
-        };
-    }
-
-    return $summary;
+    return $by_post || {};
 }
 
 sub _create_report {
@@ -707,7 +572,8 @@ sub _report_json_response {
     return $controller->render(
         json => {
             status => 'reported',
-            report => _report_hash( $result->{report} ),
+            report =>
+              $controller->gp_forum_view_model->report( $result->{report} ),
         },
         status => $HTTP_OK,
     );
@@ -827,14 +693,14 @@ sub search {
         return _render_payload(
             $self,
             'forum/search',
-            {
-                query      => q{},
+            $self->gp_forum_view_model->search_page(
                 filters    => $filters,
                 has_more   => 0,
                 limit      => $limit,
                 more_limit => undef,
+                query      => q{},
                 results    => [],
-            },
+            ),
             $HTTP_OK
         );
     }
@@ -854,20 +720,20 @@ sub search {
         return _render_payload(
             $self,
             'forum/search',
-            {
-                query      => $query,
+            $self->gp_forum_view_model->search_page(
                 filters    => $filters,
                 has_more   => 0,
                 limit      => $limit,
                 more_limit => undef,
-                status     => 'degraded',
+                query      => $query,
                 results    => [],
-            },
+                status     => 'degraded',
+            ),
             $HTTP_OK
         );
     }
 
-    my @results  = map { _search_hash($_) } @{$rows};
+    my @results  = @{$rows};
     my $has_more = @results > $limit ? 1 : 0;
     pop @results while @results > $limit;
     my $more_limit =
@@ -878,14 +744,14 @@ sub search {
     return _render_payload(
         $self,
         'forum/search',
-        {
+        $self->gp_forum_view_model->search_page(
             query      => $query,
             filters    => $filters,
             has_more   => $has_more,
             limit      => $limit,
             more_limit => $more_limit,
             results    => \@results,
-        },
+        ),
         $HTTP_OK
     );
 }
@@ -897,7 +763,10 @@ sub search_autocomplete {
 
     if ( length $query < $AUTOCOMPLETE_MIN ) {
         return $self->render(
-            json   => { query => $query, suggestions => [] },
+            json => $self->gp_forum_view_model->autocomplete_response(
+                query       => $query,
+                suggestions => [],
+            ),
             status => $HTTP_OK,
         );
     }
@@ -921,20 +790,20 @@ sub search_autocomplete {
     if ($EVAL_ERROR) {
         $self->app->log->warn("autocomplete degraded: $EVAL_ERROR");
         return $self->render(
-            json => {
+            json => $self->gp_forum_view_model->autocomplete_response(
                 query       => $query,
                 status      => 'degraded',
                 suggestions => [],
-            },
+            ),
             status => $HTTP_OK,
         );
     }
 
     return $self->render(
-        json => {
+        json => $self->gp_forum_view_model->autocomplete_response(
             query       => $query,
-            suggestions => [ map { _autocomplete_hash($_) } @{$rows} ],
-        },
+            suggestions => $rows,
+        ),
         status => $HTTP_OK,
     );
 }
@@ -993,43 +862,20 @@ sub _thread_form_bad_request {
     my $values     = $prepared->{values} || {};
 
     return $controller->render(
-        template             => 'forum/new_thread',
-        status               => $HTTP_BAD_REQUEST,
-        categories           => [ map { _category_hash($_) } @{$categories} ],
-        errors               => $prepared->{errors} || {},
-        selected_category_id => $values->{category_id}
-          || $controller->param('category_id')
-          || q{},
-        values => $values,
+        template => 'forum/new_thread',
+        status   => $HTTP_BAD_REQUEST,
+        %{
+            $controller->gp_forum_view_model->new_thread_form(
+                categories           => $categories,
+                csrf_token           => $controller->csrf_token,
+                errors               => $prepared->{errors} || {},
+                selected_category_id => $values->{category_id}
+                  || $controller->param('category_id')
+                  || q{},
+                values => $values,
+            )
+        },
     );
-}
-
-sub _store_thread {
-    my ( $controller, $command ) = @_;
-
-    my $stored =
-      eval { return $controller->gp_thread_store->create_thread($command); };
-
-    if ($EVAL_ERROR) {
-        $controller->app->log->error("thread create failed: $EVAL_ERROR");
-        return { ok => 0 };
-    }
-
-    return $stored;
-}
-
-sub _store_post {
-    my ( $controller, $command ) = @_;
-
-    my $stored =
-      eval { return $controller->gp_post_store->create_post($command); };
-
-    if ($EVAL_ERROR) {
-        $controller->app->log->error("reply create failed: $EVAL_ERROR");
-        return { ok => 0 };
-    }
-
-    return $stored;
 }
 
 sub _allowed {
@@ -1157,116 +1003,6 @@ sub _can_participate {
     return $decision->{ok};
 }
 
-sub _category_hash {
-    my ($row) = @_;
-
-    return {
-        category_id => _column( $row, 'category_id' ),
-        slug        => _column( $row, 'slug' ),
-        title       => _column( $row, 'title' ),
-        description => _column( $row, 'description' ),
-        visibility  => _column( $row, 'visibility' ),
-        position    => _column( $row, 'position' ),
-    };
-}
-
-sub _thread_hash {
-    my ($row) = @_;
-
-    return {
-        thread_id            => _column( $row, 'thread_id' ),
-        category_id          => _column( $row, 'category_id' ),
-        author_user_id       => _column( $row, 'author_user_id' ),
-        author_username      => _column( $row, 'author_username' ),
-        author_display_name  => _column( $row, 'author_display_name' ),
-        author_profile_label =>
-          _profile_label( _column( $row, 'author_username' ) ),
-        title            => _column( $row, 'title' ),
-        slug             => _column( $row, 'slug' ),
-        pinned           => _column( $row, 'pinned' ),
-        visibility       => _column( $row, 'visibility' ),
-        moderation_state => _column( $row, 'moderation_state' ),
-        locked_at        => _column( $row, 'locked_at' ),
-        last_activity_at => _column( $row, 'last_activity_at' ),
-    };
-}
-
-sub _post_hash {
-    my ($row) = @_;
-
-    my $body_text = _column( $row, 'body' );
-    if ( !defined $body_text ) {
-        my $body = _related_current_body($row);
-        $body_text = _column( $body, 'body_rendered_safe' ) if $body;
-    }
-
-    return {
-        post_id              => _column( $row, 'post_id' ),
-        thread_id            => _column( $row, 'thread_id' ),
-        author_user_id       => _column( $row, 'author_user_id' ),
-        author_username      => _column( $row, 'author_username' ),
-        author_display_name  => _column( $row, 'author_display_name' ),
-        author_profile_label =>
-          _profile_label( _column( $row, 'author_username' ) ),
-        position         => _column( $row, 'position' ),
-        visibility       => _column( $row, 'visibility' ),
-        moderation_state => _column( $row, 'moderation_state' ),
-        body             => $body_text,
-    };
-}
-
-sub _thread_page_metadata {
-    my ( $controller, $thread, $first_post ) = @_;
-
-    return $controller->gp_metadata_builder->thread_metadata(
-        $thread,
-        {
-            safe_text => $first_post->{body} || q{},
-        }
-    );
-}
-
-sub _search_hash {
-    my ($row) = @_;
-
-    return {
-        entity_type          => _column( $row, 'entity_type' ),
-        entity_id            => _column( $row, 'entity_id' ),
-        category_id          => _column( $row, 'category_id' ),
-        author_user_id       => _column( $row, 'author_user_id' ),
-        author_username      => _column( $row, 'author_username' ),
-        author_display_name  => _column( $row, 'author_display_name' ),
-        author_profile_label =>
-          _profile_label( _column( $row, 'author_username' ) ),
-        title             => _column( $row, 'title' ),
-        body              => _column( $row, 'body' ),
-        snippet           => _column( $row, 'snippet' ),
-        snippet_html      => _column( $row, 'snippet_html' ),
-        rank_score        => _column( $row, 'rank_score' ),
-        visibility        => _column( $row, 'visibility' ),
-        source_created_at => _column( $row, 'source_created_at' ),
-        indexed_at        => _column( $row, 'indexed_at' ),
-    };
-}
-
-sub _autocomplete_hash {
-    my ($row) = @_;
-
-    return {
-        entity_type          => _column( $row, 'entity_type' ),
-        entity_id            => _column( $row, 'entity_id' ),
-        category_id          => _column( $row, 'category_id' ),
-        author_user_id       => _column( $row, 'author_user_id' ),
-        author_username      => _column( $row, 'author_username' ),
-        author_display_name  => _column( $row, 'author_display_name' ),
-        author_profile_label =>
-          _profile_label( _column( $row, 'author_username' ) ),
-        title             => _column( $row, 'title' ),
-        visibility        => _column( $row, 'visibility' ),
-        source_created_at => _column( $row, 'source_created_at' ),
-    };
-}
-
 sub _search_filters {
     my ($controller) = @_;
 
@@ -1279,55 +1015,6 @@ sub _search_filters {
     return \%filters;
 }
 
-sub _bookmark_hash {
-    my ($row) = @_;
-
-    return {
-        bookmark_id => _column( $row, 'bookmark_id' ),
-        target_type => _column( $row, 'target_type' ),
-        target_id   => _column( $row, 'target_id' ),
-        note        => _column( $row, 'note' ),
-        created_at  => _column( $row, 'created_at' ),
-    };
-}
-
-sub _feed_item_hash {
-    my ($row) = @_;
-
-    return {
-        user_id            => _column( $row, 'user_id' ),
-        item_type          => _column( $row, 'item_type' ),
-        item_id            => _column( $row, 'item_id' ),
-        created_at         => _column( $row, 'created_at' ),
-        rank_score         => _column( $row, 'rank_score' ),
-        visibility_version => _column( $row, 'visibility_version' ),
-        permission_version => _column( $row, 'permission_version' ),
-    };
-}
-
-sub _report_hash {
-    my ($row) = @_;
-
-    return {
-        report_id        => _column( $row, 'report_id' ),
-        reporter_user_id => _column( $row, 'reporter_user_id' ),
-        target_type      => _column( $row, 'target_type' ),
-        target_id        => _column( $row, 'target_id' ),
-        reason           => _column( $row, 'reason' ),
-        details          => _column( $row, 'details' ),
-        status           => _column( $row, 'status' ),
-        created_at       => _column( $row, 'created_at' ),
-    };
-}
-
-sub _related_current_body {
-    my ($row) = @_;
-
-    return if !$row || ref $row eq 'HASH' || !$row->can('current_body');
-
-    return $row->current_body;
-}
-
 sub _column {
     my ( $row, $name ) = @_;
 
@@ -1336,15 +1023,6 @@ sub _column {
 
     my $undefined;
     return $undefined;
-}
-
-sub _profile_label {
-    my ($username) = @_;
-
-    my $undefined;
-    return $undefined if !defined $username || !length $username;
-
-    return q{@} . $username;
 }
 
 sub _current_user_id {
@@ -1357,12 +1035,6 @@ sub _request_address {
     my ($controller) = @_;
 
     return $controller->tx->remote_address || 'anonymous';
-}
-
-sub _body_hash {
-    my ($body) = @_;
-
-    return sha256_hex( _trim($body) );
 }
 
 sub _trim {

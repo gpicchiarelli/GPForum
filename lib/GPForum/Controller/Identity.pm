@@ -33,8 +33,7 @@ sub register_form {
 
     return $self->render(
         template => 'identity/register',
-        values   => {},
-        errors   => {},
+        %{ $self->gp_identity_view_model->register_form },
     );
 }
 
@@ -58,8 +57,12 @@ sub register {
     return $self->render(
         template => 'identity/register',
         status   => $HTTP_BAD_REQUEST,
-        values   => $result->{values},
-        errors   => $result->{errors},
+        %{
+            $self->gp_identity_view_model->register_form(
+                errors => $result->{errors},
+                values => $result->{values},
+            )
+        },
     ) if !$result->{ok};
 
     my $stored =
@@ -68,8 +71,13 @@ sub register {
     return $self->render(
         template => 'identity/register',
         status   => $HTTP_BAD_REQUEST,
-        values   => $result->{values},
-        errors   => _non_enumerative_registration_errors( $stored->{errors} ),
+        %{
+            $self->gp_identity_view_model->register_form(
+                errors =>
+                  _non_enumerative_registration_errors( $stored->{errors} ),
+                values => $result->{values},
+            )
+        },
     ) if !$stored->{ok};
 
     return $self->render(
@@ -84,8 +92,7 @@ sub login_form {
 
     return $self->render(
         template => 'identity/login',
-        values   => {},
-        errors   => {},
+        %{ $self->gp_identity_view_model->login_form },
     );
 }
 
@@ -107,8 +114,12 @@ sub login {
     return $self->render(
         template => 'identity/login',
         status   => $HTTP_BAD_REQUEST,
-        values   => { identifier => $self->param('identifier') || q{} },
-        errors   => $errors,
+        %{
+            $self->gp_identity_view_model->login_form(
+                errors => $errors,
+                values => { identifier => $self->param('identifier') || q{} },
+            )
+        },
     ) if keys %{$errors};
 
     my $authenticated = _authenticate_login($self);
@@ -186,7 +197,8 @@ sub profile {
 
     return _profile_not_found($self) if !$profile->{ok};
 
-    return _render_profile( $self, $profile->{profile} );
+    return _render_profile( $self,
+        $self->gp_identity_view_model->profile( $profile->{profile} ) );
 }
 
 sub _render_profile {
@@ -466,9 +478,13 @@ sub _invalid_login {
     return $controller->render(
         template => 'identity/login',
         status   => $HTTP_UNAUTHORIZED,
-        values   => { identifier => $controller->param('identifier') || q{} },
-        errors   => {
-            login => 'login request could not be accepted',
+        %{
+            $controller->gp_identity_view_model->login_form(
+                errors => { login => 'login request could not be accepted', },
+                values => {
+                    identifier => $controller->param('identifier') || q{},
+                },
+            )
         },
     );
 }

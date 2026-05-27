@@ -46,14 +46,12 @@ sub inbox {
     return _render_payload(
         $self,
         'notifications/inbox',
-        {
-            notifications => [
-                map { _rendered_notification( $self, $_ ) }
-                  @{ $result->{page}{items} }
-            ],
-            next_cursor  => $result->{page}{next_cursor},
+        $self->gp_community_view_model->notifications_page(
+            locale       => $self->ui_locale,
+            page         => $result->{page},
+            renderer     => $self->gp_notification_renderer,
             unread_count => $result->{unread_count},
-        },
+        ),
         $HTTP_OK
     );
 }
@@ -107,11 +105,11 @@ sub mentions {
     return _render_payload(
         $self,
         'notifications/mentions',
-        {
-            mentions =>
-              [ map { _rendered_mention( $self, $_ ) } @{ $page->{items} } ],
-            next_cursor => $page->{next_cursor},
-        },
+        $self->gp_community_view_model->mentions_page(
+            locale   => $self->ui_locale,
+            page     => $page,
+            renderer => $self->gp_notification_renderer,
+        ),
         $HTTP_OK
     );
 }
@@ -169,108 +167,6 @@ sub _allowed {
     );
 
     return $decision->{ok};
-}
-
-sub _notification_hash {
-    my ($row) = @_;
-
-    my $notification = _related_notification($row);
-
-    return {
-        notification_id   => _column( $row,          'notification_id' ),
-        recipient_user_id => _column( $row,          'recipient_user_id' ),
-        created_at        => _column( $row,          'created_at' ),
-        read_at           => _column( $row,          'read_at' ),
-        rank_score        => _column( $row,          'rank_score' ),
-        source_type       => _column( $notification, 'source_type' ),
-        source_id         => _column( $notification, 'source_id' ),
-        notification_type => _column( $notification, 'notification_type' ),
-        payload           => _column( $notification, 'payload' ) || {},
-    };
-}
-
-sub _rendered_notification {
-    my ( $controller, $row ) = @_;
-
-    my $notification = _notification_hash($row);
-    $notification->{presentation} =
-      $controller->gp_notification_renderer->render_inbox_item(
-        $controller->ui_locale, $notification );
-
-    return $notification;
-}
-
-sub _mention_hash {
-    my ($row) = @_;
-
-    return {
-        mention_id          => _column( $row, 'mention_id' ),
-        source_type         => _column( $row, 'source_type' ),
-        source_id           => _column( $row, 'source_id' ),
-        actor_id            => _column( $row, 'actor_id' ),
-        actor_username      => _column( $row, 'actor_username' ),
-        actor_display_name  => _column( $row, 'actor_display_name' ),
-        actor_profile_label =>
-          _profile_label( _column( $row, 'actor_username' ) ),
-        mentioned_user_id  => _column( $row, 'mentioned_user_id' ),
-        mentioned_username => _column( $row, 'mentioned_username' ),
-        created_at         => _column( $row, 'created_at' ),
-    };
-}
-
-sub _rendered_mention {
-    my ( $controller, $row ) = @_;
-
-    my $mention = _mention_hash($row);
-    $mention->{presentation} =
-      $controller->gp_notification_renderer->render_mention(
-        $controller->ui_locale, $mention );
-
-    return $mention;
-}
-
-sub _related_notification {
-    my ($row) = @_;
-
-    return $row if _hash_includes_notification($row);
-    return      if _cannot_load_notification($row);
-
-    return $row->notification;
-}
-
-sub _hash_includes_notification {
-    my ($row) = @_;
-
-    return ref $row eq 'HASH' && exists $row->{notification_type};
-}
-
-sub _cannot_load_notification {
-    my ($row) = @_;
-
-    return 1 if !$row;
-    return 1 if ref $row eq 'HASH';
-    return 1 if !$row->can('notification');
-
-    return 0;
-}
-
-sub _column {
-    my ( $row, $column ) = @_;
-
-    return $row->{$column}           if ref $row eq 'HASH';
-    return $row->get_column($column) if $row && $row->can('get_column');
-
-    my $undefined;
-    return $undefined;
-}
-
-sub _profile_label {
-    my ($username) = @_;
-
-    my $undefined;
-    return $undefined if !defined $username || !length $username;
-
-    return q{@} . $username;
 }
 
 sub _current_user_id {

@@ -25,7 +25,11 @@
     <button type="submit"><%= t('search.submit') %></button>
   </form>
   % if (defined $status && $status eq 'degraded') {
-    <%= include 'components/alert', tone => 'warning', message => t('search.degraded') %>
+    <%= include 'components/status_banner',
+      tone => 'warning',
+      heading_id => 'search-status-heading',
+      component_title => t('search.title'),
+      message => t('search.degraded') %>
   % }
   % if (@{$results}) {
     <p role="status"><%= t('search.results_summary', { count => $result_count }) %></p>

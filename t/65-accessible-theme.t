@@ -95,9 +95,25 @@ like(
     qr/\[aria-invalid="true"\]/msx,
     'theme gives invalid controls a non-color-only state'
 );
+like( $css, qr/[.]visually-hidden/msx,
+    'theme exposes screen-reader-only utility for semantic labels' );
+like( $css, qr/[.]ui-status-banner/msx,
+    'theme styles shared status banner surfaces' );
+like( $css, qr/[.]ui-admin-table/msx,
+    'theme styles shared admin table surfaces' );
+like(
+    $css,
+    qr/[.]ui-notification-surface/msx,
+    'theme styles shared notification surfaces'
+);
 ok(
     index( $css, 'nav[aria-label$="pagination" i]' ) >= 0,
     'theme styles screen-reader-safe pagination navs'
+);
+like(
+    $css,
+    qr/\@media \s+ print/msx,
+    'theme includes print-safe typography and shell reduction'
 );
 
 my $test = Test::Mojo->new('GPForum');

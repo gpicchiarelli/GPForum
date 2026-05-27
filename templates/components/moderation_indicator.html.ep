@@ -1,0 +1,9 @@
+% my $namespace = stash('namespace') || 'moderation.action';
+% my $value = stash('value') || 'unknown';
+% my $label = stash('label') || ui_label($namespace, $value) || $value;
+% my $tone = stash('tone') || ui_tone($value);
+
+<span class="ui-moderation-indicator">
+  <span class="visually-hidden"><%= t('ui.moderation_indicator') %></span>
+  <%= include 'components/badge', tone => $tone, label => $label %>
+</span>

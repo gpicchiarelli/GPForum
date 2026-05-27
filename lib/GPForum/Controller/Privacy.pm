@@ -28,30 +28,20 @@ sub dashboard {
     return _unauthorized($self) if !$user_id;
 
     my $payload = eval {
-        return {
+        return $self->gp_privacy_view_model->dashboard(
+            active_holds => $self->gp_data_rights_review->active_holds_for_user(
+                $user_id, { limit => _limit_param($self) },
+            ),
             csrf_token        => $self->csrf_token,
-            deletion_requests => [
-                map { _deletion_request_hash($_) } @{
-                    $self->gp_data_rights_review->deletion_requests_for_user(
-                        $user_id, { limit => _limit_param($self) },
-                    )
-                }
-            ],
-            export_requests => [
-                map { _export_request_hash($_) } @{
-                    $self->gp_data_rights_review->export_requests_for_user(
-                        $user_id, { limit => _limit_param($self) },
-                    )
-                }
-            ],
-            active_holds => [
-                map { _retention_hold_hash($_) } @{
-                    $self->gp_data_rights_review->active_holds_for_user(
-                        $user_id, { limit => _limit_param($self) },
-                    )
-                }
-            ],
-        };
+            deletion_requests =>
+              $self->gp_data_rights_review->deletion_requests_for_user(
+                $user_id, { limit => _limit_param($self) },
+              ),
+            export_requests =>
+              $self->gp_data_rights_review->export_requests_for_user(
+                $user_id, { limit => _limit_param($self) },
+              ),
+        );
     };
 
     if ($EVAL_ERROR) {
@@ -80,8 +70,14 @@ sub request_export {
 
     return _system_failure($self) if $EVAL_ERROR;
 
-    return _privacy_action_response( $self, 'export_requested',
-        { export_request => _export_request_hash($export) } );
+    return _privacy_action_response(
+        $self,
+        'export_requested',
+        {
+            export_request =>
+              $self->gp_privacy_view_model->export_request($export)
+        }
+    );
 }
 
 sub request_deletion {
@@ -108,8 +104,14 @@ sub request_deletion {
 
     return _system_failure($self) if $EVAL_ERROR;
 
-    return _privacy_action_response( $self, 'deletion_requested',
-        { deletion_request => _deletion_request_hash($request) } );
+    return _privacy_action_response(
+        $self,
+        'deletion_requested',
+        {
+            deletion_request =>
+              $self->gp_privacy_view_model->deletion_request($request)
+        }
+    );
 }
 
 sub review {
@@ -119,37 +121,24 @@ sub review {
     return if !$user_id;
 
     my $payload = eval {
-        return {
-            active_holds => [
-                map { _retention_hold_hash($_) } @{
-                    $self->gp_data_rights_review->active_holds(
-                        { limit => _limit_param($self) },
-                    )
-                }
-            ],
+        return $self->gp_privacy_view_model->review(
+            active_holds => $self->gp_data_rights_review->active_holds(
+                { limit => _limit_param($self) },
+            ),
             csrf_token        => $self->csrf_token,
-            deletion_requests => [
-                map { _deletion_request_hash($_) } @{
-                    $self->gp_data_rights_review->pending_deletion_requests(
-                        { limit => _limit_param($self) },
-                    )
-                }
-            ],
-            erasure_jobs => [
-                map { _erasure_job_hash($_) } @{
-                    $self->gp_data_rights_review->erasure_jobs_by_status(
-                        'pending', { limit => _limit_param($self) },
-                    )
-                }
-            ],
-            export_requests => [
-                map { _export_request_hash($_) } @{
-                    $self->gp_data_rights_review->pending_export_requests(
-                        { limit => _limit_param($self) },
-                    )
-                }
-            ],
-        };
+            deletion_requests =>
+              $self->gp_data_rights_review->pending_deletion_requests(
+                { limit => _limit_param($self) },
+              ),
+            erasure_jobs =>
+              $self->gp_data_rights_review->erasure_jobs_by_status(
+                'pending', { limit => _limit_param($self) },
+              ),
+            export_requests =>
+              $self->gp_data_rights_review->pending_export_requests(
+                { limit => _limit_param($self) },
+              ),
+        );
     };
 
     if ($EVAL_ERROR) {
@@ -180,9 +169,15 @@ sub approve_deletion {
     return _not_found( $self, 'deletion request not found' ) if !$approved;
     return _conflict( $self, $approved->{error} ) if !$approved->{ok};
 
-    return _privacy_action_response( $self, 'deletion_approved',
-        { deletion_review => _deletion_review_hash($approved) },
-        'privacy_review' );
+    return _privacy_action_response(
+        $self,
+        'deletion_approved',
+        {
+            deletion_review =>
+              $self->gp_privacy_view_model->deletion_review($approved)
+        },
+        'privacy_review'
+    );
 }
 
 sub hold_deletion {
@@ -218,9 +213,15 @@ sub hold_deletion {
     return _system_failure($self)                            if $EVAL_ERROR;
     return _not_found( $self, 'deletion request not found' ) if !$held;
 
-    return _privacy_action_response( $self, 'deletion_held',
-        { deletion_review => _deletion_review_hash($held) },
-        'privacy_review' );
+    return _privacy_action_response(
+        $self,
+        'deletion_held',
+        {
+            deletion_review =>
+              $self->gp_privacy_view_model->deletion_review($held)
+        },
+        'privacy_review'
+    );
 }
 
 sub run_erasure_job {
@@ -334,78 +335,6 @@ sub _render_error {
         %{$payload},
         status => $status,
     );
-}
-
-sub _deletion_request_hash {
-    my ($row) = @_;
-
-    return {
-        completed_at        => _column( $row, 'completed_at' ),
-        created_at          => _column( $row, 'created_at' ),
-        deletion_request_id => _column( $row, 'deletion_request_id' ),
-        reason              => _column( $row, 'reason' ),
-        request_type        => _column( $row, 'request_type' ),
-        requester_user_id   => _column( $row, 'requester_user_id' ),
-        resource_id         => _column( $row, 'resource_id' ),
-        resource_type       => _column( $row, 'resource_type' ),
-        status              => _column( $row, 'status' ),
-    };
-}
-
-sub _export_request_hash {
-    my ($row) = @_;
-
-    return {
-        created_at        => _column( $row, 'created_at' ),
-        export_request_id => _column( $row, 'export_request_id' ),
-        export_type       => _column( $row, 'export_type' ),
-        finished_at       => _column( $row, 'finished_at' ),
-        format            => _column( $row, 'format' ),
-        manifest          => _column( $row, 'manifest' ) || {},
-        requester_user_id => _column( $row, 'requester_user_id' ),
-        status            => _column( $row, 'status' ),
-        subject_user_id   => _column( $row, 'subject_user_id' ),
-    };
-}
-
-sub _retention_hold_hash {
-    my ($row) = @_;
-
-    return {
-        created_at        => _column( $row, 'created_at' ),
-        created_by        => _column( $row, 'created_by' ),
-        ends_at           => _column( $row, 'ends_at' ),
-        reason            => _column( $row, 'reason' ),
-        resource_id       => _column( $row, 'resource_id' ),
-        resource_type     => _column( $row, 'resource_type' ),
-        retention_hold_id => _column( $row, 'retention_hold_id' ),
-        starts_at         => _column( $row, 'starts_at' ),
-    };
-}
-
-sub _erasure_job_hash {
-    my ($row) = @_;
-
-    return {
-        completed_at        => _column( $row, 'completed_at' ),
-        deletion_request_id => _column( $row, 'deletion_request_id' ),
-        erasure_job_id      => _column( $row, 'erasure_job_id' ),
-        last_error          => _column( $row, 'last_error' ),
-        scheduled_at        => _column( $row, 'scheduled_at' ),
-        status              => _column( $row, 'status' ),
-    };
-}
-
-sub _deletion_review_hash {
-    my ($result) = @_;
-
-    return {
-        error      => $result->{error},
-        idempotent => $result->{idempotent} || 0,
-        job        => $result->{job},
-        ok         => $result->{ok} || 0,
-        request_id => $result->{request_id},
-    };
 }
 
 sub _column {

@@ -4,8 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use English    qw(-no_match_vars);
-use Mojo::JSON qw(encode_json);
+use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
 our $VERSION = '0.001';
@@ -37,24 +36,16 @@ sub dashboard {
     my $payload = eval {
         my $console_summary = $self->gp_admin_console_reader->dashboard_summary(
             { limit => $DASHBOARD_LIMIT } );
-        return {
-            audit_rows => [
-                map { _audit_hash($_) } @{
-                    $self->gp_admin_audit_review->recent(
-                        { limit => $DASHBOARD_LIMIT }
-                    )
-                }
-            ],
+        return $self->gp_admin_view_model->dashboard(
+            audit_rows => $self->gp_admin_audit_review->recent(
+                { limit => $DASHBOARD_LIMIT }
+            ),
             csrf_token => $self->csrf_token,
-            roles      => [
-                map { _role_hash($_) } @{
-                    $self->gp_role_catalog->list_roles(
-                        { limit => $DASHBOARD_LIMIT }
-                    )
-                }
-            ],
+            roles      => $self->gp_role_catalog->list_roles(
+                { limit => $DASHBOARD_LIMIT }
+            ),
             summary => $console_summary,
-        };
+        );
     };
 
     if ($EVAL_ERROR) {
@@ -72,23 +63,15 @@ sub roles {
     return if !$user_id;
 
     my $payload = eval {
-        return {
+        return $self->gp_admin_view_model->roles_page(
             csrf_token  => $self->csrf_token,
-            permissions => [
-                map { _permission_hash($_) } @{
-                    $self->gp_role_catalog->list_permissions(
-                        { limit => _limit_param($self) }
-                    )
-                }
-            ],
-            roles => [
-                map { _role_hash($_) } @{
-                    $self->gp_role_catalog->list_roles(
-                        { limit => _limit_param($self) }
-                    )
-                }
-            ],
-        };
+            permissions => $self->gp_role_catalog->list_permissions(
+                { limit => _limit_param($self) }
+            ),
+            roles => $self->gp_role_catalog->list_roles(
+                { limit => _limit_param($self) }
+            ),
+        );
     };
 
     if ($EVAL_ERROR) {
@@ -194,11 +177,11 @@ sub user_roles {
     return _render_payload(
         $self,
         'admin/user_roles',
-        {
-            bindings   => [ map { _binding_hash($_) } @{$bindings} ],
+        $self->gp_admin_view_model->user_roles_page(
+            bindings   => $bindings,
             csrf_token => $self->csrf_token,
             user_id    => $target_user_id,
-        },
+        ),
         $HTTP_OK,
     );
 }
@@ -274,11 +257,11 @@ sub audit {
     return _render_payload(
         $self,
         'admin/audit',
-        {
-            audit_rows  => [ map { _audit_hash($_) } @{$rows} ],
+        $self->gp_admin_view_model->audit_page(
+            audit_rows  => $rows,
             target_id   => $target_id,
             target_type => $target_type,
-        },
+        ),
         $HTTP_OK,
     );
 }
@@ -412,7 +395,10 @@ sub _role_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json   => { status => $status, role => _role_hash($role) },
+            json => {
+                status => $status,
+                role   => $controller->gp_admin_view_model->role($role),
+            },
             status => $HTTP_OK,
         );
     }
@@ -427,7 +413,8 @@ sub _permission_response {
         return $controller->render(
             json => {
                 status     => $status,
-                permission => _permission_hash($permission),
+                permission =>
+                  $controller->gp_admin_view_model->permission($permission),
             },
             status => $HTTP_OK,
         );
@@ -442,8 +429,10 @@ sub _role_permission_response {
     if ( _wants_json($controller) ) {
         return $controller->render(
             json => {
-                role_permission => _role_permission_hash($role_permission),
-                status          => $status,
+                role_permission =>
+                  $controller->gp_admin_view_model->role_permission(
+                    $role_permission),
+                status => $status,
             },
             status => $HTTP_OK,
         );
@@ -458,8 +447,9 @@ sub _binding_response {
     if ( _wants_json($controller) ) {
         return $controller->render(
             json => {
-                binding => _binding_hash($binding),
-                status  => $status,
+                binding =>
+                  $controller->gp_admin_view_model->role_binding($binding),
+                status => $status,
             },
             status => $HTTP_OK,
         );
@@ -494,105 +484,6 @@ sub _render_error {
         %{$payload},
         status => $status,
     );
-}
-
-sub _role_hash {
-    my ($row) = @_;
-
-    return {
-        created_at  => _column( $row, 'created_at' ),
-        description => _column( $row, 'description' ),
-        name        => _column( $row, 'name' ),
-        role_id     => _column( $row, 'role_id' ),
-    };
-}
-
-sub _permission_hash {
-    my ($row) = @_;
-
-    return {
-        action        => _column( $row, 'action' ),
-        created_at    => _column( $row, 'created_at' ),
-        name          => _column( $row, 'name' ),
-        permission_id => _column( $row, 'permission_id' ),
-        resource_type => _column( $row, 'resource_type' ),
-    };
-}
-
-sub _role_permission_hash {
-    my ($row) = @_;
-
-    return {
-        created_at    => _column( $row, 'created_at' ),
-        permission_id => _column( $row, 'permission_id' ),
-        role_id       => _column( $row, 'role_id' ),
-    };
-}
-
-sub _binding_hash {
-    my ($result) = @_;
-
-    my $binding =
-      ref $result eq 'HASH' && exists $result->{binding}
-      ? $result->{binding}
-      : $result;
-
-    return {
-        binding_id         => _column( $binding, 'binding_id' ),
-        created_at         => _column( $binding, 'created_at' ),
-        created_by_user_id => _column( $binding, 'created_by_user_id' ),
-        resource_id        => _column( $binding, 'resource_id' ),
-        resource_type      => _column( $binding, 'resource_type' ),
-        revoked_at         => _column( $binding, 'revoked_at' ),
-        role_id            => _column( $binding, 'role_id' ),
-        space_id           => _column( $binding, 'space_id' ),
-        user_id            => _column( $binding, 'user_id' ),
-    };
-}
-
-sub _audit_hash {
-    my ($row) = @_;
-
-    return {
-        action         => _column( $row, 'action' ),
-        actor_id       => _column( $row, 'actor_id' ),
-        audit_id       => _column( $row, 'audit_id' ),
-        correlation_id => _column( $row, 'correlation_id' ),
-        created_at     => _column( $row, 'created_at' ),
-        metadata       => _column( $row, 'metadata' ),
-        metadata_items => _metadata_items( _column( $row, 'metadata' ) ),
-        target_id      => _column( $row, 'target_id' ),
-        target_type    => _column( $row, 'target_type' ),
-    };
-}
-
-sub _metadata_items {
-    my ($metadata) = @_;
-
-    return [] if ref $metadata ne 'HASH';
-
-    return [
-        map { { name => $_, value => _metadata_value( $metadata->{$_} ), } }
-        sort keys %{$metadata}
-    ];
-}
-
-sub _metadata_value {
-    my ($value) = @_;
-
-    return q{}                 if !defined $value;
-    return encode_json($value) if ref $value;
-
-    return $value;
-}
-
-sub _column {
-    my ( $row, $name ) = @_;
-
-    return $row->{$name}           if ref $row eq 'HASH';
-    return $row->get_column($name) if $row && $row->can('get_column');
-
-    return;
 }
 
 sub _required_errors {

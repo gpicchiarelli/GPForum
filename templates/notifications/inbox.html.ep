@@ -8,34 +8,24 @@
     <ol class="ui-card-list" aria-label="<%= t('notifications.inbox_label') %>">
       % for my $notification (@{$notifications}) {
         % my $presentation = $notification->{presentation} || {};
+        % my $payload = $notification->{payload} || {};
+        % my $notification_href = q{};
+        % if ($payload->{thread_id}) {
+          % $notification_href = url_for('thread', thread_id => $payload->{thread_id})->to_string;
+          % if ($payload->{post_id}) {
+            % $notification_href .= '#post-' . $payload->{post_id};
+          % }
+        % }
         <li>
-          <article aria-labelledby="notification-<%= $notification->{notification_id} %>-heading">
-            <h2 id="notification-<%= $notification->{notification_id} %>-heading">
-              <%= $presentation->{title} || t('notifications.title.notification') %>
-            </h2>
-            % if ($presentation->{summary}) {
-              <p><%= $presentation->{summary} %></p>
-            % }
-            % if ($notification->{payload}{thread_id}) {
-              <p>
-                <a href="<%= url_for('thread', thread_id => $notification->{payload}{thread_id}) %><%= $notification->{payload}{post_id} ? '#post-' . $notification->{payload}{post_id} : q{} %>">
-                  <%= $presentation->{action_label} || t('notifications.open_discussion') %>
-                </a>
-              </p>
-            % }
-            <p>
-              <%= t('notifications.received_at') %>
-              <time datetime="<%= $notification->{created_at} %>"><%= $notification->{created_at} %></time>
-            </p>
-            % if ($notification->{read_at}) {
-              <p role="status"><%= t('notifications.read') %></p>
-            % } else {
-              <form method="post" action="<%= url_for('notification_read', notification_id => $notification->{notification_id}) %>">
-                <%= csrf_field %>
-                <button type="submit"><%= t('notifications.mark_read') %></button>
-              </form>
-            % }
-          </article>
+          <%= include 'components/notification_surface',
+            heading_id => 'notification-' . $notification->{notification_id} . '-heading',
+            component_title => $presentation->{title} || t('notifications.title.notification'),
+            summary => $presentation->{summary} || q{},
+            href => $notification_href,
+            action_label => $presentation->{action_label} || t('notifications.open_discussion'),
+            created_at => $notification->{created_at},
+            read => $notification->{read_at} ? 1 : 0,
+            read_action => url_for('notification_read', notification_id => $notification->{notification_id})->to_string %>
         </li>
       % }
     </ol>

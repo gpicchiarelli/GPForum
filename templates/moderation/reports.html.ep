@@ -30,7 +30,7 @@
               <dt><%= t('common.details') %></dt>
               <dd><%= $report->{details} || t('common.none') %></dd>
               <dt><%= t('admin.status') %></dt>
-              <dd><%= ui_label('state', $report->{status}) %></dd>
+              <dd><%= include 'components/status_badge', value => $report->{status} %></dd>
               <dt><%= t('common.actor') %></dt>
               <dd><%= $report->{assigned_moderator_user_id} || t('common.unassigned') %></dd>
               <dt><%= t('common.target') %></dt>

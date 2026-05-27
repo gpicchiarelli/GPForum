@@ -46,6 +46,11 @@ route-local markup:
 - `empty_state` for no-results and not-yet-created states;
 - `badge` for status, moderation, job, and audit indicators;
 - `alert` for warning/error/success status surfaces.
+- `status_banner` for section-level degraded or blocked states;
+- `error_summary` and `field_error` for validation feedback;
+- `moderation_indicator` for review/audit state labels;
+- `admin_table` for operational data that needs column headers;
+- `notification_surface` for inbox items and mark-read controls.
 
 Every page should rely on the base layout for the document `<main>` landmark.
 Nested `<main>` elements are invalid and are blocked by `t/67-ui-system.t`.
@@ -56,3 +61,7 @@ Add new visual decisions as semantic CSS custom properties first. Prefer
 logical properties such as `padding-inline-start` and `inset-inline-start` so
 future RTL locales can reuse the layout. Avoid inline `style` attributes in
 templates; component and token changes belong in `assets/css/gpforum-ssr.css`.
+
+Print output uses the same content hierarchy but removes navigation, forms,
+pagination, and transient messages so long-form discussion pages remain readable
+on paper or PDF exports.

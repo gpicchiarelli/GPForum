@@ -11,11 +11,23 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 182;
+const my $TEST_COUNT => 204;
 
 plan tests => $TEST_COUNT;
 
 use_ok('GPForum');
+use_ok('GPForum::Bootstrap::Admin');
+use_ok('GPForum::Bootstrap::Core');
+use_ok('GPForum::Bootstrap::Discovery');
+use_ok('GPForum::Bootstrap::Forum');
+use_ok('GPForum::Bootstrap::I18N');
+use_ok('GPForum::Bootstrap::Identity');
+use_ok('GPForum::Bootstrap::Moderation');
+use_ok('GPForum::Bootstrap::Operations');
+use_ok('GPForum::Bootstrap::Privacy');
+use_ok('GPForum::Bootstrap::Routes');
+use_ok('GPForum::Bootstrap::Security');
+use_ok('GPForum::Bootstrap::UI');
 use_ok('GPForum::Config');
 use_ok('GPForum::Runtime');
 use_ok('GPForum::OS::Preflight');
@@ -39,6 +51,15 @@ use_ok('GPForum::Controller::Notifications');
 use_ok('GPForum::Controller::Operations');
 use_ok('GPForum::Controller::Privacy');
 use_ok('GPForum::Controller::Realtime');
+use_ok('GPForum::ViewModel::Admin::Presenter');
+use_ok('GPForum::ViewModel::Attachment::Presenter');
+use_ok('GPForum::ViewModel::Base');
+use_ok('GPForum::ViewModel::Community::Presenter');
+use_ok('GPForum::ViewModel::Discovery::Presenter');
+use_ok('GPForum::ViewModel::Forum::Presenter');
+use_ok('GPForum::ViewModel::Identity::Presenter');
+use_ok('GPForum::ViewModel::Moderation::Presenter');
+use_ok('GPForum::ViewModel::Privacy::Presenter');
 use_ok('GPForum::Schema');
 use_ok('GPForum::Schema::Result::SchemaVersion');
 use_ok('GPForum::Migration::Plan');
@@ -165,6 +186,7 @@ use_ok('GPForum::Service::Forum::HomePageReader');
 use_ok('GPForum::Service::Forum::PageWindow');
 use_ok('GPForum::Service::Forum::PostReader');
 use_ok('GPForum::Service::Forum::PostPosition');
+use_ok('GPForum::Service::Forum::PostingWorkflow');
 use_ok('GPForum::Service::Forum::ReadState');
 use_ok('GPForum::Service::Forum::ThreadReader');
 use_ok('GPForum::Service::Forum::ThreadDetailReader');

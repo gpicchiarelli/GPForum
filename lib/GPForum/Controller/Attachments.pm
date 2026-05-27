@@ -85,8 +85,14 @@ sub _upload_response {
         return $controller->render(
             json => {
                 status     => 'uploaded',
-                attachment =>
-                  _attachment_hash( $controller, $result->{attachment} ),
+                attachment => $controller->gp_attachment_view_model->attachment(
+                    $result->{attachment},
+                    download_url => $controller->url_for(
+                        'attachment_download',
+                        attachment_id =>
+                          _column( $result->{attachment}, 'attachment_id' ),
+                    )->to_string,
+                ),
                 link => $result->{link},
             },
             status => $HTTP_CREATED,
@@ -96,21 +102,6 @@ sub _upload_response {
     return $controller->redirect_to(
         $controller->url_for( 'thread', thread_id => $thread_id )
           ->fragment( 'post-' . $controller->param('post_id') ) );
-}
-
-sub _attachment_hash {
-    my ( $controller, $attachment ) = @_;
-
-    return {
-        attachment_id => $attachment->{attachment_id},
-        byte_size     => $attachment->{byte_size},
-        download_url  => $controller->url_for( 'attachment_download',
-            attachment_id => $attachment->{attachment_id}, )->to_string,
-        media_type        => $attachment->{media_type},
-        original_filename => $attachment->{original_filename},
-        scan_status       => $attachment->{scan_status},
-        state             => $attachment->{state},
-    };
 }
 
 sub _write_user_id {

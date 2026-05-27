@@ -34,8 +34,34 @@ localizable presentation text.
 | `components/alert` | Notice, warning, and error status surfaces. |
 | `components/badge` | Status/moderation/admin indicators. |
 | `components/status_badge` | Localized status badge backed by presenter helpers. |
+| `components/error_summary` | Form-level alert summary with links to invalid fields. |
+| `components/field_error` | Field-level validation message connected by `aria-describedby`. |
+| `components/status_banner` | Section-level warning/error/notice surface. |
+| `components/moderation_indicator` | Presentation-only moderation state badge. |
+| `components/admin_table` | Scroll-safe admin table primitive with labelled columns. |
+| `components/notification_surface` | Inbox notification card with read-state action support. |
+| `components/confirmation` | SSR confirmation copy for reversible or high-impact actions. |
+| `components/card` | Generic card shell for simple repeated records. |
 | `components/loading` | Hidden progressive-enhancement loading state. |
 | `components/dialog` | SSR-safe accessible dialog shell for future enhancement. |
+
+## Semantic Template Architecture
+
+Page templates should describe product regions and pass semantic payloads to
+components. Avoid route-local copies of:
+
+- form error summaries and field error paragraphs;
+- status/warning banners;
+- moderation state labels;
+- notification card structure;
+- admin table scaffolding;
+- pagination link lists.
+
+Controllers and services should not emit HTML-specific fragments except for
+already-sanitized user content boundaries. View models shape data for templates;
+components shape reusable SSR HTML; `gpforum-ssr.css` owns visual decisions.
+When a page needs a new visual pattern, add a component partial and tokenized
+CSS rule before adding one-off route markup.
 
 ## Tokens
 
@@ -60,13 +86,18 @@ route-specific styling unless a component cannot express the UI.
   labelled `<nav>` contract.
 - Statuses use text plus badge styling; color alone is not the only signal.
 - Form errors use alert summaries and field-level `aria-describedby`.
+- Confirmation and moderation actions include text labels, not color-only
+  state.
 - Focus states remain visible via `:focus-visible`.
 - Motion-sensitive behavior must respect `prefers-reduced-motion`.
+- Tables used for admin/status data are labelled and wrapped for small
+  screens.
 
 ## Verification
 
 - `t/65-accessible-theme.t` enforces contrast, focus, direction, and token
-  contracts.
+  contracts, including print, screen-reader-only text, and shared status/table
+  surfaces.
 - `t/67-ui-system.t` verifies component partials, no inline CSS proliferation,
   single-main HTML structure, localized admin rendering, and component presence
   on product routes.

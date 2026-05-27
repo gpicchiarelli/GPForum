@@ -33,11 +33,19 @@
     <p><%= t('admin.query_budget_drift') %>: <%= include 'components/status_badge', value => $admin_status->{query_budget_drift}{status} || 'unknown' %></p>
     % my $endpoints = $admin_status->{query_budgets}{endpoints} || {};
     % if (keys %{$endpoints}) {
-      <ol aria-label="<%= t('admin.query_budget_list') %>">
-        % for my $endpoint (sort keys %{$endpoints}) {
-          <li><%= $endpoint %>: <%= t('admin.queries', { count => $endpoints->{$endpoint}{max_queries} }) %></li>
-        % }
-      </ol>
+      % my @query_budget_rows = map {
+      %   {
+      %     endpoint => $_,
+      %     budget => t('admin.queries', { count => $endpoints->{$_}{max_queries} }),
+      %   }
+      % } sort keys %{$endpoints};
+      <%= include 'components/admin_table',
+        label => t('admin.query_budget_list'),
+        columns => [
+          { key => 'endpoint', label => t('admin.endpoint') },
+          { key => 'budget', label => t('admin.query_budget') },
+        ],
+        rows => \@query_budget_rows %>
     % } else {
       <%= include 'components/empty_state', heading_id => 'admin-query-budget-empty-heading', component_title => t('admin.no_query_budget') %>
     % }

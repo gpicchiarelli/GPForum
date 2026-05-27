@@ -36,12 +36,12 @@ sub sitemap {
     my @entries = (
         @{
             $builder->category_entries(
-                [ map { _resource_hash($_) } @{$categories} ]
+                $self->gp_discovery_view_model->resources($categories)
             )
         },
         @{
             $builder->thread_entries(
-                [ map { _resource_hash($_) } @{ $threads->{items} } ]
+                $self->gp_discovery_view_model->resources( $threads->{items} )
             )
         },
     );
@@ -62,7 +62,7 @@ sub feed {
         { limit => $self->param('limit') || $DEFAULT_FEED_LIMIT } );
     my $items =
       $self->gp_feed_builder->thread_items(
-        [ map { _resource_hash($_) } @{ $page->{items} } ] );
+        $self->gp_discovery_view_model->resources( $page->{items} ) );
     my $updated =
       @{$items} ? $items->[0]{updated} : $self->gp_clock->now_iso8601;
     my $url = $self->gp_canonical_url->base_url . '/feed.atom';
@@ -82,14 +82,6 @@ sub feed {
         format => 'atom',
         status => $HTTP_OK,
     );
-}
-
-sub _resource_hash {
-    my ($row) = @_;
-
-    return $row if ref $row eq 'HASH';
-
-    return { map { $_ => $row->get_column($_) } $row->columns };
 }
 
 1;

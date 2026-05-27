@@ -54,11 +54,11 @@ sub reports {
     return _render_payload(
         $self,
         'moderation/reports',
-        {
+        $self->gp_moderation_view_model->reports_page(
             csrf_token => $self->csrf_token,
-            reports    => [ map { _report_hash($_) } @{$rows} ],
+            reports    => $rows,
             status     => $status,
-        },
+        ),
         $HTTP_OK,
     );
 }
@@ -89,14 +89,12 @@ sub actions {
     return _render_payload(
         $self,
         'moderation/actions',
-        {
-            actions =>
-              [ map { _moderation_action_hash($_) } @{ $page->{items} } ],
+        $self->gp_moderation_view_model->actions_page(
             csrf_token  => $self->csrf_token,
-            next_cursor => $page->{next_cursor},
+            page        => $page,
             target_id   => _optional_param( $self, 'target_id' ),
             target_type => _optional_param( $self, 'target_type' ),
-        },
+        ),
         $HTTP_OK,
     );
 }
@@ -128,13 +126,12 @@ sub suspensions {
     return _render_payload(
         $self,
         'moderation/suspensions',
-        {
-            csrf_token  => $self->csrf_token,
-            next_cursor => $page->{next_cursor},
-            status      => $status,
-            suspensions => [ map { _suspension_hash($_) } @{ $page->{items} } ],
-            user_id     => _optional_param( $self, 'user_id' ),
-        },
+        $self->gp_moderation_view_model->suspensions_page(
+            csrf_token => $self->csrf_token,
+            page       => $page,
+            status     => $status,
+            user_id    => _optional_param( $self, 'user_id' ),
+        ),
         $HTTP_OK,
     );
 }
@@ -430,7 +427,9 @@ sub _moderation_action_response {
         return $controller->render(
             json => {
                 status => $status,
-                action => _moderation_action_hash($action),
+                action =>
+                  $controller->gp_moderation_view_model->moderation_action(
+                    $action),
             },
             status => $HTTP_OK,
         );
@@ -446,7 +445,9 @@ sub _suspension_response {
         return $controller->render(
             json => {
                 status     => $status,
-                suspension => _suspension_hash($suspension),
+                suspension =>
+                  $controller->gp_moderation_view_model->suspension(
+                    $suspension),
             },
             status => $HTTP_OK,
         );
@@ -462,7 +463,8 @@ sub _action_response {
         return $controller->render(
             json => {
                 status => $status,
-                report => _report_hash($report),
+                report =>
+                  $controller->gp_moderation_view_model->report($report),
             },
             status => $HTTP_OK,
         );
@@ -503,76 +505,6 @@ sub _render_error {
         %{$payload},
         status => $status,
     );
-}
-
-sub _suspension_hash {
-    my ($result) = @_;
-
-    my $suspension =
-      ref $result eq 'HASH' && exists $result->{suspension}
-      ? $result->{suspension}
-      : $result;
-
-    return {
-        suspension_id => _column( $suspension, 'suspension_id' ),
-        user_id       => _column( $suspension, 'user_id' ),
-        actor_user_id => _column( $suspension, 'actor_user_id' ),
-        reason        => _column( $suspension, 'reason' ),
-        valid_from    => _column( $suspension, 'valid_from' ),
-        valid_to      => _column( $suspension, 'valid_to' ),
-        revoked_at    => _column( $suspension, 'revoked_at' ),
-        metadata      => _column( $suspension, 'metadata' ),
-    };
-}
-
-sub _moderation_action_hash {
-    my ($result) = @_;
-
-    my $action =
-      ref $result eq 'HASH' && exists $result->{action}
-      ? $result->{action}
-      : $result;
-
-    return {
-        moderation_action_id => _column( $action, 'moderation_action_id' ),
-        actor_user_id        => _column( $action, 'actor_user_id' ),
-        action_type          => _column( $action, 'action_type' ),
-        target_type          => _column( $action, 'target_type' ),
-        target_id            => _column( $action, 'target_id' ),
-        reason               => _column( $action, 'reason' ),
-        metadata             => _column( $action, 'metadata' ),
-        created_at           => _column( $action, 'created_at' ),
-        reversed_at          => _column( $action, 'reversed_at' ),
-        reversed_by_user_id  => _column( $action, 'reversed_by_user_id' ),
-    };
-}
-
-sub _report_hash {
-    my ($row) = @_;
-
-    return {
-        assigned_moderator_user_id =>
-          _column( $row, 'assigned_moderator_user_id' ),
-        created_at       => _column( $row, 'created_at' ),
-        details          => _column( $row, 'details' ),
-        reason           => _column( $row, 'reason' ),
-        report_id        => _column( $row, 'report_id' ),
-        reporter_user_id => _column( $row, 'reporter_user_id' ),
-        resolution       => _column( $row, 'resolution' ),
-        resolved_at      => _column( $row, 'resolved_at' ),
-        status           => _column( $row, 'status' ),
-        target_id        => _column( $row, 'target_id' ),
-        target_type      => _column( $row, 'target_type' ),
-    };
-}
-
-sub _column {
-    my ( $row, $name ) = @_;
-
-    return $row->{$name}           if ref $row eq 'HASH';
-    return $row->get_column($name) if $row && $row->can('get_column');
-
-    return;
 }
 
 sub _status_param {

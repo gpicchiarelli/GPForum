@@ -20,8 +20,9 @@ our $VERSION = '0.001';
 const my $HTTP_OK => 200;
 
 my @component_names = qw(
-  alert badge dialog empty_state loading page_header pagination section_header
-  status_badge
+  admin_table alert badge card confirmation dialog empty_state error_summary
+  field_error loading moderation_indicator notification_surface page_header
+  pagination section_header status_badge status_banner
 );
 for my $component_name (@component_names) {
     ok( -e path( 'templates/components', "$component_name.html.ep" ),
@@ -58,7 +59,9 @@ my $css = path('assets/css/gpforum-ssr.css')->slurp;
 for my $selector (
     qw(
     ui-page-header ui-section-header ui-card-list ui-empty-state ui-badge
-    ui-alert ui-dialog ui-pagination
+    ui-alert ui-dialog ui-pagination ui-status-banner ui-confirmation
+    ui-moderation-indicator ui-admin-table ui-notification-surface
+    form-error-summary field-error visually-hidden
     )
   )
 {
@@ -74,6 +77,36 @@ like(
 );
 unlike( _all_template_source(), qr/\sstyle=/msx,
     'SSR templates do not introduce inline CSS' );
+like(
+    path('templates/identity/login.html.ep')->slurp,
+    qr/components\/error_summary/msx,
+    'login uses shared form error summary'
+);
+like(
+    path('templates/forum/new_thread.html.ep')->slurp,
+    qr/components\/field_error/msx,
+    'thread creation uses shared field errors'
+);
+like(
+    path('templates/notifications/inbox.html.ep')->slurp,
+    qr/components\/notification_surface/msx,
+    'notification inbox uses shared notification surface'
+);
+like(
+    path('templates/moderation/actions.html.ep')->slurp,
+    qr/components\/moderation_indicator/msx,
+    'moderation action history uses shared moderation indicator'
+);
+like(
+    path('templates/admin/status.html.ep')->slurp,
+    qr/components\/admin_table/msx,
+    'admin status uses shared table primitive'
+);
+like(
+    path('templates/forum/search.html.ep')->slurp,
+    qr/components\/status_banner/msx,
+    'search degraded state uses shared status banner'
+);
 
 my $forum = Test::Mojo->new('GPForum');
 _install_forum_fakes($forum);
@@ -130,6 +163,8 @@ $admin->element_exists('ol.ui-card-list[aria-label="Elenco outbox admin"]');
 $admin->get_ok('/admin/status')->status_is($HTTP_OK);
 $admin->element_exists('.ui-badge.ui-badge--success');
 $admin->element_exists('ol[aria-label="Admin readiness checks"]');
+$admin->element_exists(
+    'table.ui-admin-table[aria-label="Admin query budget list"]');
 
 $admin->get_ok('/admin/roles')->status_is($HTTP_OK);
 $admin->element_exists('ol.ui-card-list[aria-label="Admin role list"]');

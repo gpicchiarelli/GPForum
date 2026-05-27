@@ -1,0 +1,368 @@
+package main;
+
+use strict;
+use warnings;
+
+use Scalar::Util qw(blessed);
+use Test::More;
+
+use lib 'lib';
+
+use GPForum::Service::I18N;
+use GPForum::Service::Notification::Renderer;
+use GPForum::ViewModel::Admin::Presenter;
+use GPForum::ViewModel::Attachment::Presenter;
+use GPForum::ViewModel::Community::Presenter;
+use GPForum::ViewModel::Discovery::Presenter;
+use GPForum::ViewModel::Forum::Presenter;
+use GPForum::ViewModel::Identity::Presenter;
+use GPForum::ViewModel::Moderation::Presenter;
+use GPForum::ViewModel::Privacy::Presenter;
+
+our $VERSION = '0.001';
+
+my $forum = GPForum::ViewModel::Forum::Presenter->new;
+
+my $category = $forum->category(
+    _row(
+        {
+            category_id => 'category-1',
+            description => 'General discussion',
+            position    => 1,
+            slug        => 'general',
+            title       => 'General',
+            visibility  => 'public',
+        }
+    )
+);
+is_deeply(
+    $category,
+    {
+        category_id => 'category-1',
+        description => 'General discussion',
+        position    => 1,
+        slug        => 'general',
+        title       => 'General',
+        ui          => { heading_id => 'category-category-1-heading', },
+        visibility  => 'public',
+    },
+'forum category presenter keeps existing fields and adds semantic UI metadata'
+);
+
+my $post = $forum->post(
+    _row(
+        {
+            author_display_name => 'Giacomo',
+            author_user_id      => 'user-1',
+            author_username     => 'giacomo',
+            moderation_state    => 'visible',
+            position            => 2,
+            post_id             => 'post-2',
+            thread_id           => 'thread-1',
+            visibility          => 'public',
+        },
+        current_body => _row( { body_rendered_safe => '<p>Rendered</p>' } ),
+    )
+);
+is( $post->{body}, '<p>Rendered</p>',
+    'forum post presenter reads safe rendered body from relation' );
+is( $post->{author_profile_label},
+    '@giacomo', 'forum post presenter prepares public profile label' );
+is( $post->{ui}{permalink},
+    'post-post-2', 'forum post presenter prepares permalink metadata' );
+
+my $autocomplete = $forum->autocomplete_suggestion(
+    {
+        entity_id       => 'thread-1',
+        entity_type     => 'thread',
+        title           => 'Welcome',
+        body            => 'body must not be serialized in autocomplete',
+        visibility      => 'public',
+        author_username => 'giacomo',
+    }
+);
+ok( !exists $autocomplete->{body},
+    'autocomplete presenter omits body from serialized suggestions' );
+is( $autocomplete->{author_profile_label},
+    '@giacomo', 'autocomplete presenter keeps author profile label' );
+
+my $reading = $forum->reading_summary(
+    posts      => [ { post_id => 'post-1' } ],
+    read_state => GPForum::Test::ViewModelReadState->new,
+    thread_id  => 'thread-1',
+    user_id    => 'user-1',
+);
+is( $reading->{first_unread_anchor},
+    'post-post-1', 'reading summary is delegated through the view model' );
+is_deeply(
+    $forum->reading_summary(
+        posts      => [],
+        read_state => GPForum::Test::ViewModelReadState->new,
+        thread_id  => 'thread-1',
+    ),
+    { authenticated => 0 },
+    'reading summary remains anonymous-safe without a user'
+);
+
+my $engagement = $forum->engagement_summary(
+    bookmark_store     => GPForum::Test::ViewModelEngagementStore->new,
+    subscription_store => GPForum::Test::ViewModelEngagementStore->new,
+    thread             => { thread_id => 'thread-1' },
+    user_id            => 'user-1',
+);
+ok( $engagement->{authenticated},
+    'engagement summary marks authenticated user' );
+ok(
+    $engagement->{bookmark}{bookmarked},
+    'engagement summary shapes bookmark status'
+);
+
+my $admin = GPForum::ViewModel::Admin::Presenter->new;
+my $audit = $admin->audit_entry(
+    {
+        action         => 'admin.role_bound',
+        actor_id       => 'admin-1',
+        audit_id       => 'audit-1',
+        correlation_id => 'corr-1',
+        created_at     => '2026-05-23T12:00:00Z',
+        metadata       => { reason => 'least privilege', tags => ['rbac'] },
+        target_id      => 'role-1',
+        target_type    => 'role',
+    }
+);
+is( $audit->{metadata_items}[0]{name},
+    'reason', 'admin audit metadata is sorted for stable SSR rendering' );
+is( $audit->{metadata_items}[1]{value},
+    '["rbac"]', 'admin audit metadata values are JSON encoded consistently' );
+
+my $moderation = GPForum::ViewModel::Moderation::Presenter->new;
+my $action     = $moderation->moderation_action(
+    {
+        action => {
+            action_type          => 'post.hidden',
+            actor_user_id        => 'moderator-1',
+            moderation_action_id => 'action-1',
+            reason               => 'spam',
+            target_id            => 'post-1',
+            target_type          => 'post',
+        },
+    }
+);
+is( $action->{ui}{heading_id},
+    'action-action-1-heading', 'moderation action exposes heading metadata' );
+ok( $action->{ui}{reversible},
+    'moderation action marks unreversed actions as reversible for templates' );
+
+my $community = GPForum::ViewModel::Community::Presenter->new;
+my $renderer  = GPForum::Service::Notification::Renderer->new(
+    i18n => GPForum::Service::I18N->new );
+my $notification = $community->notification(
+    {
+        created_at        => '2026-05-23T12:00:00Z',
+        notification_id   => 'notification-1',
+        notification_type => 'mention',
+        payload           => { thread_id => 'thread-1' },
+        recipient_user_id => 'user-1',
+        source_id         => 'post-1',
+        source_type       => 'post',
+    },
+    locale   => 'it',
+    renderer => $renderer,
+);
+is(
+    $notification->{presentation}{title},
+    'Sei stato menzionato',
+    'notification presenter renders locale-aware title'
+);
+is(
+    $notification->{presentation}{email}{subject},
+    'Sei stato menzionato su GPForum',
+    'notification presenter renders locale-aware email subject'
+);
+
+my $mention = $community->mention(
+    {
+        actor_display_name => 'Reply Author',
+        actor_id           => 'user-2',
+        actor_username     => 'reply_author',
+        created_at         => '2026-05-23T12:00:00Z',
+        mention_id         => 'mention-1',
+        mentioned_user_id  => 'user-1',
+        mentioned_username => 'giacomo',
+        source_id          => 'post-1',
+        source_type        => 'post',
+    },
+    locale   => 'en',
+    renderer => $renderer,
+);
+is( $mention->{actor_profile_label},
+    '@reply_author', 'mention presenter prepares actor profile label' );
+is( $mention->{presentation}{by_label},
+    'Mention by', 'mention presenter renders locale-aware presentation' );
+
+my $identity = GPForum::ViewModel::Identity::Presenter->new;
+my $login    = $identity->login_form(
+    errors => { identifier => 'identifier is required' },
+    values => { identifier => q{} },
+);
+is( $login->{ui}{described_by},
+    'login-error-summary', 'identity presenter prepares form error metadata' );
+
+my $profile = $identity->profile(
+    {
+        counts  => {},
+        replies => { items => [] },
+        threads => { items => [] },
+        trust   => {},
+        user    => { username => 'giacomo', display_name => 'Giacomo' },
+    }
+);
+is( $profile->{user}{profile_label},
+    '@giacomo', 'identity presenter fills safe public profile label' );
+_assert_no_blessed_values( $profile,
+    'identity profile view model is plain data' );
+_assert_no_blessed_values( $post, 'forum post view model is plain data' );
+
+my $privacy = GPForum::ViewModel::Privacy::Presenter->new;
+my $export  = $privacy->export_request(
+    {
+        export_request_id => 'export-1',
+        manifest          => { counts => { posts => 2 } },
+        status            => 'completed',
+        subject_user_id   => 'user-1',
+    }
+);
+is( $export->{manifest}{counts}{posts},
+    2, 'privacy presenter keeps export manifest serialization stable' );
+
+my $attachment = GPForum::ViewModel::Attachment::Presenter->new->attachment(
+    {
+        attachment_id     => 'attachment-1',
+        byte_size         => 512,
+        media_type        => 'text/plain',
+        original_filename => 'note.txt',
+        scan_status       => 'clean',
+        state             => 'ready',
+    },
+    download_url => '/attachments/attachment-1/download',
+);
+is(
+    $attachment->{download_url},
+    '/attachments/attachment-1/download',
+    'attachment presenter keeps download URL presentation outside controller'
+);
+
+my $resource = GPForum::ViewModel::Discovery::Presenter->new->resource(
+    GPForum::Test::ViewModelDiscoveryRow->new );
+is( $resource->{slug}, 'welcome',
+    'discovery presenter serializes resource rows for sitemap/feed' );
+
+done_testing();
+
+sub _row {
+    return GPForum::Test::ViewModelRow->new(@_);
+}
+
+sub _assert_no_blessed_values {
+    my ( $value, $message ) = @_;
+
+    my $found = _find_blessed($value);
+    ok( !$found, $message );
+
+    return;
+}
+
+sub _find_blessed {
+    my ($value) = @_;
+
+    return 1 if blessed($value);
+    if ( ref $value eq 'HASH' ) {
+        for my $child ( values %{$value} ) {
+            return 1 if _find_blessed($child);
+        }
+    }
+    if ( ref $value eq 'ARRAY' ) {
+        for my $child ( @{$value} ) {
+            return 1 if _find_blessed($child);
+        }
+    }
+
+    return 0;
+}
+
+package GPForum::Test::ViewModelRow;
+
+sub new {
+    my ( $class, $columns, %related ) = @_;
+
+    return bless { columns => $columns || {}, related => \%related }, $class;
+}
+
+sub get_column {
+    my ( $self, $name ) = @_;
+
+    return $self->{columns}{$name};
+}
+
+sub current_body {
+    my ($self) = @_;
+
+    return $self->{related}{current_body};
+}
+
+package GPForum::Test::ViewModelReadState;
+
+sub new {
+    my ($class) = @_;
+
+    return bless {}, $class;
+}
+
+sub summary_for_page {
+    return {
+        authenticated         => 1,
+        first_unread_anchor   => 'post-post-1',
+        last_visible_position => 2,
+    };
+}
+
+package GPForum::Test::ViewModelEngagementStore;
+
+sub new {
+    my ($class) = @_;
+
+    return bless {}, $class;
+}
+
+sub status_for_user_target {
+    my ( undef, undef, $target_type ) = @_;
+
+    return { bookmarked => 1 } if $target_type eq 'thread';
+
+    return { muted => 0, subscribed => 1 };
+}
+
+package GPForum::Test::ViewModelDiscoveryRow;
+
+sub new {
+    my ($class) = @_;
+
+    return bless {
+        category_id => 'category-1',
+        slug        => 'welcome',
+        thread_id   => 'thread-1',
+        title       => 'Welcome',
+    }, $class;
+}
+
+sub columns {
+    return qw(category_id slug thread_id title);
+}
+
+sub get_column {
+    my ( $self, $name ) = @_;
+
+    return $self->{$name};
+}
+
+1;

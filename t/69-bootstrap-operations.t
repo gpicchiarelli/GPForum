@@ -63,6 +63,28 @@ is_deeply( $application->config('gpforum_runtime_enforcement'),
 ok( $application->config('hypnotoad')->{workers},
     'operations bootstrap registers Hypnotoad runtime config' );
 
+$application->helper(
+    gp_schema => sub {
+        return GPForum::Test::BootstrapOperationsSchema->new;
+    }
+);
+$application->helper(
+    gp_realtime_hub => sub {
+        return GPForum::Test::BootstrapOperationsRealtimeHub->new;
+    }
+);
+
+isa_ok(
+    $controller->gp_metrics_snapshot,
+    'GPForum::Service::Operations::MetricsSnapshot',
+    'operations bootstrap constructs metrics snapshot helper'
+);
+isa_ok(
+    $controller->gp_readiness,
+    'GPForum::Service::Operations::Readiness',
+    'operations bootstrap constructs readiness helper'
+);
+
 $application->routes->get('/__operations/thread')->to(
     cb => sub {
         my ($controller) = @_;
@@ -86,5 +108,21 @@ is( $controller->gp_db_query_stats->snapshot->{requests_observed},
     1, 'operations bootstrap observes request query stats' );
 
 done_testing();
+
+package GPForum::Test::BootstrapOperationsSchema;
+
+sub new {
+    my ($class) = @_;
+
+    return bless {}, $class;
+}
+
+package GPForum::Test::BootstrapOperationsRealtimeHub;
+
+sub new {
+    my ($class) = @_;
+
+    return bless {}, $class;
+}
 
 1;
