@@ -27,6 +27,9 @@ Current bootstrap modules:
 - `GPForum::Bootstrap::Operations` registers runtime/config helpers, schema
   wiring, query statistics, local cache, security telemetry, rate limiting,
   metrics, readiness, logging, and benchmark query-budget headers.
+- `GPForum::Bootstrap::Identity` registers password, session token,
+  registration, identity store, identity audit, profile reader helpers, and the
+  server-side session validation guard.
 
 The bootstrap modules do not own controller behavior or business workflows.
 They only install application-level collaborators, hooks, and presentation or
