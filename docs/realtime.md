@@ -11,12 +11,39 @@ Domain event
   -> outbox dispatcher / domain event transport
   -> PostgreSQL NOTIFY gpforum_realtime_events
   -> GPForum::Service::Realtime::PgListener
+  -> GPForum::Service::Realtime::ListenerSupervisor
   -> GPForum::Service::Realtime::Hub
   -> authenticated websocket subscribers
 ```
 
 If LISTEN/NOTIFY is unavailable, writes still succeed, the listener/notifier
 report degraded transport state, and clients continue to use polling fallback.
+
+## Listener Lifecycle
+
+The listener is supervised inside each Mojolicious web process. This is
+intentional: websocket connections live in web workers, so a standalone listener
+process without those connections could observe notifications but could not
+deliver websocket fanout.
+
+Enable the lifecycle hook with:
+
+```sh
+GPFORUM_REALTIME_LISTENER_ENABLED=1
+```
+
+Optional tuning:
+
+```sh
+GPFORUM_REALTIME_LISTENER_POLL_INTERVAL_SECONDS=1
+GPFORUM_REALTIME_LISTENER_RECONNECT_BACKOFF_SECONDS=5
+GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS=30
+```
+
+The bootstrap hook starts the supervisor lazily on request dispatch and then
+keeps polling through the process IOLoop. Starts are idempotent, reconnects use
+a bounded backoff timer, and the supervisor registers IOLoop finish cleanup so
+shutdown removes timers before unlistening.
 
 ## Websocket Contract
 
@@ -91,6 +118,8 @@ objects. Evolution is additive: new consumers must ignore unknown fields.
 
 `PgNotifier` and `PgListener` expose snapshots for notify failures, degraded
 transport, invalid payloads, duplicates, reconnect count, and delivered events.
+`ListenerSupervisor` exposes enabled/running state, scheduled polls, poll
+failures, reconnects and heartbeats.
 
 ## Security Model
 
@@ -117,6 +146,7 @@ message bodies or private resource contents.
 | --- | --- |
 | NOTIFY unavailable | notifier returns `degraded`, outbox dispatch can continue, polling remains source of truth |
 | LISTEN unavailable | listener status becomes `degraded`; websocket hub still handles local broadcasts |
+| supervisor start failure | reconnect is scheduled after bounded backoff; SSR and polling continue |
 | malformed NOTIFY payload | listener rejects payload and increments invalid counters |
 | duplicate NOTIFY payload | listener suppresses recent duplicate event ids with bounded best-effort memory |
 | websocket send failure | hub records failed delivery and does not affect canonical writes |
@@ -124,8 +154,8 @@ message bodies or private resource contents.
 
 ## Scaling Guidance
 
-Websocket state is process-local and disposable. PostgreSQL LISTEN/NOTIFY gives
-fanout between processes, while all durable state remains in PostgreSQL tables.
-Do not use websocket presence, subscriptions, or recent-event caches as
-authoritative product state.
-
+Websocket state is process-local and disposable. Each web process runs its own
+listener supervisor when enabled, and PostgreSQL LISTEN/NOTIFY gives fanout
+between processes while all durable state remains in PostgreSQL tables. Do not
+use websocket presence, subscriptions, or recent-event caches as authoritative
+product state.

@@ -3,6 +3,8 @@ package GPForum::Bootstrap::Operations;
 use strict;
 use warnings;
 
+use English qw(-no_match_vars);
+
 use GPForum::Log;
 use GPForum::Schema;
 use GPForum::Service::Operations::DbQueryStats;
@@ -119,15 +121,20 @@ sub _register_operational_helpers {
         gp_metrics_snapshot => sub {
             my ($controller) = @_;
 
+            my $realtime_supervisor =
+              _optional_controller_helper( $controller,
+                'gp_realtime_listener_supervisor' );
+
             return GPForum::Service::Operations::MetricsSnapshot->new(
-                runtime            => $runtime,
-                runtime_policy     => $runtime_policy,
-                schema             => $controller->gp_schema,
-                db_query_stats     => $controller->gp_db_query_stats,
-                realtime_hub       => $controller->gp_realtime_hub,
-                rate_limiter       => $controller->gp_rate_limiter,
-                security_telemetry => $controller->gp_security_telemetry,
-                local_caches       => [ $controller->gp_local_cache ],
+                runtime             => $runtime,
+                runtime_policy      => $runtime_policy,
+                schema              => $controller->gp_schema,
+                db_query_stats      => $controller->gp_db_query_stats,
+                realtime_hub        => $controller->gp_realtime_hub,
+                realtime_supervisor => $realtime_supervisor,
+                rate_limiter        => $controller->gp_rate_limiter,
+                security_telemetry  => $controller->gp_security_telemetry,
+                local_caches        => [ $controller->gp_local_cache ],
             );
         }
     );
@@ -144,6 +151,24 @@ sub _register_operational_helpers {
             );
         }
     );
+
+    return;
+}
+
+sub _optional_controller_helper {
+    my ( $controller, $helper ) = @_;
+
+    my $value;
+    my $ok = eval {
+        $value = $controller->$helper;
+        return 1;
+    };
+    return $value if $ok;
+
+    my $error = $EVAL_ERROR;
+    die $error
+      if $error !~
+      /Can't [ ] locate [ ] object [ ] method [ ] "\Q$helper\E"/msx;
 
     return;
 }

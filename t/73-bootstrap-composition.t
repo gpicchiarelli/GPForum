@@ -196,6 +196,7 @@ sub _helper_names {
       gp_privacy_view_model
       gp_rate_limiter
       gp_readiness
+      gp_realtime_listener_supervisor
       gp_realtime_pg_listener
       gp_realtime_pg_notifier
       gp_realtime_hub

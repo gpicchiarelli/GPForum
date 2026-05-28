@@ -22,6 +22,7 @@ has local_caches        => sub { return []; };
 has schema              => undef;
 has rate_limiter        => undef;
 has realtime_hub        => undef;
+has realtime_supervisor => undef;
 has security_telemetry  => undef;
 has projection_trackers => sub { return []; };
 has query_budget =>
@@ -49,6 +50,7 @@ sub collect {
         runtime_enforcement => $self->_runtime_enforcement,
         local_caches        => $self->_local_caches,
         realtime            => $self->_realtime,
+        realtime_listener   => $self->_realtime_listener,
         rate_limits         => $self->_rate_limits,
         security            => $self->_security,
         projections         => $self->_projections,
@@ -130,6 +132,14 @@ sub _realtime {
     return {} if !$self->realtime_hub;
 
     return $self->realtime_hub->snapshot;
+}
+
+sub _realtime_listener {
+    my ($self) = @_;
+
+    return {} if !$self->realtime_supervisor;
+
+    return $self->realtime_supervisor->snapshot;
 }
 
 sub _local_caches {

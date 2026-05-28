@@ -7,6 +7,7 @@ use GPForum::Service::Clock;
 use GPForum::Service::Id;
 use GPForum::Service::Realtime::ChannelAuthorizer;
 use GPForum::Service::Realtime::Hub;
+use GPForum::Service::Realtime::ListenerSupervisor;
 use GPForum::Service::Realtime::PgListener;
 use GPForum::Service::Realtime::PgNotifier;
 use GPForum::Service::Realtime::SubscriptionPolicy;
@@ -73,6 +74,28 @@ sub register {
         }
     );
 
+    my $realtime_listener_supervisor;
+    $application->helper(
+        gp_realtime_listener_supervisor => sub {
+            my ($controller) = @_;
+
+            $realtime_listener_supervisor ||=
+              GPForum::Service::Realtime::ListenerSupervisor->new(
+                enabled => $config->realtime_listener_enabled,
+                heartbeat_interval_seconds =>
+                  $config->realtime_listener_heartbeat_interval_seconds,
+                listener              => $controller->gp_realtime_pg_listener,
+                logger                => $controller->app->log,
+                poll_interval_seconds =>
+                  $config->realtime_listener_poll_interval_seconds,
+                reconnect_backoff_seconds =>
+                  $config->realtime_listener_reconnect_backoff_seconds,
+              );
+            return $realtime_listener_supervisor;
+        }
+    );
+    _configure_realtime_listener_lifecycle( $application, $config );
+
     return;
 }
 
@@ -83,6 +106,22 @@ sub _configure_static_assets {
     push @{$paths},
       $application->home->rel_file('assets/css')->to_string,
       $application->home->rel_file('assets/img')->to_string;
+
+    return;
+}
+
+sub _configure_realtime_listener_lifecycle {
+    my ( $application, $config ) = @_;
+
+    return if !$config->realtime_listener_enabled;
+
+    $application->hook(
+        before_dispatch => sub {
+            my ($controller) = @_;
+
+            $controller->gp_realtime_listener_supervisor->start;
+        }
+    );
 
     return;
 }

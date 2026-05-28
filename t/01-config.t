@@ -14,7 +14,7 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 47;
+const my $EXPECTED_TESTS            => 52;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
@@ -26,6 +26,9 @@ const my $CUSTOM_MIN_OS_WORKERS     => 2;
 const my $CUSTOM_MAX_OPEN_FDS       => 128;
 const my $CUSTOM_CACHE_MAX_ENTRIES  => 64;
 const my $CUSTOM_CATEGORY_CACHE_TTL => 45;
+const my $CUSTOM_REALTIME_POLL      => 2;
+const my $CUSTOM_REALTIME_BACKOFF   => 4;
+const my $CUSTOM_REALTIME_HEARTBEAT => 12;
 const my $TOO_MANY_PROCESSES        => 513;
 
 plan tests => $EXPECTED_TESTS;
@@ -63,6 +66,12 @@ my %environment = (
     GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS => $CUSTOM_MAX_OPEN_FDS,
     GPFORUM_LOCAL_CACHE_MAX_ENTRIES      => $CUSTOM_CACHE_MAX_ENTRIES,
     GPFORUM_CATEGORY_CACHE_TTL_SECONDS   => $CUSTOM_CATEGORY_CACHE_TTL,
+    GPFORUM_REALTIME_LISTENER_ENABLED    => 1,
+    GPFORUM_REALTIME_LISTENER_POLL_INTERVAL_SECONDS => $CUSTOM_REALTIME_POLL,
+    GPFORUM_REALTIME_LISTENER_RECONNECT_BACKOFF_SECONDS =>
+      $CUSTOM_REALTIME_BACKOFF,
+    GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS =>
+      $CUSTOM_REALTIME_HEARTBEAT,
 );
 
 my $config  = GPForum::Config->from_environment( \%environment );
@@ -122,6 +131,16 @@ is( $config->local_cache_max_entries,
     $CUSTOM_CACHE_MAX_ENTRIES, 'local cache max entries loads from env' );
 is( $config->category_cache_ttl_seconds,
     $CUSTOM_CATEGORY_CACHE_TTL, 'category cache TTL loads from env' );
+is( $config->realtime_listener_enabled,
+    1, 'realtime listener enabled flag loads from env' );
+is( $config->realtime_listener_poll_interval_seconds,
+    $CUSTOM_REALTIME_POLL, 'realtime listener poll interval loads from env' );
+is( $config->realtime_listener_reconnect_backoff_seconds,
+    $CUSTOM_REALTIME_BACKOFF,
+    'realtime listener reconnect backoff loads from env' );
+is( $config->realtime_listener_heartbeat_interval_seconds,
+    $CUSTOM_REALTIME_HEARTBEAT,
+    'realtime listener heartbeat interval loads from env' );
 is( $runtime->as_hash->{os_features}{reuseport}{setting},
     'off', 'runtime exposes OS feature settings' );
 is( $runtime->as_hash->{os_preflight_settings}{min_recommended_workers},
@@ -170,6 +189,14 @@ throws_ok(
     },
     qr/\A runtime_proxy [ ] must [ ] be [ ] 0 [ ] or [ ] 1/msx,
     'runtime proxy must be boolean integer',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( realtime_listener_enabled => 2 )->validate;
+    },
+    qr/\A realtime_listener_enabled [ ] must [ ] be [ ] 0 [ ] or [ ] 1/msx,
+    'realtime listener enabled flag must be boolean integer',
 );
 
 throws_ok(

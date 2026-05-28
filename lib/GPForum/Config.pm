@@ -43,6 +43,10 @@ const my $DEFAULT_OS_MIN_WORKERS          => 1;
 const my $DEFAULT_OS_MAX_OPEN_FDS         => 1024;
 const my $DEFAULT_LOCAL_CACHE_MAX_ENTRIES => 512;
 const my $DEFAULT_CATEGORY_CACHE_TTL      => 30;
+const my $DEFAULT_REALTIME_LISTENER       => 0;
+const my $DEFAULT_REALTIME_POLL_SECONDS   => 1;
+const my $DEFAULT_REALTIME_BACKOFF        => 5;
+const my $DEFAULT_REALTIME_HEARTBEAT      => 30;
 const my $MINIMUM_PROCESS_COUNT           => 1;
 const my $MAXIMUM_PROCESS_COUNT           => 512;
 const my $MINIMUM_OS_THRESHOLD            => 1;
@@ -89,6 +93,13 @@ has os_min_recommended_workers => sub { return $DEFAULT_OS_MIN_WORKERS; };
 has os_max_open_file_descriptors => sub { return $DEFAULT_OS_MAX_OPEN_FDS; };
 has local_cache_max_entries => sub { return $DEFAULT_LOCAL_CACHE_MAX_ENTRIES; };
 has category_cache_ttl_seconds => sub { return $DEFAULT_CATEGORY_CACHE_TTL; };
+has realtime_listener_enabled  => sub { return $DEFAULT_REALTIME_LISTENER; };
+has realtime_listener_poll_interval_seconds =>
+  sub { return $DEFAULT_REALTIME_POLL_SECONDS; };
+has realtime_listener_reconnect_backoff_seconds =>
+  sub { return $DEFAULT_REALTIME_BACKOFF; };
+has realtime_listener_heartbeat_interval_seconds =>
+  sub { return $DEFAULT_REALTIME_HEARTBEAT; };
 
 sub from_environment {
     my ( $class, $environment ) = @_;
@@ -230,6 +241,24 @@ sub from_environment {
             $environment, 'GPFORUM_CATEGORY_CACHE_TTL_SECONDS',
             $DEFAULT_CATEGORY_CACHE_TTL
         ),
+        realtime_listener_enabled => _env_integer(
+            $environment, 'GPFORUM_REALTIME_LISTENER_ENABLED',
+            $DEFAULT_REALTIME_LISTENER
+        ),
+        realtime_listener_poll_interval_seconds => _env_integer(
+            $environment,
+            'GPFORUM_REALTIME_LISTENER_POLL_INTERVAL_SECONDS',
+            $DEFAULT_REALTIME_POLL_SECONDS
+        ),
+        realtime_listener_reconnect_backoff_seconds => _env_integer(
+            $environment, 'GPFORUM_REALTIME_LISTENER_RECONNECT_BACKOFF_SECONDS',
+            $DEFAULT_REALTIME_BACKOFF
+        ),
+        realtime_listener_heartbeat_interval_seconds => _env_integer(
+            $environment,
+            'GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS',
+            $DEFAULT_REALTIME_HEARTBEAT
+        ),
     );
 
     $self->validate;
@@ -289,6 +318,20 @@ sub validate {
         $self->local_cache_max_entries );
     _require_positive_integer( 'category_cache_ttl_seconds',
         $self->category_cache_ttl_seconds );
+    _require_boolean_integer( 'realtime_listener_enabled',
+        $self->realtime_listener_enabled );
+    _require_positive_integer(
+        'realtime_listener_poll_interval_seconds',
+        $self->realtime_listener_poll_interval_seconds
+    );
+    _require_positive_integer(
+        'realtime_listener_reconnect_backoff_seconds',
+        $self->realtime_listener_reconnect_backoff_seconds
+    );
+    _require_positive_integer(
+        'realtime_listener_heartbeat_interval_seconds',
+        $self->realtime_listener_heartbeat_interval_seconds
+    );
 
     if (   $self->environment eq 'production'
         && $self->session_secret eq $DEFAULT_SESSION_SECRET )

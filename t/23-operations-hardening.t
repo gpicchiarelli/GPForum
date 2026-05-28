@@ -28,7 +28,28 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 72;
+{
+
+    package GPForum::Test::RealtimeSupervisor;
+
+    sub new {
+        my ( $class, %input ) = @_;
+
+        return bless { enabled => $input{enabled} ? 1 : 0 }, $class;
+    }
+
+    sub snapshot {
+        my ($self) = @_;
+
+        return {
+            enabled => $self->{enabled} ? 1 : 0,
+            running => 0,
+            stats   => {},
+        };
+    }
+}
+
+const my $EXPECTED_TESTS            => 73;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -148,6 +169,8 @@ my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
     local_caches        => [$local_cache],
     runtime             => $runtime,
     realtime_hub        => $hub,
+    realtime_supervisor =>
+      GPForum::Test::RealtimeSupervisor->new( enabled => 1 ),
     rate_limiter        => $limiter,
     security_telemetry  => $security_telemetry,
     projection_trackers => [ GPForum::Test::ProjectionLagProbe->new ],
@@ -193,6 +216,8 @@ is( $metrics->{local_caches}[0]{stats}{writes},
     $CACHE_ENTRIES, 'metrics exposes local cache writes' );
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
+is( $metrics->{realtime_listener}{enabled},
+    1, 'metrics exposes realtime listener supervisor snapshot' );
 is( $metrics->{rate_limits}{buckets},
     $BUCKET_COUNT, 'metrics exposes limiter snapshot' );
 is( $metrics->{rate_limits}{rate_limit_allowed},
