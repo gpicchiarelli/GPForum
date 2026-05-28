@@ -17,7 +17,7 @@ use GPForum::Service::Password;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 36;
+const my $EXPECTED_TESTS => 41;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -50,6 +50,8 @@ is( scalar @{ $schema->created_for('User') }, 1, 'user row is created' );
 is( scalar @{ $schema->created_for('Credential') },
     1, 'credential row is created' );
 is( scalar @{ $schema->created_for('EventLog') }, 1, 'event row is created' );
+is( scalar @{ $schema->created_for('OutboxMessage') },
+    1, 'registration queues outbox message' );
 is( scalar @{ $schema->created_for('AuditLog') }, 1, 'audit row is created' );
 is( $schema->created_for('Credential')->[0]{user_id},
     'user-1', 'credential is linked to user' );
@@ -77,6 +79,7 @@ my $login_schema     = GPForum::Test::Schema->new(
             display_name     => 'Giacomo Picchiarelli',
             email_normalized => 'giacomo@example.test',
             preferred_locale => 'en',
+            preferred_theme  => 'default',
             status           => 'active',
         },
     ],
@@ -128,6 +131,27 @@ is(
     $login_schema->users->[0]{updated_at},
     $login_store->clock->now_iso8601,
     'preferred locale update refreshes user updated_at'
+);
+
+my $theme_update = $login_store->update_preferred_theme(
+    {
+        user_id         => 'user-1',
+        preferred_theme => 'high_contrast',
+    }
+);
+ok( $theme_update->{ok}, 'preferred theme update succeeds' );
+is( $login_schema->users->[0]{preferred_theme},
+    'high_contrast', 'preferred theme is persisted on the user row' );
+is(
+    $login_schema->users->[0]{updated_at},
+    $login_store->clock->now_iso8601,
+    'preferred theme update refreshes user updated_at'
+);
+is(
+    $login_store->preferred_theme_for_user( { user_id => 'user-1' } )
+      ->{preferred_theme},
+    'high_contrast',
+    'preferred theme can be read back through identity store'
 );
 
 my $failed_login = $login_store->authenticate_login(

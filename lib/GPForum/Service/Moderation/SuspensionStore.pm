@@ -6,9 +6,9 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
-use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
@@ -22,13 +22,15 @@ const my %STATUS_DENIALS => (
     $STATUS_SUSPEND => 'suspended',
 );
 
-has clock          => sub { return GPForum::Service::Clock->new; };
-has id_service     => sub { return GPForum::Service::Id->new; };
-has outbox_builder => sub {
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Service::Id->new; };
+has recorder   => sub {
     my ($self) = @_;
 
-    return GPForum::Service::Outbox::MessageBuilder->new(
-        id_service => $self->id_service, );
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
 };
 has schema => undef;
 
@@ -247,10 +249,8 @@ sub _record_event_and_audit {
     my ( $self, $input ) = @_;
 
     my $correlation_id = $input->{correlation_id} || $self->id_service->uuid;
-    my $event          = {
-        event_id          => $self->id_service->uuid,
+    $self->recorder->record_event(
         event_type        => $input->{action},
-        schema_version    => $SCHEMA_VERSION,
         aggregate_type    => $USER_AGGREGATE,
         aggregate_id      => $input->{user_id},
         aggregate_version => $SCHEMA_VERSION,
@@ -259,28 +259,19 @@ sub _record_event_and_audit {
         causation_id      => undef,
         idempotency_key   => join( q{:},
             $input->{action}, $input->{user_id}, $input->{created_at} ),
-        payload    => $input->{payload},
-        metadata   => {},
-        created_at => $input->{created_at},
-    };
+        payload   => $input->{payload},
+        timestamp => $input->{created_at},
+    );
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => $input->{action},
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $input->{actor_id},
-            target_type    => $USER_AGGREGATE,
-            target_id      => $input->{user_id},
-            correlation_id => $correlation_id,
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => $input->{metadata},
-            created_at     => $input->{created_at},
-        }
+    $self->recorder->record_audit(
+        action         => $input->{action},
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $input->{actor_id},
+        target_type    => $USER_AGGREGATE,
+        target_id      => $input->{user_id},
+        correlation_id => $correlation_id,
+        metadata       => $input->{metadata},
+        created_at     => $input->{created_at},
     );
 
     return;

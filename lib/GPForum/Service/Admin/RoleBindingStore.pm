@@ -6,6 +6,7 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
 
@@ -16,7 +17,15 @@ const my $ROW_LIMIT_ONE  => 1;
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub { return GPForum::Service::Id->new; };
-has schema     => undef;
+has recorder   => sub {
+    my ($self) = @_;
+
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
+};
+has schema => undef;
 
 sub bind_role {
     my ( $self, $input ) = @_;
@@ -150,26 +159,22 @@ sub _record_audit {
 
     my $binding = $input->{binding};
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => $input->{action},
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $input->{actor_user_id},
-            target_type    => 'role_binding',
-            target_id      => $binding->{binding_id},
-            correlation_id => $self->id_service->uuid,
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                user_id       => $binding->{user_id},
-                role_id       => $binding->{role_id},
-                resource_type => $binding->{resource_type},
-                resource_id   => $binding->{resource_id},
-                space_id      => $binding->{space_id},
-            },
-            created_at => $input->{created_at},
-        }
+    $self->recorder->record_audit(
+        action         => $input->{action},
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $input->{actor_user_id},
+        target_type    => 'role_binding',
+        target_id      => $binding->{binding_id},
+        previous_hash  => undef,
+        record_hash    => q{},
+        metadata       => {
+            user_id       => $binding->{user_id},
+            role_id       => $binding->{role_id},
+            resource_type => $binding->{resource_type},
+            resource_id   => $binding->{resource_id},
+            space_id      => $binding->{space_id},
+        },
+        created_at => $input->{created_at},
     );
 
     return;

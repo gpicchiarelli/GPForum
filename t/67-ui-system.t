@@ -24,6 +24,7 @@ my @component_names = qw(
   error_summary field_error flash_messages identity_nav loading locale_selector
   moderation_indicator notification_surface page_header pagination primary_nav
   section_header site_footer site_header status_badge status_banner
+  theme_selector
 );
 for my $component_name (@component_names) {
     ok( -e path( 'templates/components', "$component_name.html.ep" ),
@@ -115,6 +116,16 @@ like(
     path('templates/forum/search.html.ep')->slurp,
     qr/components\/status_banner/msx,
     'search degraded state uses shared status banner'
+);
+like(
+    path('templates/forum/thread.html.ep')->slurp,
+    qr/ui_trusted_html[(]\$post->\{body\}, [ ] 'forum[.]post[.]body'/msx,
+    'thread raw post body rendering goes through render policy helper'
+);
+like(
+    path('templates/forum/search.html.ep')->slurp,
+    qr/ui_trusted_html[(]\$result->\{snippet_html\}, [ ] 'search[.]snippet'/msx,
+    'search snippet highlighting goes through render policy helper'
 );
 
 my $forum = Test::Mojo->new('GPForum');

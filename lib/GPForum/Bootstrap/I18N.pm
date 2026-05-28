@@ -15,8 +15,9 @@ sub register {
     my $config      = $input{config};
 
     return GPForum::Bootstrap::UI->register(
-        application => $application,
-        i18n        => GPForum::Service::I18N->new(
+        application   => $application,
+        default_theme => $config->default_theme,
+        i18n          => GPForum::Service::I18N->new(
             default_locale => $config->default_locale,
         ),
     );

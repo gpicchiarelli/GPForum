@@ -7,6 +7,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
+use GPForum::Web::ErrorPayload;
+
 our $VERSION = '0.001';
 
 const my $DEFAULT_LIMIT     => 25;
@@ -72,11 +74,9 @@ sub request_export {
 
     return _privacy_action_response(
         $self,
-        'export_requested',
-        {
-            export_request =>
-              $self->gp_privacy_view_model->export_request($export)
-        }
+        $self->gp_privacy_view_model->export_request_response(
+            'export_requested', $export,
+        ),
     );
 }
 
@@ -106,11 +106,9 @@ sub request_deletion {
 
     return _privacy_action_response(
         $self,
-        'deletion_requested',
-        {
-            deletion_request =>
-              $self->gp_privacy_view_model->deletion_request($request)
-        }
+        $self->gp_privacy_view_model->deletion_request_response(
+            'deletion_requested', $request,
+        ),
     );
 }
 
@@ -171,11 +169,9 @@ sub approve_deletion {
 
     return _privacy_action_response(
         $self,
-        'deletion_approved',
-        {
-            deletion_review =>
-              $self->gp_privacy_view_model->deletion_review($approved)
-        },
+        $self->gp_privacy_view_model->deletion_review_response(
+            'deletion_approved', $approved,
+        ),
         'privacy_review'
     );
 }
@@ -215,11 +211,9 @@ sub hold_deletion {
 
     return _privacy_action_response(
         $self,
-        'deletion_held',
-        {
-            deletion_review =>
-              $self->gp_privacy_view_model->deletion_review($held)
-        },
+        $self->gp_privacy_view_model->deletion_review_response(
+            'deletion_held', $held,
+        ),
         'privacy_review'
     );
 }
@@ -239,9 +233,13 @@ sub run_erasure_job {
     return _not_found( $self, 'erasure job not found' ) if !$result;
     return _conflict( $self, $result->{error} )         if !$result->{ok};
 
-    return _privacy_action_response( $self, 'erasure_completed',
-        { erasure_job => $result },
-        'privacy_review' );
+    return _privacy_action_response(
+        $self,
+        $self->gp_privacy_view_model->erasure_job_response(
+            'erasure_completed', $result,
+        ),
+        'privacy_review'
+    );
 }
 
 sub _write_user_id {
@@ -297,11 +295,11 @@ sub _authorized_user_id {
 }
 
 sub _privacy_action_response {
-    my ( $controller, $status, $payload, $redirect_route ) = @_;
+    my ( $controller, $payload, $redirect_route ) = @_;
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json   => { status => $status, %{$payload} },
+            json   => $payload,
             status => $HTTP_OK,
         );
     }
@@ -388,68 +386,43 @@ sub _bad_request {
     return _render_error(
         $controller,
         $HTTP_BAD_REQUEST,
-        {
+        GPForum::Web::ErrorPayload->bad_request(
             error  => 'The submitted privacy request was invalid.',
             errors => $errors,
-            status => 'invalid',
             title  => 'Invalid privacy request',
-        }
+        )
     );
 }
 
 sub _csrf_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            error  => 'Bad CSRF token',
-            status => 'forbidden',
-            title  => 'Forbidden',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->csrf_failure,
     );
 }
 
 sub _unauthorized {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_UNAUTHORIZED,
-        {
-            error  => 'authentication required',
-            status => 'unauthorized',
-            title  => 'Authentication required',
-        }
+    return _render_error( $controller, $HTTP_UNAUTHORIZED,
+        GPForum::Web::ErrorPayload->unauthorized,
     );
 }
 
 sub _forbidden {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            error  => 'permission denied',
-            status => 'forbidden',
-            title  => 'Forbidden',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->forbidden,
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_NOT_FOUND,
-        {
-            error  => $error,
-            status => 'not_found',
-            title  => 'Not found',
-        }
+    return _render_error( $controller, $HTTP_NOT_FOUND,
+        GPForum::Web::ErrorPayload->not_found( error => $error ),
     );
 }
 
@@ -459,25 +432,19 @@ sub _conflict {
     return _render_error(
         $controller,
         $HTTP_CONFLICT,
-        {
+        GPForum::Web::ErrorPayload->conflict(
             error  => $error,
             status => 'blocked',
             title  => 'Privacy action blocked',
-        }
+        )
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_SERVER_ERROR,
-        {
-            error  => 'internal error',
-            status => 'error',
-            title  => 'Internal error',
-        }
+    return _render_error( $controller, $HTTP_SERVER_ERROR,
+        GPForum::Web::ErrorPayload->system_failure,
     );
 }
 

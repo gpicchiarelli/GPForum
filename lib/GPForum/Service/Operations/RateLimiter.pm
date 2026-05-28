@@ -7,6 +7,7 @@ use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
 use GPForum::Service::Operations::RateLimiter::LocalMemoryStore;
@@ -22,8 +23,16 @@ has fallback_store => sub {
     return GPForum::Service::Operations::RateLimiter::LocalMemoryStore->new(
         clock => $self->clock, );
 };
-has id_service         => sub { return GPForum::Service::Id->new; };
-has primary_store      => undef;
+has id_service    => sub { return GPForum::Service::Id->new; };
+has primary_store => undef;
+has recorder      => sub {
+    my ($self) = @_;
+
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
+};
 has schema             => undef;
 has security_telemetry => undef;
 has stats              => sub {
@@ -123,28 +132,24 @@ sub _record_block_audit {
     return if !$self->schema;
 
     my $created = eval {
-        return $self->schema->resultset('AuditLog')->create(
-            {
-                action         => 'rate_limit.blocked',
-                actor_id       => _uuid_or_undef( $input->{actor_id} ),
-                audit_id       => $self->id_service->uuid,
-                correlation_id => $self->id_service->uuid,
-                created_at     => $self->clock->now_iso8601,
-                metadata       => {
-                    action         => $input->{action},
-                    actor_hash     => _actor_hash($input),
-                    limit          => $decision->{limit},
-                    observed_count => $decision->{observed_count},
-                    scope          => $input->{scope},
-                    store          => $decision->{store},
-                    window_seconds => $decision->{window_seconds},
-                },
-                previous_hash  => undef,
-                record_hash    => q{},
-                schema_version => $SCHEMA_VERSION,
-                target_id      => undef,
-                target_type    => 'rate_limit',
-            }
+        return $self->recorder->record_audit(
+            action     => 'rate_limit.blocked',
+            actor_id   => _uuid_or_undef( $input->{actor_id} ),
+            created_at => $self->clock->now_iso8601,
+            metadata   => {
+                action         => $input->{action},
+                actor_hash     => _actor_hash($input),
+                limit          => $decision->{limit},
+                observed_count => $decision->{observed_count},
+                scope          => $input->{scope},
+                store          => $decision->{store},
+                window_seconds => $decision->{window_seconds},
+            },
+            previous_hash  => undef,
+            record_hash    => q{},
+            schema_version => $SCHEMA_VERSION,
+            target_id      => undef,
+            target_type    => 'rate_limit',
         );
     };
 

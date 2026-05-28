@@ -16,8 +16,10 @@ has duplicate        => 0;
 has invalid_login    => 0;
 has invalid_session  => 0;
 has preferred_locale => undef;
+has preferred_theme  => undef;
 has revoked          => sub { return []; };
 has locale_updates   => sub { return []; };
+has theme_updates    => sub { return []; };
 
 sub create_registration {
     my ( $self, $registration ) = @_;
@@ -47,6 +49,7 @@ sub authenticate_login {
         user       => {
             id               => 'user-1',
             preferred_locale => $self->preferred_locale,
+            preferred_theme  => $self->preferred_theme,
             username         => 'giacomo_forum',
         },
         user_id => 'user-1',
@@ -71,6 +74,27 @@ sub preferred_locale_for_user {
     return {
         ok               => 1,
         preferred_locale => $self->preferred_locale,
+    };
+}
+
+sub update_preferred_theme {
+    my ( $self, $input ) = @_;
+
+    $self->preferred_theme( $input->{preferred_theme} );
+    push @{ $self->theme_updates }, { %{$input} };
+
+    return {
+        ok              => 1,
+        preferred_theme => $self->preferred_theme,
+    };
+}
+
+sub preferred_theme_for_user {
+    my ( $self, $input ) = @_;
+
+    return {
+        ok              => 1,
+        preferred_theme => $self->preferred_theme,
     };
 }
 

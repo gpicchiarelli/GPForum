@@ -5,7 +5,11 @@ use warnings;
 
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+use GPForum::Service::Realtime::ChannelAuthorizer;
 use GPForum::Service::Realtime::Hub;
+use GPForum::Service::Realtime::PgListener;
+use GPForum::Service::Realtime::PgNotifier;
+use GPForum::Service::Realtime::SubscriptionPolicy;
 
 our $VERSION = '0.001';
 
@@ -26,8 +30,46 @@ sub register {
     my $realtime_hub;
     $application->helper(
         gp_realtime_hub => sub {
-            $realtime_hub ||= GPForum::Service::Realtime::Hub->new;
+            my ($controller) = @_;
+
+            $realtime_hub ||= GPForum::Service::Realtime::Hub->new(
+                authorizer =>
+                  GPForum::Service::Realtime::ChannelAuthorizer->new(
+                    permission_engine =>
+                      GPForum::Service::Realtime::SubscriptionPolicy->new(
+                        permission_gate  => $controller->gp_permission_gate,
+                        schema           => $controller->gp_schema,
+                        suspension_store => $controller->gp_suspension_store,
+                      ),
+                  ),
+            );
             return $realtime_hub;
+        }
+    );
+
+    my $realtime_pg_notifier;
+    $application->helper(
+        gp_realtime_pg_notifier => sub {
+            my ($controller) = @_;
+
+            $realtime_pg_notifier ||=
+              GPForum::Service::Realtime::PgNotifier->new(
+                schema => $controller->gp_schema, );
+            return $realtime_pg_notifier;
+        }
+    );
+
+    my $realtime_pg_listener;
+    $application->helper(
+        gp_realtime_pg_listener => sub {
+            my ($controller) = @_;
+
+            $realtime_pg_listener ||=
+              GPForum::Service::Realtime::PgListener->new(
+                hub    => $controller->gp_realtime_hub,
+                schema => $controller->gp_schema,
+              );
+            return $realtime_pg_listener;
         }
     );
 

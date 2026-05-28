@@ -35,6 +35,24 @@ sub feed_page {
     };
 }
 
+sub bookmark_response {
+    my ( $self, $status, $bookmark ) = @_;
+
+    return {
+        bookmark => $bookmark,
+        status   => $status,
+    };
+}
+
+sub subscription_response {
+    my ( $self, $status, $subscription ) = @_;
+
+    return {
+        status       => $status,
+        subscription => $subscription,
+    };
+}
+
 sub notifications_page {
     my ( $self, %input ) = @_;
 

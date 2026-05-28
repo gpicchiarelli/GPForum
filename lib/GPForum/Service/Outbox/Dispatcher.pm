@@ -157,6 +157,7 @@ sub _mark_failed {
         attempt_count => $attempt_count,
         error_class   => ref $exception || $GENERIC_ERROR_CLASS,
         error_message => "$exception",
+        failure_type  => _failure_type($exception),
     };
     my $status =
         $attempt_count >= $self->max_attempts
@@ -173,6 +174,7 @@ sub _mark_failed {
             locked_until     => undef,
             last_error       => $failure->{error_message},
             last_error_class => $failure->{error_class},
+            failure_type     => $failure->{failure_type},
             next_attempt_at  => $self->clock->epoch_plus_iso8601(
                 $attempt_count * $LOCK_SECONDS
             ),
@@ -192,6 +194,27 @@ sub _next_attempt_count {
     my $current = $message->get_column('attempt_count') || 0;
 
     return $current + $FIRST_FAILURE_OFFSET;
+}
+
+sub _failure_type {
+    my ($exception) = @_;
+
+    return $exception->failure_type
+      if ref $exception && $exception->can('failure_type');
+
+    my $class = ref $exception || q{};
+    my $text  = "$exception";
+
+    return 'serialization'
+      if $class =~ /Serial/i || $text =~ /serial/i;
+    return 'authorization'
+      if $class =~ /Authori[sz]ation/i || $text =~ /forbidden|unauthor/i;
+    return 'transport'
+      if $class =~ /Transport|Notify|Pg/i || $text =~ /transport|notify/i;
+    return 'permanent'
+      if $class =~ /Permanent/i || $text =~ /permanent/i;
+
+    return 'transient';
 }
 
 1;

@@ -4,13 +4,17 @@ GPForum uses SSR-first templates. Controllers should stay focused on HTTP:
 authorization, CSRF, rate limits, service calls, status codes, redirects, and
 content negotiation. They should not hand-build large rendering hashes.
 
-Use `GPForum::ViewModel::*` presenters for page and domain payload shaping.
+Use `GPForum::ViewModel::*` presenters for page, domain payload, and mutation
+response shaping.
 
 ## Rules
 
 - Return plain hashes and arrays only. Do not pass DBIx::Class result objects to
   templates.
 - Preserve existing public JSON field names unless the API change is deliberate.
+- JSON mutation responses should be shaped by presenters too. Controllers may
+  choose `status => 200` or redirect, but the `{status, role}`, `{status,
+  action}`, or similar compatibility hash belongs in the presenter boundary.
 - Keep HTML out of view models. Safe rendered post bodies may pass through as
   already-sanitized content from the forum read model.
 - Put accessibility metadata in predictable `ui` structures, for example
@@ -61,8 +65,9 @@ Operational surfaces should follow the same rule. For example, Admin presenters
 shape user rows, outbox messages, dead-letter rows, and operations status before
 templates render them; controllers still preserve the raw compatibility payload
 where JSON clients already expect it.
-Identity presenters own form field descriptors and error-summary wiring, while
-Moderation presenters own action/control ids for reversible workflows.
+Forum and Identity presenters own form field descriptors, settings payloads, and
+error-summary wiring, while Moderation presenters own action/control ids for
+reversible workflows.
 
 ## Testing
 

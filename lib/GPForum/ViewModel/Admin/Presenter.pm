@@ -107,6 +107,42 @@ sub audit_page {
     };
 }
 
+sub role_response {
+    my ( $self, $status, $role ) = @_;
+
+    return {
+        role   => $self->role($role),
+        status => $status,
+    };
+}
+
+sub permission_response {
+    my ( $self, $status, $permission ) = @_;
+
+    return {
+        permission => $self->permission($permission),
+        status     => $status,
+    };
+}
+
+sub role_permission_response {
+    my ( $self, $status, $role_permission ) = @_;
+
+    return {
+        role_permission => $self->role_permission($role_permission),
+        status          => $status,
+    };
+}
+
+sub role_binding_response {
+    my ( $self, $status, $binding ) = @_;
+
+    return {
+        binding => $self->role_binding($binding),
+        status  => $status,
+    };
+}
+
 sub user {
     my ( $self, $row ) = @_;
 

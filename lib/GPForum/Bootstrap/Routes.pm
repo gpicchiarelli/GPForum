@@ -162,6 +162,11 @@ sub register {
     $routes->post('/login')->to('Identity#login')->name('login_submit');
     $routes->post('/logout')->to('Identity#logout')->name('logout');
     $routes->post('/locale')->to('Identity#set_locale')->name('locale_update');
+    $routes->post('/theme')->to('Identity#set_theme')->name('theme_update');
+    $routes->get('/settings')->to('Identity#settings')->name('settings');
+    $routes->post('/settings')
+      ->to('Identity#update_settings')
+      ->name('settings_update');
     $routes->get('/u/:username')->to('Identity#profile')->name('profile');
     $routes->get('/privacy')
       ->to('Privacy#dashboard')

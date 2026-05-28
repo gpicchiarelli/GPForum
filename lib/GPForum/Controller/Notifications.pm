@@ -7,6 +7,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
+use GPForum::Web::ErrorPayload;
+
 our $VERSION = '0.001';
 
 const my $HTTP_OK           => 200;
@@ -72,11 +74,8 @@ sub mark_read {
 
     if ( _wants_json($self) ) {
         return $self->render(
-            json => {
-                status       => 'read',
-                read         => $read,
-                unread_count => $read->{unread_count},
-            },
+            json =>
+              $self->gp_notifications_view_model->mark_read_response($read),
             status => $HTTP_OK,
         );
     }
@@ -196,14 +195,8 @@ sub _csrf_failure {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            status => 'forbidden',
-            title  => 'Forbidden',
-            error  => 'Bad CSRF token',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->csrf_failure,
     );
 }
 
@@ -218,14 +211,8 @@ sub _unauthorized {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_UNAUTHORIZED,
-        {
-            status => 'unauthorized',
-            title  => 'Authentication required',
-            error  => 'authentication required',
-        }
+    return _render_error( $controller, $HTTP_UNAUTHORIZED,
+        GPForum::Web::ErrorPayload->unauthorized,
     );
 }
 
@@ -240,42 +227,24 @@ sub _rate_limited {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_TOO_MANY,
-        {
-            status => 'rate_limited',
-            title  => 'Too many requests',
-            error  => 'too many requests',
-        }
+    return _render_error( $controller, $HTTP_TOO_MANY,
+        GPForum::Web::ErrorPayload->rate_limited,
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_NOT_FOUND,
-        {
-            status => 'not_found',
-            title  => 'Not found',
-            error  => $error,
-        }
+    return _render_error( $controller, $HTTP_NOT_FOUND,
+        GPForum::Web::ErrorPayload->not_found( error => $error ),
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_SERVER_ERROR,
-        {
-            status => 'error',
-            title  => 'Internal error',
-            error  => 'internal error',
-        }
+    return _render_error( $controller, $HTTP_SERVER_ERROR,
+        GPForum::Web::ErrorPayload->system_failure,
     );
 }
 

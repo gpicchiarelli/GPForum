@@ -31,6 +31,7 @@ localizable presentation text.
 | `components/primary_nav` | Main product navigation. |
 | `components/identity_nav` | Login/register or logout controls. |
 | `components/locale_selector` | SSR language selector. |
+| `components/theme_selector` | SSR theme selector with validated cookie/user preference persistence. |
 | `components/breadcrumbs` | Breadcrumb navigation from `ui_breadcrumbs`. |
 | `components/flash_messages` | Flash message stack from `ui_flash_messages`. |
 | `components/site_footer` | Product footer shell. |
@@ -61,9 +62,16 @@ components. Avoid route-local copies of:
 - status/warning banners;
 - moderation state labels;
 - notification card structure;
-- shell navigation, locale selector, breadcrumbs, and flash messages;
+- shell navigation, locale/theme selectors, breadcrumbs, and flash messages;
 - admin table scaffolding;
 - pagination link lists.
+
+Authenticated account preferences live at `/settings`. That page uses the
+identity presenter for semantic payload shape, persists locale/theme through the
+same controller paths as the shell selectors, and delegates notification channel
+state to `GPForum::Service::Notification::PreferenceStore`. The current product
+enforces the in-app channel during notification delivery; email and digest
+preferences are persisted for their delivery paths.
 
 Controllers and services should not emit HTML-specific fragments except for
 already-sanitized user content boundaries. View models shape data for templates;
@@ -78,8 +86,11 @@ CSS rule before adding one-off route markup.
 - spacing scale: `--space-1` through `--space-7`;
 - typography scale: `--font-size-*`, line-height, readable measure;
 - semantic colors: foreground/background/surface/primary/secondary/accent,
-  danger/success/warning/focus;
-- dark-mode readiness through `html[data-theme="dark"]`;
+  danger/success/warning/info/focus, state surfaces, and text-on-action
+  colors;
+- default, dark, and high-contrast readiness through `data-theme`;
+- safe theme selection from the configured default plus validated
+  `gpforum_theme` cookies and authenticated `preferred_theme` sessions;
 - direction and typography hooks through `data-direction`, `data-script`, and
   `typography-*` body classes.
 

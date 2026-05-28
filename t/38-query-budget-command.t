@@ -17,7 +17,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS           => 10;
+const my $EXPECTED_TESTS           => 11;
 const my $THREAD_VIEW_QUERY_BUDGET => 8;
 
 plan tests => $EXPECTED_TESTS;
@@ -39,6 +39,11 @@ like(
     qr/search [ ] queries=2/msx,
     'query budget print shows search budget'
 );
+like(
+    $printed,
+    qr/notifications [ ] queries=4/msx,
+    'query budget print shows notifications budget'
+);
 
 my $resultset = GPForum::Test::QueryBudgetResultSet->new;
 my $schema =
@@ -52,7 +57,7 @@ my $sync_output  = _capture_stdout(
 
 like(
     $sync_output,
-    qr/\A synced [ ] 23 [ ] endpoint/msx,
+    qr/\A synced [ ] 24 [ ] endpoint/msx,
     'query budget sync reports synced endpoint count'
 );
 is( $resultset->rows->{thread_view}->get_column('max_queries'),

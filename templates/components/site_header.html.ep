@@ -7,5 +7,6 @@
     <%= include 'components/primary_nav' %>
     <%= include 'components/identity_nav' %>
     <%= include 'components/locale_selector' %>
+    <%= include 'components/theme_selector' %>
   </div>
 </header>

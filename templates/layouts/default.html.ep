@@ -1,9 +1,10 @@
 <!doctype html>
 % my $locale_metadata = ui_locale_metadata;
-<html lang="<%= ui_locale %>" dir="<%= ui_direction %>" data-locale="<%= ui_locale %>" data-direction="<%= ui_direction %>" data-script="<%= $locale_metadata->{script} %>">
+<html lang="<%= ui_locale %>" dir="<%= ui_direction %>" data-locale="<%= ui_locale %>" data-direction="<%= ui_direction %>" data-script="<%= $locale_metadata->{script} %>" data-theme="<%= ui_theme %>" data-color-scheme="<%= ui_theme_color_scheme %>">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="<%= ui_theme_color_scheme %>">
     <meta name="theme-color" content="<%= ui_theme_color %>">
     <title><%= title %></title>
     <link rel="icon" href="<%= url_for('/gpforum-mark.svg') %>" type="image/svg+xml">

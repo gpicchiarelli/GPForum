@@ -7,6 +7,7 @@ use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
 
@@ -16,7 +17,15 @@ const my $SCHEMA_VERSION => 1;
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub { return GPForum::Service::Id->new; };
-has schema     => undef;
+has recorder   => sub {
+    my ($self) = @_;
+
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
+};
+has schema => undef;
 
 sub record_login_request {
     my ( $self, $input ) = @_;
@@ -57,11 +66,9 @@ sub record_logout_request {
 sub _record {
     my ( $self, $input ) = @_;
 
-    my $row = {
+    my $row = $self->recorder->record_audit(
         action         => $input->{action},
         actor_id       => $input->{actor_id},
-        audit_id       => $self->id_service->uuid,
-        correlation_id => $self->id_service->uuid,
         created_at     => $self->clock->now_iso8601,
         metadata       => $input->{metadata},
         previous_hash  => undef,
@@ -69,9 +76,7 @@ sub _record {
         schema_version => $SCHEMA_VERSION,
         target_id      => $input->{target_id},
         target_type    => $input->{target_type},
-    };
-
-    $self->schema->resultset('AuditLog')->create($row);
+    );
 
     return { ok => 1, audit => $row };
 }

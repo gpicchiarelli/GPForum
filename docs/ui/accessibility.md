@@ -19,8 +19,9 @@ Required contracts:
 
 Automated checks:
 
-- `t/65-accessible-theme.t` covers contrast tokens, focus, reduced motion,
-  logical direction hooks, screen-reader utilities, and print mode;
+- `t/65-accessible-theme.t` covers contrast tokens for every supported theme,
+  theme selector rendering, fallback, focus, reduced motion, logical direction
+  hooks, screen-reader utilities, and print mode;
 - `t/67-ui-system.t` covers component presence, landmarks, localized SSR
   rendering, and representative admin/forum/notification pages.
 

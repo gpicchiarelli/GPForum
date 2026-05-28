@@ -213,7 +213,8 @@ sub _catalog_namespace_violations {
 
     my %allowed = map { $_ => 1 } qw(
       admin app auth common community data form forum layout locale mentions
-      moderation nav notifications permission privacy profile search state target ui
+      moderation nav notifications permission privacy profile search state target
+      settings theme ui
     );
     my @violations;
 

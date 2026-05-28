@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 406;
-const my $EXPECTED_MIGRATIONS          => 19;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 54;
+const my $EXPECTED_TESTS               => 414;
+const my $EXPECTED_MIGRATIONS          => 21;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 60;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -37,6 +37,8 @@ const my $HOT_PATH_INDEX               => 13;
 const my $SECURITY_ABUSE_INDEX         => 15;
 const my $SEARCH_PRODUCT_INDEX         => 17;
 const my $USER_LOCALE_INDEX            => 18;
+const my $USER_THEME_INDEX             => 19;
+const my $OUTBOX_RELIABILITY_INDEX     => 20;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -153,6 +155,10 @@ ok( $outbox_source->has_column('queue'),    'outbox stores queue' );
 ok( $outbox_source->has_column('job_type'), 'outbox stores job type' );
 ok( $outbox_source->has_column('next_attempt_at'),
     'outbox stores retry schedule' );
+ok(
+    $outbox_source->has_column('failure_type'),
+    'outbox stores classified failure type'
+);
 
 is( $dead_letter_source->from, 'dead_letters',
     'dead letter source maps dead letters table' );
@@ -166,6 +172,10 @@ ok( $dead_letter_source->has_column('error_class'),
     'dead letter stores error class' );
 ok( $dead_letter_source->has_column('retry_count'),
     'dead letter stores retry count' );
+ok(
+    $dead_letter_source->has_column('failure_type'),
+    'dead letter stores classified failure type'
+);
 
 is( $notification_source->from,
     'notifications', 'notification source maps notifications table' );
@@ -569,6 +579,8 @@ ok(
 );
 ok( $user_source->has_column('preferred_locale'),
     'user stores preferred UI locale' );
+ok( $user_source->has_column('preferred_theme'),
+    'user stores preferred UI theme' );
 ok(
     $user_source->has_relationship('credentials'),
     'user has credentials relationship'
@@ -1410,6 +1422,38 @@ like(
     $user_locale_sql,
     qr/ADD [ ] COLUMN [ ] IF [ ] NOT [ ] EXISTS [ ] preferred_locale/msx,
     'user locale migration adds preferred locale column'
+);
+
+my $user_theme_sql = path( $summary->[$USER_THEME_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$USER_THEME_INDEX]->{description},
+    'user theme preference',
+    'user theme migration description is parsed'
+);
+like(
+    $user_theme_sql,
+    qr/ADD [ ] COLUMN [ ] IF [ ] NOT [ ] EXISTS [ ] preferred_theme/msx,
+    'user theme migration adds preferred theme column'
+);
+like(
+    $user_theme_sql,
+    qr/users_preferred_theme_check/msx,
+    'user theme migration constrains supported theme names'
+);
+
+my $outbox_reliability_sql =
+  path( $summary->[$OUTBOX_RELIABILITY_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$OUTBOX_RELIABILITY_INDEX]->{description},
+    'outbox delivery reliability',
+    'outbox reliability migration description is parsed'
+);
+like(
+    $outbox_reliability_sql,
+    qr/ADD [ ] COLUMN [ ] IF [ ] NOT [ ] EXISTS [ ] failure_type/msx,
+    'outbox reliability migration adds failure type classification'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

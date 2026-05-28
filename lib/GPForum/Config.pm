@@ -12,6 +12,7 @@ our $VERSION = '0.001';
 const my $DEFAULT_ENVIRONMENT     => 'development';
 const my $DEFAULT_LOG_LEVEL       => 'debug';
 const my $DEFAULT_LOCALE          => 'en';
+const my $DEFAULT_THEME           => 'default';
 const my $DEFAULT_PUBLIC_BASE_URL => 'http://127.0.0.1:3000';
 const my $DEFAULT_SESSION_SECRET  => 'gpforum-development-secret-change-me';
 const my $DEFAULT_DATABASE_DSN =>
@@ -49,10 +50,12 @@ const my %VALID_OS_FEATURE_SETTING        => map { $_ => 1 } qw(auto on off);
 const my %VALID_OS_AFFINITY               => map { $_ => 1 } qw(off manual);
 const my %VALID_RUNTIME_WORKER_POLICY => map { $_ => 1 }
   qw(configured cap-to-cpu);
+const my %VALID_THEME => map { $_ => 1 } qw(default dark high_contrast);
 
 has environment             => sub { return $DEFAULT_ENVIRONMENT; };
 has log_level               => sub { return $DEFAULT_LOG_LEVEL; };
 has default_locale          => sub { return $DEFAULT_LOCALE; };
+has default_theme           => sub { return $DEFAULT_THEME; };
 has public_base_url         => sub { return $DEFAULT_PUBLIC_BASE_URL; };
 has session_secret          => sub { return $DEFAULT_SESSION_SECRET; };
 has database_dsn            => sub { return $DEFAULT_DATABASE_DSN; };
@@ -100,6 +103,8 @@ sub from_environment {
           _env_value( $environment, 'GPFORUM_LOG_LEVEL', $DEFAULT_LOG_LEVEL ),
         default_locale =>
           _env_value( $environment, 'GPFORUM_DEFAULT_LOCALE', $DEFAULT_LOCALE ),
+        default_theme =>
+          _env_value( $environment, 'GPFORUM_DEFAULT_THEME', $DEFAULT_THEME ),
         public_base_url => _env_value(
             $environment, 'GPFORUM_PUBLIC_BASE_URL',
             $DEFAULT_PUBLIC_BASE_URL
@@ -235,9 +240,10 @@ sub from_environment {
 sub validate {
     my ($self) = @_;
 
-    _require_non_empty( 'environment',     $self->environment );
-    _require_non_empty( 'log_level',       $self->log_level );
-    _require_non_empty( 'default_locale',  $self->default_locale );
+    _require_non_empty( 'environment',    $self->environment );
+    _require_non_empty( 'log_level',      $self->log_level );
+    _require_non_empty( 'default_locale', $self->default_locale );
+    _require_theme( $self->default_theme );
     _require_non_empty( 'public_base_url', $self->public_base_url );
     _require_non_empty( 'session_secret',  $self->session_secret );
     _require_non_empty( 'database_dsn',    $self->database_dsn );
@@ -343,6 +349,15 @@ sub _require_runtime_worker_policy {
 
     croak 'runtime_worker_policy must be configured or cap-to-cpu'
       if !exists $VALID_RUNTIME_WORKER_POLICY{$value};
+
+    return;
+}
+
+sub _require_theme {
+    my ($value) = @_;
+
+    croak 'default_theme must be default, dark, or high_contrast'
+      if !exists $VALID_THEME{$value};
 
     return;
 }

@@ -50,6 +50,7 @@ authorization, CSRF, anti-leak and abuse-control paths.
 | `POST /moderation/*` | authenticated | resource/action specific moderation permission | required | request path budget | moderation budgets |
 | `GET /search` | anonymous or authenticated | permission-aware search projection | not applicable | read path budget | `search:2` |
 | `GET /search/autocomplete` | anonymous or authenticated | permission-aware search projection | not applicable | `search.autocomplete` | `search_autocomplete:2` |
+| `GET /realtime` | authenticated websocket | `realtime.subscribe` per channel | same-origin handshake | `realtime.connect` / `realtime.subscribe` | realtime enhancement |
 
 ## Abuse Controls
 
@@ -63,6 +64,9 @@ authorization, CSRF, anti-leak and abuse-control paths.
 | Bookmark/subscription churn | bookmark and subscription writes use tighter per-action limits |
 | Suspended-user posting | thread/reply creation records `suspended_user_block` and returns `403` |
 | Hidden-content discovery | search, profile, feed, sitemap, Atom and autocomplete tests reject leaks |
+| Realtime resource leaks | channel authorizer denies unknown channels by default and validates thread/category/moderation visibility |
+| Cross-user notification read | notification websocket channels only allow `notifications:<own_user_id>` |
+| Websocket CSRF/origin abuse | websocket handshake validates same-origin `Origin` when present |
 
 ## Observability
 
@@ -81,6 +85,9 @@ authorization, CSRF, anti-leak and abuse-control paths.
 * `security.events.auth_denial.count`;
 * `security.events.rate_limit_hit.count`;
 * `security.events.suspended_user_block.count`.
+* `security.events.realtime_subscription_denied.count`;
+* `security.events.realtime_origin_denied.count`;
+* `security.events.realtime_payload_rejected.count`.
 
 Security metrics intentionally do not expose raw usernames, IP addresses,
 passwords, body text, search text, report details or private content.

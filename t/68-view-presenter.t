@@ -3,12 +3,14 @@ package main;
 use strict;
 use warnings;
 
+use Mojolicious;
 use Test::Mojo;
 use Test::More;
 
 use lib 'lib';
 
 use GPForum::Bootstrap::UI;
+use GPForum::Service::I18N;
 use GPForum::View::Presenter;
 
 our $VERSION = '0.001';
@@ -96,10 +98,39 @@ is_deeply(
 is( $controller->ui_tone( 'state', 'suspended' ),
     'danger', 'ui_tone accepts namespaced calls for template ergonomics' );
 
+is( $controller->ui_theme_options->[0]{label},
+    'Default', 'ui_theme_options localizes theme labels' );
+
 $test->get_ok( '/__bootstrap-ui' => { 'Accept-Language' => 'it' } )
   ->status_is(200)
   ->header_is( 'Content-Language' => 'it' )
   ->content_is('Cerca');
+
+my $theme_application = Mojolicious->new;
+GPForum::Bootstrap::UI->register(
+    application   => $theme_application,
+    default_theme => 'dark',
+    i18n          => GPForum::Service::I18N->new,
+);
+$theme_application->routes->get('/__theme')->to(
+    cb => sub {
+        my ($controller) = @_;
+
+        return $controller->render(
+            text => join q{:},
+            $controller->ui_theme,
+            $controller->ui_theme_color_scheme,
+        );
+    }
+);
+my $theme_test = Test::Mojo->new($theme_application);
+$theme_test->get_ok('/__theme')->status_is(200)->content_is('dark:dark');
+$theme_test->get_ok( '/__theme' => { Cookie => 'gpforum_theme=neon' } )
+  ->status_is(200)
+  ->content_is('dark:dark');
+$theme_test->get_ok( '/__theme' => { Cookie => 'gpforum_theme=high_contrast' } )
+  ->status_is(200)
+  ->content_is('high_contrast:light');
 
 done_testing();
 

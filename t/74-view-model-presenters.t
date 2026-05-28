@@ -86,6 +86,35 @@ ok( !exists $autocomplete->{body},
     'autocomplete presenter omits body from serialized suggestions' );
 is( $autocomplete->{author_profile_label},
     '@giacomo', 'autocomplete presenter keeps author profile label' );
+is_deeply(
+    $forum->created_thread_response(
+        { thread => { thread_id => 'thread-1' } }
+    ),
+    { status => 'created', thread_id => 'thread-1' },
+    'forum presenter owns created-thread response shape'
+);
+is_deeply(
+    $forum->created_post_response( { post => { post_id => 'post-1' } } ),
+    { post_id => 'post-1', status => 'created' },
+    'forum presenter owns created-post response shape'
+);
+is_deeply(
+    $forum->read_marker_response(
+        {
+            read_state => { thread_id => 'thread-1', last_read_post_id => 'p1' }
+        }
+    ),
+    {
+        read_state => { thread_id => 'thread-1', last_read_post_id => 'p1' },
+        status     => 'ok',
+    },
+    'forum presenter owns read-marker response shape'
+);
+is(
+    $forum->report_response( { report_id => 'report-1' } )->{report}{report_id},
+    'report-1',
+    'forum presenter owns report response shape'
+);
 
 my $reading = $forum->reading_summary(
     posts      => [ { post_id => 'post-1' } ],
@@ -116,6 +145,50 @@ ok( $engagement->{authenticated},
 ok(
     $engagement->{bookmark}{bookmarked},
     'engagement summary shapes bookmark status'
+);
+
+my $new_thread_form = $forum->new_thread_form(
+    categories => [
+        {
+            category_id => 'category-1',
+            title       => 'General',
+            visibility  => 'public',
+        },
+    ],
+    errors => {
+        body_source => 'body is required',
+        title       => 'title is required',
+    },
+    values => {
+        body_source => q{},
+        category_id => 'category-1',
+        title       => q{},
+    },
+);
+is( $new_thread_form->{ui}{described_by},
+    'thread-error-summary',
+    'forum new-thread presenter prepares error summary relationship' );
+is( $new_thread_form->{fields}[0],
+    'category_id',
+    'forum new-thread presenter preserves JSON field-name compatibility' );
+is(
+    $new_thread_form->{form_fields}[1]{error_attrs},
+    ' aria-invalid="true" aria-describedby="thread-title-error"',
+    'forum new-thread presenter prepares title error attributes'
+);
+is( $new_thread_form->{form_fields}[2]{error_id},
+    'thread-body-error', 'forum new-thread presenter prepares body error id' );
+is( $new_thread_form->{form_fields}[3]{value},
+    'public', 'forum new-thread presenter defaults visibility' );
+is_deeply(
+    $new_thread_form->{error_fields},
+    [
+        { id => 'thread-category',   name => 'category_id' },
+        { id => 'thread-title',      name => 'title' },
+        { id => 'thread-body',       name => 'body_source' },
+        { id => 'thread-visibility', name => 'visibility' },
+    ],
+    'forum new-thread presenter prepares error summary field metadata'
 );
 
 my $admin = GPForum::ViewModel::Admin::Presenter->new;
@@ -207,6 +280,41 @@ is( $status_page->{query_budget_rows}[0]{endpoint},
 is( $status_page->{query_budget_rows}[0]{ui}{row_id},
     'query-budget-admin_jobs',
     'admin status presenter prepares stable row metadata' );
+is_deeply(
+    $admin->role_response(
+        'role_created', { role_id => 'role-1', name => 'space_admin' }
+    ),
+    {
+        role => {
+            created_at  => undef,
+            description => undef,
+            name        => 'space_admin',
+            role_id     => 'role-1',
+            ui          => { heading_id => 'role-role-1-heading' },
+        },
+        status => 'role_created',
+    },
+    'admin presenter owns role mutation response shape'
+);
+is(
+    $admin->permission_response(
+        'permission_created',
+        {
+            action        => 'view',
+            permission_id => 'permission-1',
+            resource_type => 'admin_console',
+        }
+    )->{permission}{ui}{heading_id},
+    'permission-permission-1-heading',
+    'admin presenter owns permission mutation response metadata'
+);
+is(
+    $admin->role_binding_response( 'role_bound',
+        { binding => { binding_id => 'binding 1', role_id => 'role-1' } } )
+      ->{binding}{ui}{heading_id},
+    'binding-binding-1-heading',
+    'admin presenter owns role binding mutation response metadata'
+);
 
 my $moderation = GPForum::ViewModel::Moderation::Presenter->new;
 my $action     = $moderation->moderation_action(
@@ -230,6 +338,35 @@ is(
 );
 ok( $action->{ui}{reversible},
     'moderation action marks unreversed actions as reversible for templates' );
+is_deeply(
+    $moderation->moderation_action_response(
+        'post_hidden', { action => { moderation_action_id => 'action-1' } }
+    ),
+    {
+        action => {
+            action_type          => undef,
+            actor_user_id        => undef,
+            created_at           => undef,
+            metadata             => undef,
+            moderation_action_id => 'action-1',
+            reason               => undef,
+            reversed_at          => undef,
+            reversed_by_user_id  => undef,
+            target_id            => undef,
+            target_type          => undef,
+            ui                   => {
+                heading_id         => 'action-action-1-heading',
+                restore_reason_id  => 'action-action-1-restore-reason',
+                reverse_heading_id => 'action-action-1-reverse-heading',
+                reverse_reason_id  => 'action-action-1-reverse-reason',
+                reversible         => 1,
+                unlock_reason_id   => 'action-action-1-unlock-reason',
+            },
+        },
+        status => 'post_hidden',
+    },
+    'moderation presenter owns action mutation response shape'
+);
 my $report = $moderation->report(
     {
         report_id   => 'report 1',
@@ -243,6 +380,12 @@ is( $report->{ui}{heading_id},
 is( $report->{ui}{post_reason_id},
     'report-report-1-post-reason',
     'moderation report exposes post reason control metadata' );
+is(
+    $moderation->report_action_response( 'report_assigned', $report )
+      ->{report}{ui}{heading_id},
+    'report-report-1-heading',
+    'moderation presenter owns report mutation response metadata'
+);
 my $suspension = $moderation->suspension(
     {
         suspension => {
@@ -256,10 +399,40 @@ is(
     'suspension-suspension-1-revoke-reason',
     'moderation suspension exposes revoke reason control metadata'
 );
+is(
+    $moderation->suspension_response( 'user_suspended', $suspension )
+      ->{suspension}{ui}{heading_id},
+    'suspension-suspension-1-heading',
+    'moderation presenter owns suspension mutation response metadata'
+);
 
 my $community = GPForum::ViewModel::Community::Presenter->new;
 my $renderer  = GPForum::Service::Notification::Renderer->new(
     i18n => GPForum::Service::I18N->new );
+is_deeply(
+    $community->bookmark_response(
+        'bookmarked', { bookmark_id => 'bookmark-1', target_id => 'thread-1' },
+    ),
+    {
+        bookmark => { bookmark_id => 'bookmark-1', target_id => 'thread-1' },
+        status   => 'bookmarked',
+    },
+    'community presenter owns bookmark mutation response shape'
+);
+is_deeply(
+    $community->subscription_response(
+        'followed',
+        { subscription_id => 'subscription-1', target_id => 'thread-1' },
+    ),
+    {
+        status       => 'followed',
+        subscription => {
+            subscription_id => 'subscription-1',
+            target_id       => 'thread-1',
+        },
+    },
+    'community presenter owns subscription mutation response shape'
+);
 my $notifications    = GPForum::ViewModel::Notifications::Presenter->new;
 my $notification_row = {
     created_at        => '2026-05-23T12:00:00Z',
@@ -289,6 +462,23 @@ is(
     $notification->{ui}{heading_id},
     'notification-notification-1-heading',
     'notification presenter exposes stable heading metadata'
+);
+is_deeply(
+    $notifications->mark_read_response(
+        {
+            notification_id => 'notification-1',
+            unread_count    => 2,
+        }
+    ),
+    {
+        read => {
+            notification_id => 'notification-1',
+            unread_count    => 2,
+        },
+        status       => 'read',
+        unread_count => 2,
+    },
+    'notification presenter owns mark-read mutation response shape'
 );
 is_deeply(
     $community->notification(
@@ -370,8 +560,21 @@ my $profile = $identity->profile(
 );
 is( $profile->{user}{profile_label},
     '@giacomo', 'identity presenter fills safe public profile label' );
+my $settings = $identity->settings_page(
+    digest_frequency_options => [ { value   => 'daily' } ],
+    locale_options           => [ { locale  => 'en' } ],
+    notification_preferences => [ { channel => 'in_app' } ],
+    theme_options            => [ { name    => 'default' } ],
+);
+is( $settings->{ui}{heading_id},
+    'settings-heading',
+    'identity presenter exposes settings heading metadata' );
+is( $settings->{notification_preferences}[0]{channel},
+    'in_app', 'identity presenter preserves settings preference payloads' );
 _assert_no_blessed_values( $profile,
     'identity profile view model is plain data' );
+_assert_no_blessed_values( $settings,
+    'identity settings view model is plain data' );
 _assert_no_blessed_values( $post, 'forum post view model is plain data' );
 
 my $privacy = GPForum::ViewModel::Privacy::Presenter->new;
@@ -397,8 +600,37 @@ my $deletion = $privacy->deletion_request(
 is( $deletion->{ui}{heading_id},
     'deletion-delete-1-heading',
     'privacy deletion presenter normalizes heading metadata' );
+is(
+    $privacy->export_request_response( 'export_requested', $export )
+      ->{export_request}{ui}{heading_id},
+    'export-export-1-heading',
+    'privacy presenter owns export mutation response metadata'
+);
+is(
+    $privacy->deletion_request_response( 'deletion_requested', $deletion )
+      ->{deletion_request}{ui}{heading_id},
+    'deletion-delete-1-heading',
+    'privacy presenter owns deletion mutation response metadata'
+);
+is_deeply(
+    $privacy->deletion_review_response(
+        'deletion_approved', { ok => 1, request_id => 'delete-1' }
+    ),
+    {
+        deletion_review => {
+            error      => undef,
+            idempotent => 0,
+            job        => undef,
+            ok         => 1,
+            request_id => 'delete-1',
+        },
+        status => 'deletion_approved',
+    },
+    'privacy presenter owns deletion review mutation response shape'
+);
 
-my $attachment = GPForum::ViewModel::Attachment::Presenter->new->attachment(
+my $attachment_presenter = GPForum::ViewModel::Attachment::Presenter->new;
+my $attachment           = $attachment_presenter->attachment(
     {
         attachment_id     => 'attachment-1',
         byte_size         => 512,
@@ -418,6 +650,37 @@ is(
     $attachment->{ui}{heading_id},
     'attachment-attachment-1-heading',
     'attachment presenter exposes stable heading metadata'
+);
+is_deeply(
+    $attachment_presenter->upload_response(
+        {
+            attachment => {
+                attachment_id     => 'attachment-1',
+                byte_size         => 512,
+                media_type        => 'text/plain',
+                original_filename => 'note.txt',
+            },
+            link => { target_id => 'post-1' },
+        },
+        download_url => '/attachments/attachment-1/download',
+    ),
+    {
+        attachment => {
+            attachment_id     => 'attachment-1',
+            byte_size         => 512,
+            download_url      => '/attachments/attachment-1/download',
+            media_type        => 'text/plain',
+            original_filename => 'note.txt',
+            scan_status       => undef,
+            state             => undef,
+            ui                => {
+                heading_id => 'attachment-attachment-1-heading',
+            },
+        },
+        link   => { target_id => 'post-1' },
+        status => 'uploaded',
+    },
+    'attachment presenter owns upload mutation response shape'
 );
 
 my $resource = GPForum::ViewModel::Discovery::Presenter->new->resource(

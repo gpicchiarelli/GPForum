@@ -11,6 +11,8 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Theme::Registry;
+
 our $VERSION = '0.001';
 
 const my $HTTP_OK             => 200;
@@ -28,8 +30,9 @@ const my $GREEN_WEIGHT        => 0.7152;
 const my $BLUE_WEIGHT         => 0.0722;
 const my $RATIO_OFFSET        => 0.05;
 
-my $css    = path('assets/css/gpforum-ssr.css')->slurp;
-my %tokens = _root_tokens($css);
+my $css      = path('assets/css/gpforum-ssr.css')->slurp;
+my %tokens   = _root_tokens($css);
+my $registry = GPForum::Theme::Registry->new;
 
 is( $tokens{'color-background'},
     '#f8f6ef', 'SSR theme background comes from the logo paper color' );
@@ -69,6 +72,20 @@ like(
     qr/html\[data-theme="dark"\]/msx,
     'theme has dark-mode token readiness without auto-enabling it'
 );
+like(
+    $css,
+    qr/html\[data-theme="high_contrast"\]/msx,
+    'theme has high-contrast token readiness without auto-enabling it'
+);
+
+for my $theme (qw(default dark high_contrast)) {
+    ok(
+        -e path( 'themes', $theme, 'tokens.css' ),
+        "$theme theme token file exists"
+    );
+    _theme_tokens_match_registry( $registry, $theme );
+    _theme_contrast_ok( $registry, $theme );
+}
 like(
     $css,
     qr/html\[data-direction="rtl"\]/msx,
@@ -129,7 +146,7 @@ $test->content_like(qr/GPForum/msx);
 $test->get_ok( '/login' => { 'Accept-Language' => 'it' } );
 $test->status_is($HTTP_OK);
 $test->element_exists(
-'html[lang="it"][dir="ltr"][data-locale="it"][data-direction="ltr"][data-script="Latn"]'
+'html[lang="it"][dir="ltr"][data-locale="it"][data-direction="ltr"][data-script="Latn"][data-theme="default"][data-color-scheme="light"]'
 );
 $test->element_exists('body.app-shell.typography-latin');
 $test->element_exists('link[rel="stylesheet"][href="/gpforum-ssr.css"]');
@@ -140,16 +157,84 @@ $test->text_is( 'nav.breadcrumbs [aria-current="page"]' => 'Accedi' );
 $test->element_exists('footer.site-footer');
 $test->text_is( 'h1' => 'Accesso' );
 $test->content_like(qr/Nome [ ] utente [ ] o [ ] email/msx);
+$test->element_exists('form.theme-form[action="/theme"]');
+$test->element_exists('select[name="theme"] option[value="high_contrast"]');
+
+$test->get_ok( '/login' => { Cookie => 'gpforum_theme=dark' } );
+$test->status_is($HTTP_OK);
+$test->element_exists('html[data-theme="dark"][data-color-scheme="dark"]');
+$test->element_exists('meta[name="theme-color"][content="#111412"]');
+
+$test->get_ok( '/login' => { Cookie => 'gpforum_theme=neon' } );
+$test->status_is($HTTP_OK);
+$test->element_exists('html[data-theme="default"][data-color-scheme="light"]');
 
 done_testing();
+
+sub _theme_tokens_match_registry {
+    my ( $registry, $theme ) = @_;
+
+    my %file_tokens =
+      _css_color_tokens( path( 'themes', $theme, 'tokens.css' )->slurp );
+    for my $token_name ( @{ $registry->token_names } ) {
+        my $css_name = _css_token_name($token_name);
+        is(
+            $file_tokens{$css_name},
+            $registry->token( $theme, $token_name ),
+            "$theme $css_name token matches registry"
+        );
+    }
+
+    return;
+}
+
+sub _theme_contrast_ok {
+    my ( $registry, $theme ) = @_;
+
+    my $tokens = $registry->tokens($theme);
+    cmp_ok( _contrast( $tokens->{foreground}, $tokens->{background} ),
+        '>=', $WCAG_AA, "$theme foreground/background passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{muted}, $tokens->{background} ),
+        '>=', $WCAG_AA, "$theme muted/background passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{primary}, $tokens->{background} ),
+        '>=', $WCAG_AA, "$theme primary/background passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{text_on_primary}, $tokens->{primary} ),
+        '>=', $WCAG_AA, "$theme primary action text passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{text_on_accent}, $tokens->{accent} ),
+        '>=', $WCAG_AA, "$theme accent action text passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{danger}, $tokens->{surface_danger} ),
+        '>=', $WCAG_AA, "$theme danger surface text passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{success}, $tokens->{surface_success} ),
+        '>=', $WCAG_AA, "$theme success surface text passes WCAG AA" );
+    cmp_ok( _contrast( $tokens->{warning}, $tokens->{surface_warning} ),
+        '>=', $WCAG_AA, "$theme warning surface text passes WCAG AA" );
+
+    return;
+}
 
 sub _root_tokens {
     my ($stylesheet) = @_;
 
     my ($root_block) = $stylesheet =~ /:root \s* \{ (.*?) \n\}/msx;
-    my %tokens = $root_block =~ /--([a-z0-9-]+): \s* (\#[0-9a-f]{6})/gimsx;
+    my %tokens = _css_color_tokens($root_block);
 
     return %tokens;
+}
+
+sub _css_color_tokens {
+    my ($stylesheet) = @_;
+
+    my %tokens = $stylesheet =~ /--([a-z0-9-]+): \s* (\#[0-9a-f]{6})/gimsx;
+
+    return %tokens;
+}
+
+sub _css_token_name {
+    my ($token_name) = @_;
+
+    $token_name =~ s/_/-/gmsx;
+
+    return 'color-' . $token_name;
 }
 
 sub _contrast {

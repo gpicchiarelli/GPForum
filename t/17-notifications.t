@@ -187,6 +187,47 @@ is( scalar @{ $preferences->created }, 1, 'preference row is upserted' );
 is_deeply( [ $preference_store->enabled_channels('user-1') ],
     ['email'], 'enabled channels can be listed' );
 
+my $preference_page = $preference_store->preferences_for_user('user-1');
+is( scalar @{$preference_page},
+    3, 'preference page exposes every supported channel' );
+is( $preference_page->[0]{channel},
+    'in_app', 'preference page has stable channel order' );
+is( $preference_page->[1]{enabled},
+    1, 'stored email preference overlays channel defaults' );
+is( $preference_page->[2]{enabled}, 0, 'digest channel defaults to disabled' );
+is(
+    $preference_page->[0]{label_key},
+    'notifications.channel.in_app',
+    'preference page returns presentation label keys'
+);
+
+my $saved_preferences = $preference_store->set_preferences(
+    {
+        user_id     => 'user-1',
+        preferences => [
+            {
+                channel          => 'in_app',
+                digest_frequency => 'immediate',
+                enabled          => 1,
+            },
+            {
+                channel          => 'email',
+                digest_frequency => 'weekly',
+                enabled          => 0,
+            },
+            {
+                channel          => 'digest',
+                digest_frequency => 'weekly',
+                enabled          => 1,
+            },
+        ],
+    }
+);
+is( $saved_preferences->[1]{enabled},
+    0, 'bulk preference save persists disabled email' );
+is( $saved_preferences->[2]{digest_frequency},
+    'weekly', 'bulk preference save persists digest frequency' );
+
 my $renderer           = GPForum::Service::Notification::Renderer->new;
 my $reply_presentation = $renderer->render_inbox_item(
     'it',
@@ -371,6 +412,38 @@ my $denied = $denied_dispatcher->create_notification(
 ok( !$denied->{ok}, 'permission denied notification is skipped' );
 is( $denied->{skipped}, 'permission_denied',
     'permission denied reason is explicit' );
+
+$preference_store->set_preference(
+    {
+        user_id          => 'user-muted',
+        channel          => 'in_app',
+        enabled          => 0,
+        digest_frequency => 'never',
+    }
+);
+ok(
+    !$preference_store->channel_enabled( 'user-muted', 'in_app' ),
+    'preference store reports disabled in-app channel'
+);
+my $muted_dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    schema           => $schema,
+    clock            => $clock,
+    preference_store => $preference_store,
+);
+my $muted_notification = $muted_dispatcher->create_notification(
+    {
+        recipient_user_id => 'user-muted',
+        source_type       => 'post',
+        source_id         => 'post-muted',
+        notification_type => 'reply',
+    }
+);
+ok( !$muted_notification->{ok},
+    'disabled in-app channel skips notification delivery' );
+is( $muted_notification->{skipped},
+    'channel_disabled', 'disabled notification channel reason is explicit' );
+is( scalar @{ $notifications->created },
+    1, 'disabled in-app channel does not insert notification row' );
 
 my $fanout = $dispatcher->fanout_to_subscribers(
     {

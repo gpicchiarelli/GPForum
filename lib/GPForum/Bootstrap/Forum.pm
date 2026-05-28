@@ -26,6 +26,7 @@ use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Notification::Dispatcher;
+use GPForum::Service::Notification::PreferenceStore;
 use GPForum::Service::Notification::Renderer;
 use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Search::PermissionEngine;
@@ -287,10 +288,20 @@ sub _register_notification_helpers {
         }
     );
     $application->helper(
+        gp_notification_preference_store => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Notification::PreferenceStore->new(
+                schema => $controller->gp_schema );
+        }
+    );
+    $application->helper(
         gp_notification_dispatcher => sub {
             my ($controller) = @_;
 
             return GPForum::Service::Notification::Dispatcher->new(
+                preference_store =>
+                  $controller->gp_notification_preference_store,
                 realtime_hub       => $controller->gp_realtime_hub,
                 schema             => $controller->gp_schema,
                 subscription_store => $controller->gp_subscription_store,

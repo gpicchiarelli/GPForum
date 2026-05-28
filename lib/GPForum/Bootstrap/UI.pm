@@ -3,6 +3,7 @@ package GPForum::Bootstrap::UI;
 use strict;
 use warnings;
 
+use GPForum::Theme::Registry;
 use GPForum::View::Presenter;
 use GPForum::ViewModel::Admin::Presenter;
 use GPForum::ViewModel::Attachment::Presenter;
@@ -13,6 +14,7 @@ use GPForum::ViewModel::Identity::Presenter;
 use GPForum::ViewModel::Moderation::Presenter;
 use GPForum::ViewModel::Notifications::Presenter;
 use GPForum::ViewModel::Privacy::Presenter;
+use GPForum::Web::RenderPolicy;
 
 our $VERSION = '0.001';
 
@@ -22,8 +24,12 @@ sub register {
     my $application = $input{application};
     my $i18n        = $input{i18n};
 
-    my $locale_cookie         = 'gpforum_locale';
-    my $presenter             = GPForum::View::Presenter->new;
+    my $locale_cookie  = 'gpforum_locale';
+    my $theme_cookie   = 'gpforum_theme';
+    my $presenter      = GPForum::View::Presenter->new;
+    my $render_policy  = GPForum::Web::RenderPolicy->new;
+    my $theme_registry = GPForum::Theme::Registry->new(
+        configured_default_theme => $input{default_theme}, );
     my $admin_view_model      = GPForum::ViewModel::Admin::Presenter->new;
     my $attachment_view_model = GPForum::ViewModel::Attachment::Presenter->new;
     my $community_view_model  = GPForum::ViewModel::Community::Presenter->new;
@@ -35,8 +41,11 @@ sub register {
       GPForum::ViewModel::Notifications::Presenter->new;
     my $privacy_view_model = GPForum::ViewModel::Privacy::Presenter->new;
 
-    $application->helper( i18n_service => sub { return $i18n; } );
-    $application->helper( ui_presenter => sub { return $presenter; } );
+    $application->helper( i18n_service     => sub { return $i18n; } );
+    $application->helper( ui_render_policy => sub { return $render_policy; } );
+    $application->helper( ui_presenter     => sub { return $presenter; } );
+    $application->helper(
+        ui_theme_registry => sub { return $theme_registry; } );
     $application->helper(
         gp_admin_view_model => sub { return $admin_view_model; } );
     $application->helper(
@@ -77,7 +86,7 @@ sub register {
         }
     );
     _register_translation_helpers($application);
-    _register_presentation_helpers($application);
+    _register_presentation_helpers( $application, $theme_cookie );
 
     $application->hook(
         after_dispatch => sub {
@@ -133,7 +142,7 @@ sub _register_translation_helpers {
 }
 
 sub _register_presentation_helpers {
-    my ($application) = @_;
+    my ( $application, $theme_cookie ) = @_;
 
     $application->helper(
         ui_label => sub {
@@ -259,7 +268,79 @@ sub _register_presentation_helpers {
                 $controller->ui_locale, $number );
         }
     );
-    $application->helper( ui_theme_color => sub { return '#f8f6ef'; } );
+    $application->helper(
+        ui_theme => sub {
+            my ($controller) = @_;
+
+            my $cached_theme = $controller->stash('ui_theme');
+            return $cached_theme
+              if defined $cached_theme && length $cached_theme;
+
+            my $requested_theme = $controller->session('preferred_theme')
+              || $controller->cookie($theme_cookie);
+            my $theme =
+                $controller->ui_theme_registry->supported($requested_theme)
+              ? $requested_theme
+              : $controller->ui_theme_registry->default_theme;
+            $controller->stash( ui_theme => $theme );
+
+            return $theme;
+        }
+    );
+    $application->helper(
+        ui_theme_metadata => sub {
+            my ($controller) = @_;
+
+            return $controller->ui_theme_registry->theme(
+                $controller->ui_theme );
+        }
+    );
+    $application->helper(
+        ui_theme_color => sub {
+            my ($controller) = @_;
+
+            return $controller->ui_theme_registry->theme_color(
+                $controller->ui_theme );
+        }
+    );
+    $application->helper(
+        ui_theme_color_scheme => sub {
+            my ($controller) = @_;
+
+            return $controller->ui_theme_registry->color_scheme(
+                $controller->ui_theme );
+        }
+    );
+    $application->helper(
+        ui_theme_options => sub {
+            my ($controller) = @_;
+
+            my $options = $controller->ui_theme_registry->theme_options(
+                $controller->ui_theme );
+            for my $option ( @{$options} ) {
+                $option->{label} = $controller->t( $option->{label_key} );
+            }
+
+            return $options;
+        }
+    );
+    $application->helper(
+        ui_trusted_html => sub {
+            my ( $controller, $html, $context ) = @_;
+
+            return $controller->ui_render_policy->trusted_html(
+                context => $context,
+                html    => $html,
+            );
+        }
+    );
+    $application->helper(
+        ui_attr => sub {
+            my ( $controller, %input ) = @_;
+
+            return $controller->ui_render_policy->attribute(%input);
+        }
+    );
     $application->helper(
         ui_locale_options => sub {
             my ($controller) = @_;
@@ -334,6 +415,7 @@ sub _ui_breadcrumbs {
         privacy_review         => 'nav.privacy',
         profile                => 'nav.profile',
         register               => 'auth.register',
+        settings               => 'nav.settings',
         thread                 => 'nav.categories',
         thread_canonical       => 'nav.categories',
     );

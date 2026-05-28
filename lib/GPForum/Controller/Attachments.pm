@@ -7,6 +7,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
+use GPForum::Web::ErrorPayload;
+
 our $VERSION = '0.001';
 
 const my $HTTP_OK           => 200;
@@ -82,19 +84,14 @@ sub _upload_response {
     my ( $controller, $result, $thread_id ) = @_;
 
     if ( _wants_json($controller) ) {
+        my $download_url = $controller->url_for( 'attachment_download',
+            attachment_id => _column( $result->{attachment}, 'attachment_id' ),
+        )->to_string;
+
         return $controller->render(
-            json => {
-                status     => 'uploaded',
-                attachment => $controller->gp_attachment_view_model->attachment(
-                    $result->{attachment},
-                    download_url => $controller->url_for(
-                        'attachment_download',
-                        attachment_id =>
-                          _column( $result->{attachment}, 'attachment_id' ),
-                    )->to_string,
-                ),
-                link => $result->{link},
-            },
+            json => $controller->gp_attachment_view_model->upload_response(
+                $result, download_url => $download_url,
+            ),
             status => $HTTP_CREATED,
         );
     }
@@ -131,11 +128,10 @@ sub _write_user_id {
         return _render_error(
             $controller,
             429,
-            {
-                error  => 'rate limit exceeded',
-                status => 'rate_limited',
-                title  => 'Rate limited',
-            }
+            GPForum::Web::ErrorPayload->rate_limited(
+                error => 'rate limit exceeded',
+                title => 'Rate limited',
+            )
         );
     }
 
@@ -182,82 +178,51 @@ sub _bad_request {
     return _render_error(
         $controller,
         $HTTP_BAD_REQUEST,
-        {
+        GPForum::Web::ErrorPayload->bad_request(
             error  => 'The submitted attachment was invalid.',
             errors => $errors || {},
-            status => 'invalid',
             title  => 'Invalid attachment',
-        }
+        )
     );
 }
 
 sub _csrf_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            error  => 'Bad CSRF token',
-            status => 'forbidden',
-            title  => 'Forbidden',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->csrf_failure,
     );
 }
 
 sub _unauthorized {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_UNAUTHORIZED,
-        {
-            error  => 'authentication required',
-            status => 'unauthorized',
-            title  => 'Authentication required',
-        }
+    return _render_error( $controller, $HTTP_UNAUTHORIZED,
+        GPForum::Web::ErrorPayload->unauthorized,
     );
 }
 
 sub _forbidden {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            error  => $error,
-            status => 'forbidden',
-            title  => 'Forbidden',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->forbidden( error => $error ),
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_NOT_FOUND,
-        {
-            error  => $error,
-            status => 'not_found',
-            title  => 'Not found',
-        }
+    return _render_error( $controller, $HTTP_NOT_FOUND,
+        GPForum::Web::ErrorPayload->not_found( error => $error ),
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_SERVER_ERROR,
-        {
-            error  => 'internal error',
-            status => 'error',
-            title  => 'Internal error',
-        }
+    return _render_error( $controller, $HTTP_SERVER_ERROR,
+        GPForum::Web::ErrorPayload->system_failure,
     );
 }
 

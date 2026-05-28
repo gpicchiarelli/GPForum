@@ -14,7 +14,7 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 45;
+const my $EXPECTED_TESTS            => 47;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
@@ -34,6 +34,7 @@ my %environment = (
     GPFORUM_ENV                          => 'test',
     GPFORUM_LOG_LEVEL                    => 'info',
     GPFORUM_DEFAULT_LOCALE               => 'it',
+    GPFORUM_DEFAULT_THEME                => 'dark',
     GPFORUM_PUBLIC_BASE_URL              => 'http://example.test',
     GPFORUM_SESSION_SECRET               => 'test-secret',
     GPFORUM_DATABASE_DSN                 => 'dbi:Pg:dbname=gpforum_test',
@@ -70,6 +71,7 @@ my $runtime = GPForum::Runtime->from_config($config);
 is( $config->environment,    'test', 'environment loads from env' );
 is( $config->log_level,      'info', 'log level loads from env' );
 is( $config->default_locale, 'it',   'default locale loads from env' );
+is( $config->default_theme,  'dark', 'default theme loads from env' );
 is( $config->public_base_url, 'http://example.test',
     'public base url loads from env' );
 is( $config->database_dsn, 'dbi:Pg:dbname=gpforum_test',
@@ -152,6 +154,14 @@ throws_ok(
     },
 qr/\A runtime_worker_policy [ ] must [ ] be [ ] configured [ ] or [ ] cap-to-cpu/msx,
     'invalid runtime worker policy fails validation',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( default_theme => 'neon' )->validate;
+    },
+qr/\A default_theme [ ] must [ ] be [ ] default, [ ] dark, [ ] or [ ] high_contrast/msx,
+    'invalid default theme fails validation',
 );
 
 throws_ok(

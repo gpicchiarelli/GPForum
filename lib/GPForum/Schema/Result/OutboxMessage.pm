@@ -82,6 +82,10 @@ __PACKAGE__->add_columns(
         data_type   => 'text',
         is_nullable => 1,
     },
+    failure_type => {
+        data_type   => 'text',
+        is_nullable => 1,
+    },
 );
 
 __PACKAGE__->set_primary_key('outbox_id');

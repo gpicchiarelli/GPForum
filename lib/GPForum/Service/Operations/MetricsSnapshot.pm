@@ -230,16 +230,25 @@ sub _outbox {
 
     return {} if !$self->schema;
 
-    my $pending = eval {
+    my $snapshot = eval {
         my $outbox = $self->schema->resultset('OutboxMessage');
-        my $search = $outbox->search( { status => 'pending' } );
-
-        return $search->count;
+        return {
+            pending       => $outbox->search( { status => 'pending' } )->count,
+            failed        => $outbox->search( { status => 'failed' } )->count,
+            retry_backlog => $outbox->search(
+                {
+                    status          => { -in  => [ 'pending', 'failed' ] },
+                    next_attempt_at => { '<=' => $self->clock->now_iso8601 },
+                }
+            )->count,
+            dead_letters =>
+              $self->schema->resultset('DeadLetter')->search( {} )->count,
+        };
     };
 
-    return {} if !defined $pending;
+    return {} if !$snapshot;
 
-    return { pending => $pending };
+    return $snapshot;
 }
 
 sub _degraded_rate_limiter_active {

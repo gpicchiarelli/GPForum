@@ -124,6 +124,42 @@ sub erasure_job {
     };
 }
 
+sub export_request_response {
+    my ( $self, $status, $export ) = @_;
+
+    return {
+        export_request => $self->export_request($export),
+        status         => $status,
+    };
+}
+
+sub deletion_request_response {
+    my ( $self, $status, $request ) = @_;
+
+    return {
+        deletion_request => $self->deletion_request($request),
+        status           => $status,
+    };
+}
+
+sub deletion_review_response {
+    my ( $self, $status, $result ) = @_;
+
+    return {
+        deletion_review => $self->deletion_review($result),
+        status          => $status,
+    };
+}
+
+sub erasure_job_response {
+    my ( $self, $status, $result ) = @_;
+
+    return {
+        erasure_job => $result,
+        status      => $status,
+    };
+}
+
 sub deletion_review {
     my ( $self, $result ) = @_;
 

@@ -46,7 +46,7 @@
           </h2>
           <p>
             % if ($result->{snippet_html}) {
-              <%== $result->{snippet_html} %>
+              <%== ui_trusted_html($result->{snippet_html}, 'search.snippet') %>
             % } else {
               <%= $result->{snippet} || $result->{body} %>
             % }

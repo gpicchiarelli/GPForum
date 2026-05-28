@@ -7,6 +7,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
+use GPForum::Web::ErrorPayload;
+
 our $VERSION = '0.001';
 
 const my $DEFAULT_QUEUE_LIMIT => 50;
@@ -425,12 +427,10 @@ sub _moderation_action_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status => $status,
-                action =>
-                  $controller->gp_moderation_view_model->moderation_action(
-                    $action),
-            },
+            json => $controller->gp_moderation_view_model
+              ->moderation_action_response(
+                $status, $action
+              ),
             status => $HTTP_OK,
         );
     }
@@ -443,12 +443,9 @@ sub _suspension_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status     => $status,
-                suspension =>
-                  $controller->gp_moderation_view_model->suspension(
-                    $suspension),
-            },
+            json => $controller->gp_moderation_view_model->suspension_response(
+                $status, $suspension,
+            ),
             status => $HTTP_OK,
         );
     }
@@ -461,11 +458,10 @@ sub _action_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status => $status,
-                report =>
-                  $controller->gp_moderation_view_model->report($report),
-            },
+            json =>
+              $controller->gp_moderation_view_model->report_action_response(
+                $status, $report
+              ),
             status => $HTTP_OK,
         );
     }
@@ -562,12 +558,11 @@ sub _bad_request {
     return _render_error(
         $controller,
         $HTTP_BAD_REQUEST,
-        {
-            status => 'invalid',
-            title  => 'Invalid moderation request',
+        GPForum::Web::ErrorPayload->bad_request(
             error  => 'The submitted moderation request was invalid.',
             errors => $errors,
-        }
+            title  => 'Invalid moderation request',
+        )
     );
 }
 
@@ -582,14 +577,8 @@ sub _csrf_failure {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            status => 'forbidden',
-            title  => 'Forbidden',
-            error  => 'Bad CSRF token',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->csrf_failure,
     );
 }
 
@@ -604,14 +593,8 @@ sub _unauthorized {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_UNAUTHORIZED,
-        {
-            status => 'unauthorized',
-            title  => 'Authentication required',
-            error  => 'authentication required',
-        }
+    return _render_error( $controller, $HTTP_UNAUTHORIZED,
+        GPForum::Web::ErrorPayload->unauthorized,
     );
 }
 
@@ -627,42 +610,24 @@ sub _forbidden {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            status => 'forbidden',
-            title  => 'Forbidden',
-            error  => 'permission denied',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->forbidden,
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_NOT_FOUND,
-        {
-            status => 'not_found',
-            title  => 'Not found',
-            error  => $error,
-        }
+    return _render_error( $controller, $HTTP_NOT_FOUND,
+        GPForum::Web::ErrorPayload->not_found( error => $error ),
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_SERVER_ERROR,
-        {
-            status => 'error',
-            title  => 'Internal error',
-            error  => 'internal error',
-        }
+    return _render_error( $controller, $HTTP_SERVER_ERROR,
+        GPForum::Web::ErrorPayload->system_failure,
     );
 }
 

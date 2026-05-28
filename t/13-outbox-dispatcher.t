@@ -19,7 +19,7 @@ use GPForum::Test::OutboxTransport;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 28;
+const my $EXPECTED_TESTS => 30;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -97,6 +97,8 @@ is(
     'GPForum::Test::OutboxFailure',
     'failing message records error class'
 );
+is( $failing->updates->[1]{failure_type},
+    'transient', 'failing message records classified failure type' );
 is( $failing->updates->[1]{next_attempt_at},
     '2026-05-23T12:01:00Z', 'failing message schedules retry' );
 ok(
@@ -114,6 +116,8 @@ is( $dead_letters->created->[0]{source_id},
     'outbox-2', 'dead letter stores source id' );
 is( $dead_letters->created->[0]{retry_count},
     2, 'dead letter stores retry count' );
+is( $dead_letters->created->[0]{failure_type},
+    'transient', 'dead letter stores classified failure type' );
 is_deeply(
     $dead_letters->created->[0]{payload},
     { event_id => 'event-2' },

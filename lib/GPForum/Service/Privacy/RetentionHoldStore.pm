@@ -8,19 +8,21 @@ use Mojo::Base -base;
 use Const::Fast;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
-use GPForum::Service::Outbox::MessageBuilder;
+use GPForum::Infrastructure::EventRecorder;
 
 our $VERSION = '0.001';
 
 const my $SCHEMA_VERSION => 1;
 
-has clock          => sub { return GPForum::Service::Clock->new; };
-has id_service     => sub { return GPForum::Service::Id->new; };
-has outbox_builder => sub {
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Service::Id->new; };
+has recorder   => sub {
     my ($self) = @_;
 
-    return GPForum::Service::Outbox::MessageBuilder->new(
-        id_service => $self->id_service, );
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
 };
 has schema => undef;
 
@@ -71,10 +73,8 @@ sub _record_event_and_audit {
     my ( $self, $action, $hold, $actor_id ) = @_;
 
     my $correlation_id = $self->id_service->uuid;
-    my $event          = {
-        event_id          => $self->id_service->uuid,
+    $self->recorder->record_event(
         event_type        => $action,
-        schema_version    => $SCHEMA_VERSION,
         aggregate_type    => $hold->{resource_type},
         aggregate_id      => $hold->{resource_id},
         aggregate_version => $SCHEMA_VERSION,
@@ -90,30 +90,23 @@ sub _record_event_and_audit {
             starts_at         => $hold->{starts_at},
             ends_at           => $hold->{ends_at},
         },
-        metadata   => {},
-        created_at => $hold->{created_at},
-    };
+        timestamp => $hold->{created_at},
+    );
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => $action,
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $actor_id,
-            target_type    => $hold->{resource_type},
-            target_id      => $hold->{resource_id},
-            correlation_id => $correlation_id,
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                reason            => $hold->{reason},
-                retention_hold_id => $hold->{retention_hold_id},
-            },
-            created_at => $hold->{created_at},
-        }
+    $self->recorder->record_audit(
+        action         => $action,
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $actor_id,
+        target_type    => $hold->{resource_type},
+        target_id      => $hold->{resource_id},
+        correlation_id => $correlation_id,
+        previous_hash  => undef,
+        record_hash    => q{},
+        metadata       => {
+            reason            => $hold->{reason},
+            retention_hold_id => $hold->{retention_hold_id},
+        },
+        created_at => $hold->{created_at},
     );
 
     return;

@@ -19,21 +19,26 @@ WCAG contrast checks are enforced in `t/65-accessible-theme.t`.
 | Foreground on background | 17.15:1 | AAA normal text |
 | Muted text on background | 9.80:1 | AAA normal text |
 | Primary links on background | 10.23:1 | AAA normal text |
-| White on primary button | 11.06:1 | AAA normal text |
+| Text-on-primary on primary button | 11.06:1 | AAA normal text |
 | White on secondary surface | 6.79:1 | AA normal text |
-| White on accent action | 5.38:1 | AA normal text |
+| Text-on-accent on accent action | 5.38:1 | AA normal text |
 | White on danger state | 7.74:1 | AAA normal text |
 | White on success state | 6.44:1 | AA normal text |
 
 The shared stylesheet includes visible `:focus-visible` states, skip links,
 reduced-motion handling, semantic breadcrumb/flash styling, form styles, and
-dark-mode token readiness through `html[data-theme="dark"]`. Dark mode is not
-enabled automatically.
+validated `default`, `dark`, and `high_contrast` theme contracts. The SSR shell
+uses the configured default theme unless a supported `gpforum_theme` cookie or
+authenticated `preferred_theme` session is present.
 
 Form validation errors are exposed through a summary with `role="alert"` and
 field-level messages connected by `aria-describedby`. Invalid controls set
 `aria-invalid="true"` and receive a border-width/focusable visual treatment in
 addition to color, so the state does not depend on color perception alone.
+
+The `/settings` form uses labelled selects, labelled notification checkboxes,
+and text descriptions for each channel. Notification state is never communicated
+by color alone.
 
 ## SSR component contracts
 
@@ -43,6 +48,7 @@ route-local markup:
 
 - `page_header` for the page heading and top-level actions;
 - `site_header`, `primary_nav`, `identity_nav`, `locale_selector`,
+  `theme_selector`,
   `breadcrumbs`, `flash_messages`, and `site_footer` for the shared shell;
 - `pagination` for labelled paging navigation;
 - `empty_state` for no-results and not-yet-created states;
@@ -62,7 +68,8 @@ Nested `<main>` elements are invalid and are blocked by `t/67-ui-system.t`.
 Add new visual decisions as semantic CSS custom properties first. Prefer
 logical properties such as `padding-inline-start` and `inset-inline-start` so
 future RTL locales can reuse the layout. Avoid inline `style` attributes in
-templates; component and token changes belong in `assets/css/gpforum-ssr.css`.
+templates; component and token changes belong in `GPForum::Theme::Registry`,
+`assets/css/gpforum-ssr.css`, and `themes/*/tokens.css`.
 
 Print output uses the same content hierarchy but removes navigation, forms,
 pagination, and transient messages so long-form discussion pages remain readable

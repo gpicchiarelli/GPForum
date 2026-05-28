@@ -47,6 +47,33 @@ sub suspensions_page {
     };
 }
 
+sub moderation_action_response {
+    my ( $self, $status, $action ) = @_;
+
+    return {
+        action => $self->moderation_action($action),
+        status => $status,
+    };
+}
+
+sub suspension_response {
+    my ( $self, $status, $suspension ) = @_;
+
+    return {
+        status     => $status,
+        suspension => $self->suspension($suspension),
+    };
+}
+
+sub report_action_response {
+    my ( $self, $status, $report ) = @_;
+
+    return {
+        report => $self->report($report),
+        status => $status,
+    };
+}
+
 sub suspension {
     my ( $self, $result ) = @_;
 

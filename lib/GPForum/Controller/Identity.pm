@@ -5,6 +5,7 @@ use warnings;
 
 use Const::Fast;
 use English qw(-no_match_vars);
+use GPForum::Web::ErrorPayload;
 use Mojo::Base 'Mojolicious::Controller';
 use Scalar::Util qw(blessed);
 use Time::HiRes  qw(time);
@@ -16,16 +17,19 @@ const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_FORBIDDEN    => 403;
 const my $HTTP_NOT_FOUND    => 404;
 const my $HTTP_OK           => 200;
+const my $HTTP_SERVER_ERROR => 500;
 const my $HTTP_TOO_MANY     => 429;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $PROFILE_THREADS   => 10;
 const my $LOGIN_LIMIT       => 10;
 const my $LOGOUT_LIMIT      => 20;
 const my $REGISTER_LIMIT    => 5;
+const my $SETTINGS_LIMIT    => 60;
 const my $SHORT_WINDOW      => 60;
 const my $LONG_WINDOW       => 300;
 const my $SESSION_SECONDS   => 2_592_000;
 const my $LOCALE_COOKIE     => 'gpforum_locale';
+const my $THEME_COOKIE      => 'gpforum_theme';
 const my $LOCALE_COOKIE_AGE => 31_536_000;
 
 sub register_form {
@@ -184,6 +188,64 @@ sub set_locale {
     return $self->redirect_to( _safe_return_to( $self->param('return_to') ) );
 }
 
+sub set_theme {
+    my ($self) = @_;
+
+    return _csrf_failure($self)
+      if $self->validation->csrf_protect->has_error('csrf_token');
+
+    my $theme = _requested_theme($self);
+    _persist_theme_preference( $self, $theme );
+    _set_theme_cookie( $self, $theme );
+    $self->stash( ui_theme => $theme );
+
+    return $self->redirect_to( _safe_return_to( $self->param('return_to') ) );
+}
+
+sub settings {
+    my ($self) = @_;
+
+    my $user_id = $self->session('user_id');
+    return _settings_unauthorized($self) if !$user_id;
+
+    my $payload = _settings_payload( $self, $user_id );
+    return _settings_system_failure($self) if !$payload;
+
+    return $self->render(
+        template => 'identity/settings',
+        %{$payload},
+        status => $HTTP_OK,
+    );
+}
+
+sub update_settings {
+    my ($self) = @_;
+
+    return _csrf_failure($self)
+      if $self->validation->csrf_protect->has_error('csrf_token');
+
+    my $user_id = $self->session('user_id');
+    return _settings_unauthorized($self) if !$user_id;
+    return _rate_limited($self)
+      if !_identity_allowed( $self, 'identity.settings' );
+
+    my $locale = _requested_locale($self);
+    my $theme  = _requested_theme($self);
+
+    return _settings_system_failure($self)
+      if !_persist_notification_preferences( $self, $user_id );
+
+    _persist_locale_preference( $self, $locale );
+    _persist_theme_preference( $self, $theme );
+    _set_locale_cookie( $self, $locale );
+    _set_theme_cookie( $self, $theme );
+    $self->stash( ui_locale => $locale, ui_theme => $theme );
+
+    $self->flash( success => $self->t('settings.saved') );
+
+    return $self->redirect_to('settings');
+}
+
 sub profile {
     my ($self) = @_;
 
@@ -223,7 +285,7 @@ sub _profile_not_found {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json   => { status => 'not_found', error => 'profile not found' },
+            json   => GPForum::Web::ErrorPayload->identity_profile_not_found,
             status => $HTTP_NOT_FOUND,
         );
     }
@@ -287,6 +349,7 @@ sub _limit_for {
 
     return $REGISTER_LIMIT if $action eq 'identity.register';
     return $LOGOUT_LIMIT   if $action eq 'identity.logout';
+    return $SETTINGS_LIMIT if $action eq 'identity.settings';
 
     return $LOGIN_LIMIT;
 }
@@ -295,6 +358,7 @@ sub _window_for {
     my ($action) = @_;
 
     return $SHORT_WINDOW if $action eq 'identity.logout';
+    return $SHORT_WINDOW if $action eq 'identity.settings';
 
     return $LONG_WINDOW;
 }
@@ -327,9 +391,10 @@ sub _apply_login_session {
 
     my $preferred_locale =
       _login_preferred_locale( $controller, $authenticated );
-    my $session = $controller->session;
+    my $preferred_theme = _login_preferred_theme( $controller, $authenticated );
+    my $session         = $controller->session;
     delete @{$session}{
-        qw(user_id session_id login_rotation session_expires_at_epoch preferred_locale)
+        qw(user_id session_id login_rotation session_expires_at_epoch preferred_locale preferred_theme)
     };
     my %session_values = (
         login_rotation           => $controller->gp_id->uuid,
@@ -339,10 +404,14 @@ sub _apply_login_session {
     );
     $session_values{preferred_locale} = $preferred_locale
       if defined $preferred_locale;
+    $session_values{preferred_theme} = $preferred_theme
+      if defined $preferred_theme;
 
     $controller->session(%session_values);
     _set_locale_cookie( $controller, $preferred_locale )
       if defined $preferred_locale;
+    _set_theme_cookie( $controller, $preferred_theme )
+      if defined $preferred_theme;
 
     return;
 }
@@ -372,6 +441,40 @@ sub _authenticated_user_locale {
       && blessed($user)
       && $user->can('get_column')
       && defined $user->get_column('preferred_locale');
+
+    return;
+}
+
+sub _login_preferred_theme {
+    my ( $controller, $authenticated ) = @_;
+
+    my $authenticated_theme = _authenticated_user_theme($authenticated);
+    return $authenticated_theme
+      if $controller->ui_theme_registry->supported($authenticated_theme);
+
+    my $cookie_theme = $controller->cookie($THEME_COOKIE);
+    return $cookie_theme
+      if $controller->ui_theme_registry->supported($cookie_theme);
+
+    return $controller->ui_theme;
+}
+
+sub _authenticated_user_theme {
+    my ($authenticated) = @_;
+
+    my $user = $authenticated->{user};
+    return $authenticated->{preferred_theme}
+      if defined $authenticated->{preferred_theme}
+      && length $authenticated->{preferred_theme};
+    return $user->{preferred_theme}
+      if ref $user eq 'HASH'
+      && defined $user->{preferred_theme}
+      && length $user->{preferred_theme};
+    return $user->get_column('preferred_theme')
+      if $user
+      && blessed($user)
+      && $user->can('get_column')
+      && defined $user->get_column('preferred_theme');
 
     return;
 }
@@ -439,16 +542,13 @@ sub _rate_limited {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                error  => 'too many requests',
-                status => 'rate_limited',
-            },
+            json   => GPForum::Web::ErrorPayload->identity_rate_limited,
             status => $HTTP_TOO_MANY,
         );
     }
 
     return $controller->render(
-        text   => 'Too many requests',
+        text   => GPForum::Web::ErrorPayload->rate_limited_text,
         status => $HTTP_TOO_MANY,
     );
 }
@@ -467,10 +567,7 @@ sub _invalid_login {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                error  => 'login request could not be accepted',
-                status => 'unauthorized',
-            },
+            json   => GPForum::Web::ErrorPayload->identity_invalid_login,
             status => $HTTP_UNAUTHORIZED,
         );
     }
@@ -501,7 +598,7 @@ sub _csrf_failure {
     );
 
     return $controller->render(
-        text   => 'Bad CSRF token',
+        text   => GPForum::Web::ErrorPayload->csrf_text,
         status => $HTTP_FORBIDDEN,
     );
 }
@@ -512,6 +609,72 @@ sub _requested_locale {
     return $controller->i18n_service->supported_locale(
         $controller->param('locale') )
       || $controller->ui_locale;
+}
+
+sub _requested_theme {
+    my ($controller) = @_;
+
+    my $theme = $controller->param('theme');
+    return $theme if $controller->ui_theme_registry->supported($theme);
+
+    return $controller->ui_theme_registry->default_theme;
+}
+
+sub _settings_payload {
+    my ( $controller, $user_id ) = @_;
+
+    my $store       = $controller->gp_notification_preference_store;
+    my $preferences = eval { return $store->preferences_for_user($user_id); };
+    return if $EVAL_ERROR;
+
+    return $controller->gp_identity_view_model->settings_page(
+        digest_frequency_options => $store->digest_frequency_options,
+        locale_options           => $controller->ui_locale_options,
+        notification_preferences => $preferences,
+        theme_options            => $controller->ui_theme_options,
+    );
+}
+
+sub _persist_notification_preferences {
+    my ( $controller, $user_id ) = @_;
+
+    my $store       = $controller->gp_notification_preference_store;
+    my $preferences = _notification_preference_input( $controller, $store );
+    eval {
+        return $store->set_preferences(
+            {
+                preferences => $preferences,
+                user_id     => $user_id,
+            }
+        );
+    };
+    if ($EVAL_ERROR) {
+        $controller->app->log->warn(
+            "notification preference update degraded: $EVAL_ERROR");
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _notification_preference_input {
+    my ( $controller, $store ) = @_;
+
+    return [
+        map {
+            my $channel = $_;
+            {
+                channel          => $channel,
+                digest_frequency => $controller->param(
+                    'notification_' . $channel . '_digest_frequency'
+                ),
+                enabled =>
+                  $controller->param( 'notification_' . $channel . '_enabled' )
+                ? 1
+                : 0,
+            }
+        } @{ $store->channel_names }
+    ];
 }
 
 sub _persist_locale_preference {
@@ -536,6 +699,28 @@ sub _persist_locale_preference {
     return;
 }
 
+sub _persist_theme_preference {
+    my ( $controller, $theme ) = @_;
+
+    my $user_id = $controller->session('user_id');
+    if ( defined $user_id && length $user_id ) {
+        $controller->session( preferred_theme => $theme );
+        my $result = eval {
+            return $controller->gp_identity_store->update_preferred_theme(
+                {
+                    user_id         => $user_id,
+                    preferred_theme => $theme,
+                }
+            );
+        };
+        $controller->app->log->warn(
+            "theme preference update degraded: $EVAL_ERROR")
+          if !$result || !$result->{ok};
+    }
+
+    return;
+}
+
 sub _set_locale_cookie {
     my ( $controller, $locale ) = @_;
 
@@ -543,6 +728,24 @@ sub _set_locale_cookie {
 
     $controller->cookie(
         $LOCALE_COOKIE => $locale,
+        {
+            expires  => time + $LOCALE_COOKIE_AGE,
+            httponly => 1,
+            path     => q{/},
+            samesite => 'Lax',
+        }
+    );
+
+    return;
+}
+
+sub _set_theme_cookie {
+    my ( $controller, $theme ) = @_;
+
+    return if !defined $theme || !length $theme;
+
+    $controller->cookie(
+        $THEME_COOKIE => $theme,
         {
             expires  => time + $LOCALE_COOKIE_AGE,
             httponly => 1,
@@ -563,6 +766,37 @@ sub _safe_return_to {
     return q{/} if $return_to =~ /[\r\n]/msx;
 
     return $return_to;
+}
+
+sub _settings_unauthorized {
+    my ($controller) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => GPForum::Web::ErrorPayload->unauthorized,
+            status => $HTTP_UNAUTHORIZED,
+        );
+    }
+
+    $controller->flash( error => $controller->t('settings.login_required') );
+
+    return $controller->redirect_to('login');
+}
+
+sub _settings_system_failure {
+    my ($controller) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => GPForum::Web::ErrorPayload->system_failure,
+            status => $HTTP_SERVER_ERROR,
+        );
+    }
+
+    return $controller->render(
+        text   => GPForum::Web::ErrorPayload->system_failure()->{error},
+        status => $HTTP_SERVER_ERROR,
+    );
 }
 
 sub _record_security_event {

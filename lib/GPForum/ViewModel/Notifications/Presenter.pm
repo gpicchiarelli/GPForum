@@ -46,6 +46,16 @@ sub mentions_page {
     };
 }
 
+sub mark_read_response {
+    my ( $self, $read ) = @_;
+
+    return {
+        read         => $read,
+        status       => 'read',
+        unread_count => $read->{unread_count},
+    };
+}
+
 sub notification {
     my ( $self, $row, %input ) = @_;
 

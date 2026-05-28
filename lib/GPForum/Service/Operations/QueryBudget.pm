@@ -103,6 +103,10 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 2,
         notes => 'bounded permission-aware autocomplete projection lookup',
     },
+    notifications => {
+        max_queries => 4,
+        notes       => 'bounded inbox read plus unread counter',
+    },
 );
 
 has budgets => sub { return _default_budgets(); };
@@ -133,6 +137,7 @@ sub observe {
 
     my $queries      = _observed_value( $observation, 'queries' );
     my $transactions = _observed_value( $observation, 'transactions' );
+    my $duplicates   = _observed_value( $observation, 'duplicate_queries' );
     my @violations;
 
     if ( $queries > $budget->{max_queries} ) {
@@ -141,17 +146,31 @@ sub observe {
     if ( $transactions > $budget->{max_transactions} ) {
         push @violations, 'transactions';
     }
+    if ( $duplicates > $budget->{max_duplicate_queries} ) {
+        push @violations, 'duplicate_queries';
+    }
 
     return {
         endpoint_name => $endpoint_name,
         status        => @violations ? 'fail' : 'ok',
         budget        => $budget,
         observed      => {
-            queries      => $queries,
-            transactions => $transactions,
+            duplicate_queries => $duplicates,
+            queries           => $queries,
+            transactions      => $transactions,
         },
         violations => \@violations,
     };
+}
+
+sub enforce {
+    my ( $self, $endpoint_name, $observation ) = @_;
+
+    my $result = $self->observe( $endpoint_name, $observation );
+    die _failure_message($result)
+      if ( $result->{status} || q{} ) eq 'fail';
+
+    return $result;
 }
 
 sub snapshot {
@@ -201,11 +220,12 @@ sub _default_budgets {
 
     for my $endpoint_name ( keys %DEFAULT_BUDGETS ) {
         $budgets{$endpoint_name} = {
-            endpoint_name     => $endpoint_name,
-            max_queries       => $DEFAULT_BUDGETS{$endpoint_name}{max_queries},
-            max_transactions  => $DEFAULT_TRANSACTION_BUDGET,
-            notes             => $DEFAULT_BUDGETS{$endpoint_name}{notes},
-            enforcement_level => 'release-gate',
+            endpoint_name    => $endpoint_name,
+            max_queries      => $DEFAULT_BUDGETS{$endpoint_name}{max_queries},
+            max_transactions => $DEFAULT_TRANSACTION_BUDGET,
+            max_duplicate_queries => 0,
+            notes                 => $DEFAULT_BUDGETS{$endpoint_name}{notes},
+            enforcement_level     => 'release-gate',
         };
     }
 
@@ -231,6 +251,15 @@ sub _unknown_endpoint {
         observed      => {},
         violations    => ['endpoint'],
     };
+}
+
+sub _failure_message {
+    my ($result) = @_;
+
+    return join q{:},
+      'query budget exceeded',
+      $result->{endpoint_name},
+      join q{,}, @{ $result->{violations} || [] };
 }
 
 sub _resultset {

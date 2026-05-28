@@ -28,6 +28,7 @@ sub create_dead_letter {
         payload         => $message->get_column('payload') || {},
         error_class     => $failure->{error_class},
         error_message   => $failure->{error_message},
+        failure_type    => $failure->{failure_type} || 'transient',
         retry_count     => $failure->{attempt_count},
         first_failed_at => $message->get_column('first_failed_at')
           || $failure_time,

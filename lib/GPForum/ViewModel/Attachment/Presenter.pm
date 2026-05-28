@@ -27,4 +27,16 @@ sub attachment {
     };
 }
 
+sub upload_response {
+    my ( $self, $result, %input ) = @_;
+
+    return {
+        attachment => $self->attachment(
+            $result->{attachment}, download_url => $input{download_url},
+        ),
+        link   => $result->{link},
+        status => 'uploaded',
+    };
+}
+
 1;

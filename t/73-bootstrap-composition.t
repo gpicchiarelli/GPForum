@@ -125,6 +125,8 @@ sub _route_names {
       reply_create
       robots
       search_autocomplete
+      settings
+      settings_update
       sitemap
       thread
       thread_bookmark
@@ -136,6 +138,7 @@ sub _route_names {
       thread_subscribe
       thread_subscription_mute
       thread_unsubscribe
+      theme_update
     );
 }
 
@@ -178,6 +181,7 @@ sub _helper_names {
       gp_moderation_review_reader
       gp_moderation_view_model
       gp_notification_dispatcher
+      gp_notification_preference_store
       gp_notification_renderer
       gp_notifications_view_model
       gp_password
@@ -192,6 +196,8 @@ sub _helper_names {
       gp_privacy_view_model
       gp_rate_limiter
       gp_readiness
+      gp_realtime_pg_listener
+      gp_realtime_pg_notifier
       gp_realtime_hub
       gp_registration
       gp_report_store
@@ -220,6 +226,7 @@ sub _helper_names {
       tc
       ui_action
       ui_actions
+      ui_attr
       ui_badge
       ui_breadcrumbs
       ui_date
@@ -233,10 +240,17 @@ sub _helper_names {
       ui_next_page
       ui_number
       ui_presenter
+      ui_render_policy
       ui_return_to
+      ui_theme
       ui_theme_color
+      ui_theme_color_scheme
+      ui_theme_metadata
+      ui_theme_options
+      ui_theme_registry
       ui_time
       ui_tone
+      ui_trusted_html
       ui_typography_class
     );
 }

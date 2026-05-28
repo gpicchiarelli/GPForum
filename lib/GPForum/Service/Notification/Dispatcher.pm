@@ -22,6 +22,7 @@ has clock       => sub { return GPForum::Service::Clock->new; };
 has id_service  => sub { return GPForum::Service::Id->new; };
 has page_window => sub { return GPForum::Service::Forum::PageWindow->new; };
 has permission_engine  => undef;
+has preference_store   => undef;
 has realtime_hub       => undef;
 has schema             => undef;
 has subscription_store => undef;
@@ -31,6 +32,8 @@ sub create_notification {
 
     return { ok => 0, skipped => 'permission_denied' }
       if !$self->_can_notify($input);
+    return { ok => 0, skipped => 'channel_disabled', channel => 'in_app' }
+      if !$self->_channel_enabled( $input, 'in_app' );
 
     my $work = sub {
         return $self->_create_notification($input);
@@ -276,6 +279,23 @@ sub _can_notify {
         $input->{recipient_user_id}, $input->{source_type},
         $input->{source_id},         $input->{payload} || {},
     );
+}
+
+sub _channel_enabled {
+    my ( $self, $input, $channel ) = @_;
+
+    return 1 if !$self->preference_store;
+    return 1
+      if !defined $input->{recipient_user_id}
+      || !length $input->{recipient_user_id};
+
+    my $enabled = eval {
+        return $self->preference_store->channel_enabled(
+            $input->{recipient_user_id}, $channel );
+    };
+    return 1 if $EVAL_ERROR;
+
+    return $enabled ? 1 : 0;
 }
 
 sub _broadcast_unread_count {

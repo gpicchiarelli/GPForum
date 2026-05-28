@@ -7,6 +7,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
+use GPForum::Web::ErrorPayload;
+
 our $VERSION = '0.001';
 
 const my $DEFAULT_LIMIT       => 50;
@@ -390,10 +392,9 @@ sub _role_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status => $status,
-                role   => $controller->gp_admin_view_model->role($role),
-            },
+            json => $controller->gp_admin_view_model->role_response(
+                $status, $role,
+            ),
             status => $HTTP_OK,
         );
     }
@@ -406,11 +407,9 @@ sub _permission_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status     => $status,
-                permission =>
-                  $controller->gp_admin_view_model->permission($permission),
-            },
+            json => $controller->gp_admin_view_model->permission_response(
+                $status, $permission,
+            ),
             status => $HTTP_OK,
         );
     }
@@ -423,12 +422,9 @@ sub _role_permission_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                role_permission =>
-                  $controller->gp_admin_view_model->role_permission(
-                    $role_permission),
-                status => $status,
-            },
+            json => $controller->gp_admin_view_model->role_permission_response(
+                $status, $role_permission,
+            ),
             status => $HTTP_OK,
         );
     }
@@ -441,11 +437,9 @@ sub _binding_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                binding =>
-                  $controller->gp_admin_view_model->role_binding($binding),
-                status => $status,
-            },
+            json => $controller->gp_admin_view_model->role_binding_response(
+                $status, $binding,
+            ),
             status => $HTTP_OK,
         );
     }
@@ -535,12 +529,11 @@ sub _bad_request {
     return _render_error(
         $controller,
         $HTTP_BAD_REQUEST,
-        {
+        GPForum::Web::ErrorPayload->bad_request(
             error  => 'The submitted admin request was invalid.',
             errors => $errors,
-            status => 'invalid',
             title  => 'Invalid admin request',
-        }
+        )
     );
 }
 
@@ -555,14 +548,8 @@ sub _csrf_failure {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            error  => 'Bad CSRF token',
-            status => 'forbidden',
-            title  => 'Forbidden',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->csrf_failure,
     );
 }
 
@@ -577,14 +564,8 @@ sub _unauthorized {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_UNAUTHORIZED,
-        {
-            error  => 'authentication required',
-            status => 'unauthorized',
-            title  => 'Authentication required',
-        }
+    return _render_error( $controller, $HTTP_UNAUTHORIZED,
+        GPForum::Web::ErrorPayload->unauthorized,
     );
 }
 
@@ -600,42 +581,24 @@ sub _forbidden {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            error  => 'permission denied',
-            status => 'forbidden',
-            title  => 'Forbidden',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->forbidden,
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_NOT_FOUND,
-        {
-            error  => $error,
-            status => 'not_found',
-            title  => 'Not found',
-        }
+    return _render_error( $controller, $HTTP_NOT_FOUND,
+        GPForum::Web::ErrorPayload->not_found( error => $error ),
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_SERVER_ERROR,
-        {
-            error  => 'internal error',
-            status => 'error',
-            title  => 'Internal error',
-        }
+    return _render_error( $controller, $HTTP_SERVER_ERROR,
+        GPForum::Web::ErrorPayload->system_failure,
     );
 }
 

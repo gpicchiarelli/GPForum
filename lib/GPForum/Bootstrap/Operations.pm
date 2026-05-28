@@ -35,7 +35,7 @@ sub register {
         $runtime_policy );
 
     GPForum::Log->configure( $application, $config );
-    _configure_db_query_observer($application);
+    _configure_db_query_observer( $application, $config );
 
     return;
 }
@@ -149,7 +149,7 @@ sub _register_operational_helpers {
 }
 
 sub _configure_db_query_observer {
-    my ($application) = @_;
+    my ( $application, $config ) = @_;
 
     $application->hook(
         before_dispatch => sub {
@@ -182,6 +182,7 @@ sub _configure_db_query_observer {
             my $observation =
               _record_query_budget_observation( $stats, $record );
             _add_benchmark_query_headers( $controller, $record, $observation );
+            _enforce_query_budget( $config, $record, $observation );
         }
     );
 
@@ -238,6 +239,8 @@ sub _query_budget_endpoint {
         admin_audit                  => 'admin_audit',
         admin_jobs                   => 'admin_jobs',
         admin_status                 => 'admin_status',
+        notifications                => 'notifications',
+        notification_read            => 'notifications',
         privacy_review               => 'admin_dashboard',
         privacy_deletion_approve     => 'admin_role_update',
         privacy_deletion_hold        => 'admin_role_update',
@@ -255,8 +258,9 @@ sub _record_query_budget_observation {
     my $observation = GPForum::Service::Operations::QueryBudget->new->observe(
         $record->{endpoint_name},
         {
-            queries      => $record->{queries},
-            transactions => $record->{transactions},
+            queries           => $record->{queries},
+            transactions      => $record->{transactions},
+            duplicate_queries => $record->{duplicate_queries},
         }
     );
     $stats->record_budget_observation( $record->{request_id}, $observation );
@@ -291,8 +295,30 @@ sub _add_benchmark_query_headers {
         ? $observation->{status}
         : 'none'
     );
+    $headers->header( 'X-GPForum-DB-Budget-Endpoint' => $record->{endpoint_name}
+          || 'none' );
+    $headers->header(
+        'X-GPForum-DB-Budget-Max-Queries' => $observation
+          && $observation->{budget}
+        ? $observation->{budget}{max_queries}
+        : 'none'
+    );
 
     return;
+}
+
+sub _enforce_query_budget {
+    my ( $config, $record, $observation ) = @_;
+
+    return if ( $ENV{GPFORUM_QUERY_BUDGET_ENFORCE} || q{} ) ne '1';
+    return if $config->environment eq 'production';
+    return if !$record || !$observation;
+    return if ( $observation->{status} || q{} ) ne 'fail';
+
+    die join q{:},
+      'query budget exceeded',
+      $record->{endpoint_name} || 'unknown',
+      join q{,}, @{ $observation->{violations} || [] };
 }
 
 1;

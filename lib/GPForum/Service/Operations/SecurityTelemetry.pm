@@ -51,7 +51,12 @@ sub _safe_metadata {
     return {} if !$metadata;
 
     my %safe;
-    for my $name (qw(action route status store degraded reason)) {
+    for my $name (
+        qw(
+        action route status store degraded reason channel_type payload_size
+        )
+      )
+    {
         $safe{$name} = $metadata->{$name} if defined $metadata->{$name};
     }
 

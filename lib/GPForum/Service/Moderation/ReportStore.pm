@@ -6,9 +6,9 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
-use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
@@ -18,13 +18,15 @@ const my $SCHEMA_VERSION      => 1;
 const my $STATUS_OPEN         => 'open';
 const my $STATUS_RESOLVED     => 'resolved';
 
-has clock          => sub { return GPForum::Service::Clock->new; };
-has id_service     => sub { return GPForum::Service::Id->new; };
-has outbox_builder => sub {
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Service::Id->new; };
+has recorder   => sub {
     my ($self) = @_;
 
-    return GPForum::Service::Outbox::MessageBuilder->new(
-        id_service => $self->id_service, );
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
 };
 has schema => undef;
 
@@ -64,23 +66,17 @@ sub _open_duplicate_report {
 sub _record_duplicate_audit {
     my ( $self, $input, $duplicate ) = @_;
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => 'report.duplicate_blocked',
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $input->{reporter_user_id},
-            target_type    => $input->{target_type},
-            target_id      => $input->{target_id},
-            correlation_id => $self->id_service->uuid,
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                existing_report_id => _column( $duplicate, 'report_id' ),
-                reason             => $input->{reason},
-            },
-            created_at => $self->clock->now_iso8601,
-        }
+    $self->recorder->record_audit(
+        action         => 'report.duplicate_blocked',
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $input->{reporter_user_id},
+        target_type    => $input->{target_type},
+        target_id      => $input->{target_id},
+        metadata       => {
+            existing_report_id => _column( $duplicate, 'report_id' ),
+            reason             => $input->{reason},
+        },
+        created_at => $self->clock->now_iso8601,
     );
 
     return;
@@ -240,11 +236,8 @@ sub _record_event_and_audit {
     my ( $self, $report ) = @_;
 
     my $correlation_id = $self->id_service->uuid;
-    my $event_id       = $self->id_service->uuid;
-    my $event          = {
-        event_id          => $event_id,
+    $self->recorder->record_event(
         event_type        => 'report.created',
-        schema_version    => $SCHEMA_VERSION,
         aggregate_type    => $REPORT_AGGREGATE,
         aggregate_id      => $report->{report_id},
         aggregate_version => $SCHEMA_VERSION,
@@ -258,13 +251,9 @@ sub _record_event_and_audit {
             target_id   => $report->{target_id},
             reason      => $report->{reason},
         },
-        metadata   => {},
-        created_at => $report->{created_at},
-    };
+        timestamp => $report->{created_at},
+    );
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
     $self->_record_audit( $report, $correlation_id );
 
     return;
@@ -273,23 +262,18 @@ sub _record_event_and_audit {
 sub _record_audit {
     my ( $self, $report, $correlation_id ) = @_;
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => 'report.created',
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $report->{reporter_user_id},
-            target_type    => $report->{target_type},
-            target_id      => $report->{target_id},
-            correlation_id => $correlation_id,
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                reason    => $report->{reason},
-                report_id => $report->{report_id},
-            },
-            created_at => $report->{created_at},
-        }
+    $self->recorder->record_audit(
+        action         => 'report.created',
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $report->{reporter_user_id},
+        target_type    => $report->{target_type},
+        target_id      => $report->{target_id},
+        correlation_id => $correlation_id,
+        metadata       => {
+            reason    => $report->{reason},
+            report_id => $report->{report_id},
+        },
+        created_at => $report->{created_at},
     );
 
     return;
@@ -303,10 +287,9 @@ sub _record_transition_event_and_audit {
     my $correlation_id = $self->id_service->uuid;
     my $event_id       = $self->id_service->uuid;
     my $created_at     = $self->clock->now_iso8601;
-    my $event          = {
+    $self->recorder->record_event(
         event_id          => $event_id,
         event_type        => $input->{event_type},
-        schema_version    => $SCHEMA_VERSION,
         aggregate_type    => $REPORT_AGGREGATE,
         aggregate_id      => $report_id,
         aggregate_version => $SCHEMA_VERSION,
@@ -321,13 +304,9 @@ sub _record_transition_event_and_audit {
             target_id   => _column( $report, 'target_id' ),
             %{ $input->{payload} },
         },
-        metadata   => {},
-        created_at => $created_at,
-    };
+        timestamp => $created_at,
+    );
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
     $self->_record_transition_audit(
         {
             action         => $input->{event_type},
@@ -347,23 +326,18 @@ sub _record_transition_audit {
 
     my $report = $input->{report};
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => $input->{action},
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $input->{actor_id},
-            target_type    => _column( $report, 'target_type' ),
-            target_id      => _column( $report, 'target_id' ),
-            correlation_id => $input->{correlation_id},
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                report_id => _column( $report, 'report_id' ),
-                %{ $input->{metadata} },
-            },
-            created_at => $input->{created_at},
-        }
+    $self->recorder->record_audit(
+        action         => $input->{action},
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $input->{actor_id},
+        target_type    => _column( $report, 'target_type' ),
+        target_id      => _column( $report, 'target_id' ),
+        correlation_id => $input->{correlation_id},
+        metadata       => {
+            report_id => _column( $report, 'report_id' ),
+            %{ $input->{metadata} },
+        },
+        created_at => $input->{created_at},
     );
 
     return;

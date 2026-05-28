@@ -45,6 +45,11 @@ __PACKAGE__->add_columns(
         default_value => 'en',
         is_nullable   => 0,
     },
+    preferred_theme => {
+        data_type     => 'text',
+        default_value => 'default',
+        is_nullable   => 0,
+    },
     version => {
         data_type     => 'bigint',
         default_value => 1,

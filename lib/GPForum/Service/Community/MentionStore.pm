@@ -6,6 +6,7 @@ use warnings;
 use Mojo::Base -base;
 
 use Const::Fast;
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Community::MentionExtractor;
 use GPForum::Service::Id;
@@ -20,7 +21,15 @@ has extractor =>
   sub { return GPForum::Service::Community::MentionExtractor->new; };
 has id_service              => sub { return GPForum::Service::Id->new; };
 has notification_dispatcher => undef;
-has schema                  => undef;
+has recorder                => sub {
+    my ($self) = @_;
+
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
+};
+has schema => undef;
 
 sub record_for_source {
     my ( $self, $input ) = @_;
@@ -61,25 +70,21 @@ sub _record_fanout_audit {
     my ( $self, $input, $blocked_count, $max_mentions ) = @_;
 
     my $created = eval {
-        return $self->schema->resultset('AuditLog')->create(
-            {
-                action         => 'mention.fanout_limited',
-                actor_id       => _uuid_or_undef( $input->{actor_id} ),
-                audit_id       => $self->id_service->uuid,
-                correlation_id => $self->id_service->uuid,
-                created_at     => $self->clock->now_iso8601,
-                metadata       => {
-                    blocked_count => $blocked_count,
-                    max_mentions  => $max_mentions,
-                    source_id     => $input->{source_id},
-                    source_type   => $input->{source_type},
-                },
-                previous_hash  => undef,
-                record_hash    => q{},
-                schema_version => $SCHEMA_VERSION,
-                target_id      => _uuid_or_undef( $input->{source_id} ),
-                target_type    => 'mention',
-            }
+        return $self->recorder->record_audit(
+            action     => 'mention.fanout_limited',
+            actor_id   => _uuid_or_undef( $input->{actor_id} ),
+            created_at => $self->clock->now_iso8601,
+            metadata   => {
+                blocked_count => $blocked_count,
+                max_mentions  => $max_mentions,
+                source_id     => $input->{source_id},
+                source_type   => $input->{source_type},
+            },
+            previous_hash  => undef,
+            record_hash    => q{},
+            schema_version => $SCHEMA_VERSION,
+            target_id      => _uuid_or_undef( $input->{source_id} ),
+            target_type    => 'mention',
         );
     };
 

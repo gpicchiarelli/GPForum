@@ -56,20 +56,65 @@ sub thread_page {
 sub new_thread_form {
     my ( $self, %input ) = @_;
 
+    my $errors = $input{errors} || {};
     my $values = $input{values} || {};
+    my $selected_category_id =
+      $input{selected_category_id} || $values->{category_id} || q{};
+    my %form_values = (
+        %{$values},
+        category_id => $selected_category_id,
+        visibility  => $values->{visibility} || 'public',
+    );
+    my $fields = $self->form_fields(
+        errors => $errors,
+        values => \%form_values,
+        specs  => [
+            {
+                id        => 'thread-category',
+                label_key => 'search.category',
+                name      => 'category_id',
+                type      => 'select',
+            },
+            {
+                id        => 'thread-title',
+                label_key => 'forum.thread_title',
+                name      => 'title',
+                required  => 1,
+                type      => 'text',
+            },
+            {
+                id        => 'thread-body',
+                label_key => 'forum.thread_body',
+                name      => 'body_source',
+                required  => 1,
+                rows      => 10,
+                type      => 'textarea',
+            },
+            {
+                id        => 'thread-visibility',
+                label_key => 'forum.visibility',
+                name      => 'visibility',
+                type      => 'select',
+            },
+        ],
+    );
 
     return {
         categories =>
           [ map { $self->category($_) } @{ $input{categories} || [] } ],
         csrf_token           => $input{csrf_token},
-        errors               => $input{errors} || {},
+        error_fields         => $self->form_error_fields($fields),
+        errors               => $errors,
         fields               => [qw(category_id title body_source visibility)],
-        selected_category_id => $input{selected_category_id}
-          || $values->{category_id}
-          || q{},
-        ui => {
-            described_by => 'thread-error-summary',
-            heading_id   => 'new-thread-heading',
+        form_fields          => $fields,
+        selected_category_id => $selected_category_id,
+        ui                   => {
+            described_by => $self->form_described_by(
+                errors     => $errors,
+                summary_id => 'thread-error-summary',
+            ),
+            heading_id => 'new-thread-heading',
+            summary_id => 'thread-error-summary',
         },
         values => $values,
     };
@@ -100,6 +145,42 @@ sub autocomplete_response {
               @{ $input{suggestions} || [] }
         ],
         ( defined $input{status} ? ( status => $input{status} ) : () ),
+    };
+}
+
+sub report_response {
+    my ( $self, $report ) = @_;
+
+    return {
+        report => $self->report($report),
+        status => 'reported',
+    };
+}
+
+sub created_thread_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        status    => 'created',
+        thread_id => $self->column( $stored->{thread}, 'thread_id' ),
+    };
+}
+
+sub created_post_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        post_id => $self->column( $stored->{post}, 'post_id' ),
+        status  => 'created',
+    };
+}
+
+sub read_marker_response {
+    my ( $self, $marked ) = @_;
+
+    return {
+        read_state => $marked->{read_state},
+        status     => 'ok',
     };
 }
 

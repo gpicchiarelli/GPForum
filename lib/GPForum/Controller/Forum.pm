@@ -7,6 +7,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
+use GPForum::Web::ErrorPayload;
+
 our $VERSION = '0.001';
 
 const my $HTTP_OK            => 200;
@@ -570,11 +572,9 @@ sub _report_json_response {
     my ( $controller, $result ) = @_;
 
     return $controller->render(
-        json => {
-            status => 'reported',
-            report =>
-              $controller->gp_forum_view_model->report( $result->{report} ),
-        },
+        json => $controller->gp_forum_view_model->report_response(
+            $result->{report},
+        ),
         status => $HTTP_OK,
     );
 }
@@ -597,10 +597,8 @@ sub _created_thread_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status    => 'created',
-                thread_id => $thread_id,
-            },
+            json => $controller->gp_forum_view_model->created_thread_response(
+                $stored),
             status => $HTTP_CREATED,
         );
     }
@@ -616,10 +614,8 @@ sub _created_post_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status  => 'created',
-                post_id => $post_id,
-            },
+            json =>
+              $controller->gp_forum_view_model->created_post_response($stored),
             status => $HTTP_CREATED,
         );
     }
@@ -634,10 +630,8 @@ sub _read_marker_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status     => 'ok',
-                read_state => $marked->{read_state},
-            },
+            json =>
+              $controller->gp_forum_view_model->read_marker_response($marked),
             status => $HTTP_OK,
         );
     }
@@ -651,10 +645,9 @@ sub _bookmark_action_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status   => $status,
-                bookmark => $bookmark,
-            },
+            json => $controller->gp_community_view_model->bookmark_response(
+                $status, $bookmark,
+            ),
             status => $HTTP_OK,
         );
     }
@@ -668,10 +661,9 @@ sub _subscription_action_response {
 
     if ( _wants_json($controller) ) {
         return $controller->render(
-            json => {
-                status       => $status,
-                subscription => $subscription,
-            },
+            json => $controller->gp_community_view_model->subscription_response(
+                $status, $subscription
+            ),
             status => $HTTP_OK,
         );
     }
@@ -1074,12 +1066,11 @@ sub _bad_request {
     return _render_error(
         $controller,
         $HTTP_BAD_REQUEST,
-        {
-            status => 'invalid',
-            title  => 'Invalid request',
+        GPForum::Web::ErrorPayload->bad_request(
             error  => 'The submitted forum request was invalid.',
             errors => $errors,
-        }
+            title  => 'Invalid request',
+        )
     );
 }
 
@@ -1094,14 +1085,8 @@ sub _csrf_failure {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            status => 'forbidden',
-            title  => 'Forbidden',
-            error  => 'Bad CSRF token',
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->csrf_failure,
     );
 }
 
@@ -1116,14 +1101,8 @@ sub _unauthorized {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_UNAUTHORIZED,
-        {
-            status => 'unauthorized',
-            title  => 'Authentication required',
-            error  => 'authentication required',
-        }
+    return _render_error( $controller, $HTTP_UNAUTHORIZED,
+        GPForum::Web::ErrorPayload->unauthorized,
     );
 }
 
@@ -1139,28 +1118,16 @@ sub _forbidden {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_FORBIDDEN,
-        {
-            status => 'forbidden',
-            title  => 'Forbidden',
-            error  => $error,
-        }
+    return _render_error( $controller, $HTTP_FORBIDDEN,
+        GPForum::Web::ErrorPayload->forbidden( error => $error ),
     );
 }
 
 sub _not_found {
     my ( $controller, $error ) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_NOT_FOUND,
-        {
-            status => 'not_found',
-            title  => 'Not found',
-            error  => $error,
-        }
+    return _render_error( $controller, $HTTP_NOT_FOUND,
+        GPForum::Web::ErrorPayload->not_found( error => $error ),
     );
 }
 
@@ -1175,28 +1142,16 @@ sub _rate_limited {
         }
     );
 
-    return _render_error(
-        $controller,
-        $HTTP_TOO_MANY,
-        {
-            status => 'rate_limited',
-            title  => 'Too many requests',
-            error  => 'too many requests',
-        }
+    return _render_error( $controller, $HTTP_TOO_MANY,
+        GPForum::Web::ErrorPayload->rate_limited,
     );
 }
 
 sub _system_failure {
     my ($controller) = @_;
 
-    return _render_error(
-        $controller,
-        $HTTP_SERVER_ERROR,
-        {
-            status => 'error',
-            title  => 'Internal error',
-            error  => 'internal error',
-        }
+    return _render_error( $controller, $HTTP_SERVER_ERROR,
+        GPForum::Web::ErrorPayload->system_failure,
     );
 }
 

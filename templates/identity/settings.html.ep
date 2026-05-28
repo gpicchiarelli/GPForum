@@ -1,0 +1,63 @@
+% layout 'default';
+% title t('settings.title') . ' - ' . t('app.name');
+
+<section aria-labelledby="<%= $ui->{heading_id} %>">
+  <%= include 'components/page_header',
+    heading_id => $ui->{heading_id},
+    component_title => t('settings.title'),
+    description => t('settings.description') %>
+
+  <form method="post" action="<%= url_for('settings_update') %>">
+    <%= csrf_field %>
+
+    <section class="ui-card" aria-labelledby="<%= $ui->{appearance_heading_id} %>">
+      <h2 id="<%= $ui->{appearance_heading_id} %>"><%= t('settings.appearance') %></h2>
+      <label for="settings-locale">
+        <span><%= t('locale.choose') %></span>
+        <select id="settings-locale" name="locale">
+          % for my $option (@{$locale_options}) {
+            <option value="<%= $option->{locale} %>"<%= $option->{current} ? ' selected' : '' %>><%= $option->{native_name} %></option>
+          % }
+        </select>
+      </label>
+      <label for="settings-theme">
+        <span><%= t('theme.choose') %></span>
+        <select id="settings-theme" name="theme">
+          % for my $option (@{$theme_options}) {
+            <option value="<%= $option->{name} %>"<%= $option->{current} ? ' selected' : '' %>><%= $option->{label} %></option>
+          % }
+        </select>
+      </label>
+    </section>
+
+    <section class="ui-card" aria-labelledby="<%= $ui->{notifications_heading_id} %>">
+      <h2 id="<%= $ui->{notifications_heading_id} %>"><%= t('settings.notifications') %></h2>
+      <p><%= t('settings.notifications_description') %></p>
+      <fieldset>
+        <legend><%= t('settings.notification_channels') %></legend>
+        % for my $preference (@{$notification_preferences}) {
+          % my $channel = $preference->{channel};
+          <section aria-labelledby="settings-notification-<%= $channel %>-heading">
+            <div class="checkbox-field">
+              <input id="settings-notification-<%= $channel %>-enabled" name="notification_<%= $channel %>_enabled" type="checkbox" value="1"<%= $preference->{enabled} ? ' checked' : '' %>>
+              <label for="settings-notification-<%= $channel %>-enabled">
+                <span id="settings-notification-<%= $channel %>-heading"><%= t($preference->{label_key}) %></span>
+                <span><%= t($preference->{description_key}) %></span>
+              </label>
+            </div>
+            <label for="settings-notification-<%= $channel %>-digest-frequency">
+              <span><%= t('notifications.digest_frequency') %></span>
+              <select id="settings-notification-<%= $channel %>-digest-frequency" name="notification_<%= $channel %>_digest_frequency">
+                % for my $option (@{$digest_frequency_options}) {
+                  <option value="<%= $option->{value} %>"<%= $option->{value} eq $preference->{digest_frequency} ? ' selected' : '' %>><%= t($option->{label_key}) %></option>
+                % }
+              </select>
+            </label>
+          </section>
+        % }
+      </fieldset>
+    </section>
+
+    <button type="submit"><%= t('settings.save') %></button>
+  </form>
+</section>

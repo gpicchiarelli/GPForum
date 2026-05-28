@@ -35,6 +35,11 @@ __PACKAGE__->add_columns(
         data_type   => 'text',
         is_nullable => 0,
     },
+    failure_type => {
+        data_type     => 'text',
+        default_value => 'transient',
+        is_nullable   => 0,
+    },
     retry_count => {
         data_type     => 'integer',
         default_value => 0,

@@ -79,6 +79,21 @@ single-process benchmark evidence. Multi-process production aggregation remains
 the responsibility of logs, scrape configuration, or a future optional metrics
 adapter.
 
+## Realtime And Outbox Signals
+
+Realtime metrics include active websocket connections, subscription count,
+broadcast attempts, delivered messages, failed websocket sends, malformed
+events, and configured connection/subscription quotas.
+
+PostgreSQL LISTEN/NOTIFY services expose local snapshots for degraded transport,
+notify failures, invalid payloads, duplicate event suppression, reconnect count,
+and delivered fanout count.
+
+Outbox metrics include pending rows, failed rows, ready retry backlog, and dead
+letter count. Failure classification is persisted as `failure_type` with the
+canonical values `transient`, `permanent`, `serialization`, `authorization`, and
+`transport`.
+
 ## Benchmark Methodology
 
 Current benchmark discipline:
@@ -214,6 +229,10 @@ Validated degradation behavior:
 
 * websocket send failure is contained inside the local realtime hub;
 * failed realtime delivery records a failed count and keeps SSR continuity;
+* PostgreSQL NOTIFY failure is classified as degraded transport and does not
+  make canonical writes fail;
+* PostgreSQL LISTEN failure makes the listener degraded while polling fallback
+  remains valid;
 * notification fanout records per-recipient failure without aborting the whole
   fanout;
 * core forum rendering does not depend on websocket availability;
@@ -229,4 +248,3 @@ Validated degradation behavior:
 | pg_stat_statements | documented, optional, not required by startup |
 | production memory growth | RSS is sampled in benchmark output; long-running worker drift still needs soak tests |
 | projection rebuild scale | idempotency is covered; full large replay duration still needs bigger datasets |
-

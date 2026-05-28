@@ -12,9 +12,7 @@ PostgreSQL-authoritative, operable, and explicit.
 5. Run the quality gate before opening a pull request:
 
 ```sh
-script/perlcritic
-script/test
-script/coverage
+make check
 ```
 
 Run profiling for performance-sensitive changes:
@@ -30,6 +28,9 @@ script/profile -Ilib -It/lib t/17-notifications.t
 - PostgreSQL is authoritative. Search, inboxes, feeds, and counters are rebuildable projections.
 - Carton, Perl::Critic, tests, coverage, and profiling are mandatory project surfaces.
 - Any deviation from Perl-first, PostgreSQL-native, Redis-optional, or SSR-first needs an ADR.
+- Durable event writes should use `GPForum::Infrastructure::EventRecorder`.
+- Raw SSR HTML must pass through `GPForum::Web::RenderPolicy`.
+- Browser security headers belong in `GPForum::Security::*`, not controllers.
 
 ## Pull Requests
 
@@ -40,4 +41,3 @@ Every pull request should include:
 - prompt or ADR updates when contracts change;
 - migration and rollback notes when database shape changes;
 - profiling notes when hot paths change.
-

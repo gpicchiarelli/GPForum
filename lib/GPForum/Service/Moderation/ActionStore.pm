@@ -6,9 +6,9 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
-use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
@@ -20,13 +20,15 @@ const my $TARGET_ACTION  => 'moderation_action';
 const my $TARGET_POST    => 'post';
 const my $TARGET_THREAD  => 'thread';
 
-has clock          => sub { return GPForum::Service::Clock->new; };
-has id_service     => sub { return GPForum::Service::Id->new; };
-has outbox_builder => sub {
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Service::Id->new; };
+has recorder   => sub {
     my ($self) = @_;
 
-    return GPForum::Service::Outbox::MessageBuilder->new(
-        id_service => $self->id_service, );
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
 };
 has schema => undef;
 
@@ -266,10 +268,8 @@ sub _record_event_and_audit {
 
     my $action         = $input->{action};
     my $correlation_id = $input->{correlation_id} || $self->id_service->uuid;
-    my $event          = {
-        event_id          => $self->id_service->uuid,
+    $self->recorder->record_event(
         event_type        => $action->{action_type},
-        schema_version    => $SCHEMA_VERSION,
         aggregate_type    => $action->{target_type},
         aggregate_id      => $action->{target_id},
         aggregate_version => $SCHEMA_VERSION,
@@ -286,13 +286,9 @@ sub _record_event_and_audit {
             reason               => $action->{reason},
             metadata             => $action->{metadata},
         },
-        metadata   => {},
-        created_at => $action->{created_at},
-    };
+        timestamp => $action->{created_at},
+    );
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
     $self->_record_audit(
         {
             action         => $action,
@@ -308,10 +304,8 @@ sub _record_reversal_event_and_audit {
 
     my $action         = $input->{action};
     my $correlation_id = $self->id_service->uuid;
-    my $event          = {
-        event_id          => $self->id_service->uuid,
+    $self->recorder->record_event(
         event_type        => 'moderation_action.reversed',
-        schema_version    => $SCHEMA_VERSION,
         aggregate_type    => $TARGET_ACTION,
         aggregate_id      => $input->{action_id},
         aggregate_version => $SCHEMA_VERSION,
@@ -329,13 +323,9 @@ sub _record_reversal_event_and_audit {
             target_id            => _column( $action, 'target_id' ),
             reason               => $input->{reason},
         },
-        metadata   => {},
-        created_at => $input->{reversed_at},
-    };
+        timestamp => $input->{reversed_at},
+    );
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
     $self->_record_reversal_audit(
         {
             action         => $action,
@@ -354,23 +344,18 @@ sub _record_audit {
 
     my $action = $input->{action};
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => $action->{action_type},
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $action->{actor_user_id},
-            target_type    => $action->{target_type},
-            target_id      => $action->{target_id},
-            correlation_id => $input->{correlation_id},
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                reason               => $action->{reason},
-                moderation_action_id => $action->{moderation_action_id},
-            },
-            created_at => $action->{created_at},
-        }
+    $self->recorder->record_audit(
+        action         => $action->{action_type},
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $action->{actor_user_id},
+        target_type    => $action->{target_type},
+        target_id      => $action->{target_id},
+        correlation_id => $input->{correlation_id},
+        metadata       => {
+            reason               => $action->{reason},
+            moderation_action_id => $action->{moderation_action_id},
+        },
+        created_at => $action->{created_at},
     );
 
     return;
@@ -381,25 +366,19 @@ sub _record_reversal_audit {
 
     my $action = $input->{action};
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => 'moderation_action.reversed',
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $input->{reversed_by},
-            target_type    => _column( $action, 'target_type' ),
-            target_id      => _column( $action, 'target_id' ),
-            correlation_id => $input->{correlation_id},
-            previous_hash  => undef,
-            record_hash    => q{},
-            metadata       => {
-                moderation_action_id =>
-                  _column( $action, 'moderation_action_id' ),
-                original_action_type => _column( $action, 'action_type' ),
-                reason               => $input->{reason},
-            },
-            created_at => $input->{reversed_at},
-        }
+    $self->recorder->record_audit(
+        action         => 'moderation_action.reversed',
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $input->{reversed_by},
+        target_type    => _column( $action, 'target_type' ),
+        target_id      => _column( $action, 'target_id' ),
+        correlation_id => $input->{correlation_id},
+        metadata       => {
+            moderation_action_id => _column( $action, 'moderation_action_id' ),
+            original_action_type => _column( $action, 'action_type' ),
+            reason               => $input->{reason},
+        },
+        created_at => $input->{reversed_at},
     );
 
     return;

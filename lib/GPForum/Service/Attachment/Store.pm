@@ -6,9 +6,9 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
-use GPForum::Service::Outbox::MessageBuilder;
 
 our $VERSION = '0.001';
 
@@ -20,13 +20,15 @@ const my $STATE_UPLOADED    => 'uploaded';
 const my $STATE_QUARANTINED => 'quarantined';
 const my $SCAN_CLEAN        => 'clean';
 
-has clock          => sub { return GPForum::Service::Clock->new; };
-has id_service     => sub { return GPForum::Service::Id->new; };
-has outbox_builder => sub {
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Service::Id->new; };
+has recorder   => sub {
     my ($self) = @_;
 
-    return GPForum::Service::Outbox::MessageBuilder->new(
-        id_service => $self->id_service, );
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
 };
 has schema => undef;
 
@@ -528,9 +530,7 @@ sub _has_text {
 sub _record_event {
     my ( $self, $event ) = @_;
 
-    $self->schema->resultset('EventLog')->create($event);
-    $self->schema->resultset('OutboxMessage')
-      ->create( $self->outbox_builder->for_event($event) );
+    $self->recorder->record_event( %{$event} );
 
     return;
 }
@@ -538,17 +538,14 @@ sub _record_event {
 sub _record_audit {
     my ( $self, $action, $intent, $correlation_id ) = @_;
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => $action,
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $intent->{owner_user_id},
-            target_type    => $AGGREGATE_TYPE,
-            target_id      => $intent->{attachment_id},
-            correlation_id => $correlation_id,
-            metadata       => { object_key => $intent->{object_key} },
-        }
+    $self->recorder->record_audit(
+        action         => $action,
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $intent->{owner_user_id},
+        target_type    => $AGGREGATE_TYPE,
+        target_id      => $intent->{attachment_id},
+        correlation_id => $correlation_id,
+        metadata       => { object_key => $intent->{object_key} },
     );
 
     return;

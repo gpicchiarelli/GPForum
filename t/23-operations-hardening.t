@@ -28,7 +28,7 @@ use GPForum::Test::QueryBudgetSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 69;
+const my $EXPECTED_TESTS            => 72;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -310,6 +310,28 @@ is( $query_budget->observe( 'unknown_endpoint', { queries => 1 } )->{status},
 ok(
     exists $query_budget->snapshot->{endpoints}{search},
     'query budget snapshot includes search endpoint'
+);
+is( $query_budget->budget_for('notifications')->{max_queries},
+    4, 'query budget catalog includes notifications endpoint' );
+is_deeply(
+    $query_budget->observe(
+        'thread_view',
+        {
+            duplicate_queries => 1,
+            queries           => 1,
+            transactions      => 1,
+        }
+    )->{violations},
+    ['duplicate_queries'],
+    'query budget observes duplicate query violations'
+);
+ok(
+    !eval {
+        $query_budget->enforce( 'thread_view',
+            { queries => $EXCESSIVE_QUERY_COUNT, transactions => 1 } );
+        1;
+    },
+    'query budget hard-fail mode can throw on violations'
 );
 my $query_budget_resultset = GPForum::Test::QueryBudgetResultSet->new;
 my $query_budget_schema    = GPForum::Test::QueryBudgetSchema->new(

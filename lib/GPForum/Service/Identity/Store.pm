@@ -8,6 +8,7 @@ use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base;
 use POSIX qw(strftime);
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
 use GPForum::Service::Password;
@@ -20,10 +21,18 @@ const my $SCHEMA_VERSION => 1;
 const my $SESSION_DAYS   => 30;
 const my $DAY_SECONDS    => 86_400;
 
-has schema          => undef;
-has clock           => sub { return GPForum::Service::Clock->new; };
-has id_service      => sub { return GPForum::Service::Id->new; };
-has password        => sub { return GPForum::Service::Password->new; };
+has schema     => undef;
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Service::Id->new; };
+has password   => sub { return GPForum::Service::Password->new; };
+has recorder   => sub {
+    my ($self) = @_;
+
+    return GPForum::Infrastructure::EventRecorder->new(
+        id_service => $self->id_service,
+        schema     => $self->schema,
+    );
+};
 has session_tokens  => sub { return GPForum::Service::SessionToken->new; };
 has session_seconds => sub { return $SESSION_DAYS * $DAY_SECONDS; };
 
@@ -207,6 +216,43 @@ sub update_preferred_locale {
     };
 }
 
+sub preferred_theme_for_user {
+    my ( $self, $input ) = @_;
+
+    my $user = $self->_find_user_by_id( $input->{user_id} );
+    return { ok => 0, error => 'not_found' } if !$user;
+
+    return {
+        ok              => 1,
+        preferred_theme => _column( $user, 'preferred_theme' ),
+        user            => $user,
+    };
+}
+
+sub update_preferred_theme {
+    my ( $self, $input ) = @_;
+
+    my $user = $self->_find_user_by_id( $input->{user_id} );
+    return { ok => 0, error => 'not_found' } if !$user;
+
+    my $theme = _trim( $input->{preferred_theme} );
+    return { ok => 0, error => 'theme_required' } if !length $theme;
+
+    _update_row(
+        $user,
+        {
+            preferred_theme => $theme,
+            updated_at      => $self->clock->now_iso8601,
+        }
+    );
+
+    return {
+        ok              => 1,
+        preferred_theme => $theme,
+        user            => $user,
+    };
+}
+
 sub _find_user_by_id {
     my ( $self, $user_id ) = @_;
 
@@ -279,24 +325,18 @@ sub _create_session {
 sub _record_event {
     my ( $self, $user, $correlation_id ) = @_;
 
-    my $event_id        = $self->id_service->uuid;
     my $idempotency_key = join q{:}, 'user.registered', $user->{id};
-
-    $self->schema->resultset('EventLog')->create(
-        {
-            event_id          => $event_id,
-            event_type        => 'user.registered',
-            schema_version    => $SCHEMA_VERSION,
-            aggregate_type    => $USER_AGGREGATE,
-            aggregate_id      => $user->{id},
-            aggregate_version => $SCHEMA_VERSION,
-            actor_id          => $user->{id},
-            correlation_id    => $correlation_id,
-            causation_id      => undef,
-            idempotency_key   => $idempotency_key,
-            payload           => { username => $user->{username} },
-            metadata          => {},
-        }
+    $self->recorder->record_event(
+        event_type        => 'user.registered',
+        schema_version    => $SCHEMA_VERSION,
+        aggregate_type    => $USER_AGGREGATE,
+        aggregate_id      => $user->{id},
+        aggregate_version => $SCHEMA_VERSION,
+        actor_id          => $user->{id},
+        correlation_id    => $correlation_id,
+        causation_id      => undef,
+        idempotency_key   => $idempotency_key,
+        payload           => { username => $user->{username} },
     );
 
     return;
@@ -305,17 +345,14 @@ sub _record_event {
 sub _record_audit {
     my ( $self, $user, $correlation_id ) = @_;
 
-    $self->schema->resultset('AuditLog')->create(
-        {
-            audit_id       => $self->id_service->uuid,
-            action         => 'user.registered',
-            schema_version => $SCHEMA_VERSION,
-            actor_id       => $user->{id},
-            target_type    => $USER_AGGREGATE,
-            target_id      => $user->{id},
-            correlation_id => $correlation_id,
-            metadata       => { username => $user->{username} },
-        }
+    $self->recorder->record_audit(
+        action         => 'user.registered',
+        schema_version => $SCHEMA_VERSION,
+        actor_id       => $user->{id},
+        target_type    => $USER_AGGREGATE,
+        target_id      => $user->{id},
+        correlation_id => $correlation_id,
+        metadata       => { username => $user->{username} },
     );
 
     return;

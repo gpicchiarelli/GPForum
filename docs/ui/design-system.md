@@ -13,10 +13,15 @@ The palette is derived from the GPForum mark:
 - copper accent: `#a6532f`;
 - semantic danger/success/warning/focus tokens.
 
+`GPForum::Theme::Registry` is the runtime contract for theme names, color
+schemes, label keys, theme-color metadata, and semantic color tokens. The SSR
+shell applies `data-theme` and `data-color-scheme`; invalid theme values fall
+back before rendering.
+
 Core components live in `templates/components/`:
 
 - shell: `site_header`, `primary_nav`, `identity_nav`, `locale_selector`,
-  `breadcrumbs`, `flash_messages`, `site_footer`;
+  `theme_selector`, `breadcrumbs`, `flash_messages`, `site_footer`;
 - content: `page_header`, `section_header`, `card`, `empty_state`;
 - feedback: `alert`, `status_banner`, `confirmation`, `error_summary`,
   `field_error`;
@@ -24,6 +29,12 @@ Core components live in `templates/components/`:
   `admin_table`, `notification_surface`;
 - utility: `pagination`, `loading`, `dialog`.
 
+The authenticated `/settings` surface combines locale, theme, and notification
+channel preferences in ordinary SSR forms. It should remain the canonical place
+for durable account preferences; shell selectors are quick controls for the same
+locale/theme state.
+
 Add new UI by extending semantic tokens and components first. Route-specific CSS
 should be rare and justified by a surface that cannot be expressed as a shared
-primitive.
+primitive. Theme token changes must update the registry, `gpforum-ssr.css`, and
+the matching `themes/*/tokens.css` reference file together.

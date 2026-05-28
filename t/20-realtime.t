@@ -18,7 +18,7 @@ use GPForum::Test::RealtimePermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 37;
+const my $EXPECTED_TESTS => 43;
 const my $POLL_SECONDS   => 30;
 const my $UNREAD_COUNT   => 7;
 
@@ -47,6 +47,24 @@ ok( !$wrong_notifications->{ok}, 'user cannot subscribe other notifications' );
 is( $wrong_notifications->{reason},
     'wrong_recipient', 'wrong notification recipient reason is explicit' );
 
+my $anonymous_thread =
+  $authorizer->authorize( {}, 'thread:thread-1', {}, );
+ok( !$anonymous_thread->{ok}, 'anonymous actor cannot subscribe thread' );
+is( $anonymous_thread->{reason},
+    'authentication_required', 'anonymous denial reason is explicit' );
+
+my $unconfigured_thread =
+  $authorizer->authorize( { user_id => 'user-1' }, 'thread:thread-1', {}, );
+ok( !$unconfigured_thread->{ok}, 'thread subscription denies without policy' );
+is( $unconfigured_thread->{reason},
+    'forbidden', 'thread subscription deny-by-default reason is explicit' );
+
+my $unknown_channel =
+  $authorizer->authorize( { user_id => 'user-1' }, 'unknown:resource', {}, );
+ok( !$unknown_channel->{ok}, 'unknown channel type is denied' );
+is( $unknown_channel->{reason},
+    'unknown_channel', 'unknown channel reason is explicit' );
+
 my $policy_authorizer = GPForum::Service::Realtime::ChannelAuthorizer->new(
     permission_engine => GPForum::Test::RealtimePermissionEngine->new(
         denied => { 'thread-denied' => 1 },
@@ -60,7 +78,7 @@ ok(
 is(
     $policy_authorizer->authorize( { user_id => 'user-1' },
         'thread:thread-denied', {}, )->{reason},
-    'policy_denied',
+    'forbidden',
     'policy can deny thread channel'
 );
 
@@ -89,7 +107,7 @@ is( $registry->snapshot->{connections}, 0, 'registry unregisters connection' );
 
 my $hub = GPForum::Service::Realtime::Hub->new(
     registry   => GPForum::Service::Realtime::ConnectionRegistry->new,
-    authorizer => GPForum::Service::Realtime::ChannelAuthorizer->new,
+    authorizer => $policy_authorizer,
 );
 my $thread_connection = GPForum::Test::RealtimeConnection->new;
 my $badge_connection  = GPForum::Test::RealtimeConnection->new;

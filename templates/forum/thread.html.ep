@@ -102,7 +102,7 @@
                 </p>
               % }
               <p><a href="#post-<%= $post->{post_id} %>"><%= t('forum.permalink') %></a></p>
-              <div><%== $post->{body} // q{} %></div>
+              <div><%== ui_trusted_html($post->{body}, 'forum.post.body') %></div>
               % if ($post->{attachments} && @{ $post->{attachments} }) {
                 <ul aria-label="<%= t('forum.post_attachments') %>">
                   % for my $attachment (@{ $post->{attachments} }) {

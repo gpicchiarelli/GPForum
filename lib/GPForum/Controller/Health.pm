@@ -3,26 +3,16 @@ package GPForum::Controller::Health;
 use strict;
 use warnings;
 
-use Const::Fast;
+use GPForum::Web::HealthPayload;
 use Mojo::Base 'Mojolicious::Controller';
 
 our $VERSION = '0.001';
-
-const my %STATUS_CODE_FOR => (
-    ok       => 200,
-    degraded => 200,
-    fail     => 503,
-);
 
 sub live {
     my ($self) = @_;
 
     return $self->render(
-        json => {
-            status => 'ok',
-            check  => 'live',
-            time   => $self->gp_clock->now_iso8601,
-        },
+        json => GPForum::Web::HealthPayload->live( clock => $self->gp_clock ),
     );
 }
 
@@ -33,7 +23,9 @@ sub ready {
 
     return $self->render(
         json   => $readiness,
-        status => $STATUS_CODE_FOR{ $readiness->{status} },
+        status => GPForum::Web::HealthPayload->ready_status_code(
+            $readiness->{status}
+        ),
     );
 }
 
@@ -41,23 +33,11 @@ sub summary {
     my ($self) = @_;
 
     return $self->render(
-        json => {
-            status      => 'ok',
-            application => 'GPForum',
-            environment => $self->gp_config->environment,
-            runtime     => $self->gp_runtime->as_hash,
-            os          => $self->gp_runtime->os_profile->snapshot,
-            os_features => $self->gp_runtime->os_profile->feature_snapshot(
-                $self->gp_runtime->os_feature_settings
-            ),
-            os_sockets => $self->gp_runtime->os_profile->socket_snapshot(
-                $self->gp_runtime->os_feature_settings
-            ),
-            os_processes => $self->gp_runtime->os_profile->process_snapshot(
-                $self->gp_runtime->os_feature_settings
-            ),
-            time => $self->gp_clock->now_iso8601,
-        },
+        json => GPForum::Web::HealthPayload->summary(
+            config  => $self->gp_config,
+            runtime => $self->gp_runtime,
+            clock   => $self->gp_clock,
+        ),
     );
 }
 
