@@ -28,8 +28,8 @@ or SPA-first architecture is introduced here.
 | Search | complete | `Forum` | `Search::Searcher` | `t/19-search.t`, `t/32-forum-web.t` | PostgreSQL-native derived search and autocomplete remain visibility/permission-aware and bounded. |
 | Public feed | complete | `Discovery` | `FeedBuilder`, `ThreadReader`, `VisibilityPolicy` | `t/30-public-discovery.t`, `t/32-forum-web.t` | Atom feed exposes only public visible excerpts, not full private/moderated content. |
 | Sitemap/robots/canonical metadata | complete | `Discovery`, `Forum` | `SitemapBuilder`, `RobotsPolicy`, `CanonicalUrl`, `MetadataBuilder` | `t/30-public-discovery.t`, `t/32-forum-web.t` | Public discovery is canonical, noindex-safe for restricted content, and excludes hidden/deleted resources. |
-| Realtime | partial | `Realtime` | `Realtime::Hub`, `ConnectionRegistry`, `ChannelAuthorizer` | `t/20-realtime.t` | Existing process-local websocket layer is intentionally unchanged in this commit. Advanced realtime remains outside product-flow completion. |
-| Worker delivery | partial | workers | Minion registrar and handler boundaries | `t/16-workers-phase.t` | Worker placeholders are operationally registered; full async delivery semantics remain later stabilization work. |
+| Realtime | complete | `Realtime` | `Realtime::Hub`, `ConnectionRegistry`, `ChannelAuthorizer`, `PgNotifier`, `PgListener`, `ListenerSupervisor` | `t/20-realtime.t`, `t/81-realtime-operational.t`, `t/82-realtime-supervisor.t` | Realtime is strict-auth, LISTEN/NOTIFY capable, supervised per web process, and remains an enhancement over polling. |
+| Worker delivery | complete | workers | `Outbox::Dispatcher`, `DomainEventTransport`, `MinionRegistrar`, worker handlers | `t/16-workers-phase.t`, `t/83-outbox-worker-wiring.t` | Outbox dispatch is wired to real handlers through a direct worker command and optional Minion registration; legacy placeholder task names now dispatch real work. |
 
 ## Completion Rules Applied
 
@@ -50,8 +50,8 @@ or SPA-first architecture is introduced here.
 | --- | --- | --- | --- |
 | Email verification | Registration creates login-capable accounts before a full verification workflow exists. | Account state is explicit and email verification columns already exist. | medium |
 | Multi-process rate limiting | PostgreSQL-backed limiter exists; local memory remains degraded fallback. | `/metrics` exposes primary failures, fallback usage and blocked decisions. | low |
-| Realtime fanout | Websocket state is process-local. | Realtime is enhancement-only and canonical writes do not depend on it. | medium |
-| Worker placeholders | Some Minion tasks are registered placeholders. | Outbox, dispatcher, and handler boundaries already exist; placeholders are observable. | medium |
+| Realtime fanout | Websocket state is process-local. | Each web process can run a supervised LISTEN/NOTIFY listener; polling remains canonical fallback. | low |
+| Worker operations | Minion backend is opt-in and requires explicit PostgreSQL URL/backend dependencies. | Direct outbox dispatch command is always available; Minion startup fails explicitly if configured incompletely. | low |
 | Rich content rendering | Safe rendered body boundary is trusted by templates. | Tests preserve escaping/sanitized-body contract. | high before rich renderer |
 
 ## Commands

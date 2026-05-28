@@ -98,11 +98,11 @@ This repository currently contains:
 * CSRF enforcement for state-changing identity requests;
 * registration persistence boundary for users, credentials, events, and audit records;
 * transactional outbox rows for forum domain events;
-* retry-aware outbox dispatcher boundary for future Minion workers;
+* retry-aware outbox dispatcher with direct worker command and optional Minion wiring;
 * dead-letter preservation for exhausted outbox deliveries;
 * projection offset tracking for lag and health visibility;
 * projection generation management for blue/green read-model rebuilds;
-* Minion registration, idempotent job runner, and worker placeholders for search, notification, and cache invalidation;
+* Minion registration, idempotent job runner, and real worker handoff for search, notification, cache, attachment, media, and realtime fanout;
 * notification subscriptions, preferences, inbox creation, read state, and fanout services;
 * PostgreSQL-native search document building, indexing, rebuild, permission-aware querying, and worker handoff services;
 * process-local realtime websocket boundaries for authenticated connections, authorized channel subscription, thread updates, notification badges, and polling fallback;

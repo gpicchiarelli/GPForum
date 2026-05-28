@@ -16,7 +16,9 @@ Startup order matters:
    metrics, readiness, query stats, and telemetry.
 5. Product bootstraps register identity, discovery, forum, admin, moderation,
    and privacy services.
-6. `GPForum::Bootstrap::Routes` registers named routes last.
+6. `GPForum::Bootstrap::Workers` wires outbox transport, dispatch, direct worker
+   helpers, and optional Minion registration after forum dependencies exist.
+7. `GPForum::Bootstrap::Routes` registers named routes last.
 
 Helpers are part of the public internal contract. Controller code should depend
 on helper names, not on bootstrap module internals. `t/73-bootstrap-composition.t`

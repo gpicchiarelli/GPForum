@@ -43,3 +43,44 @@ the record as terminal evidence.
 `PgNotifier`. Realtime delivery is best-effort: notifier failure is classified
 and observable, but canonical writes and SSR reads remain authoritative.
 
+## Worker Lifecycle
+
+`GPForum::Bootstrap::Workers` wires the production outbox dispatcher from the
+same service boundaries used by SSR:
+
+- search indexing;
+- notification fanout;
+- cache invalidation;
+- attachment scanning;
+- media processing;
+- realtime NOTIFY fanout.
+
+The direct worker command can run one bounded batch:
+
+```sh
+carton exec bin/gpforum-outbox-dispatch --once --limit 100
+```
+
+or a continuous loop suitable for a process supervisor:
+
+```sh
+carton exec bin/gpforum-outbox-dispatch --loop --limit 100 --sleep 5
+```
+
+The loop exits cleanly on `INT` or `TERM`, prints one operational summary per
+batch, and keeps all write/retry/dead-letter behavior inside
+`GPForum::Service::Outbox::Dispatcher`.
+
+Minion integration is opt-in so development and single-process SSR do not gain
+mandatory worker infrastructure. Enable it only with an explicit PostgreSQL
+backend URL:
+
+```sh
+GPFORUM_MINION_ENABLED=1 \
+GPFORUM_MINION_PG_URL=postgresql://gpforum@/gpforum_minion \
+carton exec perl -Ilib bin/gpforum minion worker
+```
+
+The optional PostgreSQL dependency bundle includes `Mojo::Pg`, which Minion's
+PostgreSQL backend requires. If Minion is enabled without a URL or backend
+support, startup fails explicitly instead of silently skipping workers.

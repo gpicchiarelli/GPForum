@@ -36,6 +36,7 @@ requirements without review.
 | Devel::Cover | develop | Perl 5 license | coverage tool | dev-only allowed |
 | Devel::NYTProf | develop | Perl 5 license | profiling tool | dev-only allowed |
 | DBD::Pg | optional-postgres | Perl 5 license | PostgreSQL driver for DB-backed CI and deployments | allowed |
+| Mojo::Pg | optional-postgres | Artistic-2.0 | required by Minion PostgreSQL backend | allowed |
 | Test::PostgreSQL | optional-postgres | Perl 5 license | PostgreSQL integration testing helper | dev-only allowed |
 
 Dependency governance rules:

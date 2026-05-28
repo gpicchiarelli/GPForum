@@ -184,6 +184,8 @@ sub _helper_names {
       gp_notification_preference_store
       gp_notification_renderer
       gp_notifications_view_model
+      gp_outbox_dispatcher
+      gp_outbox_transport
       gp_password
       gp_permission_gate
       gp_permission_review
@@ -220,6 +222,7 @@ sub _helper_names {
       gp_thread_read_state
       gp_thread_reader
       gp_thread_store
+      gp_worker_registrar
       i18n
       i18n_service
       l

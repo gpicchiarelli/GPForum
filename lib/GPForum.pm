@@ -16,6 +16,7 @@ use GPForum::Bootstrap::Operations;
 use GPForum::Bootstrap::Privacy;
 use GPForum::Bootstrap::Routes;
 use GPForum::Bootstrap::Security;
+use GPForum::Bootstrap::Workers;
 use GPForum::Config;
 use GPForum::OS::RuntimePolicy;
 use GPForum::Runtime;
@@ -54,6 +55,10 @@ sub startup {
         config      => $config,
     );
     GPForum::Bootstrap::Forum->register(
+        application => $self,
+        config      => $config,
+    );
+    GPForum::Bootstrap::Workers->register(
         application => $self,
         config      => $config,
     );

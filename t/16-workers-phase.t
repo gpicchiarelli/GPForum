@@ -255,16 +255,18 @@ ok(
     $minion->tasks->{'gpforum.notification.dispatch'},
     'registrar installs notification dispatch task'
 );
+ok( $minion->tasks->{'gpforum.cache_invalidation.dispatch'},
+    'registrar installs cache dispatch task' );
+ok(
+    $minion->tasks->{'gpforum.attachment_scan.dispatch'},
+    'registrar installs attachment scan dispatch task'
+);
+ok(
+    $minion->tasks->{'gpforum.media_processing.dispatch'},
+    'registrar installs media processing dispatch task'
+);
 ok( $minion->tasks->{'gpforum.cache_invalidation.placeholder'},
-    'registrar installs cache placeholder task' );
-ok(
-    $minion->tasks->{'gpforum.attachment_scan.placeholder'},
-    'registrar installs attachment scan placeholder task'
-);
-ok(
-    $minion->tasks->{'gpforum.media_processing.placeholder'},
-    'registrar installs media processing placeholder task'
-);
+    'registrar keeps cache legacy task alias' );
 
 my $outbox_job = GPForum::Test::MinionJob->new;
 my $outbox_result =
@@ -297,12 +299,44 @@ is( $search_task_result->{dispatched},
 is( $search_job->finished->{selected}, 1, 'search task finishes job' );
 
 my $media_job = GPForum::Test::MinionJob->new;
-my $media_placeholder =
-  $minion->tasks->{'gpforum.media_processing.placeholder'}->($media_job);
+my $media_task_dispatch =
+  $minion->tasks->{'gpforum.media_processing.dispatch'}
+  ->( $media_job, $OUTBOX_LIMIT );
 
-ok( $media_placeholder->{ok}, 'media placeholder task succeeds' );
-is( $media_placeholder->{placeholder},
-    'media_processing', 'media placeholder identifies workload' );
+is( $minion_dispatcher->calls->[3],
+    $OUTBOX_LIMIT, 'media task passes limit to dispatcher' );
+is( $media_task_dispatch->{dispatched},
+    1, 'media task returns dispatch summary' );
+is( $media_job->finished->{selected}, 1, 'media task finishes job' );
+
+my $legacy_job = GPForum::Test::MinionJob->new;
+my $legacy_dispatch =
+  $minion->tasks->{'gpforum.cache_invalidation.placeholder'}
+  ->( $legacy_job, $OUTBOX_LIMIT );
+
+ok( !exists $legacy_dispatch->{placeholder},
+    'legacy placeholder task no longer returns placeholder result' );
+is( $legacy_dispatch->{dispatched},
+    1, 'legacy placeholder alias dispatches real outbox work' );
+
+my @factory_jobs;
+my $factory_dispatcher = GPForum::Test::OutboxDispatcher->new;
+my $factory_registrar  = GPForum::Worker::MinionRegistrar->new(
+    dispatcher_factory => sub {
+        my ($job) = @_;
+
+        push @factory_jobs, $job;
+        return $factory_dispatcher;
+    },
+);
+my $factory_minion = GPForum::Test::Minion->new;
+$factory_registrar->register($factory_minion);
+my $factory_job = GPForum::Test::MinionJob->new;
+$factory_minion->tasks->{'gpforum.outbox.dispatch'}->( $factory_job, 5 );
+is( scalar @factory_jobs, 1,
+    'registrar can build dispatcher from job factory' );
+is( $factory_dispatcher->calls->[0],
+    5, 'factory-built dispatcher receives job limit' );
 
 done_testing();
 

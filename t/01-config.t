@@ -14,7 +14,7 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 52;
+const my $EXPECTED_TESTS            => 56;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
@@ -29,6 +29,7 @@ const my $CUSTOM_CATEGORY_CACHE_TTL => 45;
 const my $CUSTOM_REALTIME_POLL      => 2;
 const my $CUSTOM_REALTIME_BACKOFF   => 4;
 const my $CUSTOM_REALTIME_HEARTBEAT => 12;
+const my $CUSTOM_MINION_PG_URL      => 'postgresql://gpforum@/gpforum_minion';
 const my $TOO_MANY_PROCESSES        => 513;
 
 plan tests => $EXPECTED_TESTS;
@@ -72,6 +73,8 @@ my %environment = (
       $CUSTOM_REALTIME_BACKOFF,
     GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS =>
       $CUSTOM_REALTIME_HEARTBEAT,
+    GPFORUM_MINION_ENABLED => 1,
+    GPFORUM_MINION_PG_URL  => $CUSTOM_MINION_PG_URL,
 );
 
 my $config  = GPForum::Config->from_environment( \%environment );
@@ -141,6 +144,9 @@ is( $config->realtime_listener_reconnect_backoff_seconds,
 is( $config->realtime_listener_heartbeat_interval_seconds,
     $CUSTOM_REALTIME_HEARTBEAT,
     'realtime listener heartbeat interval loads from env' );
+is( $config->minion_enabled, 1, 'Minion enabled flag loads from env' );
+is( $config->minion_pg_url,
+    $CUSTOM_MINION_PG_URL, 'Minion PostgreSQL URL loads from env' );
 is( $runtime->as_hash->{os_features}{reuseport}{setting},
     'off', 'runtime exposes OS feature settings' );
 is( $runtime->as_hash->{os_preflight_settings}{min_recommended_workers},
@@ -197,6 +203,22 @@ throws_ok(
     },
     qr/\A realtime_listener_enabled [ ] must [ ] be [ ] 0 [ ] or [ ] 1/msx,
     'realtime listener enabled flag must be boolean integer',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( minion_enabled => 2 )->validate;
+    },
+    qr/\A minion_enabled [ ] must [ ] be [ ] 0 [ ] or [ ] 1/msx,
+    'Minion enabled flag must be boolean integer',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( minion_enabled => 1 )->validate;
+    },
+    qr/\A minion_pg_url [ ] is [ ] required/msx,
+    'Minion enabled requires PostgreSQL URL',
 );
 
 throws_ok(

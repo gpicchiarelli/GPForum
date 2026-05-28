@@ -306,8 +306,17 @@ expose both the catalog and, when a schema is configured, the drift report used
 by readiness. `carton exec bin/gpforum-platform-check` aggregates OS preflight
 and optional DB-backed query budget drift into a single CI/deploy check.
 
-Start workers after Minion configuration is present:
+Run outbox workers directly for a bounded batch or supervised loop:
 
 ```sh
+carton exec bin/gpforum-outbox-dispatch --once --limit 100
+carton exec bin/gpforum-outbox-dispatch --loop --limit 100 --sleep 5
+```
+
+Start Minion workers after optional Minion PostgreSQL configuration is present:
+
+```sh
+GPFORUM_MINION_ENABLED=1 \
+GPFORUM_MINION_PG_URL=postgresql://gpforum@/gpforum_minion \
 carton exec perl -Ilib bin/gpforum minion worker
 ```

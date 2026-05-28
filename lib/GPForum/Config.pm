@@ -47,6 +47,8 @@ const my $DEFAULT_REALTIME_LISTENER       => 0;
 const my $DEFAULT_REALTIME_POLL_SECONDS   => 1;
 const my $DEFAULT_REALTIME_BACKOFF        => 5;
 const my $DEFAULT_REALTIME_HEARTBEAT      => 30;
+const my $DEFAULT_MINION_ENABLED          => 0;
+const my $DEFAULT_MINION_PG_URL           => q{};
 const my $MINIMUM_PROCESS_COUNT           => 1;
 const my $MAXIMUM_PROCESS_COUNT           => 512;
 const my $MINIMUM_OS_THRESHOLD            => 1;
@@ -100,6 +102,8 @@ has realtime_listener_reconnect_backoff_seconds =>
   sub { return $DEFAULT_REALTIME_BACKOFF; };
 has realtime_listener_heartbeat_interval_seconds =>
   sub { return $DEFAULT_REALTIME_HEARTBEAT; };
+has minion_enabled => sub { return $DEFAULT_MINION_ENABLED; };
+has minion_pg_url  => sub { return $DEFAULT_MINION_PG_URL; };
 
 sub from_environment {
     my ( $class, $environment ) = @_;
@@ -259,6 +263,12 @@ sub from_environment {
             'GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS',
             $DEFAULT_REALTIME_HEARTBEAT
         ),
+        minion_enabled => _env_integer(
+            $environment, 'GPFORUM_MINION_ENABLED', $DEFAULT_MINION_ENABLED
+        ),
+        minion_pg_url => _env_value(
+            $environment, 'GPFORUM_MINION_PG_URL', $DEFAULT_MINION_PG_URL
+        ),
     );
 
     $self->validate;
@@ -332,6 +342,9 @@ sub validate {
         'realtime_listener_heartbeat_interval_seconds',
         $self->realtime_listener_heartbeat_interval_seconds
     );
+    _require_boolean_integer( 'minion_enabled', $self->minion_enabled );
+    _require_non_empty( 'minion_pg_url', $self->minion_pg_url )
+      if $self->minion_enabled;
 
     if (   $self->environment eq 'production'
         && $self->session_secret eq $DEFAULT_SESSION_SECRET )
