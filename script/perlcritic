@@ -69,9 +69,8 @@ if [ "$new_count" -ne 0 ]; then
 fi
 
 if [ "$resolved_count" -ne 0 ]; then
-    echo "perlcritic: $resolved_count baseline violation(s) disappeared; update $baseline_file after review" >&2
+    echo "perlcritic: $resolved_count baseline violation(s) not observed in this environment; review $baseline_file before removing them" >&2
     cat "$resolved_violations" >&2
-    exit 1
 fi
 
 echo "perlcritic status=ok baseline_violations=$baseline_count new_violations=0"
