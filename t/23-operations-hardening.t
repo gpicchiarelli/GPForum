@@ -434,8 +434,7 @@ $test->json_has('/runtime/web_processes');
 $test->json_has('/local_caches/0/namespace');
 $test->json_has('/rate_limits/buckets');
 cmp_ok( $test->tx->res->json->{rate_limits}{buckets},
-    '>=', $EXHAUSTED_ALLOWANCE,
-    'rate limit bucket metric is non-negative' );
+    '>=', $EXHAUSTED_ALLOWANCE, 'rate limit bucket metric is non-negative' );
 $test->json_is( '/realtime/connections' => $EXHAUSTED_ALLOWANCE );
 $test->json_has('/realtime/broadcast');
 $test->json_has('/realtime/delivered');
