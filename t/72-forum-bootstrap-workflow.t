@@ -7,10 +7,12 @@ use Digest::SHA qw(sha256_hex);
 use Test::More;
 
 use lib 'lib';
+use lib 't/lib';
 
 use GPForum::Bootstrap::Forum;
 use GPForum::Config;
 use GPForum::Service::Forum::PostingWorkflow;
+use GPForum::Test::CommandIdempotency;
 use Mojolicious;
 
 our $VERSION = '0.001';
@@ -28,6 +30,12 @@ $application->helper(
     gp_local_cache => sub { return GPForum::Test::Cache->new(); } );
 $application->helper(
     gp_mention_store => sub { return GPForum::Test::MentionStore->new(); } );
+$application->helper(
+    gp_command_idempotency => sub {
+        my $undefined;
+        return $undefined;
+    }
+);
 $application->helper(
     gp_realtime_hub => sub { return GPForum::Test::RealtimeHub->new(); } );
 
@@ -136,6 +144,74 @@ is( $thread_workflow->thread_store->calls,
 is( $thread_workflow->mention_store->calls,
     1, 'posting workflow records mentions for first post' );
 
+my $guarded_thread =
+  _workflow( command_idempotency => GPForum::Test::CommandIdempotency->new );
+my $guarded_thread_result = $guarded_thread->create_thread(
+    {
+        category_id     => 'general',
+        author_user_id  => 'user-1',
+        title           => 'Hello',
+        body_source     => 'body',
+        idempotency_key => 'thread-key-1',
+        visibility      => 'public',
+    }
+);
+ok( $guarded_thread_result->{ok},
+    'posting workflow creates an idempotent thread command' );
+is( $guarded_thread->command_idempotency->last_input->{command_type},
+    'thread.create', 'thread command idempotency records command type' );
+is( $guarded_thread->command_idempotency->response->{thread_id},
+    'thread-1', 'thread command idempotency stores replay target' );
+
+my $replayed_thread = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            post_id   => 'post-original',
+            status    => 'ok',
+            thread_id => 'thread-original',
+        }
+    )
+);
+my $replayed_thread_result = $replayed_thread->create_thread(
+    {
+        category_id     => 'general',
+        author_user_id  => 'user-1',
+        title           => 'Hello',
+        body_source     => 'body',
+        idempotency_key => 'thread-key-1',
+        visibility      => 'public',
+    }
+);
+ok( $replayed_thread_result->{ok}, 'thread command replay returns ok' );
+ok(
+    $replayed_thread_result->{idempotent},
+    'thread command replay is marked idempotent'
+);
+is( $replayed_thread_result->{stored}{thread}{thread_id},
+    'thread-original', 'thread command replay returns original thread id' );
+is( $replayed_thread->thread_store->calls,
+    0, 'thread command replay does not call store' );
+is( $replayed_thread->mention_store->calls,
+    0, 'thread command replay does not record mentions again' );
+
+my $conflicting_thread = _workflow( command_idempotency =>
+      GPForum::Test::CommandIdempotency->new( conflict => 1 ) );
+is(
+    $conflicting_thread->create_thread(
+        {
+            category_id     => 'general',
+            author_user_id  => 'user-1',
+            title           => 'Hello',
+            body_source     => 'body',
+            idempotency_key => 'thread-key-1',
+            visibility      => 'public',
+        }
+    )->{status},
+    'conflict',
+    'thread command idempotency conflict is surfaced'
+);
+
 my $thread_store_failure =
   _workflow( thread_store => GPForum::Test::ThreadStore->new( fail => 1 ) );
 my $thread_store_failure_result = $thread_store_failure->create_thread(
@@ -207,6 +283,36 @@ is( $reply_workflow->post_composer->last_input->{visibility},
 is( $reply_workflow->mention_store->last_input->{thread_id},
     'thread-1', 'reply mention recording carries thread id' );
 
+my $replayed_reply = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            post_id   => 'post-original',
+            status    => 'ok',
+            thread_id => 'thread-1',
+        }
+    )
+);
+my $replayed_reply_result = $replayed_reply->create_reply(
+    {
+        thread_id       => 'thread-1',
+        author_user_id  => 'user-2',
+        body_source     => 'reply body',
+        idempotency_key => 'reply-key-1',
+    }
+);
+ok( $replayed_reply_result->{ok}, 'reply command replay returns ok' );
+ok(
+    $replayed_reply_result->{idempotent},
+    'reply command replay is marked idempotent'
+);
+is( $replayed_reply_result->{stored}{post}{post_id},
+    'post-original', 'reply command replay returns original post id' );
+is( $replayed_reply->post_store->calls,
+    0, 'reply command replay does not call store' );
+is( $replayed_reply->mention_store->calls,
+    0, 'reply command replay does not record mentions again' );
+
 my $invalid_reply = _workflow(
     post_composer => GPForum::Test::PostComposer->new(
         result => {
@@ -262,6 +368,7 @@ sub _workflow {
     return GPForum::Service::Forum::PostingWorkflow->new(
         category_reader => $override{category_reader}
           || GPForum::Test::CategoryReader->new( found => 1 ),
+        command_idempotency => $override{command_idempotency},
         logger        => $override{logger} || GPForum::Test::Logger->new(),
         mention_store => $override{mention_store}
           || GPForum::Test::MentionStore->new(),

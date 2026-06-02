@@ -157,6 +157,7 @@ sub _helper_names {
       gp_canonical_url
       gp_category_reader
       gp_clock
+      gp_command_idempotency
       gp_config
       gp_data_rights_review
       gp_db_query_stats

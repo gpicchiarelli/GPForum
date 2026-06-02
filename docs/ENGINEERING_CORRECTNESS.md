@@ -10,6 +10,7 @@ websocket hubs, and workers are execution boundaries, not authority boundaries.
 | Area | Invariant | Executable evidence |
 | --- | --- | --- |
 | thread/post writes | A canonical thread or reply write inserts the domain rows and records EventLog, OutboxMessage, and AuditLog through one service transaction. | `t/11-forum-thread.t`, `t/12-forum-post.t`, `t/75-architecture-foundation.t`, `t/86-engineering-correctness.t` |
+| command replay | Forum thread/reply HTTP writes use `command_log` when an `idempotency_key` is supplied; identical retries replay the original target ids and different payloads with the same key are rejected. | `t/32-forum-web.t`, `t/72-forum-bootstrap-workflow.t`, `t/87-command-idempotency.t` |
 | event contract | Every domain event has a schema version, contract/version, idempotency key, correlation id, aggregate metadata, and transport metadata. | `t/75-architecture-foundation.t`, `t/86-engineering-correctness.t` |
 | outbox | Workers claim ready pending/failed messages and expired running locks atomically with PostgreSQL `FOR UPDATE SKIP LOCKED`; no two workers process the same `outbox_id`. | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `t/86-engineering-correctness.t` |
 | retry/dead-letter | Retryable outbox failures advance attempt count and backoff; max-attempt exhaustion moves to `cancelled` and records dead-letter evidence. | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t` |
@@ -44,6 +45,9 @@ Idempotency is explicit at the domain edge, not inferred from transport retry:
 
 - forum write commands carry the boundary `idempotency_key` into event/outbox
   idempotency keys when supplied;
+- thread and reply HTTP writes register supplied command keys in `command_log`;
+  a completed retry replays the original `thread_id`/`post_id` response and a
+  reused key with a different command fingerprint returns conflict;
 - event idempotency keys are deterministic for the command or aggregate/action;
 - outbox idempotency keys are unique per event handoff;
 - repeated moderation report assignment/release/resolve calls avoid duplicate

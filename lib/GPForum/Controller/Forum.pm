@@ -16,6 +16,7 @@ const my $HTTP_CREATED       => 201;
 const my $HTTP_BAD_REQUEST   => 400;
 const my $HTTP_UNAUTHORIZED  => 401;
 const my $HTTP_FORBIDDEN     => 403;
+const my $HTTP_CONFLICT      => 409;
 const my $HTTP_NOT_FOUND     => 404;
 const my $HTTP_TOO_MANY      => 429;
 const my $HTTP_SERVER_ERROR  => 500;
@@ -180,11 +181,9 @@ sub create_thread {
         }
     );
 
-    return _not_found( $self, $result->{error} )
-      if $result->{status} && $result->{status} eq 'not_found';
-    return _thread_form_bad_request( $self, $result->{prepared} )
-      if $result->{status} && $result->{status} eq 'invalid';
-    return _system_failure($self) if !$result->{ok};
+    if ( !$result->{ok} ) {
+        return _thread_write_failure( $self, $result );
+    }
 
     return _created_thread_response( $self, $result->{stored} );
 }
@@ -205,13 +204,9 @@ sub create_reply {
         }
     );
 
-    return _not_found( $self, $result->{error} )
-      if $result->{status} && $result->{status} eq 'not_found';
-    return _forbidden( $self, $result->{error} )
-      if $result->{status} && $result->{status} eq 'forbidden';
-    return _bad_request( $self, $result->{prepared}{errors} )
-      if $result->{status} && $result->{status} eq 'invalid';
-    return _system_failure($self) if !$result->{ok};
+    if ( !$result->{ok} ) {
+        return _reply_write_failure( $self, $result );
+    }
 
     return _created_post_response( $self, $result->{stored} );
 }
@@ -950,6 +945,57 @@ sub _thread_form_bad_request {
     );
 }
 
+sub _thread_write_failure {
+    my ( $controller, $result ) = @_;
+
+    return _write_failure(
+        $controller,
+        $result,
+        {
+            conflict =>
+              sub { return _conflict( $controller, $result->{error} ); },
+            invalid => sub {
+                return _thread_form_bad_request( $controller,
+                    $result->{prepared} );
+            },
+            not_found =>
+              sub { return _not_found( $controller, $result->{error} ); },
+        }
+    );
+}
+
+sub _reply_write_failure {
+    my ( $controller, $result ) = @_;
+
+    return _write_failure(
+        $controller,
+        $result,
+        {
+            conflict =>
+              sub { return _conflict( $controller, $result->{error} ); },
+            forbidden =>
+              sub { return _forbidden( $controller, $result->{error} ); },
+            invalid => sub {
+                return _bad_request( $controller, $result->{prepared}{errors} );
+            },
+            not_found =>
+              sub { return _not_found( $controller, $result->{error} ); },
+        }
+    );
+}
+
+sub _write_failure {
+    my ( $controller, $result, $handlers ) = @_;
+
+    my $status  = $result->{status} || q{};
+    my $handler = $handlers->{$status};
+    if ($handler) {
+        return $handler->();
+    }
+
+    return _system_failure($controller);
+}
+
 sub _allowed {
     my ( $controller, $user_id, $action ) = @_;
 
@@ -1224,6 +1270,19 @@ sub _rate_limited {
 
     return _render_error( $controller, $HTTP_TOO_MANY,
         GPForum::Web::ErrorPayload->rate_limited,
+    );
+}
+
+sub _conflict {
+    my ( $controller, $error ) = @_;
+
+    return _render_error(
+        $controller,
+        $HTTP_CONFLICT,
+        GPForum::Web::ErrorPayload->conflict(
+            error => $error || 'idempotency conflict',
+            title => 'Conflict',
+        )
     );
 }
 

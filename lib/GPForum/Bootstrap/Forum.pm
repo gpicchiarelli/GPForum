@@ -168,6 +168,7 @@ sub _register_forum_helpers {
 
             return GPForum::Service::Forum::PostingWorkflow->new(
                 category_reader      => $controller->gp_category_reader,
+                command_idempotency  => $controller->gp_command_idempotency,
                 logger               => $controller->app->log,
                 mention_store        => $controller->gp_mention_store,
                 post_composer        => $controller->gp_post_composer,

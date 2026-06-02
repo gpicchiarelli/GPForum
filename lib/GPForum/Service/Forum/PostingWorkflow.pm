@@ -10,6 +10,7 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 has category_reader      => undef;
+has command_idempotency  => undef;
 has logger               => undef;
 has mention_store        => undef;
 has post_composer        => undef;
@@ -20,6 +21,21 @@ has thread_detail_reader => undef;
 has thread_store         => undef;
 
 sub create_thread {
+    my ( $self, $input ) = @_;
+
+    return $self->_run_idempotent_command(
+        {
+            command_type => 'thread.create',
+            input        => $input,
+            request      => _thread_request($input),
+            response     => sub { return _thread_response_payload(@_); },
+            replay       => sub { return _thread_result_from_response(@_); },
+            run          => sub { return $self->_create_thread_once($input); },
+        }
+    );
+}
+
+sub _create_thread_once {
     my ( $self, $input ) = @_;
 
     my $category_id = _trim( $input->{category_id} );
@@ -57,6 +73,21 @@ sub create_thread {
 sub create_reply {
     my ( $self, $input ) = @_;
 
+    return $self->_run_idempotent_command(
+        {
+            command_type => 'reply.create',
+            input        => $input,
+            request      => _reply_request($input),
+            response     => sub { return _reply_response_payload(@_); },
+            replay       => sub { return _reply_result_from_response(@_); },
+            run          => sub { return $self->_create_reply_once($input); },
+        }
+    );
+}
+
+sub _create_reply_once {
+    my ( $self, $input ) = @_;
+
     my $thread =
       $self->thread_detail_reader->find_thread( $input->{thread_id} );
     return _result( status => 'not_found', error => 'thread not found' )
@@ -89,6 +120,41 @@ sub create_reply {
         prepared => $prepared,
         stored   => $stored->{stored},
     );
+}
+
+sub _run_idempotent_command {
+    my ( $self, $input ) = @_;
+
+    my $command_key = _trim( $input->{input}{idempotency_key} );
+    if ( !$self->command_idempotency || !length $command_key ) {
+        return $input->{run}->();
+    }
+
+    my $guarded = $self->command_idempotency->run(
+        {
+            actor_id        => $input->{input}{author_user_id},
+            command_type    => $input->{command_type},
+            idempotency_key => $command_key,
+            request         => $input->{request},
+        },
+        $input->{run},
+        $input->{response},
+    );
+
+    return _idempotency_guard_result( $guarded, $input );
+}
+
+sub _idempotency_guard_result {
+    my ( $guarded, $input ) = @_;
+
+    if ( $guarded->{conflict} || $guarded->{in_progress} ) {
+        return _result( status => 'conflict', error => $guarded->{error} );
+    }
+    if ( $guarded->{replayed} ) {
+        return $input->{replay}->( $guarded->{response} );
+    }
+
+    return $guarded->{result};
 }
 
 sub _store_thread {
@@ -158,6 +224,142 @@ sub _body_hash {
     return sha256_hex( _trim($body) );
 }
 
+sub _thread_request {
+    my ($input) = @_;
+
+    return {
+        author_user_id => _trim( $input->{author_user_id} ),
+        body_hash      => _body_hash( $input->{body_source} ),
+        category_id    => _trim( $input->{category_id} ),
+        title          => _trim( $input->{title} ),
+        visibility     => _trim( $input->{visibility} ),
+    };
+}
+
+sub _reply_request {
+    my ($input) = @_;
+
+    return {
+        author_user_id => _trim( $input->{author_user_id} ),
+        body_hash      => _body_hash( $input->{body_source} ),
+        thread_id      => _trim( $input->{thread_id} ),
+        visibility     => _trim( $input->{visibility} ),
+    };
+}
+
+sub _thread_response_payload {
+    my ($result) = @_;
+
+    my $response = _base_response_payload($result);
+    if ( $result->{ok} ) {
+        $response->{thread_id} =
+          _column( $result->{stored}{thread}, 'thread_id' );
+        $response->{post_id} = _column( $result->{stored}{post}, 'post_id' );
+    }
+    _include_validation_payload( $response, $result );
+
+    return $response;
+}
+
+sub _reply_response_payload {
+    my ($result) = @_;
+
+    my $response = _base_response_payload($result);
+    if ( $result->{ok} ) {
+        $response->{post_id} = _column( $result->{stored}{post}, 'post_id' );
+        $response->{thread_id} =
+          _column( $result->{stored}{post}, 'thread_id' );
+    }
+    _include_validation_payload( $response, $result );
+
+    return $response;
+}
+
+sub _thread_result_from_response {
+    my ($response) = @_;
+
+    return _result_from_response(
+        $response,
+        sub {
+            return {
+                ok     => 1,
+                post   => { post_id   => $response->{post_id} },
+                thread => { thread_id => $response->{thread_id} },
+            };
+        }
+    );
+}
+
+sub _reply_result_from_response {
+    my ($response) = @_;
+
+    return _result_from_response(
+        $response,
+        sub {
+            return {
+                ok   => 1,
+                post => {
+                    post_id   => $response->{post_id},
+                    thread_id => $response->{thread_id},
+                },
+            };
+        }
+    );
+}
+
+sub _result_from_response {
+    my ( $response, $stored_builder ) = @_;
+
+    my $prepared = _prepared_from_response($response);
+    my $stored   = $response->{ok} ? $stored_builder->() : undef;
+
+    return _result(
+        error      => $response->{error},
+        idempotent => 1,
+        prepared   => $prepared,
+        status     => $response->{status} || 'failed',
+        stored     => $stored,
+    );
+}
+
+sub _base_response_payload {
+    my ($result) = @_;
+
+    my $response = {
+        ok     => $result->{ok} ? 1 : 0,
+        status => $result->{status} || 'failed',
+    };
+    if ( defined $result->{error} && length $result->{error} ) {
+        $response->{error} = $result->{error};
+    }
+
+    return $response;
+}
+
+sub _include_validation_payload {
+    my ( $response, $result ) = @_;
+
+    return if ( $result->{status} || q{} ) ne 'invalid';
+
+    $response->{errors} = $result->{prepared}{errors} || {};
+    $response->{values} = $result->{prepared}{values} || {};
+
+    return;
+}
+
+sub _prepared_from_response {
+    my ($response) = @_;
+
+    return
+      if ( $response->{status} || q{} ) ne 'invalid';
+
+    return {
+        errors => $response->{errors} || {},
+        ok     => 0,
+        values => $response->{values} || {},
+    };
+}
+
 sub _stored_result {
     my ( $stored, $fallback_error ) = @_;
 
@@ -176,13 +378,18 @@ sub _stored_result {
 sub _result {
     my (%input) = @_;
 
-    return {
+    my $result = {
         error    => $input{error},
         ok       => ( $input{status} || q{} ) eq 'ok' ? 1 : 0,
         prepared => $input{prepared},
         status   => $input{status} || 'failed',
         stored   => $input{stored},
     };
+    if ( $input{idempotent} ) {
+        $result->{idempotent} = 1;
+    }
+
+    return $result;
 }
 
 sub _trim {

@@ -12,18 +12,20 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Test::DenyLimiter;
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::FailReadiness;
 use GPForum::Test::ForumWebServices;
 use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 163;
+const my $EXPECTED_TESTS       => 172;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
 const my $HTTP_UNAUTHORIZED    => 401;
 const my $HTTP_FORBIDDEN       => 403;
+const my $HTTP_CONFLICT        => 409;
 const my $HTTP_NOT_FOUND       => 404;
 const my $HTTP_TOO_MANY        => 429;
 const my $HTTP_NOT_MODIFIED    => 304;
@@ -148,6 +150,60 @@ $test->post_ok(
 );
 $test->status_is($HTTP_CREATED);
 $test->json_is( '/post_id' => 'post-created' );
+
+$test->app->helper(
+    gp_command_idempotency => sub {
+        return GPForum::Test::CommandIdempotency->new(
+            replay_response => {
+                ok        => 1,
+                post_id   => 'post-original',
+                status    => 'ok',
+                thread_id => 'thread-original',
+            }
+        );
+    }
+);
+$test->post_ok(
+    '/threads' => { Accept => 'application/json' } => form => {
+        csrf_token      => $session_csrf,
+        category_id     => 'category-1',
+        title           => 'A real thread',
+        body_source     => 'Opening post',
+        idempotency_key => 'thread-key-1',
+        visibility      => 'public',
+    }
+);
+$test->status_is($HTTP_CREATED);
+$test->json_is( '/thread_id' => 'thread-original' );
+
+$test->post_ok(
+    '/t/thread-1/replies' => { Accept => 'application/json' } => form => {
+        csrf_token      => $session_csrf,
+        body_source     => 'A reply',
+        idempotency_key => 'reply-key-1',
+        visibility      => 'public',
+    }
+);
+$test->status_is($HTTP_CREATED);
+$test->json_is( '/post_id' => 'post-original' );
+
+$test->app->helper(
+    gp_command_idempotency => sub {
+        return GPForum::Test::CommandIdempotency->new( conflict => 1 );
+    }
+);
+$test->post_ok(
+    '/threads' => { Accept => 'application/json' } => form => {
+        csrf_token      => $session_csrf,
+        category_id     => 'category-1',
+        title           => 'Different thread',
+        body_source     => 'Different body',
+        idempotency_key => 'thread-key-1',
+        visibility      => 'public',
+    }
+);
+$test->status_is($HTTP_CONFLICT);
+$test->json_is( '/status' => 'conflict' );
 
 $test->app->helper(
     gp_suspension_store => sub {

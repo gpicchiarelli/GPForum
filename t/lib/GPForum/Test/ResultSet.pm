@@ -9,6 +9,7 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my %STORAGE_ACCESSOR_FOR => (
+    CommandLog => 'command_logs',
     Credential => 'credentials',
     Post       => 'posts',
     Report     => 'reports',
@@ -49,16 +50,7 @@ sub create {
 sub search {
     my ( $self, $query, $attributes ) = @_;
 
-    my @rows =
-      $self->name eq 'Credential' ? grep { _matches_query( $_, $query ) }
-      @{ $self->schema->credentials }
-      : $self->name eq 'User' ? grep { _matches_query( $_, $query ) }
-      @{ $self->schema->users }
-      : $self->name eq 'Post' ? grep { _matches_query( $_, $query ) }
-      @{ $self->schema->posts }
-      : $self->name eq 'Report' ? grep { _matches_query( $_, $query ) }
-      @{ $self->schema->reports }
-      : ();
+    my @rows = grep { _matches_query( $_, $query ) } @{ $self->_search_rows };
 
     return ref($self)->new(
         schema => $self->schema,
@@ -81,6 +73,16 @@ sub single {
     return if !$self->rows || !@{ $self->rows };
 
     return $self->rows->[0];
+}
+
+sub _search_rows {
+    my ($self) = @_;
+
+    if ( $self->_has_storage_rows ) {
+        return $self->_storage_rows;
+    }
+
+    return [];
 }
 
 sub _find_user {

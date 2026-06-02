@@ -9,6 +9,7 @@ use English qw(-no_match_vars);
 use GPForum::Log;
 use GPForum::Schema;
 use GPForum::Service::Operations::DbQueryStats;
+use GPForum::Service::Operations::CommandIdempotency;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
 use GPForum::Service::Operations::QueryBudget;
@@ -118,6 +119,18 @@ sub _register_operational_helpers {
                 security_telemetry => $controller->gp_security_telemetry,
             );
             return $rate_limiter;
+        }
+    );
+
+    $application->helper(
+        gp_command_idempotency => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Operations::CommandIdempotency->new(
+                clock      => $controller->gp_clock,
+                id_service => $controller->gp_id,
+                schema     => $controller->gp_schema,
+            );
         }
     );
 

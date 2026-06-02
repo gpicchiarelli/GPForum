@@ -63,6 +63,7 @@ authorization, CSRF, anti-leak and abuse-control paths.
 | Mention fanout | mention recording caps fanout and audits skipped excess mentions |
 | Bookmark/subscription churn | bookmark and subscription writes use tighter per-action limits |
 | Suspended-user posting | thread/reply creation records `suspended_user_block` and returns `403` |
+| Dirty command retry | thread/reply creation uses `command_log` for supplied idempotency keys; mismatched retry payloads return `409` |
 | Hidden-content discovery | search, profile, feed, sitemap, Atom and autocomplete tests reject leaks |
 | Realtime resource leaks | channel authorizer denies unknown channels by default and validates thread/category/moderation visibility |
 | Cross-user notification read | notification websocket channels only allow `notifications:<own_user_id>` |
