@@ -100,6 +100,15 @@ Optional but production-relevant:
 - `GPFORUM_LOCAL_CACHE_MAX_ENTRIES`
 - `GPFORUM_CATEGORY_CACHE_TTL_SECONDS`
 
+The built-in runtime defaults are the small-production professional profile:
+loopback listen behind a reverse proxy, `4` web processes, `2` worker
+processes, `1` realtime process, backlog `256`, Hypnotoad clients `250`,
+request recycle `1000`, keep-alive `5s`, inactivity timeout `30s`, graceful
+timeout `20s`, heartbeat `5s/5s`, upgrade timeout `60s`, realtime listener
+enabled, local cache `2048` entries, category cache TTL `60s`, and a
+`65536` open-file-descriptor floor. Override these values only with staging or
+benchmark evidence for the target host.
+
 ## Bootstrap
 
 ```sh

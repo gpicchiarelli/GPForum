@@ -14,29 +14,37 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 63;
-const my $DEFAULT_RUNTIME_BACKLOG   => 256;
-const my $DEFAULT_RUNTIME_CLIENTS   => 250;
-const my $DEFAULT_RUNTIME_REQUESTS  => 1_000;
-const my $DEFAULT_RUNTIME_KEEPALIVE => 5;
-const my $DEFAULT_MAX_OPEN_FDS      => 65_536;
-const my $CUSTOM_WEB_PROCESSES      => 8;
-const my $CUSTOM_WORKER_PROCESSES   => 3;
-const my $CUSTOM_REALTIME_PROCESSES => 2;
-const my $CUSTOM_RUNTIME_BACKLOG    => 256;
-const my $CUSTOM_RUNTIME_CLIENTS    => 80;
-const my $CUSTOM_RUNTIME_REQUESTS   => 120;
-const my $CUSTOM_RUNTIME_TIMEOUT    => 20;
-const my $CUSTOM_MIN_OS_WORKERS     => 2;
-const my $CUSTOM_MAX_OPEN_FDS       => 128;
-const my $CUSTOM_CACHE_MAX_ENTRIES  => 64;
-const my $CUSTOM_CATEGORY_CACHE_TTL => 45;
-const my $CUSTOM_REALTIME_POLL      => 2;
-const my $CUSTOM_REALTIME_BACKOFF   => 4;
-const my $CUSTOM_REALTIME_HEARTBEAT => 12;
-const my $CUSTOM_MINION_PG_URL      => 'postgresql://gpforum@/gpforum_minion';
-const my $CUSTOM_METRICS_TOKEN      => 'metrics-secret';
-const my $TOO_MANY_PROCESSES        => 513;
+const my $EXPECTED_TESTS             => 73;
+const my $DEFAULT_LOG_LEVEL          => 'info';
+const my $DEFAULT_RUNTIME_LISTEN     => 'http://127.0.0.1:8080';
+const my $DEFAULT_RUNTIME_BACKLOG    => 256;
+const my $DEFAULT_RUNTIME_CLIENTS    => 250;
+const my $DEFAULT_RUNTIME_REQUESTS   => 1_000;
+const my $DEFAULT_RUNTIME_KEEPALIVE  => 5;
+const my $DEFAULT_RUNTIME_GRACEFUL   => 20;
+const my $DEFAULT_RUNTIME_HEARTBEAT  => 5;
+const my $DEFAULT_RUNTIME_UPGRADE    => 60;
+const my $DEFAULT_MIN_OS_WORKERS     => 2;
+const my $DEFAULT_MAX_OPEN_FDS       => 65_536;
+const my $DEFAULT_CACHE_MAX_ENTRIES  => 2_048;
+const my $DEFAULT_CATEGORY_CACHE_TTL => 60;
+const my $CUSTOM_WEB_PROCESSES       => 8;
+const my $CUSTOM_WORKER_PROCESSES    => 3;
+const my $CUSTOM_REALTIME_PROCESSES  => 2;
+const my $CUSTOM_RUNTIME_BACKLOG     => 256;
+const my $CUSTOM_RUNTIME_CLIENTS     => 80;
+const my $CUSTOM_RUNTIME_REQUESTS    => 120;
+const my $CUSTOM_RUNTIME_TIMEOUT     => 20;
+const my $CUSTOM_MIN_OS_WORKERS      => 2;
+const my $CUSTOM_MAX_OPEN_FDS        => 128;
+const my $CUSTOM_CACHE_MAX_ENTRIES   => 64;
+const my $CUSTOM_CATEGORY_CACHE_TTL  => 45;
+const my $CUSTOM_REALTIME_POLL       => 2;
+const my $CUSTOM_REALTIME_BACKOFF    => 4;
+const my $CUSTOM_REALTIME_HEARTBEAT  => 12;
+const my $CUSTOM_MINION_PG_URL       => 'postgresql://gpforum@/gpforum_minion';
+const my $CUSTOM_METRICS_TOKEN       => 'metrics-secret';
+const my $TOO_MANY_PROCESSES         => 513;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -157,8 +165,13 @@ is( $config->minion_pg_url,
 is( $config->metrics_token,
     $CUSTOM_METRICS_TOKEN, 'metrics token loads from env' );
 my $default_config = GPForum::Config->new;
+is( $default_config->log_level,
+    $DEFAULT_LOG_LEVEL, 'log level default is production-oriented' );
 is( $default_config->metrics_token,
     q{}, 'metrics token is optional by default' );
+is_deeply( $default_config->runtime_listen_locations,
+    [$DEFAULT_RUNTIME_LISTEN],
+    'runtime listen default binds to local reverse-proxy backend' );
 is( $default_config->runtime_backlog,
     $DEFAULT_RUNTIME_BACKLOG, 'runtime backlog default is production-sized' );
 is( $default_config->runtime_clients,
@@ -167,9 +180,29 @@ is( $default_config->runtime_requests,
     $DEFAULT_RUNTIME_REQUESTS, 'runtime request recycle default is bounded' );
 is( $default_config->runtime_keep_alive,
     $DEFAULT_RUNTIME_KEEPALIVE, 'runtime keep-alive default is conservative' );
+is( $default_config->runtime_graceful_timeout,
+    $DEFAULT_RUNTIME_GRACEFUL, 'runtime graceful default is production-sized' );
+is( $default_config->runtime_heartbeat_interval,
+    $DEFAULT_RUNTIME_HEARTBEAT,
+    'runtime heartbeat interval default is production-sized' );
+is( $default_config->runtime_heartbeat_timeout,
+    $DEFAULT_RUNTIME_HEARTBEAT,
+    'runtime heartbeat timeout default is production-sized' );
+is( $default_config->runtime_upgrade_timeout,
+    $DEFAULT_RUNTIME_UPGRADE, 'runtime upgrade default is production-sized' );
+is( $default_config->os_min_recommended_workers,
+    $DEFAULT_MIN_OS_WORKERS,
+    'OS minimum worker default matches small production profile' );
 is( $default_config->os_max_open_file_descriptors,
     $DEFAULT_MAX_OPEN_FDS,
     'OS file descriptor default matches production floor' );
+is( $default_config->local_cache_max_entries,
+    $DEFAULT_CACHE_MAX_ENTRIES, 'local cache default is production-sized' );
+is( $default_config->category_cache_ttl_seconds,
+    $DEFAULT_CATEGORY_CACHE_TTL,
+    'category cache TTL default is production-sized' );
+is( $default_config->realtime_listener_enabled,
+    1, 'realtime listener is enabled by default' );
 is( $runtime->as_hash->{os_features}{reuseport}{setting},
     'off', 'runtime exposes OS feature settings' );
 is( $runtime->as_hash->{os_preflight_settings}{min_recommended_workers},

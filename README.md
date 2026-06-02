@@ -275,6 +275,13 @@ or degraded host capabilities are visible before production traffic depends on
 them. `GPFORUM_OS_MIN_RECOMMENDED_WORKERS` and
 `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS` provide conservative readiness thresholds
 for host capacity posture.
+The built-in runtime defaults now start from the professional small-production
+profile: loopback listen behind a reverse proxy, backlog `256`, Hypnotoad
+clients `250`, request recycle `1000`, keep-alive `5s`, graceful/upgrade
+timeouts suitable for controlled restarts, realtime listener enabled, local
+cache `2048`, category cache TTL `60s`, and an open-file-descriptor floor of
+`65536`. These are operational defaults, not benchmark evidence; deployments
+should still prove them in staging before public traffic.
 The process-local disposable cache is implemented in pure Perl with namespace,
 TTL, max-entry, key invalidation, tag invalidation, and metrics. It is wired
 only into read-mostly category lists by default through

@@ -40,11 +40,8 @@ like(
     qr/query_budget=categories:3/msx,
     'benchmark text reports query budget contract'
 );
-like(
-    $text,
-    qr/db_queries=not-observed/msx,
-    'benchmark text reports unobserved DB query state'
-);
+like( $text, qr/db_queries=max=0/msx,
+    'benchmark text reports observed DB query state' );
 like( $text, qr/statuses=200:2/msx, 'benchmark text reports status counts' );
 
 my $json_report = $command->benchmark_report(
@@ -62,7 +59,7 @@ is( $report->{routes}[0]{status_codes}{$HTTP_OK},
 is( $report->{routes}[0]{query_budget}{max_queries},
     2, 'benchmark JSON reports query budget contract' );
 is( $report->{routes}[0]{db_queries}{observed},
-    0, 'benchmark JSON reports DB query observation state' );
+    1, 'benchmark JSON reports DB query observation state' );
 
 my $error_report =
   $command->benchmark_report( '--fixture', '--iterations', '1', '--warmup',
