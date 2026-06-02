@@ -158,6 +158,7 @@
       component_title => t('forum.reply') %>
     <form method="post" action="<%= url_for('reply_create', thread_id => $thread->{thread_id}) %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $reply_command_id || q{} %>">
       <label for="reply-body"><%= t('forum.reply_body') %></label>
       <textarea id="reply-body" name="body_source" rows="8" required></textarea>
       <input type="hidden" name="visibility" value="<%= $thread->{visibility} // 'public' %>">

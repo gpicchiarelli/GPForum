@@ -19,7 +19,7 @@ use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 172;
+const my $EXPECTED_TESTS       => 178;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
@@ -138,6 +138,29 @@ $test->post_ok(
         visibility  => 'public',
     }
 );
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/t/thread-1/replies' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        body_source => 'A reply',
+        visibility  => 'public',
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/threads' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        category_id => 'category-1',
+        command_id  => 'thread-command-1',
+        title       => 'A real thread',
+        body_source => 'Opening post',
+        visibility  => 'public',
+    }
+);
 $test->status_is($HTTP_CREATED);
 $test->json_is( '/thread_id' => 'thread-created' );
 
@@ -145,6 +168,7 @@ $test->post_ok(
     '/t/thread-1/replies' => { Accept => 'application/json' } => form => {
         csrf_token  => $session_csrf,
         body_source => 'A reply',
+        command_id  => 'reply-command-1',
         visibility  => 'public',
     }
 );
@@ -165,12 +189,12 @@ $test->app->helper(
 );
 $test->post_ok(
     '/threads' => { Accept => 'application/json' } => form => {
-        csrf_token      => $session_csrf,
-        category_id     => 'category-1',
-        title           => 'A real thread',
-        body_source     => 'Opening post',
-        idempotency_key => 'thread-key-1',
-        visibility      => 'public',
+        csrf_token  => $session_csrf,
+        category_id => 'category-1',
+        command_id  => 'thread-command-2',
+        title       => 'A real thread',
+        body_source => 'Opening post',
+        visibility  => 'public',
     }
 );
 $test->status_is($HTTP_CREATED);
@@ -178,10 +202,10 @@ $test->json_is( '/thread_id' => 'thread-original' );
 
 $test->post_ok(
     '/t/thread-1/replies' => { Accept => 'application/json' } => form => {
-        csrf_token      => $session_csrf,
-        body_source     => 'A reply',
-        idempotency_key => 'reply-key-1',
-        visibility      => 'public',
+        csrf_token  => $session_csrf,
+        body_source => 'A reply',
+        command_id  => 'reply-command-2',
+        visibility  => 'public',
     }
 );
 $test->status_is($HTTP_CREATED);
@@ -194,12 +218,12 @@ $test->app->helper(
 );
 $test->post_ok(
     '/threads' => { Accept => 'application/json' } => form => {
-        csrf_token      => $session_csrf,
-        category_id     => 'category-1',
-        title           => 'Different thread',
-        body_source     => 'Different body',
-        idempotency_key => 'thread-key-1',
-        visibility      => 'public',
+        csrf_token  => $session_csrf,
+        category_id => 'category-1',
+        command_id  => 'thread-command-3',
+        title       => 'Different thread',
+        body_source => 'Different body',
+        visibility  => 'public',
     }
 );
 $test->status_is($HTTP_CONFLICT);
@@ -439,6 +463,11 @@ sub _install_forum_fakes {
     $test_object->app->helper(
         gp_feed_reader => sub {
             return GPForum::Test::ForumWebServices->new( mode => 'feed' );
+        }
+    );
+    $test_object->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
         }
     );
 

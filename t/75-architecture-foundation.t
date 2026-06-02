@@ -121,6 +121,10 @@ subtest
         length $first_audit->{record_hash},
         'audit record hash is computed by recorder'
     );
+    ok(
+        $recorder->verify_audit_record($first_audit),
+        'computed audit hash verifies against canonical record'
+    );
     is( $first_audit->{previous_hash},
         undef, 'first audit row has no previous hash' );
 
@@ -143,6 +147,33 @@ subtest
         $second_audit->{record_hash},
         $first_audit->{record_hash},
         'audit hash changes with record content'
+    );
+
+    my $third_audit = $recorder->record_audit(
+        action         => 'thread.moderated',
+        actor_id       => 'user-2',
+        correlation_id => $event->{correlation_id},
+        metadata       => { moderation_state => 'locked' },
+        previous_hash  => undef,
+        record_hash    => q{},
+        target_id      => 'thread-1',
+        target_type    => 'thread',
+    );
+    is(
+        $third_audit->{previous_hash},
+        $second_audit->{record_hash},
+        'explicit blank audit hash inputs still preserve the hash chain'
+    );
+    ok(
+        $recorder->verify_audit_record($third_audit),
+        'audit verifier accepts an untampered chained record'
+    );
+
+    my %tampered_audit = %{$third_audit};
+    $tampered_audit{metadata} = { moderation_state => 'visible' };
+    ok(
+        !$recorder->verify_audit_record( \%tampered_audit ),
+        'audit verifier rejects tampered metadata'
     );
   };
 

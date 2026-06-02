@@ -17,6 +17,7 @@
     fields => $error_fields %>
   <form method="post" action="<%= url_for('thread_create') %>"<%== length $form_described_by ? ' aria-describedby="' . $form_described_by . '"' : q{} %>>
     <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= $command_id || q{} %>">
     <label for="<%= $category_field->{id} %>"><%= t($category_field->{label_key}) %></label>
     <select id="<%= $category_field->{id} %>" name="<%= $category_field->{name} %>" required<%== $category_field->{error_attrs} %>>
       % for my $category (@{$categories}) {

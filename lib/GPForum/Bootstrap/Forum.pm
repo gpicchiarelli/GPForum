@@ -172,7 +172,6 @@ sub _register_forum_helpers {
                 logger               => $controller->app->log,
                 mention_store        => $controller->gp_mention_store,
                 post_composer        => $controller->gp_post_composer,
-                post_position        => $controller->gp_post_position,
                 post_store           => $controller->gp_post_store,
                 thread_composer      => $controller->gp_thread_composer,
                 thread_detail_reader => $controller->gp_thread_detail_reader,

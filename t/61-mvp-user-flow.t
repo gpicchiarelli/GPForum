@@ -10,6 +10,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::ForumWebServices;
 use GPForum::Test::IdentitySecurityAudit;
 use GPForum::Test::IdentityStore;
@@ -79,12 +80,14 @@ $test->element_exists(
 $test->get_ok('/new-thread?category_id=category-1');
 $test->status_is($HTTP_OK);
 $test->element_exists('option[value="category-1"][selected]');
-my $thread_token = _csrf_token($test);
+my $thread_token      = _csrf_token($test);
+my $thread_command_id = _command_id($test);
 
 $test->post_ok(
     '/threads' => form => {
         csrf_token  => $thread_token,
         category_id => 'category-1',
+        command_id  => $thread_command_id,
         title       => q{},
         body_source => q{},
         visibility  => 'public',
@@ -96,11 +99,13 @@ $test->content_like(qr/title [ ] is [ ] required/msx);
 $test->content_like(qr/body_source [ ] is [ ] required/msx);
 $test->element_exists('option[value="category-1"][selected]');
 
-$thread_token = _csrf_token($test);
+$thread_token      = _csrf_token($test);
+$thread_command_id = _command_id($test);
 $test->post_ok(
     '/threads' => form => {
         csrf_token  => $thread_token,
         category_id => 'category-1',
+        command_id  => $thread_command_id,
         title       => 'A real MVP thread',
         body_source => 'Opening post for the MVP flow',
         visibility  => 'public',
@@ -116,11 +121,13 @@ $test->element_exists('form[action="/t/thread-1/replies"]');
 $test->element_exists('form[action="/t/thread-1/bookmark"]');
 $test->element_exists('form[action="/t/thread-1/subscribe"]');
 my $thread_page_token = _csrf_token($test);
+my $reply_command_id  = _command_id($test);
 
 $test->post_ok(
     '/t/thread-1/replies' => form => {
         csrf_token  => $thread_page_token,
         body_source => 'A real reply',
+        command_id  => $reply_command_id,
         visibility  => 'public',
     }
 );
@@ -212,6 +219,11 @@ sub _install_forum_fakes {
             return GPForum::Test::ForumWebServices->new( mode => 'feed' );
         }
     );
+    $test_object->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
 
     return;
 }
@@ -224,3 +236,14 @@ sub _csrf_token {
 
     return $token;
 }
+
+sub _command_id {
+    my ($test_object) = @_;
+
+    my $body = $test_object->tx->res->body;
+    my ($command_id) = $body =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
+}
+
+1;

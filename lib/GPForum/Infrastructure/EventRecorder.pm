@@ -74,10 +74,19 @@ sub _audit_record {
         created_at     => _audit_created_at(%input),
     };
 
-    $audit->{record_hash} =
-      $input{record_hash} || $self->_audit_record_hash($audit);
+    $audit->{record_hash} = $self->_audit_record_hash($audit);
 
     return $audit;
+}
+
+sub verify_audit_record {
+    my ( $self, $audit ) = @_;
+
+    my $audit_payload = _audit_record_payload($audit);
+    my $hash          = $audit_payload->{record_hash};
+    return 0 if !defined $hash || !length $hash;
+
+    return $hash eq $self->_audit_record_hash($audit_payload) ? 1 : 0;
 }
 
 sub _audit_id {
@@ -127,7 +136,8 @@ sub _audit_created_at {
 sub _audit_previous_hash {
     my ( $self, %input ) = @_;
 
-    return $input{previous_hash} if exists $input{previous_hash};
+    return $input{previous_hash}
+      if defined $input{previous_hash} && length $input{previous_hash};
 
     return $self->_latest_audit_hash;
 }
@@ -184,6 +194,24 @@ sub _audit_record_hash {
     delete $canonical{record_hash};
 
     return sha256_hex( $self->json->encode( \%canonical ) );
+}
+
+sub _audit_record_payload {
+    my ($audit) = @_;
+
+    return {
+        audit_id       => _column( $audit, 'audit_id' ),
+        action         => _column( $audit, 'action' ),
+        schema_version => _column( $audit, 'schema_version' ),
+        actor_id       => _column( $audit, 'actor_id' ),
+        target_type    => _column( $audit, 'target_type' ),
+        target_id      => _column( $audit, 'target_id' ),
+        correlation_id => _column( $audit, 'correlation_id' ),
+        previous_hash  => _column( $audit, 'previous_hash' ),
+        record_hash    => _column( $audit, 'record_hash' ),
+        metadata       => _column( $audit, 'metadata' ),
+        created_at     => _column( $audit, 'created_at' ),
+    };
 }
 
 sub _column {

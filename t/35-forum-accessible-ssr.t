@@ -10,6 +10,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
@@ -155,6 +156,7 @@ $test->element_exists('section[aria-labelledby="engagement-heading"]');
 $test->element_exists('form[action="/t/thread-1/bookmark"]');
 $test->element_exists('label[for="bookmark-note"]');
 $test->element_exists('form[action="/t/thread-1/subscribe"]');
+my $reply_command_id = _command_id($test);
 $test->get_ok('/bookmarks');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="bookmarks-heading"]');
@@ -191,11 +193,13 @@ $test->text_is( 'h1' => 'Menzioni' );
 $test->content_like(qr/Menzione [ ] da/msx);
 $test->element_exists('ol[aria-label="Elenco menzioni"]');
 $test->get_ok('/new-thread');
-my $invalid_thread_token = _csrf_token($test);
+my $invalid_thread_token      = _csrf_token($test);
+my $invalid_thread_command_id = _command_id($test);
 $test->post_ok(
     '/threads' => form => {
         csrf_token  => $invalid_thread_token,
         category_id => 'category-1',
+        command_id  => $invalid_thread_command_id,
         title       => q{},
         body_source => q{},
         visibility  => 'public',
@@ -213,11 +217,13 @@ $test->element_exists(
 $test->element_exists('#thread-error-summary a[href="#thread-body"]');
 
 $test->get_ok('/new-thread');
-my $csrf_token = _csrf_token($test);
+my $csrf_token        = _csrf_token($test);
+my $thread_command_id = _command_id($test);
 $test->post_ok(
     '/threads' => form => {
         csrf_token  => $csrf_token,
         category_id => 'category-1',
+        command_id  => $thread_command_id,
         title       => 'A real thread',
         body_source => 'Opening post',
         visibility  => 'public',
@@ -230,6 +236,7 @@ $test->post_ok(
     '/t/thread-1/replies' => form => {
         csrf_token  => $csrf_token,
         body_source => 'A reply',
+        command_id  => $reply_command_id,
         visibility  => 'public',
     }
 );
@@ -256,6 +263,11 @@ sub _install_forum_fakes {
     $test_object->app->helper(
         gp_feed_reader => sub {
             return GPForum::Test::ForumWebServices->new( mode => 'feed' );
+        }
+    );
+    $test_object->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
         }
     );
 
@@ -286,6 +298,15 @@ sub _csrf_token {
     my ($token) = $body =~ /name="csrf_token" [^>]+ value="([^"]+)"/msx;
 
     return $token;
+}
+
+sub _command_id {
+    my ($test_object) = @_;
+
+    my $body = $test_object->tx->res->body;
+    my ($command_id) = $body =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
 }
 
 1;

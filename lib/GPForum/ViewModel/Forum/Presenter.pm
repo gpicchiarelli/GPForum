@@ -30,40 +30,42 @@ sub category_page {
 sub thread_page {
     my ( $self, %input ) = @_;
 
-    my $page        = $input{page};
-    my $attachments = $input{attachments_by_post} || {};
-    my $thread      = $self->thread( $page->{thread} );
-    my @posts       = map {
-        my $post = $self->post($_);
-        $post->{attachments} = $attachments->{ $post->{post_id} } || [];
-        $post;
-    } @{ $page->{posts}{items} || [] };
+    my $page             = $input{page};
+    my $attachments      = _hash_or_empty( $input{attachments_by_post} );
+    my $thread           = $self->thread( $page->{thread} );
+    my $post_rows        = _array_or_empty( $page->{posts}{items} );
+    my $engagement       = _thread_page_summary( $input{engagement} );
+    my $reading          = _thread_page_summary( $input{reading} );
+    my $reply_command_id = _string_or_empty( $input{reply_command_id} );
+    my $posts = _thread_page_posts( $self, $post_rows, $attachments );
 
     return {
-        engagement    => $input{engagement} || { authenticated => 0 },
+        engagement    => $engagement,
         next_cursor   => $page->{posts}{next_cursor},
         page_metadata => $self->thread_page_metadata(
             metadata_builder => $input{metadata_builder},
-            posts            => \@posts,
+            posts            => $posts,
             thread           => $thread,
         ),
-        posts   => \@posts,
-        reading => $input{reading} || { authenticated => 0 },
-        thread  => $thread,
+        posts            => $posts,
+        reading          => $reading,
+        reply_command_id => $reply_command_id,
+        thread           => $thread,
     };
 }
 
 sub new_thread_form {
     my ( $self, %input ) = @_;
 
-    my $errors = $input{errors} || {};
-    my $values = $input{values} || {};
+    my $errors = _hash_or_empty( $input{errors} );
+    my $values = _hash_or_empty( $input{values} );
     my $selected_category_id =
-      $input{selected_category_id} || $values->{category_id} || q{};
+      _new_thread_selected_category_id( \%input, $values );
     my %form_values = (
         %{$values},
         category_id => $selected_category_id,
-        visibility  => $values->{visibility} || 'public',
+        command_id  => _new_thread_command_id( \%input, $values ),
+        visibility  => _new_thread_visibility($values),
     );
     my $fields = $self->form_fields(
         errors => $errors,
@@ -100,9 +102,12 @@ sub new_thread_form {
     );
 
     return {
-        categories =>
-          [ map { $self->category($_) } @{ $input{categories} || [] } ],
+        categories => [
+            map { $self->category($_) }
+              @{ _array_or_empty( $input{categories} ) }
+        ],
         csrf_token           => $input{csrf_token},
+        command_id           => $form_values{command_id},
         error_fields         => $self->form_error_fields($fields),
         errors               => $errors,
         fields               => [qw(category_id title body_source visibility)],
@@ -118,6 +123,83 @@ sub new_thread_form {
         },
         values => $values,
     };
+}
+
+sub _thread_page_posts {
+    my ( $self, $post_rows, $attachments ) = @_;
+
+    my @posts;
+    for my $row ( @{$post_rows} ) {
+        my $post = $self->post($row);
+        $post->{attachments} = $attachments->{ $post->{post_id} } || [];
+        push @posts, $post;
+    }
+
+    return \@posts;
+}
+
+sub _thread_page_summary {
+    my ($value) = @_;
+
+    return $value if ref $value eq 'HASH';
+
+    return { authenticated => 0 };
+}
+
+sub _new_thread_selected_category_id {
+    my ( $input, $values ) = @_;
+
+    return $input->{selected_category_id}
+      if defined $input->{selected_category_id}
+      && length $input->{selected_category_id};
+
+    return $values->{category_id}
+      if defined $values->{category_id} && length $values->{category_id};
+
+    return q{};
+}
+
+sub _new_thread_command_id {
+    my ( $input, $values ) = @_;
+
+    return $input->{command_id}
+      if defined $input->{command_id} && length $input->{command_id};
+
+    return $values->{command_id}
+      if defined $values->{command_id} && length $values->{command_id};
+
+    return q{};
+}
+
+sub _new_thread_visibility {
+    my ($values) = @_;
+
+    return $values->{visibility}
+      if defined $values->{visibility} && length $values->{visibility};
+
+    return 'public';
+}
+
+sub _string_or_empty {
+    my ($value) = @_;
+
+    return defined $value ? $value : q{};
+}
+
+sub _hash_or_empty {
+    my ($value) = @_;
+
+    return $value if ref $value eq 'HASH';
+
+    return {};
+}
+
+sub _array_or_empty {
+    my ($value) = @_;
+
+    return $value if ref $value eq 'ARRAY';
+
+    return [];
 }
 
 sub search_page {

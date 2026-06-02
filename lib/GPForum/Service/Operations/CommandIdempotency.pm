@@ -19,9 +19,12 @@ has schema     => undef;
 sub run {
     my ( $self, $input, $code, $response_builder ) = @_;
 
-    my $key = _trim( $input->{idempotency_key} );
+    my $key = _command_key($input);
     if ( !length $key ) {
-        return { recorded => 0, result => $code->() };
+        return {
+            error   => 'command_id is required',
+            invalid => 1,
+        };
     }
 
     my $request_hash = _canonical_hash( $input->{request} || {} );
@@ -154,6 +157,16 @@ sub _canonical_hash {
       ->encode( _defined_json_value($value) );
 
     return sha256_hex($json);
+}
+
+sub _command_key {
+    my ($input) = @_;
+
+    my $source     = $input || {};
+    my $command_id = _trim( $source->{command_id} );
+    return $command_id if length $command_id;
+
+    return _trim( $source->{idempotency_key} );
 }
 
 sub _defined_json_value {

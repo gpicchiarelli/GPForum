@@ -14,7 +14,6 @@ has command_idempotency  => undef;
 has logger               => undef;
 has mention_store        => undef;
 has post_composer        => undef;
-has post_position        => undef;
 has post_store           => undef;
 has thread_composer      => undef;
 has thread_detail_reader => undef;
@@ -38,6 +37,7 @@ sub create_thread {
 sub _create_thread_once {
     my ( $self, $input ) = @_;
 
+    my $command_id  = _command_id($input);
     my $category_id = _trim( $input->{category_id} );
     return _result( status => 'not_found', error => 'category not found' )
       if length $category_id
@@ -51,7 +51,7 @@ sub _create_thread_once {
             body_source     => $input->{body_source},
             body_hash       => _body_hash( $input->{body_source} ),
             visibility      => $input->{visibility},
-            idempotency_key => $input->{idempotency_key},
+            idempotency_key => $command_id,
         }
     );
 
@@ -88,6 +88,7 @@ sub create_reply {
 sub _create_reply_once {
     my ( $self, $input ) = @_;
 
+    my $command_id = _command_id($input);
     my $thread =
       $self->thread_detail_reader->find_thread( $input->{thread_id} );
     return _result( status => 'not_found', error => 'thread not found' )
@@ -102,7 +103,7 @@ sub _create_reply_once {
             allocate_position => 1,
             body_source       => $input->{body_source},
             body_hash         => _body_hash( $input->{body_source} ),
-            idempotency_key   => $input->{idempotency_key},
+            idempotency_key   => $command_id,
             visibility        => _reply_visibility( $input, $thread ),
         }
     );
@@ -125,14 +126,18 @@ sub _create_reply_once {
 sub _run_idempotent_command {
     my ( $self, $input ) = @_;
 
-    my $command_key = _trim( $input->{input}{idempotency_key} );
-    if ( !$self->command_idempotency || !length $command_key ) {
+    my $command_key = _command_id( $input->{input} );
+    return _missing_command_id_result( $input->{input} )
+      if !length $command_key;
+
+    if ( !$self->command_idempotency ) {
         return $input->{run}->();
     }
 
     my $guarded = $self->command_idempotency->run(
         {
             actor_id        => $input->{input}{author_user_id},
+            command_id      => $command_key,
             command_type    => $input->{command_type},
             idempotency_key => $command_key,
             request         => $input->{request},
@@ -147,6 +152,9 @@ sub _run_idempotent_command {
 sub _idempotency_guard_result {
     my ( $guarded, $input ) = @_;
 
+    if ( $guarded->{invalid} ) {
+        return _missing_command_id_result( $input->{input} );
+    }
     if ( $guarded->{conflict} || $guarded->{in_progress} ) {
         return _result( status => 'conflict', error => $guarded->{error} );
     }
@@ -216,6 +224,29 @@ sub _reply_visibility {
       if defined $input->{visibility} && length $input->{visibility};
 
     return _column( $thread, 'visibility' );
+}
+
+sub _command_id {
+    my ($input) = @_;
+
+    my $source     = $input || {};
+    my $command_id = _trim( $source->{command_id} );
+    return $command_id if length $command_id;
+
+    return _trim( $source->{idempotency_key} );
+}
+
+sub _missing_command_id_result {
+    my ($input) = @_;
+
+    return _result(
+        status   => 'invalid',
+        prepared => {
+            errors => { command_id => 'command_id is required' },
+            ok     => 0,
+            values => { %{ $input || {} } },
+        },
+    );
 }
 
 sub _body_hash {

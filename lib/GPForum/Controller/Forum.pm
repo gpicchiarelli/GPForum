@@ -97,7 +97,8 @@ sub category {
 sub thread {
     my ($self) = @_;
 
-    my $page = $self->gp_thread_detail_reader->thread_page(
+    my $user_id = _current_user_id($self);
+    my $page    = $self->gp_thread_detail_reader->thread_page(
         {
             thread_id => $self->param('thread_id'),
             limit     => $self->param('limit') || $DEFAULT_PAGE_LIMIT,
@@ -115,15 +116,16 @@ sub thread {
             logger             => $self->app->log,
             subscription_store => $self->gp_subscription_store,
             thread             => $page->{thread},
-            user_id            => _current_user_id($self),
+            user_id            => $user_id,
         ),
         metadata_builder => $self->gp_metadata_builder,
         page             => $page,
+        reply_command_id => $user_id ? _new_command_id($self) : q{},
         reading          => $self->gp_forum_view_model->reading_summary(
             posts      => $page->{posts}{items},
             read_state => $self->gp_thread_read_state,
             thread_id  => $self->param('thread_id'),
-            user_id    => _current_user_id($self),
+            user_id    => $user_id,
         ),
     );
 
@@ -148,6 +150,7 @@ sub new_thread_form {
 
     my $payload = $self->gp_forum_view_model->new_thread_form(
         categories           => $categories,
+        command_id           => _new_command_id($self),
         csrf_token           => $self->csrf_token,
         errors               => {},
         selected_category_id => $self->param('category_id') || q{},
@@ -172,12 +175,12 @@ sub create_thread {
 
     my $result = $self->gp_posting_workflow->create_thread(
         {
-            category_id     => $self->param('category_id'),
-            author_user_id  => $user_id,
-            title           => $self->param('title'),
-            body_source     => $self->param('body_source'),
-            visibility      => $self->param('visibility'),
-            idempotency_key => $self->param('idempotency_key'),
+            category_id    => $self->param('category_id'),
+            author_user_id => $user_id,
+            title          => $self->param('title'),
+            body_source    => $self->param('body_source'),
+            command_id     => _command_id_param($self),
+            visibility     => $self->param('visibility'),
         }
     );
 
@@ -196,11 +199,11 @@ sub create_reply {
 
     my $result = $self->gp_posting_workflow->create_reply(
         {
-            thread_id       => $self->param('thread_id'),
-            author_user_id  => $user_id,
-            body_source     => $self->param('body_source'),
-            visibility      => $self->param('visibility'),
-            idempotency_key => $self->param('idempotency_key'),
+            thread_id      => $self->param('thread_id'),
+            author_user_id => $user_id,
+            body_source    => $self->param('body_source'),
+            command_id     => _command_id_param($self),
+            visibility     => $self->param('visibility'),
         }
     );
 
@@ -927,6 +930,7 @@ sub _thread_form_bad_request {
 
     my $categories = $controller->gp_category_reader->list_categories( {} );
     my $values     = $prepared->{values} || {};
+    my $form_state = _thread_form_state( $controller, $values );
 
     return $controller->render(
         template => 'forum/new_thread',
@@ -934,15 +938,42 @@ sub _thread_form_bad_request {
         %{
             $controller->gp_forum_view_model->new_thread_form(
                 categories           => $categories,
+                command_id           => $form_state->{command_id},
                 csrf_token           => $controller->csrf_token,
                 errors               => $prepared->{errors} || {},
-                selected_category_id => $values->{category_id}
-                  || $controller->param('category_id')
-                  || q{},
-                values => $values,
+                selected_category_id => $form_state->{selected_category_id},
+                values               => $values,
             )
         },
     );
+}
+
+sub _thread_form_state {
+    my ( $controller, $values ) = @_;
+
+    return {
+        command_id           => _thread_form_command_id( $controller, $values ),
+        selected_category_id =>
+          _thread_form_selected_category_id( $controller, $values ),
+    };
+}
+
+sub _thread_form_command_id {
+    my ( $controller, $values ) = @_;
+
+    return $values->{command_id}
+      if defined $values->{command_id} && length $values->{command_id};
+
+    return _new_command_id($controller);
+}
+
+sub _thread_form_selected_category_id {
+    my ( $controller, $values ) = @_;
+
+    return $values->{category_id}
+      if defined $values->{category_id} && length $values->{category_id};
+
+    return _trim( $controller->param('category_id') );
 }
 
 sub _thread_write_failure {
@@ -1147,6 +1178,21 @@ sub _current_user_id {
     my ($controller) = @_;
 
     return $controller->session('user_id');
+}
+
+sub _new_command_id {
+    my ($controller) = @_;
+
+    return $controller->gp_id->uuid;
+}
+
+sub _command_id_param {
+    my ($controller) = @_;
+
+    my $command_id = _trim( $controller->param('command_id') );
+    return $command_id if length $command_id;
+
+    return _trim( $controller->param('idempotency_key') );
 }
 
 sub _request_address {

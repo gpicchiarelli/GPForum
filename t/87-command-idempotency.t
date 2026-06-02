@@ -48,6 +48,8 @@ ok( $first->{recorded}, 'first command execution is recorded' );
 is( $calls, 1, 'first command executes callback' );
 is( scalar @{ $schema->created_for('CommandLog') },
     1, 'command log row is created' );
+is( $schema->command_logs->[0]{idempotency_key},
+    'reply-command-1', 'command id is stored as the unique idempotency key' );
 is( $schema->command_logs->[0]{status},
     'handled', 'successful command is marked handled' );
 is( $schema->command_logs->[0]{payload}{response}{post_id},
@@ -84,6 +86,27 @@ ok( $conflict->{conflict},
     'same command key with different payload is rejected' );
 is( $calls, 1, 'conflicting command does not execute callback' );
 
+my $missing_key_calls = 0;
+my $missing_key       = $service->run(
+    {
+        actor_id     => 'user-1',
+        command_type => 'reply.create',
+        request      => { thread_id => 'thread-1' },
+    },
+    sub {
+        $missing_key_calls++;
+        return { ok => 1, status => 'ok' };
+    },
+    sub { return { ok => 1, status => 'ok' }; },
+);
+ok( $missing_key->{invalid}, 'missing command id is rejected' );
+is(
+    $missing_key->{error},
+    'command_id is required',
+    'missing command id reports stable error'
+);
+is( $missing_key_calls, 0, 'missing command id does not execute callback' );
+
 my $pending = GPForum::Test::Schema->new;
 push @{ $pending->command_logs },
   {
@@ -102,10 +125,10 @@ my $pending_service = GPForum::Service::Operations::CommandIdempotency->new(
 );
 my $in_progress = $pending_service->run(
     {
-        actor_id        => 'user-1',
-        command_type    => 'reply.create',
-        idempotency_key => 'pending-key',
-        request         => {
+        actor_id     => 'user-1',
+        command_id   => 'pending-key',
+        command_type => 'reply.create',
+        request      => {
             body_hash => 'hash-1',
             thread_id => 'thread-1',
         },
@@ -123,10 +146,10 @@ sub _command_request {
     my (%override) = @_;
 
     return {
-        actor_id        => 'user-1',
-        command_type    => 'reply.create',
-        idempotency_key => 'reply-key-1',
-        request         => {
+        actor_id     => 'user-1',
+        command_id   => 'reply-command-1',
+        command_type => 'reply.create',
+        request      => {
             body_hash => $override{body_hash},
             thread_id => 'thread-1',
         },

@@ -71,6 +71,44 @@ isa_ok( $controller->gp_thread_read_state,
 isa_ok( $controller->gp_posting_workflow,
     'GPForum::Service::Forum::PostingWorkflow' );
 
+my $missing_thread_command        = _workflow();
+my $missing_thread_command_result = $missing_thread_command->create_thread(
+    {
+        category_id    => 'general',
+        author_user_id => 'user-1',
+        body_source    => 'body',
+        title          => 'Hello',
+        visibility     => 'public',
+    }
+);
+is( $missing_thread_command_result->{status},
+    'invalid', 'thread write requires command id' );
+is_deeply(
+    $missing_thread_command_result->{prepared}{errors},
+    { command_id => 'command_id is required' },
+    'missing thread command id is reported as validation error'
+);
+is( $missing_thread_command->thread_store->calls,
+    0, 'missing thread command id is rejected before storage' );
+
+my $missing_reply_command        = _workflow();
+my $missing_reply_command_result = $missing_reply_command->create_reply(
+    {
+        thread_id      => 'thread-1',
+        author_user_id => 'user-1',
+        body_source    => 'reply',
+    }
+);
+is( $missing_reply_command_result->{status},
+    'invalid', 'reply write requires command id' );
+is_deeply(
+    $missing_reply_command_result->{prepared}{errors},
+    { command_id => 'command_id is required' },
+    'missing reply command id is reported as validation error'
+);
+is( $missing_reply_command->post_store->calls,
+    0, 'missing reply command id is rejected before storage' );
+
 my $missing_category = _workflow(
     category_reader => GPForum::Test::CategoryReader->new( found => 0 ) );
 is_deeply(
@@ -78,6 +116,7 @@ is_deeply(
         {
             category_id    => 'missing',
             author_user_id => 'user-1',
+            command_id     => 'thread-missing-category-command',
         }
     ),
     {
@@ -103,6 +142,7 @@ my $invalid_thread_result = $invalid_thread->create_thread(
     {
         category_id    => 'general',
         author_user_id => 'user-1',
+        command_id     => 'thread-invalid-command',
         title          => q{},
         body_source    => 'body',
         visibility     => 'public',
@@ -123,6 +163,7 @@ my $created_thread  = $thread_workflow->create_thread(
     {
         category_id    => 'general',
         author_user_id => 'user-1',
+        command_id     => 'thread-command-1',
         title          => 'Hello',
         body_source    => '  hello world  ',
         visibility     => 'public',
@@ -139,6 +180,8 @@ is(
     sha256_hex('hello world'),
     'thread body hash is normalized'
 );
+is( $thread_workflow->thread_composer->last_input->{idempotency_key},
+    'thread-command-1', 'thread command id reaches the composer' );
 is( $thread_workflow->thread_store->calls,
     1, 'posting workflow stores created thread once' );
 is( $thread_workflow->mention_store->calls,
@@ -148,18 +191,20 @@ my $guarded_thread =
   _workflow( command_idempotency => GPForum::Test::CommandIdempotency->new );
 my $guarded_thread_result = $guarded_thread->create_thread(
     {
-        category_id     => 'general',
-        author_user_id  => 'user-1',
-        title           => 'Hello',
-        body_source     => 'body',
-        idempotency_key => 'thread-key-1',
-        visibility      => 'public',
+        category_id    => 'general',
+        author_user_id => 'user-1',
+        command_id     => 'thread-command-2',
+        title          => 'Hello',
+        body_source    => 'body',
+        visibility     => 'public',
     }
 );
 ok( $guarded_thread_result->{ok},
     'posting workflow creates an idempotent thread command' );
 is( $guarded_thread->command_idempotency->last_input->{command_type},
     'thread.create', 'thread command idempotency records command type' );
+is( $guarded_thread->command_idempotency->last_input->{command_id},
+    'thread-command-2', 'thread command idempotency records command id' );
 is( $guarded_thread->command_idempotency->response->{thread_id},
     'thread-1', 'thread command idempotency stores replay target' );
 
@@ -175,12 +220,12 @@ my $replayed_thread = _workflow(
 );
 my $replayed_thread_result = $replayed_thread->create_thread(
     {
-        category_id     => 'general',
-        author_user_id  => 'user-1',
-        title           => 'Hello',
-        body_source     => 'body',
-        idempotency_key => 'thread-key-1',
-        visibility      => 'public',
+        category_id    => 'general',
+        author_user_id => 'user-1',
+        command_id     => 'thread-command-3',
+        title          => 'Hello',
+        body_source    => 'body',
+        visibility     => 'public',
     }
 );
 ok( $replayed_thread_result->{ok}, 'thread command replay returns ok' );
@@ -200,12 +245,12 @@ my $conflicting_thread = _workflow( command_idempotency =>
 is(
     $conflicting_thread->create_thread(
         {
-            category_id     => 'general',
-            author_user_id  => 'user-1',
-            title           => 'Hello',
-            body_source     => 'body',
-            idempotency_key => 'thread-key-1',
-            visibility      => 'public',
+            category_id    => 'general',
+            author_user_id => 'user-1',
+            command_id     => 'thread-command-4',
+            title          => 'Hello',
+            body_source    => 'body',
+            visibility     => 'public',
         }
     )->{status},
     'conflict',
@@ -218,6 +263,7 @@ my $thread_store_failure_result = $thread_store_failure->create_thread(
     {
         category_id    => 'general',
         author_user_id => 'user-1',
+        command_id     => 'thread-store-failure-command',
         title          => 'Hello',
         body_source    => 'body',
         visibility     => 'public',
@@ -233,8 +279,18 @@ is(
 
 my $missing_reply = _workflow( thread_detail_reader =>
       GPForum::Test::ThreadDetailReader->new( thread => undef ) );
-is( $missing_reply->create_reply( { thread_id => 'missing' } )->{status},
-    'not_found', 'posting workflow rejects replies to missing threads' );
+is(
+    $missing_reply->create_reply(
+        {
+            thread_id      => 'missing',
+            author_user_id => 'user-1',
+            body_source    => 'reply',
+            command_id     => 'reply-missing-thread-command',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects replies to missing threads'
+);
 
 my $locked_reply = _workflow(
     thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
@@ -247,6 +303,7 @@ is_deeply(
             thread_id      => 'thread-1',
             author_user_id => 'user-1',
             body_source    => 'reply',
+            command_id     => 'reply-locked-command',
         }
     ),
     {
@@ -271,6 +328,7 @@ my $created_reply = $reply_workflow->create_reply(
         thread_id      => 'thread-1',
         author_user_id => 'user-2',
         body_source    => ' reply body ',
+        command_id     => 'reply-command-1',
     }
 );
 ok( $created_reply->{ok}, 'posting workflow creates reply' );
@@ -280,6 +338,8 @@ is( $reply_workflow->post_composer->last_input->{allocate_position},
     1, 'reply workflow defers post position allocation to store' );
 is( $reply_workflow->post_composer->last_input->{visibility},
     'members', 'reply workflow inherits thread visibility by default' );
+is( $reply_workflow->post_composer->last_input->{idempotency_key},
+    'reply-command-1', 'reply command id reaches the composer' );
 is( $reply_workflow->mention_store->last_input->{thread_id},
     'thread-1', 'reply mention recording carries thread id' );
 
@@ -295,10 +355,10 @@ my $replayed_reply = _workflow(
 );
 my $replayed_reply_result = $replayed_reply->create_reply(
     {
-        thread_id       => 'thread-1',
-        author_user_id  => 'user-2',
-        body_source     => 'reply body',
-        idempotency_key => 'reply-key-1',
+        thread_id      => 'thread-1',
+        author_user_id => 'user-2',
+        body_source    => 'reply body',
+        command_id     => 'reply-command-2',
     }
 );
 ok( $replayed_reply_result->{ok}, 'reply command replay returns ok' );
@@ -322,8 +382,17 @@ my $invalid_reply = _workflow(
         }
     )
 );
-is( $invalid_reply->create_reply( { thread_id => 'thread-1' } )->{status},
-    'invalid', 'posting workflow normalizes invalid reply status' );
+is(
+    $invalid_reply->create_reply(
+        {
+            thread_id      => 'thread-1',
+            author_user_id => 'user-1',
+            command_id     => 'reply-invalid-command',
+        }
+    )->{status},
+    'invalid',
+    'posting workflow normalizes invalid reply status'
+);
 is( $invalid_reply->post_store->calls,
     0, 'invalid reply is rejected before storage' );
 
@@ -334,6 +403,7 @@ my $post_store_failure_result = $post_store_failure->create_reply(
         thread_id      => 'thread-1',
         author_user_id => 'user-1',
         body_source    => 'reply',
+        command_id     => 'reply-store-failure-command',
     }
 );
 is( $post_store_failure_result->{status},
@@ -354,6 +424,7 @@ my $mention_degraded_result = $mention_degraded->create_reply(
         thread_id      => 'thread-1',
         author_user_id => 'user-1',
         body_source    => '@user hello',
+        command_id     => 'reply-mention-degraded-command',
     }
 );
 ok( $mention_degraded_result->{ok},
@@ -366,26 +437,57 @@ sub _workflow {
     my (%override) = @_;
 
     return GPForum::Service::Forum::PostingWorkflow->new(
-        category_reader => $override{category_reader}
-          || GPForum::Test::CategoryReader->new( found => 1 ),
+        category_reader => _workflow_component(
+            \%override, 'category_reader',
+            sub { return GPForum::Test::CategoryReader->new( found => 1 ); }
+        ),
         command_idempotency => $override{command_idempotency},
-        logger        => $override{logger} || GPForum::Test::Logger->new(),
-        mention_store => $override{mention_store}
-          || GPForum::Test::MentionStore->new(),
-        post_composer => $override{post_composer}
-          || GPForum::Test::PostComposer->new(),
-        post_position => $override{post_position}
-          || GPForum::Test::PostPosition->new(),
-        post_store => $override{post_store} || GPForum::Test::PostStore->new(),
-        thread_composer => $override{thread_composer}
-          || GPForum::Test::ThreadComposer->new(),
-        thread_detail_reader => $override{thread_detail_reader}
-          || GPForum::Test::ThreadDetailReader->new(
-            thread => { thread_id => 'thread-1', visibility => 'public' }
-          ),
-        thread_store => $override{thread_store}
-          || GPForum::Test::ThreadStore->new(),
+        logger              => _workflow_component(
+            \%override, 'logger',
+            sub { return GPForum::Test::Logger->new(); }
+        ),
+        mention_store => _workflow_component(
+            \%override, 'mention_store',
+            sub { return GPForum::Test::MentionStore->new(); }
+        ),
+        post_composer => _workflow_component(
+            \%override, 'post_composer',
+            sub { return GPForum::Test::PostComposer->new(); }
+        ),
+        post_store => _workflow_component(
+            \%override, 'post_store',
+            sub { return GPForum::Test::PostStore->new(); }
+        ),
+        thread_composer => _workflow_component(
+            \%override, 'thread_composer',
+            sub { return GPForum::Test::ThreadComposer->new(); }
+        ),
+        thread_detail_reader => _workflow_component(
+            \%override,
+            'thread_detail_reader',
+            sub {
+                return GPForum::Test::ThreadDetailReader->new(
+                    thread => {
+                        thread_id  => 'thread-1',
+                        visibility => 'public',
+                    },
+                );
+            }
+        ),
+        thread_store => _workflow_component(
+            \%override,
+            'thread_store',
+            sub { return GPForum::Test::ThreadStore->new(); }
+        ),
     );
+}
+
+sub _workflow_component {
+    my ( $override, $name, $builder ) = @_;
+
+    return $override->{$name} if exists $override->{$name};
+
+    return $builder->();
 }
 
 package GPForum::Test::CategoryReader;
@@ -486,18 +588,6 @@ sub find_thread {
     my ($self) = @_;
 
     return $self->thread;
-}
-
-package GPForum::Test::PostPosition;
-
-sub new {
-    my ($class) = @_;
-
-    return bless {}, $class;
-}
-
-sub next_position {
-    return 3;
 }
 
 package GPForum::Test::PostComposer;

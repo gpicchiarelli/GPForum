@@ -4,6 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use Test::Exception;
 use Test::More;
 
 use lib 'lib';
@@ -21,7 +22,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 40;
+const my $EXPECTED_TESTS         => 41;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -218,7 +219,12 @@ is( $missing_page->{error},
 
 my $post_position =
   GPForum::Service::Forum::PostPosition->new( schema => $schema );
-is( $post_position->next_position('thread-1'),
+throws_ok(
+    sub { return $post_position->next_position('thread-1'); },
+    qr/unsafe [ ] for [ ] writes/msx,
+    'direct next position allocation is rejected outside the store'
+);
+is( $post_position->read_next_position('thread-1'),
     $NEXT_REPLY_POSITION, 'next reply position increments' );
 
 my $empty_schema = GPForum::Test::ForumReadSchema->new(
@@ -228,7 +234,7 @@ my $empty_schema = GPForum::Test::ForumReadSchema->new(
 );
 my $empty_position =
   GPForum::Service::Forum::PostPosition->new( schema => $empty_schema );
-is( $empty_position->next_position('thread-2'),
+is( $empty_position->read_next_position('thread-2'),
     1, 'empty thread starts at one' );
 
 my $hidden_schema = GPForum::Test::ForumReadSchema->new(

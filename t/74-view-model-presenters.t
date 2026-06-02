@@ -155,7 +155,8 @@ my $new_thread_form = $forum->new_thread_form(
             visibility  => 'public',
         },
     ],
-    errors => {
+    command_id => 'thread-command-1',
+    errors     => {
         body_source => 'body is required',
         title       => 'title is required',
     },
@@ -171,6 +172,8 @@ is( $new_thread_form->{ui}{described_by},
 is( $new_thread_form->{fields}[0],
     'category_id',
     'forum new-thread presenter preserves JSON field-name compatibility' );
+is( $new_thread_form->{command_id},
+    'thread-command-1', 'forum new-thread presenter carries command id' );
 is(
     $new_thread_form->{form_fields}[1]{error_attrs},
     ' aria-invalid="true" aria-describedby="thread-title-error"',
