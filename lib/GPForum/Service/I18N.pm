@@ -2,6 +2,7 @@ package GPForum::Service::I18N;
 
 use strict;
 use warnings;
+use utf8;
 
 use Const::Fast;
 use Mojo::Base -base;
@@ -864,7 +865,7 @@ sub _default_catalogs {
             'auth.login_accepted_title'        => 'Richiesta accesso accettata',
             'auth.login_again'                 => 'Accedi di nuovo',
             'auth.login_next_steps'            => 'Passi successivi accesso',
-            'auth.login_status'                => 'Hai effettuato l accesso.',
+            'auth.login_status'                => 'Hai effettuato l’accesso.',
             'auth.login_title'                 => 'Accesso',
             'auth.logout'                      => 'Esci',
             'auth.logout_accepted_title'       => 'Richiesta uscita accettata',
@@ -1008,14 +1009,14 @@ sub _default_catalogs {
             'form.attach_file'               => 'Allega file',
             'forum.create_account'           => 'Crea un account',
             'forum.create_thread'            => 'Crea discussione',
-            'forum.error_default' => 'La richiesta non puo essere completata.',
+            'forum.error_default' => 'La richiesta non può essere completata.',
             'forum.error_title'   => 'Errore forum',
             'forum.forum_actions' => 'Azioni forum',
             'forum.forum_categories'  => 'Categorie forum',
             'forum.index_tagline'     => 'Indice discussioni indipendente.',
             'forum.index_unavailable' =>
-              'L indice forum e temporaneamente non disponibile.',
-            'forum.last_activity'                => 'Ultima attivita',
+              'L’indice forum è temporaneamente non disponibile.',
+            'forum.last_activity'                => 'Ultima attività',
             'forum.latest_discussion_pagination' =>
               'Paginazione discussioni recenti',
             'forum.latest_public_discussions' =>
@@ -1030,7 +1031,7 @@ sub _default_catalogs {
             'forum.next_threads'          => 'Discussioni successive',
             'forum.no_public_discussions' =>
               'Nessuna discussione pubblica visibile.',
-            'forum.no_visible_posts'   => 'Nessun post visibile disponibile.',
+            'forum.no_visible_posts'   => 'Nessun post visibile è disponibile.',
             'forum.no_visible_threads' =>
               'Nessuna discussione visibile in questa categoria.',
             'forum.older_discussions'  => 'Discussioni precedenti',
@@ -1048,13 +1049,13 @@ sub _default_catalogs {
             'forum.runtime'            => 'Runtime',
             'forum.started_by'         => 'Avviata da',
             'forum.thread'             => 'Discussione',
-            'forum.thread_locked'      => 'Questa discussione e bloccata.',
+            'forum.thread_locked'      => 'Questa discussione è bloccata.',
             'forum.thread_tools'       => 'Strumenti discussione',
             'forum.thread_body'        => 'Corpo',
             'forum.thread_pagination'  => 'Paginazione discussioni',
             'forum.thread_title'       => 'Titolo',
             'forum.validation_errors'  => 'Errori di validazione',
-            'forum.visibility'         => 'Visibilita',
+            'forum.visibility'         => 'Visibilità',
             'forum.visibility_members' => 'Membri',
             'forum.visibility_private' => 'Privata',
             'forum.visibility_public'  => 'Pubblica',
@@ -1065,7 +1066,7 @@ sub _default_catalogs {
             'layout.footer_label'      => 'Footer prodotto',
             'layout.footer_license'    => 'Fondazione con licenza BSD-3',
             'layout.footer_tagline'    =>
-              'Infrastruttura indipendente per comunita',
+              'Infrastruttura indipendente per comunità',
             'locale.apply'                      => 'Applica',
             'locale.choose'                     => 'Lingua',
             'locale.selector_label'             => 'Selettore lingua',
@@ -1136,7 +1137,7 @@ sub _default_catalogs {
             'mentions.pagination'      => 'Paginazione menzioni',
             'mentions.source'          => 'Sorgente',
             'mentions.summary'         =>
-              'Questa menzione e collegata a {source_type} {source_id}.',
+              'Questa menzione è collegata a {source_type} {source_id}.',
             'mentions.title'       => 'Menzione',
             'nav.admin'            => 'Admin',
             'nav.bookmarks'        => 'Segnalibri',
@@ -1144,7 +1145,7 @@ sub _default_catalogs {
             'nav.categories'       => 'Categorie',
             'nav.feed'             => 'Feed',
             'nav.home'             => 'Home',
-            'nav.identity'         => 'Identita',
+            'nav.identity'         => 'Identità',
             'nav.mentions'         => 'Menzioni',
             'nav.moderation'       => 'Moderazione',
             'nav.notifications'    => 'Notifiche',
@@ -1157,7 +1158,7 @@ sub _default_catalogs {
             'nav.start_thread'     => 'Avvia una discussione',
             'settings.appearance'  => 'Lingua e tema',
             'settings.description' =>
-              'Scegli come GPForum mostra l interfaccia del tuo account.',
+              'Scegli come GPForum mostra l’interfaccia del tuo account.',
             'settings.login_required' =>
               'Accedi per gestire le tue preferenze.',
             'settings.notification_channels'     => 'Canali di notifica',
@@ -1174,7 +1175,7 @@ sub _default_catalogs {
             'theme.high_contrast'       => 'Alto contrasto',
             'theme.selector_label'      => 'Selettore tema',
             'notifications.body.follow' =>
-              'Una discussione seguita ha nuova attivita.',
+              'Una discussione seguita ha nuova attività.',
             'notifications.body.mention' =>
               'Sei stato menzionato in una discussione.',
             'notifications.body.notification' => 'Hai una nuova notifica.',
@@ -1189,7 +1190,7 @@ sub _default_catalogs {
             'notifications.digest_frequency.never'     => 'Mai',
             'notifications.digest_frequency.weekly'    => 'Settimanale',
             'notifications.email_body.follow'          =>
-'Apri GPForum per controllare la nuova attivita in una discussione seguita.',
+'Apri GPForum per controllare la nuova attività in una discussione seguita.',
             'notifications.email_body.mention' =>
 'Apri GPForum per controllare la discussione in cui sei stato menzionato.',
             'notifications.email_body.notification' =>
@@ -1197,7 +1198,7 @@ sub _default_catalogs {
             'notifications.email_body.reply' =>
 'Apri GPForum per leggere la nuova risposta in una discussione seguita.',
             'notifications.email_subject.follow' =>
-              'Nuova attivita in una discussione seguita',
+              'Nuova attività in una discussione seguita',
             'notifications.email_subject.mention' =>
               'Sei stato menzionato su GPForum',
             'notifications.email_subject.notification' =>
@@ -1211,15 +1212,15 @@ sub _default_catalogs {
             'notifications.open_discussion' => 'Apri discussione',
             'notifications.pagination'      => 'Paginazione notifiche',
             'notifications.preference.digest.description' =>
-              'Ricevi riepiloghi periodici quando il digest e attivo.',
+              'Ricevi riepiloghi periodici quando il digest è attivo.',
             'notifications.preference.email.description' =>
-              'Consenti l invio email per notifiche account e community.',
+              'Consenti l’invio email per notifiche account e community.',
             'notifications.preference.in_app.description' =>
               'Mostra notifiche nella inbox di GPForum.',
             'notifications.read'         => 'Letta',
             'notifications.received_at'  => 'Ricevuta alle',
             'notifications.title.follow' =>
-              'Nuova attivita in una discussione seguita',
+              'Nuova attività in una discussione seguita',
             'notifications.title.mention'      => 'Sei stato menzionato',
             'notifications.title.notification' => 'Notifica',
             'notifications.title.reply'        =>
@@ -1237,14 +1238,14 @@ sub _default_catalogs {
             'profile.joined'              => 'Iscrizione',
             'profile.new_contributor'     => 'Nuovo contributor',
             'profile.not_found_message'   =>
-              'Il profilo pubblico richiesto non e disponibile.',
+              'Il profilo pubblico richiesto non è disponibile.',
             'profile.not_found_title'       => 'Profilo non trovato',
             'profile.no_public_discussions' => 'Nessuna discussione pubblica.',
             'profile.no_public_replies'     => 'Nessuna risposta pubblica.',
             'profile.older_public_discussions' =>
               'Discussioni pubbliche precedenti',
             'profile.profile_activity_pagination' =>
-              'Paginazione attivita profilo',
+              'Paginazione attività profilo',
             'profile.public_contributions' => 'Contributi pubblici',
             'profile.public_discussions'   => 'Discussioni pubbliche',
             'profile.public_discussions_by_contributor' =>
@@ -1316,19 +1317,19 @@ sub _default_catalogs {
             'search.author'                   => 'Autore',
             'search.by_author'                => 'Di',
             'search.category'                 => 'Categoria',
-            'search.degraded' => 'La ricerca e temporaneamente degradata.',
+            'search.degraded' => 'La ricerca è temporaneamente degradata.',
             'search.empty_guidance' =>
 'Cerca discussioni pubbliche, risposte, categorie, autori o intervalli di date.',
             'search.empty_title' => 'Cerca nel forum',
             'search.filters'     => 'Filtri',
             'search.from'        => 'Da',
             'search.help'        =>
-'I risultati rispettano visibilita, moderazione e permessi correnti.',
+'I risultati rispettano visibilità, moderazione e permessi correnti.',
             'search.more_results' => 'Mostra altri risultati',
             'search.no_results'   =>
               'Nessun risultato visibile corrisponde alla ricerca.',
             'search.no_results_guidance' =>
-'Prova una ricerca piu ampia, rimuovi un filtro o controlla la scrittura.',
+'Prova una ricerca più ampia, rimuovi un filtro o controlla la scrittura.',
             'search.pagination'      => 'Paginazione ricerca',
             'search.permission_note' =>
               'Gli estratti includono solo contenuti che puoi leggere.',

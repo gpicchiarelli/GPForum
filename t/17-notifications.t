@@ -2,6 +2,7 @@ package main;
 
 use strict;
 use warnings;
+use utf8;
 
 use Const::Fast;
 use Test::More;
@@ -280,7 +281,7 @@ my $follow_presentation = $renderer->render_inbox_item(
 );
 is(
     $follow_presentation->{email}{subject},
-    'Nuova attivita in una discussione seguita',
+    'Nuova attività in una discussione seguita',
     'follow email subject is localized'
 );
 

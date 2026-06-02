@@ -2,6 +2,7 @@ package main;
 
 use strict;
 use warnings;
+use utf8;
 
 use Const::Fast;
 use Mojo::File qw(path);
@@ -49,6 +50,21 @@ is(
     $i18n->translate( 'it', 'auth.signed_in_as', { user_id => 'user-1' } ),
     'Accesso come user-1',
     'template variables interpolate inside translated strings'
+);
+is(
+    $i18n->translate( 'it', 'auth.login_status' ),
+    'Hai effettuato l’accesso.',
+    'Italian UI uses real apostrophes'
+);
+is(
+    $i18n->translate( 'it', 'forum.last_activity' ),
+    'Ultima attività',
+    'Italian UI uses real accented letters'
+);
+is(
+    $i18n->translate( 'it', 'search.no_results_guidance' ),
+    'Prova una ricerca più ampia, rimuovi un filtro o controlla la scrittura.',
+    'Italian guidance uses real grave accents'
 );
 is( $i18n->translate( 'it', 'missing.key' ),
     'missing.key', 'missing catalog keys return the key' );
@@ -99,6 +115,8 @@ is_deeply( _missing_template_keys($i18n),
     [], 'template translation helper keys are covered by both catalogs' );
 is_deeply( _catalog_namespace_violations($i18n),
     [], 'catalog keys stay inside explicit presentation namespaces' );
+is_deeply( _italian_ascii_accent_violations($i18n),
+    [], 'Italian UI labels do not use ASCII accent placeholders' );
 
 {
     my $test = _new_test_app('en');
@@ -114,7 +132,7 @@ is_deeply( _catalog_namespace_violations($i18n),
         'nav[aria-label="Principale"] a[href="/categories"]' => 'Categorie' );
     $test->text_is( 'nav[aria-label="Principale"] a[href="/new-thread"]' =>
           'Avvia una discussione' );
-    $test->text_is( 'nav[aria-label="Identita"] a[href="/login"]' => 'Accedi' );
+    $test->text_is( 'nav[aria-label="Identità"] a[href="/login"]' => 'Accedi' );
 }
 
 {
@@ -227,6 +245,55 @@ sub _catalog_namespace_violations {
     }
 
     return \@violations;
+}
+
+sub _italian_ascii_accent_violations {
+    my ($service) = @_;
+
+    my @violations;
+    for my $key ( @{ $service->catalog_keys('it') } ) {
+        my $message = $service->translate( 'it', $key );
+        next if ref $message;
+        if ( _has_italian_ascii_accent_placeholder($message) ) {
+            push @violations, $key;
+        }
+    }
+
+    return \@violations;
+}
+
+sub _has_italian_ascii_accent_placeholder {
+    my ($message) = @_;
+
+    my $normalized = lc $message;
+    my @words      = qw(attivita visibilita comunita identita piu);
+    my @phrases    = (
+        'e temporaneamente',
+        'e attivo',
+        'e collegata',
+        'e disponibile',
+        'e bloccata',
+        'l accesso',
+        'l indice',
+        'l interfaccia',
+        'l invio',
+    );
+
+    for my $word (@words) {
+        if ( $normalized =~
+            /(?:\A|[^[:alpha:]])\Q$word\E(?:[^[:alpha:]]|\z)/msx )
+        {
+            return 1;
+        }
+    }
+
+    for my $phrase (@phrases) {
+        if ( index( $normalized, $phrase ) >= 0 ) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 1;
