@@ -35,7 +35,9 @@ fi
 
 raw_output="$tmp_dir/raw-output"
 violations="$tmp_dir/violations"
+canonical_violations="$tmp_dir/canonical-violations"
 baseline="$tmp_dir/baseline"
+canonical_baseline="$tmp_dir/canonical-baseline"
 new_violations="$tmp_dir/new-violations"
 resolved_violations="$tmp_dir/resolved-violations"
 
@@ -45,6 +47,8 @@ critic_status=$?
 set -e
 
 grep '^\[' "$raw_output" | LC_ALL=C sort -u > "$violations" || true
+sed -E 's/ line [[:digit:]]+, column [[:digit:]]+\./ line <line>, column <column>./' \
+    "$violations" | LC_ALL=C sort -u > "$canonical_violations"
 
 if [ ! -f "$baseline_file" ]; then
     cat "$raw_output"
@@ -52,12 +56,14 @@ if [ ! -f "$baseline_file" ]; then
 fi
 
 LC_ALL=C sort -u "$baseline_file" > "$baseline"
-LC_ALL=C comm -13 "$baseline" "$violations" > "$new_violations"
-LC_ALL=C comm -23 "$baseline" "$violations" > "$resolved_violations"
+sed -E 's/ line [[:digit:]]+, column [[:digit:]]+\./ line <line>, column <column>./' \
+    "$baseline" | LC_ALL=C sort -u > "$canonical_baseline"
+LC_ALL=C comm -13 "$canonical_baseline" "$canonical_violations" > "$new_violations"
+LC_ALL=C comm -23 "$canonical_baseline" "$canonical_violations" > "$resolved_violations"
 
 new_count="$(wc -l < "$new_violations" | tr -d ' ')"
 resolved_count="$(wc -l < "$resolved_violations" | tr -d ' ')"
-baseline_count="$(wc -l < "$baseline" | tr -d ' ')"
+baseline_count="$(wc -l < "$canonical_baseline" | tr -d ' ')"
 
 if [ "$new_count" -ne 0 ]; then
     echo "perlcritic: found $new_count violation(s) outside baseline" >&2

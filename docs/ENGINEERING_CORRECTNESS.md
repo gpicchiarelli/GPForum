@@ -95,6 +95,9 @@ minimum pass targeted Perl::Critic and avoid adding new violations.
 
 - `etc/perlcritic-baseline.txt` lists the currently known historical
   violations;
-- a full run fails when any violation appears outside that baseline;
-- a full run also fails when baseline entries disappear, forcing an intentional
-  baseline update after cleanup.
+- a full run compares policy, file, message and offending source while
+  normalizing line/column drift;
+- a full run fails when any violation appears outside that normalized baseline;
+- a full run warns when baseline entries disappear, forcing an intentional
+  baseline update after cleanup without making platform-specific disappearances
+  break CI.

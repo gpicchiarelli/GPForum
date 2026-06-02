@@ -24,6 +24,8 @@ const my $P50                => 50;
 const my $P95                => 95;
 const my $P99                => 99;
 const my $MIN_ELAPSED        => 0.000_001;
+const my $HTTP_OK_MIN        => 200;
+const my $HTTP_OK_MAX        => 399;
 const my $DEFAULT_P95_LIMIT  => 1_000;
 const my $DEFAULT_P99_LIMIT  => 2_000;
 const my $DEFAULT_MIN_RPS    => 1;
@@ -34,6 +36,12 @@ const my %ROUTE_ENDPOINT => (
     q{/health/live}  => undef,
     q{/health/ready} => undef,
     q{/metrics}      => undef,
+);
+const my @DYNAMIC_ROUTE_ENDPOINTS => (
+    [ qr{\A /search/autocomplete}msx, 'search_autocomplete' ],
+    [ qr{\A /c/}msx,                  'category_threads' ],
+    [ qr{\A /t/}msx,                  'thread_view' ],
+    [ qr{\A /search}msx,              'search' ],
 );
 const my %THRESHOLD_BY_ENDPOINT => (
     home       => { p95_ms => 750, p99_ms => 1_500, min_req_per_sec => 1 },
@@ -202,9 +210,10 @@ sub _summary {
     my $db_queries   = _db_query_summary( $observations, $query_budget );
 
     return {
-        route    => $route,
-        status   => _route_status( $p95, $p99, $rps, $threshold, $db_queries ),
-        requests => scalar @sorted,
+        route  => $route,
+        status =>
+          _route_status( $p95, $p99, $rps, $threshold, $statuses, $db_queries ),
+        requests     => scalar @sorted,
         req_per_sec  => _rounded($rps),
         p50_ms       => _rounded($p50),
         p95_ms       => _rounded($p95),
@@ -290,12 +299,18 @@ sub _query_budget {
 sub _endpoint_name {
     my ($route) = @_;
 
-    return 'search_autocomplete' if $route =~ m{\A /search/autocomplete}msx;
-    return 'category_threads'    if $route =~ m{\A /c/}msx;
-    return 'thread_view'         if $route =~ m{\A /t/}msx;
-    return 'search'              if $route =~ m{\A /search}msx;
+    for my $mapping (@DYNAMIC_ROUTE_ENDPOINTS) {
+        my ( $pattern, $endpoint_name ) = @{$mapping};
+        if ( $route =~ $pattern ) {
+            return $endpoint_name;
+        }
+    }
 
-    return $ROUTE_ENDPOINT{$route};
+    if ( exists $ROUTE_ENDPOINT{$route} ) {
+        return $ROUTE_ENDPOINT{$route};
+    }
+
+    return;
 }
 
 sub _query_budget_text {
@@ -348,21 +363,62 @@ sub _threshold_for {
 }
 
 sub _route_status {
-    my ( $p95, $p99, $rps, $threshold, $db_queries ) = @_;
+    my ( $p95, $p99, $rps, $threshold, $statuses, $db_queries ) = @_;
 
     return 'fail'
       if _threshold_status( $p95, $p99, $rps, $threshold ) ne 'ok';
-    return 'fail'
-      if $db_queries
-      && $db_queries->{observed}
-      && $db_queries->{budget_status} eq 'fail';
-    return 'fail'
-      if $db_queries
-      && $db_queries->{observed}
-      && $db_queries->{budget_status} ne 'none'
-      && $db_queries->{max_duplicate_queries} > 0;
+    return 'fail' if _error_count($statuses) > 0;
+    return 'fail' if _db_query_status($db_queries) ne 'ok';
 
     return 'ok';
+}
+
+sub _db_query_status {
+    my ($db_queries) = @_;
+
+    if ( !_db_queries_observed($db_queries) ) {
+        return 'ok';
+    }
+
+    return _db_query_failure($db_queries) ? 'fail' : 'ok';
+}
+
+sub _db_queries_observed {
+    my ($db_queries) = @_;
+
+    return $db_queries && $db_queries->{observed} ? 1 : 0;
+}
+
+sub _db_query_failure {
+    my ($db_queries) = @_;
+
+    if ( $db_queries->{budget_status} eq 'fail' ) {
+        return 1;
+    }
+
+    return _db_duplicate_query_failure($db_queries);
+}
+
+sub _db_duplicate_query_failure {
+    my ($db_queries) = @_;
+
+    if ( $db_queries->{budget_status} eq 'none' ) {
+        return 0;
+    }
+
+    return $db_queries->{max_duplicate_queries} > 0 ? 1 : 0;
+}
+
+sub _error_count {
+    my ($statuses) = @_;
+
+    my $count = 0;
+    for my $status ( keys %{$statuses} ) {
+        next if $status >= $HTTP_OK_MIN && $status <= $HTTP_OK_MAX;
+        $count += $statuses->{$status};
+    }
+
+    return $count;
 }
 
 sub _threshold_status {

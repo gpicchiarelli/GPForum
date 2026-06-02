@@ -139,7 +139,9 @@ carton exec bin/gpforum-platform-check --with-db
 ```
 
 CI must keep the same gates. If Perl::Critic violations are intentionally
-resolved, update `etc/perlcritic-baseline.txt` in the same review.
+resolved, update `etc/perlcritic-baseline.txt` in the same review; the gate
+normalizes line and column drift but still fails on new policy/file/message
+violations.
 
 ## Database And Migrations
 

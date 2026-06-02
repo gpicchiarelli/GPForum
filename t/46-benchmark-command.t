@@ -15,8 +15,9 @@ use GPForum::Command::Benchmark;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 24;
+const my $EXPECTED_TESTS => 26;
 const my $HTTP_OK        => 200;
+const my $HTTP_NOT_FOUND => 404;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -62,6 +63,13 @@ is( $report->{routes}[0]{query_budget}{max_queries},
     2, 'benchmark JSON reports query budget contract' );
 is( $report->{routes}[0]{db_queries}{observed},
     0, 'benchmark JSON reports DB query observation state' );
+
+my $error_report =
+  $command->benchmark_report( '--fixture', '--iterations', '1', '--warmup',
+    '0', '--route', '/missing-benchmark-route', );
+is( $error_report->{status}, 'fail', 'benchmark fails HTTP errors' );
+is( $error_report->{routes}[0]{status_codes}{$HTTP_NOT_FOUND},
+    1, 'benchmark records HTTP error status counts' );
 
 my ( $baseline_handle, $baseline_path ) = tempfile();
 print {$baseline_handle} $json_text or die 'failed to write baseline';
