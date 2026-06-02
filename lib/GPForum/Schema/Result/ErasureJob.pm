@@ -21,6 +21,8 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key('erasure_job_id');
+__PACKAGE__->add_unique_constraint(
+    erasure_jobs_request_key => ['deletion_request_id'] );
 __PACKAGE__->belongs_to(
     deletion_request => 'GPForum::Schema::Result::DeletionRequest',
     'deletion_request_id'

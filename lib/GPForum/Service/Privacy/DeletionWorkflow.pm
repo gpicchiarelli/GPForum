@@ -74,6 +74,7 @@ sub approve_request {
     return $self->schema->txn_do(
         sub {
             my $timestamp = $self->clock->now_iso8601;
+            $self->_lock_deletion_request_for_approval($request_id);
             my $request =
               $self->schema->resultset('DeletionRequest')->find($request_id);
             return if !$request;
@@ -289,6 +290,20 @@ sub hold_request {
             return { %{$held}, error => undef, ok => 1 };
         }
     );
+}
+
+sub _lock_deletion_request_for_approval {
+    my ( $self, $request_id ) = @_;
+
+    my $dbh = _schema_dbh( $self->schema );
+    return if !$dbh;
+
+    $dbh->selectrow_array(
+'SELECT deletion_request_id FROM deletion_requests WHERE deletion_request_id = ? FOR UPDATE',
+        undef, $request_id
+    );
+
+    return;
 }
 
 sub _record_action {
@@ -538,6 +553,16 @@ sub _column {
     return $row->get_column($name) if $row && $row->can('get_column');
 
     return;
+}
+
+sub _schema_dbh {
+    my ($schema) = @_;
+
+    my $storage = eval { $schema->storage };
+    return if !$storage || !$storage->can('dbh');
+
+    my $dbh = eval { $storage->dbh };
+    return $dbh;
 }
 
 1;

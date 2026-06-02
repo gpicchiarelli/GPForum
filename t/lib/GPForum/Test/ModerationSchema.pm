@@ -9,6 +9,7 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 has resultsets => sub { return {}; };
+has storage    => undef;
 
 sub resultset {
     my ( $self, $name ) = @_;

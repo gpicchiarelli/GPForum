@@ -16,6 +16,8 @@ use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
 use GPForum::Test::ModerationResultSet;
 use GPForum::Test::ModerationSchema;
+use GPForum::Test::PostStoreLockDbh;
+use GPForum::Test::PostStoreLockStorage;
 
 our $VERSION = '0.001';
 
@@ -39,7 +41,8 @@ my $audit_log       = GPForum::Test::ModerationResultSet->new;
 my $users           = GPForum::Test::ModerationResultSet->new;
 my $credentials = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
 my $sessions    = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $schema      = GPForum::Test::ModerationSchema->new(
+my $approval_lock_dbh = GPForum::Test::PostStoreLockDbh->new;
+my $schema            = GPForum::Test::ModerationSchema->new(
     resultsets => {
         AuditLog        => $audit_log,
         Credential      => $credentials,
@@ -52,6 +55,9 @@ my $schema      = GPForum::Test::ModerationSchema->new(
         Session         => $sessions,
         User            => $users,
     },
+    storage => GPForum::Test::PostStoreLockStorage->new(
+        dbh => $approval_lock_dbh,
+    ),
 );
 
 _seed_user( $users, $SUBJECT_USER_ID );
@@ -132,6 +138,24 @@ is( scalar @{ $deletion_actions->created },
 is( scalar @{ $erasure_jobs->created }, $ONE_ROW, 'erasure job is inserted' );
 is( scalar @{ $audit_log->created },
     $TWO_ROWS, 'approval writes an audit row' );
+is(
+    $approval_lock_dbh->calls->[0]{sql},
+'SELECT deletion_request_id FROM deletion_requests WHERE deletion_request_id = ? FOR UPDATE',
+    'approval locks the deletion request row before creating erasure job'
+);
+is_deeply( $approval_lock_dbh->calls->[0]{bind},
+    ['generated-1'], 'approval lock targets the deletion request id' );
+
+my $approved_again =
+  $workflow->approve_request( 'generated-1', 'admin-1',
+    'retry after network timeout' );
+ok( $approved_again->{idempotent}, 'repeated approval reuses existing job' );
+is( $approved_again->{job}{erasure_job_id},
+    'generated-7', 'repeated approval returns the original erasure job' );
+is( scalar @{ $erasure_jobs->created },
+    $ONE_ROW, 'repeated approval avoids duplicate erasure jobs' );
+is( scalar @{ $deletion_actions->created },
+    $ONE_ROW, 'repeated approval avoids duplicate deletion actions' );
 
 my $completed = $workflow->complete_job( 'generated-7', 'worker-1' );
 is( $completed->{erasure_job_id}, 'generated-7', 'completion returns job id' );

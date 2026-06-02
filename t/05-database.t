@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 414;
-const my $EXPECTED_MIGRATIONS          => 23;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 66;
+const my $EXPECTED_TESTS               => 417;
+const my $EXPECTED_MIGRATIONS          => 24;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 69;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -320,6 +320,14 @@ is_deeply( [ $erasure_job_source->primary_columns ],
     ['erasure_job_id'], 'erasure job primary key is explicit' );
 ok( $erasure_job_source->has_column('last_error'),
     'erasure job stores last error' );
+is_deeply(
+    [
+        $erasure_job_source->unique_constraint_columns(
+            'erasure_jobs_request_key')
+    ],
+    ['deletion_request_id'],
+    'erasure job is unique per deletion request'
+);
 ok( $erasure_job_source->has_relationship('deletion_request'),
     'erasure job belongs to deletion request' );
 
@@ -1454,6 +1462,19 @@ like(
     $outbox_reliability_sql,
     qr/ADD [ ] COLUMN [ ] IF [ ] NOT [ ] EXISTS [ ] failure_type/msx,
     'outbox reliability migration adds failure type classification'
+);
+
+my $privacy_idempotency_sql = path( $summary->[-1]->{file} )->slurp;
+
+is(
+    $summary->[-1]->{description},
+    'privacy erasure job idempotency',
+    'privacy erasure job idempotency migration description is parsed'
+);
+like(
+    $privacy_idempotency_sql,
+    qr/idx_erasure_jobs_request_unique/msx,
+    'privacy idempotency migration enforces one erasure job per request'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

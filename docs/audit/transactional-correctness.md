@@ -31,7 +31,7 @@ Punti ancora da chiudere prima del go-live:
 - upsert atomico per bookmark/subscription;
 - uniqueness reale dei report aperti;
 - lock e `command_id` per transizioni di moderazione;
-- idempotenza di deletion request, approval e retention hold;
+- idempotenza di deletion request e retention hold;
 - hash-chain audit serializzata, non solo hash per record;
 - failure test con database PostgreSQL reale e worker crash.
 
@@ -251,28 +251,30 @@ sola richiesta aperta e replay stabile.
 
 ### PRIV-002: approval concorrente può creare più erasure job
 
-Severità: critical.
+Severità: mitigato, rischio storico `critical`.
 
 File coinvolti:
 
 - `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
 - `migrations/004_platform_governance.sql`
+- `migrations/024_privacy_erasure_job_idempotency.sql`
+- `lib/GPForum/Schema/Result/ErasureJob.pm`
 
-Comportamento attuale: `approve_request` cerca un job esistente, poi crea
-`erasure_jobs`. Non c'è vincolo unique su `deletion_request_id` e la richiesta
-non viene letta con lock esplicito.
+Comportamento attuale: `approve_request` blocca la `deletion_requests` con
+`FOR UPDATE` prima di cercare o creare il job. `erasure_jobs` ora ha vincolo
+univoco su `deletion_request_id` tramite `idx_erasure_jobs_request_unique` e
+schema DBIC `erasure_jobs_request_key`. Una seconda approval dello stesso
+request id ricarica il job esistente e torna idempotente.
 
-Rischio: due approval concorrenti possono schedulare più job di erasure per la
-stessa richiesta. Anche se l'anonymize tende a essere idempotente, questa è
-un'area distruttiva/compliance e non deve dipendere da fortuna operativa.
+Rischio residuo: basso. Resta necessario eseguire evidenza PostgreSQL con due
+connessioni reali in staging, perché i test unitari verificano lock SQL,
+vincolo di migrazione e replay sequenziale, non il scheduling del kernel/DB.
 
-Patch proposta: unique index su `erasure_jobs(deletion_request_id)` o su job
-attivi per richiesta; `SELECT ... FOR UPDATE` sulla deletion request; replay con
-`command_id` e risposta stabile se il job esiste già.
+Patch applicata: migration `024`, vincolo DBIC, lock esplicito su approval e
+test di replay approval in `t/29-privacy-rights.t`.
 
-Test da aggiungere: due approval concorrenti dello stesso request id; atteso un
-solo job, un solo evento `privacy.deletion_approved`, seconda risposta
-idempotente.
+Test residuo da aggiungere: due approval concorrenti dello stesso request id su
+PostgreSQL reale; atteso un solo job e seconda risposta idempotente.
 
 ### PRIV-003: retention hold e stato held ripetibili senza replay
 
@@ -385,7 +387,7 @@ atteso nessuna perdita, eventuale doppio dispatch assorbito dagli handler.
 | `moderation assign/resolve` | parziale | no | parziale | n/a | richiede lock e `command_id` |
 | `moderation hide/restore/lock/unlock` | parziale | no | no, duplica azioni | n/a | richiede lock e replay |
 | `privacy deletion request` | no | no | no | n/a | richiede `command_id`/unique |
-| `privacy approval` | no | no | no | n/a | critical, richiede unique job |
+| `privacy approval` | sì per retry completato | parziale, staging concorrente richiesto | sì, riusa job esistente | n/a | mitigato con lock e unique job |
 | `privacy erasure completion` | parziale | n/a | n/a | parziale | blocco hold ripetuto da chiudere |
 | `privacy export request` | no | no | no | n/a | richiede dedupe |
 | `outbox dispatch` | at-least-once | n/a | n/a | sì se handler idempotente | handler audit richiesto |
@@ -520,11 +522,10 @@ duplicato reply/report/job, nessuna crescita outbox non drenata dopo test.
 
 ## Prossime patch prioritarie
 
-1. `PRIV-002`: unique job per deletion request, lock request e test approval
-   concorrente.
-2. `ID-001`: idempotency guard atomico su `command_log`.
-3. `MOD-001` e `MOD-003`: report unique partial, command_id e lock target per
+1. `ID-001`: idempotency guard atomico su `command_log`.
+2. `MOD-001` e `MOD-003`: report unique partial, command_id e lock target per
    moderazione.
-4. `CM-001` e `CM-002`: upsert atomico bookmark/subscription.
-5. `AUD-001`: audit chain state serializzato con test PostgreSQL concorrente.
-6. `OUT-001`: crash test outbox più catalogo idempotenza handler.
+3. `CM-001` e `CM-002`: upsert atomico bookmark/subscription.
+4. `AUD-001`: audit chain state serializzato con test PostgreSQL concorrente.
+5. `OUT-001`: crash test outbox più catalogo idempotenza handler.
+6. `PRIV-002`: evidenza concorrente PostgreSQL reale in staging.
