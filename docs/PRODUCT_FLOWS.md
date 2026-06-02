@@ -48,7 +48,7 @@ or SPA-first architecture is introduced here.
 
 | Area | Risk | Current mitigation | Priority |
 | --- | --- | --- | --- |
-| Email verification | Registration creates login-capable accounts before a full verification workflow exists. | Account state is explicit and email verification columns already exist. | medium |
+| Email lifecycle | Registration creates login-capable accounts before initial email verification and mail delivery are wired. | Reset password, password change, email-change confirmation tokens, one-time use, expiry, CSRF, rate-limit and audit are covered; delivery adapter remains separate. | medium |
 | Multi-process rate limiting | PostgreSQL-backed limiter exists; local memory remains degraded fallback. | `/metrics` exposes primary failures, fallback usage and blocked decisions. | low |
 | Realtime fanout | Websocket state is process-local. | Each web process can run a supervised LISTEN/NOTIFY listener; polling remains canonical fallback. | low |
 | Worker operations | Minion backend is opt-in and requires explicit PostgreSQL URL/backend dependencies. | Direct outbox dispatch command is always available; Minion startup fails explicitly if configured incompletely. | low |

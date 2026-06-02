@@ -60,4 +60,26 @@
 
     <button type="submit"><%= t('settings.save') %></button>
   </form>
+
+  <section class="ui-card" aria-labelledby="<%= $ui->{credentials_heading_id} %>">
+    <h2 id="<%= $ui->{credentials_heading_id} %>"><%= t('settings.credentials') %></h2>
+    <form method="post" action="<%= url_for('settings_password_update') %>">
+      <%= csrf_field %>
+      <label for="settings-current-password"><%= t('auth.current_password') %></label>
+      <input id="settings-current-password" name="current_password" type="password" autocomplete="current-password">
+      <label for="settings-new-password"><%= t('auth.new_password') %></label>
+      <input id="settings-new-password" name="new_password" type="password" autocomplete="new-password">
+      <button type="submit"><%= t('settings.change_password') %></button>
+    </form>
+  </section>
+
+  <section class="ui-card" aria-labelledby="<%= $ui->{email_heading_id} %>">
+    <h2 id="<%= $ui->{email_heading_id} %>"><%= t('settings.email') %></h2>
+    <form method="post" action="<%= url_for('settings_email_update') %>">
+      <%= csrf_field %>
+      <label for="settings-email"><%= t('auth.email') %></label>
+      <input id="settings-email" name="email" type="email" autocomplete="email">
+      <button type="submit"><%= t('settings.change_email') %></button>
+    </form>
+  </section>
 </section>

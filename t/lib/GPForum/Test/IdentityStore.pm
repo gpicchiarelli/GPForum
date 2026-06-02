@@ -17,6 +17,7 @@ has invalid_login    => 0;
 has invalid_session  => 0;
 has preferred_locale => undef;
 has preferred_theme  => undef;
+has lifecycle_calls  => sub { return []; };
 has revoked          => sub { return []; };
 has locale_updates   => sub { return []; };
 has theme_updates    => sub { return []; };
@@ -124,6 +125,65 @@ sub validate_session {
             user_id    => $input->{user_id},
         },
     };
+}
+
+sub request_password_reset {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'request_password_reset' };
+
+    return {
+        ok    => 1,
+        token => {
+            expires_at => '2026-05-23T13:00:00Z',
+            raw_token  => 'reset-token',
+            token_id   => 'identity-token-1',
+        },
+    };
+}
+
+sub reset_password {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'reset_password' };
+
+    return { ok => 1 };
+}
+
+sub change_password {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'change_password' };
+
+    return { ok => 1 };
+}
+
+sub request_email_change {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'request_email_change' };
+
+    return {
+        ok    => 1,
+        token => {
+            expires_at => '2026-05-24T12:00:00Z',
+            raw_token  => 'email-token',
+            token_id   => 'identity-token-2',
+        },
+    };
+}
+
+sub confirm_email_change {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'confirm_email_change' };
+
+    return { ok => 1 };
 }
 
 sub public_profile {

@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 417;
-const my $EXPECTED_MIGRATIONS          => 24;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 69;
+const my $EXPECTED_TESTS               => 427;
+const my $EXPECTED_MIGRATIONS          => 25;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 72;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -39,6 +39,8 @@ const my $SEARCH_PRODUCT_INDEX         => 17;
 const my $USER_LOCALE_INDEX            => 18;
 const my $USER_THEME_INDEX             => 19;
 const my $OUTBOX_RELIABILITY_INDEX     => 20;
+const my $PRIVACY_IDEMPOTENCY_INDEX    => 23;
+const my $IDENTITY_LIFECYCLE_INDEX     => 24;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -556,20 +558,21 @@ ok( $plugin_failure_source->has_column('error_class'),
 ok( $plugin_failure_source->has_relationship('plugin'),
     'plugin failure belongs to plugin' );
 
-my $user_source          = $schema->source('User');
-my $credential_source    = $schema->source('Credential');
-my $session_source       = $schema->source('Session');
-my $space_source         = $schema->source('Space');
-my $subscription_source  = $schema->source('Subscription');
-my $category_source      = $schema->source('Category');
-my $thread_source        = $schema->source('Thread');
-my $post_source          = $schema->source('Post');
-my $body_source          = $schema->source('PostBody');
-my $revision_source      = $schema->source('PostRevision');
-my $counter_source       = $schema->source('ThreadCounter');
-my $counter_shard_source = $schema->source('ThreadCounterShard');
-my $stat_source          = $schema->source('CategoryStat');
-my $search_source        = $schema->source('SearchDocument');
+my $user_source           = $schema->source('User');
+my $credential_source     = $schema->source('Credential');
+my $identity_token_source = $schema->source('IdentityToken');
+my $session_source        = $schema->source('Session');
+my $space_source          = $schema->source('Space');
+my $subscription_source   = $schema->source('Subscription');
+my $category_source       = $schema->source('Category');
+my $thread_source         = $schema->source('Thread');
+my $post_source           = $schema->source('Post');
+my $body_source           = $schema->source('PostBody');
+my $revision_source       = $schema->source('PostRevision');
+my $counter_source        = $schema->source('ThreadCounter');
+my $counter_shard_source  = $schema->source('ThreadCounterShard');
+my $stat_source           = $schema->source('CategoryStat');
+my $search_source         = $schema->source('SearchDocument');
 
 is( $user_source->from, 'users', 'user source maps users table' );
 is_deeply( [ $user_source->primary_columns ],
@@ -595,6 +598,10 @@ ok(
 );
 ok( $user_source->has_relationship('sessions'),
     'user has sessions relationship' );
+ok(
+    $user_source->has_relationship('identity_tokens'),
+    'user has identity token relationship'
+);
 ok(
     $user_source->has_relationship('thread_read_states'),
     'user has thread read states relationship'
@@ -628,6 +635,33 @@ ok(
 );
 ok( $credential_source->has_relationship('user'),
     'credential belongs to user' );
+
+is( $identity_token_source->from,
+    'identity_tokens', 'identity token source maps identity_tokens table' );
+is_deeply( [ $identity_token_source->primary_columns ],
+    ['token_id'], 'identity token primary key is explicit' );
+ok(
+    $identity_token_source->has_column('token_hash'),
+    'identity token stores only token hash'
+);
+ok(
+    $identity_token_source->has_column('email_normalized'),
+    'identity token stores pending email target'
+);
+ok(
+    $identity_token_source->has_column('used_at'),
+    'identity token supports one-time use'
+);
+is_deeply(
+    [
+        $identity_token_source->unique_constraint_columns(
+            'identity_tokens_hash_key')
+    ],
+    ['token_hash'],
+    'identity token hash is unique'
+);
+ok( $identity_token_source->has_relationship('user'),
+    'identity token belongs to user' );
 
 is( $session_source->from, 'sessions', 'session source maps sessions table' );
 is_deeply( [ $session_source->primary_columns ],
@@ -1464,10 +1498,11 @@ like(
     'outbox reliability migration adds failure type classification'
 );
 
-my $privacy_idempotency_sql = path( $summary->[-1]->{file} )->slurp;
+my $privacy_idempotency_sql =
+  path( $summary->[$PRIVACY_IDEMPOTENCY_INDEX]->{file} )->slurp;
 
 is(
-    $summary->[-1]->{description},
+    $summary->[$PRIVACY_IDEMPOTENCY_INDEX]->{description},
     'privacy erasure job idempotency',
     'privacy erasure job idempotency migration description is parsed'
 );
@@ -1475,6 +1510,20 @@ like(
     $privacy_idempotency_sql,
     qr/idx_erasure_jobs_request_unique/msx,
     'privacy idempotency migration enforces one erasure job per request'
+);
+
+my $identity_lifecycle_sql =
+  path( $summary->[$IDENTITY_LIFECYCLE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$IDENTITY_LIFECYCLE_INDEX]->{description},
+    'identity lifecycle tokens',
+    'identity lifecycle migration description is parsed'
+);
+like(
+    $identity_lifecycle_sql,
+    qr/identity_tokens_hash_key/msx,
+    'identity lifecycle migration enforces unique token hashes'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

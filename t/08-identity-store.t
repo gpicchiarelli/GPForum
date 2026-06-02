@@ -12,12 +12,16 @@ use lib 't/lib';
 use GPForum::Test::Id;
 use GPForum::Test::Schema;
 use GPForum::Test::FixedClock;
+use GPForum::Test::PostStoreLockDbh;
+use GPForum::Test::PostStoreLockStorage;
+use GPForum::Test::SessionToken;
 use GPForum::Service::Identity::Store;
 use GPForum::Service::Password;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 41;
+const my $EXPECTED_TESTS   => 44;
+const my $FIXED_2026_EPOCH => 1_779_537_600;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -245,5 +249,238 @@ is(
 );
 is( $duplicate_schema->transaction_count,
     0, 'duplicate registration does not open transaction' );
+
+subtest 'password reset token is one-time, locked, and audited' => sub {
+    my $lock_dbh     = GPForum::Test::PostStoreLockDbh->new;
+    my $reset_schema = GPForum::Test::Schema->new(
+        credentials => [
+            {
+                user_id     => 'user-1',
+                type        => 'password',
+                secret_hash => $password_service->hash_password(
+                    'correct horse battery staple'),
+                revoked_at => undef,
+            },
+        ],
+        sessions => [
+            {
+                session_id => 'session-1',
+                user_id    => 'user-1',
+                revoked_at => undef,
+            },
+        ],
+        storage => GPForum::Test::PostStoreLockStorage->new(
+            dbh => $lock_dbh,
+        ),
+        users => [
+            {
+                id               => 'user-1',
+                username         => 'giacomo',
+                display_name     => 'Giacomo Picchiarelli',
+                email_normalized => 'giacomo@example.test',
+                status           => 'active',
+            },
+        ],
+    );
+    my $reset_store = GPForum::Service::Identity::Store->new(
+        clock => GPForum::Test::FixedClock->new(
+            epoch => $FIXED_2026_EPOCH
+        ),
+        id_service     => GPForum::Test::Id->new,
+        schema         => $reset_schema,
+        session_tokens => GPForum::Test::SessionToken->new,
+    );
+
+    my $request = $reset_store->request_password_reset(
+        {
+            identifier      => 'GIACOMO@example.test',
+            request_address => '198.51.100.1',
+        }
+    );
+    ok( $request->{ok}, 'password reset request is accepted' );
+    is( $request->{token}{raw_token},
+        'token-1', 'raw reset token is returned only by service boundary' );
+    is( $reset_schema->identity_tokens->[0]{token_hash},
+        'hash:token-1', 'only token hash is stored' );
+    is( $reset_schema->identity_tokens->[0]{expires_at},
+        '2026-05-23T13:00:00Z', 'reset token expires after one hour' );
+
+    my $reset = $reset_store->reset_password(
+        {
+            password => 'new correct horse battery',
+            token    => 'token-1',
+        }
+    );
+    ok( $reset->{ok}, 'password reset succeeds with valid token' );
+    is(
+        $lock_dbh->calls->[0]{sql},
+        'SELECT token_id FROM identity_tokens WHERE token_hash = ? FOR UPDATE',
+        'reset locks token row before consuming it'
+    );
+    is_deeply( $lock_dbh->calls->[0]{bind},
+        ['hash:token-1'], 'reset lock targets token hash' );
+    is( $reset_schema->identity_tokens->[0]{used_at},
+        '2026-05-23T12:00:00Z', 'reset marks token used' );
+    is( $reset_schema->credentials->[0]{revoked_at},
+        '2026-05-23T12:00:00Z', 'reset revokes old password credential' );
+    is( scalar @{ $reset_schema->created_for('Credential') },
+        1, 'reset creates replacement password credential' );
+    is( $reset_schema->sessions->[0]{revoked_at},
+        '2026-05-23T12:00:00Z', 'reset revokes existing sessions' );
+    is(
+        $reset_schema->created_for('AuditLog')->[0]{action},
+        'identity.password_reset.requested',
+        'reset request is audited'
+    );
+    is(
+        $reset_schema->created_for('AuditLog')->[1]{action},
+        'identity.password_reset.completed',
+        'reset completion is audited'
+    );
+
+    my $reused = $reset_store->reset_password(
+        {
+            password => 'another correct horse',
+            token    => 'token-1',
+        }
+    );
+    ok( !$reused->{ok}, 'used reset token is rejected' );
+    is( $reused->{error}, 'token_used', 'used token error is explicit' );
+    is( scalar @{ $reset_schema->created_for('Credential') },
+        1, 'used reset token does not create another credential' );
+};
+
+subtest 'change password verifies current credential and audits success' =>
+  sub {
+    my $password_schema = GPForum::Test::Schema->new(
+        credentials => [
+            {
+                user_id     => 'user-1',
+                type        => 'password',
+                secret_hash => $password_service->hash_password(
+                    'correct horse battery staple'),
+                revoked_at => undef,
+            },
+        ],
+        users => [
+            {
+                id               => 'user-1',
+                username         => 'giacomo',
+                display_name     => 'Giacomo Picchiarelli',
+                email_normalized => 'giacomo@example.test',
+                status           => 'active',
+            },
+        ],
+    );
+    my $password_store = GPForum::Service::Identity::Store->new(
+        clock => GPForum::Test::FixedClock->new(
+            epoch => $FIXED_2026_EPOCH
+        ),
+        id_service => GPForum::Test::Id->new,
+        schema     => $password_schema,
+    );
+
+    my $wrong = $password_store->change_password(
+        {
+            current_password => 'wrong password',
+            new_password     => 'new correct horse battery',
+            user_id          => 'user-1',
+        }
+    );
+    ok( !$wrong->{ok}, 'wrong current password is rejected' );
+    is( $wrong->{error},
+        'invalid_current_password', 'current password error is explicit' );
+
+    my $changed = $password_store->change_password(
+        {
+            current_password => 'correct horse battery staple',
+            new_password     => 'new correct horse battery',
+            user_id          => 'user-1',
+        }
+    );
+    ok( $changed->{ok}, 'password change succeeds' );
+    is( $password_schema->credentials->[0]{revoked_at},
+        '2026-05-23T12:00:00Z', 'old credential is revoked' );
+    is( scalar @{ $password_schema->created_for('Credential') },
+        1, 'new credential is created' );
+    is( $password_schema->created_for('AuditLog')->[0]{action},
+        'identity.password.changed', 'password change is audited' );
+  };
+
+subtest 'email change requires confirmation token and prevents replay' => sub {
+    my $email_schema = GPForum::Test::Schema->new(
+        users => [
+            {
+                id               => 'user-1',
+                username         => 'giacomo',
+                display_name     => 'Giacomo Picchiarelli',
+                email_normalized => 'giacomo@example.test',
+                status           => 'active',
+            },
+            {
+                id               => 'user-2',
+                username         => 'other',
+                display_name     => 'Other User',
+                email_normalized => 'other@example.test',
+                status           => 'active',
+            },
+        ],
+    );
+    my $email_store = GPForum::Service::Identity::Store->new(
+        clock => GPForum::Test::FixedClock->new(
+            epoch => $FIXED_2026_EPOCH
+        ),
+        id_service     => GPForum::Test::Id->new,
+        schema         => $email_schema,
+        session_tokens => GPForum::Test::SessionToken->new,
+    );
+
+    my $duplicate_email = $email_store->request_email_change(
+        {
+            email   => 'other@example.test',
+            user_id => 'user-1',
+        }
+    );
+    ok( !$duplicate_email->{ok}, 'duplicate email change is rejected' );
+    is( $duplicate_email->{error},
+        'email_already_registered', 'duplicate email error is explicit' );
+
+    my $request = $email_store->request_email_change(
+        {
+            email           => 'NEW@example.test',
+            request_address => '198.51.100.1',
+            user_id         => 'user-1',
+        }
+    );
+    ok( $request->{ok}, 'email change request succeeds' );
+    is( $email_schema->identity_tokens->[0]{email_normalized},
+        'new@example.test', 'pending email is normalized in token row' );
+    is( $email_schema->identity_tokens->[0]{token_hash},
+        'hash:token-1', 'email confirmation stores token hash' );
+
+    my $confirmed =
+      $email_store->confirm_email_change( { token => 'token-1' } );
+    ok( $confirmed->{ok}, 'email confirmation succeeds' );
+    is( $email_schema->users->[0]{email_normalized},
+        'new@example.test', 'confirmed email is persisted' );
+    is( $email_schema->users->[0]{email_verified_at},
+        '2026-05-23T12:00:00Z', 'confirmed email is verified' );
+    is( $email_schema->identity_tokens->[0]{used_at},
+        '2026-05-23T12:00:00Z', 'email token is consumed' );
+    is(
+        $email_schema->created_for('AuditLog')->[0]{action},
+        'identity.email_change.requested',
+        'email change request is audited'
+    );
+    is(
+        $email_schema->created_for('AuditLog')->[1]{action},
+        'identity.email_change.confirmed',
+        'email confirmation is audited'
+    );
+
+    my $reused = $email_store->confirm_email_change( { token => 'token-1' } );
+    ok( !$reused->{ok}, 'used email token is rejected' );
+    is( $reused->{error}, 'token_used', 'used email token error is explicit' );
+};
 
 1;

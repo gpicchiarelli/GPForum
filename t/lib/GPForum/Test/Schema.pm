@@ -16,9 +16,11 @@ has existing_emails    => sub { return {}; };
 has users              => sub { return []; };
 has credentials        => sub { return []; };
 has command_logs       => sub { return []; };
+has identity_tokens    => sub { return []; };
 has posts              => sub { return []; };
 has reports            => sub { return []; };
 has sessions           => sub { return []; };
+has storage            => undef;
 
 sub resultset {
     my ( $self, $name ) = @_;

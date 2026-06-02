@@ -92,6 +92,10 @@ __PACKAGE__->has_many(
     'user_id'
 );
 __PACKAGE__->has_many(
+    identity_tokens => 'GPForum::Schema::Result::IdentityToken',
+    'user_id'
+);
+__PACKAGE__->has_many(
     authored_threads => 'GPForum::Schema::Result::Thread',
     'author_user_id'
 );

@@ -23,6 +23,7 @@ const my $HTTP_UNAUTHORIZED => 401;
 const my $PROFILE_THREADS   => 10;
 const my $LOGIN_LIMIT       => 10;
 const my $LOGOUT_LIMIT      => 20;
+const my $PASSWORD_LIMIT    => 5;
 const my $REGISTER_LIMIT    => 5;
 const my $SETTINGS_LIMIT    => 60;
 const my $SHORT_WINDOW      => 60;
@@ -31,6 +32,14 @@ const my $SESSION_SECONDS   => 2_592_000;
 const my $LOCALE_COOKIE     => 'gpforum_locale';
 const my $THEME_COOKIE      => 'gpforum_theme';
 const my $LOCALE_COOKIE_AGE => 31_536_000;
+const my %ACTION_LIMIT_FOR => (
+    'identity.email_change'    => $PASSWORD_LIMIT,
+    'identity.logout'          => $LOGOUT_LIMIT,
+    'identity.password_change' => $PASSWORD_LIMIT,
+    'identity.password_reset'  => $PASSWORD_LIMIT,
+    'identity.register'        => $REGISTER_LIMIT,
+    'identity.settings'        => $SETTINGS_LIMIT,
+);
 
 sub register_form {
     my ($self) = @_;
@@ -97,6 +106,96 @@ sub login_form {
     return $self->render(
         template => 'identity/login',
         %{ $self->gp_identity_view_model->login_form },
+    );
+}
+
+sub password_reset_request_form {
+    my ($self) = @_;
+
+    return $self->render(
+        template => 'identity/password_reset_request',
+        %{ $self->gp_identity_view_model->password_reset_request_form },
+    );
+}
+
+sub request_password_reset {
+    my ($self) = @_;
+
+    my $guard = _identity_post_guard( $self, 'identity.password_reset' );
+    return $guard if $guard;
+
+    my $errors = _password_reset_request_errors(
+        { identifier => $self->param('identifier') } );
+    return $self->render(
+        template => 'identity/password_reset_request',
+        status   => $HTTP_BAD_REQUEST,
+        %{
+            $self->gp_identity_view_model->password_reset_request_form(
+                errors => $errors,
+                values => { identifier => $self->param('identifier') || q{} },
+            )
+        },
+    ) if keys %{$errors};
+
+    my $result = _identity_store_result(
+        $self,
+        'request_password_reset',
+        {
+            identifier      => $self->param('identifier'),
+            request_address => _request_address($self),
+        }
+    );
+    return _identity_system_failure($self) if $result->{system_failure};
+
+    return $self->render(
+        template => 'identity/password_reset_requested',
+        status   => $HTTP_ACCEPTED,
+    );
+}
+
+sub password_reset_form {
+    my ($self) = @_;
+
+    return $self->render(
+        template => 'identity/password_reset_form',
+        %{
+            $self->gp_identity_view_model->password_reset_form(
+                values => { token => $self->param('token') || q{} },
+            )
+        },
+    );
+}
+
+sub reset_password {
+    my ($self) = @_;
+
+    my $guard = _identity_post_guard( $self, 'identity.password_reset' );
+    return $guard if $guard;
+
+    my $errors = _password_reset_errors(
+        {
+            password => $self->param('password'),
+            token    => $self->param('token'),
+        }
+    );
+    return _render_password_reset_error( $self, $errors ) if keys %{$errors};
+
+    my $result = _identity_store_result(
+        $self,
+        'reset_password',
+        {
+            password => $self->param('password'),
+            token    => $self->param('token'),
+        }
+    );
+    return _identity_system_failure($self) if $result->{system_failure};
+    return _render_password_reset_error( $self,
+        { reset => 'password reset request could not be accepted' } )
+      if !$result->{ok};
+
+    return $self->render(
+        template => 'identity/password_reset_completed',
+        status   => $HTTP_ACCEPTED,
     );
 }
 
@@ -246,6 +345,88 @@ sub update_settings {
     return $self->redirect_to('settings');
 }
 
+sub change_password {
+    my ($self) = @_;
+
+    my $guard = _identity_post_guard( $self, 'identity.password_change' );
+    return $guard if $guard;
+
+    my $user_id = $self->session('user_id');
+    return _settings_unauthorized($self) if !$user_id;
+
+    my $result = _identity_store_result(
+        $self,
+        'change_password',
+        {
+            current_password => $self->param('current_password'),
+            new_password     => $self->param('new_password'),
+            user_id          => $user_id,
+        }
+    );
+    return _identity_system_failure($self) if $result->{system_failure};
+    return _identity_bad_request($self)    if !$result->{ok};
+
+    $self->flash( success => $self->t('settings.password_changed') );
+
+    return $self->redirect_to('settings');
+}
+
+sub request_email_change {
+    my ($self) = @_;
+
+    my $guard = _identity_post_guard( $self, 'identity.email_change' );
+    return $guard if $guard;
+
+    my $user_id = $self->session('user_id');
+    return _settings_unauthorized($self) if !$user_id;
+
+    my $result = _identity_store_result(
+        $self,
+        'request_email_change',
+        {
+            email           => $self->param('email'),
+            request_address => _request_address($self),
+            user_id         => $user_id,
+        }
+    );
+    return _identity_system_failure($self) if $result->{system_failure};
+    return _identity_bad_request($self)    if !$result->{ok};
+
+    $self->flash( success => $self->t('settings.email_change_requested') );
+
+    return $self->redirect_to('settings');
+}
+
+sub email_confirm_form {
+    my ($self) = @_;
+
+    return $self->render(
+        template => 'identity/email_confirm',
+        %{
+            $self->gp_identity_view_model->email_confirm_form(
+                values => { token => $self->param('token') || q{} },
+            )
+        },
+    );
+}
+
+sub confirm_email_change {
+    my ($self) = @_;
+
+    my $guard = _identity_post_guard( $self, 'identity.email_change' );
+    return $guard if $guard;
+
+    my $result = _identity_store_result( $self, 'confirm_email_change',
+        { token => $self->param('token') } );
+    return _identity_system_failure($self) if $result->{system_failure};
+    return _identity_bad_request($self)    if !$result->{ok};
+
+    return $self->render(
+        template => 'identity/email_confirmed',
+        status   => $HTTP_ACCEPTED,
+    );
+}
+
 sub profile {
     my ($self) = @_;
 
@@ -322,6 +503,67 @@ sub _login_errors {
     return \%errors;
 }
 
+sub _password_reset_request_errors {
+    my ($input) = @_;
+
+    my %errors;
+    if ( !defined $input->{identifier} || !length $input->{identifier} ) {
+        $errors{identifier} = 'identifier is required';
+    }
+
+    return \%errors;
+}
+
+sub _password_reset_errors {
+    my ($input) = @_;
+
+    my %errors;
+    if ( !defined $input->{token} || !length $input->{token} ) {
+        $errors{token} = 'token is required';
+    }
+    if ( !defined $input->{password} || !length $input->{password} ) {
+        $errors{password} = 'password is required';
+    }
+
+    return \%errors;
+}
+
+sub _render_password_reset_error {
+    my ( $controller, $errors ) = @_;
+
+    return $controller->render(
+        template => 'identity/password_reset_form',
+        status   => $HTTP_BAD_REQUEST,
+        %{
+            $controller->gp_identity_view_model->password_reset_form(
+                errors => $errors,
+                values => { token => $controller->param('token') || q{} },
+            )
+        },
+    );
+}
+
+sub _identity_post_guard {
+    my ( $controller, $action ) = @_;
+
+    return _csrf_failure($controller)
+      if $controller->validation->csrf_protect->has_error('csrf_token');
+    return _rate_limited($controller)
+      if !_identity_allowed( $controller, $action );
+
+    return;
+}
+
+sub _identity_store_result {
+    my ( $controller, $method, $input ) = @_;
+
+    my $result =
+      eval { return $controller->gp_identity_store->$method($input); };
+    return { ok => 0, system_failure => 1 } if $EVAL_ERROR || !$result;
+
+    return $result;
+}
+
 sub _identity_allowed {
     my ( $controller, $action ) = @_;
 
@@ -347,9 +589,7 @@ sub _identity_actor {
 sub _limit_for {
     my ($action) = @_;
 
-    return $REGISTER_LIMIT if $action eq 'identity.register';
-    return $LOGOUT_LIMIT   if $action eq 'identity.logout';
-    return $SETTINGS_LIMIT if $action eq 'identity.settings';
+    return $ACTION_LIMIT_FOR{$action} if exists $ACTION_LIMIT_FOR{$action};
 
     return $LOGIN_LIMIT;
 }
@@ -797,6 +1037,28 @@ sub _settings_system_failure {
         text   => GPForum::Web::ErrorPayload->system_failure()->{error},
         status => $HTTP_SERVER_ERROR,
     );
+}
+
+sub _identity_bad_request {
+    my ($controller) = @_;
+
+    if ( _wants_json($controller) ) {
+        return $controller->render(
+            json   => GPForum::Web::ErrorPayload->bad_request,
+            status => $HTTP_BAD_REQUEST,
+        );
+    }
+
+    return $controller->render(
+        text   => 'identity request could not be accepted',
+        status => $HTTP_BAD_REQUEST,
+    );
+}
+
+sub _identity_system_failure {
+    my ($controller) = @_;
+
+    return _settings_system_failure($controller);
 }
 
 sub _record_security_event {

@@ -9,12 +9,13 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my %STORAGE_ACCESSOR_FOR => (
-    CommandLog => 'command_logs',
-    Credential => 'credentials',
-    Post       => 'posts',
-    Report     => 'reports',
-    Session    => 'sessions',
-    User       => 'users',
+    CommandLog    => 'command_logs',
+    Credential    => 'credentials',
+    IdentityToken => 'identity_tokens',
+    Post          => 'posts',
+    Report        => 'reports',
+    Session       => 'sessions',
+    User          => 'users',
 );
 
 has schema => undef;

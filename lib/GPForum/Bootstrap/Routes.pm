@@ -160,6 +160,18 @@ sub register {
       ->name('register_submit');
     $routes->get('/login')->to('Identity#login_form')->name('login');
     $routes->post('/login')->to('Identity#login')->name('login_submit');
+    $routes->get('/password/reset')
+      ->to('Identity#password_reset_request_form')
+      ->name('password_reset_request');
+    $routes->post('/password/reset')
+      ->to('Identity#request_password_reset')
+      ->name('password_reset_request_submit');
+    $routes->get('/password/reset/:token')
+      ->to('Identity#password_reset_form')
+      ->name('password_reset_form');
+    $routes->post('/password/reset/complete')
+      ->to('Identity#reset_password')
+      ->name('password_reset_complete');
     $routes->post('/logout')->to('Identity#logout')->name('logout');
     $routes->post('/locale')->to('Identity#set_locale')->name('locale_update');
     $routes->post('/theme')->to('Identity#set_theme')->name('theme_update');
@@ -167,6 +179,18 @@ sub register {
     $routes->post('/settings')
       ->to('Identity#update_settings')
       ->name('settings_update');
+    $routes->post('/settings/password')
+      ->to('Identity#change_password')
+      ->name('settings_password_update');
+    $routes->post('/settings/email')
+      ->to('Identity#request_email_change')
+      ->name('settings_email_update');
+    $routes->get('/email/confirm/:token')
+      ->to('Identity#email_confirm_form')
+      ->name('email_confirm_form');
+    $routes->post('/email/confirm')
+      ->to('Identity#confirm_email_change')
+      ->name('email_confirm');
     $routes->get('/u/:username')->to('Identity#profile')->name('profile');
     $routes->get('/privacy')
       ->to('Privacy#dashboard')

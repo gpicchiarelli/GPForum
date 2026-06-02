@@ -17,11 +17,12 @@ use GPForum::Test::IdentitySecurityAudit;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 99;
+const my $EXPECTED_TESTS    => 102;
 const my $HTTP_OK           => 200;
 const my $HTTP_ACCEPTED     => 202;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_FORBIDDEN    => 403;
+const my $HTTP_FOUND        => 302;
 const my $HTTP_NOT_FOUND    => 404;
 const my $HTTP_TOO_MANY     => 429;
 const my $HTTP_UNAUTHORIZED => 401;
@@ -166,6 +167,158 @@ $invalid_login_test->status_is($HTTP_UNAUTHORIZED);
 $invalid_login_test->content_like(
     qr/login [ ] request [ ] could [ ] not [ ] be [ ] accepted/msx);
 $invalid_login_test->content_unlike(qr/invalid_credentials/msx);
+
+subtest 'password reset web flow is csrf protected and rate limited' => sub {
+    my $reset_store = GPForum::Test::IdentityStore->new;
+    my $reset_test  = Test::Mojo->new('GPForum');
+    $reset_test->app->helper(
+        gp_identity_store => sub { return $reset_store; } );
+    $reset_test->app->helper(
+        gp_identity_security_audit => sub {
+            return GPForum::Test::IdentitySecurityAudit->new;
+        }
+    );
+    $reset_test->app->helper(
+        gp_rate_limiter => sub {
+            return GPForum::Test::AllowLimiter->new;
+        }
+    );
+
+    $reset_test->get_ok('/password/reset');
+    $reset_test->status_is($HTTP_OK);
+    $reset_test->text_is( 'h1' => 'Reset password' );
+    $reset_test->element_exists('input[name="csrf_token"]');
+
+    $reset_test->post_ok('/password/reset');
+    $reset_test->status_is($HTTP_FORBIDDEN);
+
+    $reset_test->get_ok('/password/reset');
+    my $reset_token = _csrf_token($reset_test);
+    $reset_test->post_ok(
+        '/password/reset' => form => {
+            csrf_token => $reset_token,
+            identifier => 'giacomo@example.test',
+        }
+    );
+    $reset_test->status_is($HTTP_ACCEPTED);
+    $reset_test->text_is( 'h1' => 'Password reset requested' );
+    is( $reset_store->lifecycle_calls->[0]{method},
+        'request_password_reset', 'reset request reaches identity store' );
+
+    $reset_test->get_ok('/password/reset/reset-token');
+    $reset_test->status_is($HTTP_OK);
+    $reset_test->element_exists('input[name="token"][value="reset-token"]');
+
+    $reset_test->post_ok('/password/reset/complete');
+    $reset_test->status_is($HTTP_FORBIDDEN);
+
+    $reset_test->get_ok('/password/reset/reset-token');
+    my $complete_token = _csrf_token($reset_test);
+    $reset_test->post_ok(
+        '/password/reset/complete' => form => {
+            csrf_token => $complete_token,
+            password   => 'new correct horse battery',
+            token      => 'reset-token',
+        }
+    );
+    $reset_test->status_is($HTTP_ACCEPTED);
+    $reset_test->text_is( 'h1' => 'Password changed' );
+    is( $reset_store->lifecycle_calls->[1]{method},
+        'reset_password', 'reset completion reaches identity store' );
+
+    my $limited = Test::Mojo->new('GPForum');
+    $limited->app->helper(
+        gp_identity_store => sub { return GPForum::Test::IdentityStore->new; }
+    );
+    $limited->app->helper(
+        gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
+    $limited->get_ok('/password/reset');
+    my $limited_token = _csrf_token($limited);
+    $limited->post_ok(
+        '/password/reset' => form => {
+            csrf_token => $limited_token,
+            identifier => 'limited@example.test',
+        }
+    );
+    $limited->status_is($HTTP_TOO_MANY);
+};
+
+subtest 'authenticated password and email changes require csrf' => sub {
+    my $settings_store = GPForum::Test::IdentityStore->new;
+    my $settings_test  = Test::Mojo->new('GPForum');
+    _install_session_state_routes($settings_test);
+    $settings_test->app->helper(
+        gp_identity_store => sub { return $settings_store; } );
+    $settings_test->app->helper(
+        gp_rate_limiter => sub {
+            return GPForum::Test::AllowLimiter->new;
+        }
+    );
+
+    $settings_test->get_ok('/__test/fixate-session');
+    $settings_test->status_is($HTTP_OK);
+
+    $settings_test->post_ok('/settings/password');
+    $settings_test->status_is($HTTP_FORBIDDEN);
+
+    $settings_test->get_ok('/login');
+    my $settings_token = _csrf_token($settings_test);
+    $settings_test->post_ok(
+        '/settings/password' => form => {
+            csrf_token       => $settings_token,
+            current_password => 'correct horse battery staple',
+            new_password     => 'new correct horse battery',
+        }
+    );
+    $settings_test->status_is($HTTP_FOUND);
+    is( $settings_store->lifecycle_calls->[0]{method},
+        'change_password', 'password change reaches identity store' );
+
+    $settings_test->get_ok('/login');
+    my $email_token = _csrf_token($settings_test);
+    $settings_test->post_ok(
+        '/settings/email' => form => {
+            csrf_token => $email_token,
+            email      => 'new@example.test',
+        }
+    );
+    $settings_test->status_is($HTTP_FOUND);
+    is( $settings_store->lifecycle_calls->[1]{method},
+        'request_email_change', 'email change reaches identity store' );
+};
+
+subtest 'email confirmation consumes token through csrf protected post' => sub {
+    my $confirm_store = GPForum::Test::IdentityStore->new;
+    my $confirm_test  = Test::Mojo->new('GPForum');
+    $confirm_test->app->helper(
+        gp_identity_store => sub { return $confirm_store; } );
+    $confirm_test->app->helper(
+        gp_rate_limiter => sub {
+            return GPForum::Test::AllowLimiter->new;
+        }
+    );
+
+    $confirm_test->get_ok('/email/confirm/email-token');
+    $confirm_test->status_is($HTTP_OK);
+    $confirm_test->text_is( 'h1' => 'Confirm email change' );
+    $confirm_test->element_exists('input[name="token"][value="email-token"]');
+
+    $confirm_test->post_ok('/email/confirm');
+    $confirm_test->status_is($HTTP_FORBIDDEN);
+
+    $confirm_test->get_ok('/email/confirm/email-token');
+    my $confirm_token = _csrf_token($confirm_test);
+    $confirm_test->post_ok(
+        '/email/confirm' => form => {
+            csrf_token => $confirm_token,
+            token      => 'email-token',
+        }
+    );
+    $confirm_test->status_is($HTTP_ACCEPTED);
+    $confirm_test->text_is( 'h1' => 'Email confirmed' );
+    is( $confirm_store->lifecycle_calls->[0]{method},
+        'confirm_email_change', 'email confirmation reaches identity store' );
+};
 
 $test->post_ok('/logout');
 $test->status_is($HTTP_FORBIDDEN);
