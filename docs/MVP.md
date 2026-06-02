@@ -215,10 +215,11 @@ for category/thread pages with `ETag`, `Last-Modified`, and
 tags from authoritative domain events; cached data is never authoritative and is
 safe to discard.
 
-Reply position allocation currently uses the latest visible database position
-and increments it. The unique `(thread_id, position)` constraint protects data
-integrity, but a hot production thread should move to advisory locking or a
-dedicated sequence allocator.
+Reply position allocation is now owned by `PostStore` inside the canonical write
+transaction. The store locks the target thread row with PostgreSQL `FOR UPDATE`,
+allocates the next position, and the unique `(thread_id, position)` constraint
+remains the final database invariant. A staging PostgreSQL concurrency test for
+hot threads is still required before go-live.
 
 Search depends on the `search_documents` projection. If the projection is empty
 or unavailable, the HTTP route returns an explicit degraded empty result rather

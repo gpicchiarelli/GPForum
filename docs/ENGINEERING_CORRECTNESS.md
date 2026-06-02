@@ -15,8 +15,8 @@ websocket hubs, and workers are execution boundaries, not authority boundaries.
 | outbox | Workers claim ready pending/failed messages and expired running locks atomically with PostgreSQL `FOR UPDATE SKIP LOCKED`; no two workers process the same `outbox_id`. | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `t/86-engineering-correctness.t` |
 | retry/dead-letter | Retryable outbox failures advance attempt count and backoff; max-attempt exhaustion moves to `cancelled` and records dead-letter evidence. | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t` |
 | read-state | Per-user thread read state is monotonic and stored with a delta row; lower positions cannot regress the marker. | `t/41-thread-read-state.t`, `t/86-engineering-correctness.t` |
-| moderation | Moderation state transitions are transactional, audited, evented, outboxed, and idempotent when repeated. | `t/25-moderation-review.t`, `t/43-moderation-web.t`, `t/86-engineering-correctness.t` |
-| privacy | Deletion requests, legal holds, erasure jobs, and completion retries are transactional and idempotent; active holds block erasure. | `t/29-privacy-rights.t`, `t/62-privacy-web.t`, `t/86-engineering-correctness.t` |
+| moderation | Moderation state transitions are transactional, audited, evented, and outboxed; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/25-moderation-review.t`, `t/43-moderation-web.t`, `t/86-engineering-correctness.t` |
+| privacy | Deletion requests, legal holds, erasure jobs, and completion retries are transactional; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/29-privacy-rights.t`, `t/62-privacy-web.t`, `t/86-engineering-correctness.t` |
 | controller boundary | Controllers do not access DBIx::Class resultsets or perform direct writes; write commands go through services/stores/workflows. | `script/architecture-check`, `t/34-architecture-discipline.t`, `t/86-engineering-correctness.t` |
 | templates | Templates render prepared view data only; no persistence access or business writes live in templates. | `script/architecture-check`, `t/86-engineering-correctness.t` |
 | hot paths | Application and template hot paths must not use `OFFSET`; pagination remains keyset/bounded. | `script/query-plan-check`, `t/47-query-plan-check.t`, `t/86-engineering-correctness.t` |
@@ -50,9 +50,11 @@ Idempotency is explicit at the domain edge, not inferred from transport retry:
   reused key with a different command fingerprint returns conflict;
 - event idempotency keys are deterministic for the command or aggregate/action;
 - outbox idempotency keys are unique per event handoff;
-- repeated moderation report assignment/release/resolve calls avoid duplicate
-  events;
-- repeated privacy erasure completion avoids duplicate actions;
+- repeated moderation report assignment/release/resolve calls avoid some
+  duplicate state changes, but command-level replay and concurrent transition
+  locks remain audit items;
+- repeated privacy erasure completion avoids duplicate completed erasure work,
+  but deletion request/approval/hold replay safety remains an audit item;
 - read-state updates use max-position semantics instead of last-write-wins.
 
 ## Concurrency Rule
