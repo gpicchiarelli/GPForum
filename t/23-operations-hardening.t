@@ -10,6 +10,7 @@ use Test::Mojo;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Config;
 use GPForum::Runtime;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::MetricsSnapshot;
@@ -21,6 +22,7 @@ use GPForum::Service::Operations::SecurityTelemetry;
 use GPForum::Service::Operations::RunbookValidator;
 use GPForum::Service::Operations::RuntimeSizing;
 use GPForum::Service::Realtime::Hub;
+use GPForum::Test::MetricsSnapshot;
 use GPForum::Test::OperationsClock;
 use GPForum::Test::ProjectionLagProbe;
 use GPForum::Test::QueryBudgetResultSet;
@@ -52,8 +54,9 @@ our $VERSION = '0.001';
     }
 }
 
-const my $EXPECTED_TESTS            => 84;
+const my $EXPECTED_TESTS            => 95;
 const my $HTTP_OK                   => 200;
+const my $HTTP_UNAUTHORIZED         => 401;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
 const my $RESET_EPOCH               => 160;
@@ -442,5 +445,37 @@ $test->json_has('/realtime/delivered');
 $test->json_has('/realtime/failed');
 $test->json_has('/realtime/malformed');
 $test->json_has('/realtime_listener/listener/listen_notify_received');
+
+my $protected_metrics = GPForum::Test::MetricsSnapshot->new;
+my $protected_test    = Test::Mojo->new('GPForum');
+$protected_test->app->helper(
+    gp_config => sub {
+        return GPForum::Config->new( metrics_token => 'metrics-secret' );
+    }
+);
+$protected_test->app->helper(
+    gp_metrics_snapshot => sub {
+        return $protected_metrics;
+    }
+);
+
+$protected_test->get_ok('/metrics');
+$protected_test->status_is($HTTP_UNAUTHORIZED);
+$protected_test->json_is( '/status' => 'unauthorized' );
+is( $protected_metrics->collected,
+    0, 'unauthorized metrics request does not collect snapshot' );
+
+$protected_test->get_ok(
+    '/metrics' => { Authorization => 'Bearer metrics-secret' } );
+$protected_test->status_is($HTTP_OK);
+$protected_test->json_is( '/status' => 'ok' );
+is( $protected_metrics->collected,
+    1, 'bearer token authorizes metrics snapshot' );
+
+$protected_test->get_ok(
+    '/metrics' => { 'X-GPForum-Metrics-Token' => 'metrics-secret' } );
+$protected_test->status_is($HTTP_OK);
+is( $protected_metrics->collected,
+    2, 'metrics token header authorizes metrics snapshot' );
 
 1;

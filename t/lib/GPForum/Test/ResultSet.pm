@@ -3,9 +3,18 @@ package GPForum::Test::ResultSet;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Mojo::Base -base;
 
 our $VERSION = '0.001';
+
+const my %STORAGE_ACCESSOR_FOR => (
+    Credential => 'credentials',
+    Post       => 'posts',
+    Report     => 'reports',
+    Session    => 'sessions',
+    User       => 'users',
+);
 
 has schema => undef;
 has name   => undef;
@@ -45,6 +54,8 @@ sub search {
       @{ $self->schema->credentials }
       : $self->name eq 'User' ? grep { _matches_query( $_, $query ) }
       @{ $self->schema->users }
+      : $self->name eq 'Post' ? grep { _matches_query( $_, $query ) }
+      @{ $self->schema->posts }
       : $self->name eq 'Report' ? grep { _matches_query( $_, $query ) }
       @{ $self->schema->reports }
       : ();
@@ -152,21 +163,14 @@ sub _in_list {
 sub _has_storage_rows {
     my ($self) = @_;
 
-    return 1 if $self->name eq 'User';
-    return 1 if $self->name eq 'Credential';
-    return 1 if $self->name eq 'Report';
-    return 1 if $self->name eq 'Session';
-
-    return 0;
+    return exists $STORAGE_ACCESSOR_FOR{ $self->name } ? 1 : 0;
 }
 
 sub _storage_rows {
     my ($self) = @_;
 
-    return $self->schema->users       if $self->name eq 'User';
-    return $self->schema->credentials if $self->name eq 'Credential';
-    return $self->schema->reports     if $self->name eq 'Report';
-    return $self->schema->sessions    if $self->name eq 'Session';
+    my $accessor = $STORAGE_ACCESSOR_FOR{ $self->name };
+    return $self->schema->$accessor if $accessor;
 
     return [];
 }

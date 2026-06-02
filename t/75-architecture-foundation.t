@@ -98,7 +98,7 @@ subtest
         payload        => { category_id => 'category-1' },
         timestamp      => '2026-05-28T08:00:00Z',
     );
-    $recorder->record_audit(
+    my $first_audit = $recorder->record_audit(
         action         => 'thread.created',
         actor_id       => 'user-1',
         correlation_id => $event->{correlation_id},
@@ -117,6 +117,33 @@ subtest
         'gpforum.domain_event', 'outbox row stores standard event contract' );
     is( $schema->created_for('AuditLog')->[0]{correlation_id},
         'correlation-1', 'audit correlation matches event correlation' );
+    ok(
+        length $first_audit->{record_hash},
+        'audit record hash is computed by recorder'
+    );
+    is( $first_audit->{previous_hash},
+        undef, 'first audit row has no previous hash' );
+
+    my $second_audit = $recorder->record_audit(
+        action         => 'thread.updated',
+        actor_id       => 'user-1',
+        correlation_id => $event->{correlation_id},
+        metadata       => { title => 'Welcome back' },
+        target_id      => 'thread-1',
+        target_type    => 'thread',
+    );
+    is( scalar @{ $schema->created_for('AuditLog') },
+        2, 'recorder creates a second audit row' );
+    is(
+        $second_audit->{previous_hash},
+        $first_audit->{record_hash},
+        'audit hash chain links to previous row'
+    );
+    isnt(
+        $second_audit->{record_hash},
+        $first_audit->{record_hash},
+        'audit hash changes with record content'
+    );
   };
 
 subtest 'moderation write stores use the shared event recorder boundary' =>

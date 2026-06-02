@@ -48,11 +48,12 @@ sub _command {
     };
 
     return {
-        thread   => _thread_record( $values, $ids ),
-        post     => _post_record( $values, $ids ),
-        body     => _body_record( $values, $ids ),
-        revision => _revision_record( $values, $ids ),
-        counter  => _counter_record( $ids->{thread_id} ),
+        idempotency_key => $values->{idempotency_key},
+        thread          => _thread_record( $values, $ids ),
+        post            => _post_record( $values, $ids ),
+        body            => _body_record( $values, $ids ),
+        revision        => _revision_record( $values, $ids ),
+        counter         => _counter_record( $ids->{thread_id} ),
     };
 }
 
@@ -144,12 +145,13 @@ sub _normalized_values {
     my ($input) = @_;
 
     return {
-        category_id    => _trim( $input->{category_id} ),
-        author_user_id => _trim( $input->{author_user_id} ),
-        title          => _single_line( $input->{title} ),
-        body_source    => _trim( $input->{body_source} ),
-        body_hash      => _trim( $input->{body_hash} ),
-        visibility     => _visibility($input),
+        category_id     => _trim( $input->{category_id} ),
+        author_user_id  => _trim( $input->{author_user_id} ),
+        title           => _single_line( $input->{title} ),
+        body_source     => _trim( $input->{body_source} ),
+        body_hash       => _trim( $input->{body_hash} ),
+        idempotency_key => _trim( $input->{idempotency_key} ),
+        visibility      => _visibility($input),
     };
 }
 

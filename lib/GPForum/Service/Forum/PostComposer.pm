@@ -46,10 +46,11 @@ sub _command {
     };
 
     return {
-        post          => _post_record( $values, $ids ),
-        body          => _body_record( $values, $ids ),
-        revision      => _revision_record( $values, $ids ),
-        counter_shard => _counter_shard_record($values),
+        idempotency_key => $values->{idempotency_key},
+        post            => _post_record( $values, $ids ),
+        body            => _body_record( $values, $ids ),
+        revision        => _revision_record( $values, $ids ),
+        counter_shard   => _counter_shard_record($values),
     };
 }
 
@@ -115,12 +116,14 @@ sub _normalized_values {
     my ($input) = @_;
 
     return {
-        thread_id      => _trim( $input->{thread_id} ),
-        author_user_id => _trim( $input->{author_user_id} ),
-        position       => _integer_value( $input->{position} ),
-        body_source    => _trim( $input->{body_source} ),
-        body_hash      => _trim( $input->{body_hash} ),
-        visibility     => _visibility($input),
+        thread_id         => _trim( $input->{thread_id} ),
+        author_user_id    => _trim( $input->{author_user_id} ),
+        position          => _integer_value( $input->{position} ),
+        allocate_position => $input->{allocate_position} ? 1 : 0,
+        body_source       => _trim( $input->{body_source} ),
+        body_hash         => _trim( $input->{body_hash} ),
+        idempotency_key   => _trim( $input->{idempotency_key} ),
+        visibility        => _visibility($input),
     };
 }
 
@@ -160,6 +163,8 @@ sub _required_error {
 
 sub _position_error {
     my ($values) = @_;
+
+    return if $values->{allocate_position};
 
     return $values->{position} > 0 ? undef : 'position is invalid';
 }

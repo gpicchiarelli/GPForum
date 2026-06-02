@@ -66,13 +66,13 @@ sub create_reply {
 
     my $prepared = $self->post_composer->prepare(
         {
-            thread_id      => $input->{thread_id},
-            author_user_id => $input->{author_user_id},
-            position       =>
-              $self->post_position->next_position( $input->{thread_id} ),
-            body_source => $input->{body_source},
-            body_hash   => _body_hash( $input->{body_source} ),
-            visibility  => _reply_visibility( $input, $thread ),
+            thread_id         => $input->{thread_id},
+            author_user_id    => $input->{author_user_id},
+            allocate_position => 1,
+            body_source       => $input->{body_source},
+            body_hash         => _body_hash( $input->{body_source} ),
+            idempotency_key   => $input->{idempotency_key},
+            visibility        => _reply_visibility( $input, $thread ),
         }
     );
 

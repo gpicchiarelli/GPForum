@@ -49,6 +49,7 @@ const my $DEFAULT_REALTIME_BACKOFF        => 5;
 const my $DEFAULT_REALTIME_HEARTBEAT      => 30;
 const my $DEFAULT_MINION_ENABLED          => 0;
 const my $DEFAULT_MINION_PG_URL           => q{};
+const my $DEFAULT_METRICS_TOKEN           => q{};
 const my $MINIMUM_PROCESS_COUNT           => 1;
 const my $MAXIMUM_PROCESS_COUNT           => 512;
 const my $MINIMUM_OS_THRESHOLD            => 1;
@@ -104,6 +105,7 @@ has realtime_listener_heartbeat_interval_seconds =>
   sub { return $DEFAULT_REALTIME_HEARTBEAT; };
 has minion_enabled => sub { return $DEFAULT_MINION_ENABLED; };
 has minion_pg_url  => sub { return $DEFAULT_MINION_PG_URL; };
+has metrics_token  => sub { return $DEFAULT_METRICS_TOKEN; };
 
 sub from_environment {
     my ( $class, $environment ) = @_;
@@ -268,6 +270,9 @@ sub from_environment {
         ),
         minion_pg_url => _env_value(
             $environment, 'GPFORUM_MINION_PG_URL', $DEFAULT_MINION_PG_URL
+        ),
+        metrics_token => _env_value(
+            $environment, 'GPFORUM_METRICS_TOKEN', $DEFAULT_METRICS_TOKEN
         ),
     );
 

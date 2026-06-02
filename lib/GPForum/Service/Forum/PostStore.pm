@@ -13,6 +13,7 @@ our $VERSION = '0.001';
 
 const my $SCHEMA_VERSION => 1;
 const my $POST_AGGREGATE => 'post';
+const my $FIRST_POSITION => 1;
 
 has schema     => undef;
 has id_service => sub { return GPForum::Service::Id->new; };
@@ -38,7 +39,9 @@ sub create_post {
 }
 
 sub _insert_post {
-    my ( $self, $command ) = @_;
+    my ( $self, $input_command ) = @_;
+
+    my $command = $self->_command_with_allocated_position($input_command);
 
     my $post = $self->schema->resultset('Post')->create( $command->{post} );
 
@@ -66,8 +69,9 @@ sub _record_post_event {
         actor_id          => $command->{post}{author_user_id},
         correlation_id    => $correlation_id,
         causation_id      => undef,
-        idempotency_key   =>
-          _idempotency_key( 'post.created', $command->{post}{post_id} ),
+        idempotency_key   => _idempotency_key(
+            $command, 'post.created', $command->{post}{post_id}
+        ),
         payload => {
             post_id        => $command->{post}{post_id},
             thread_id      => $command->{post}{thread_id},
@@ -77,6 +81,50 @@ sub _record_post_event {
     );
 
     return;
+}
+
+sub _command_with_allocated_position {
+    my ( $self, $command ) = @_;
+
+    return $command if _valid_position( $command->{post}{position} );
+
+    my $thread_id = $command->{post}{thread_id};
+    $self->_lock_thread_for_position($thread_id);
+
+    my %post = %{ $command->{post} };
+    $post{position} = $self->_next_position($thread_id);
+
+    return { %{$command}, post => \%post };
+}
+
+sub _lock_thread_for_position {
+    my ( $self, $thread_id ) = @_;
+
+    my $dbh = _schema_dbh( $self->schema );
+    return if !$dbh;
+
+    $dbh->selectrow_array(
+        'SELECT thread_id FROM threads WHERE thread_id = ? FOR UPDATE',
+        undef, $thread_id );
+
+    return;
+}
+
+sub _next_position {
+    my ( $self, $thread_id ) = @_;
+
+    my $posts  = $self->schema->resultset('Post');
+    my $latest = $posts->search(
+        { thread_id => $thread_id },
+        {
+            order_by => [ { -desc => 'position' }, { -desc => 'post_id' }, ],
+            rows     => 1,
+        }
+    )->single;
+
+    return $FIRST_POSITION if !$latest;
+
+    return _column( $latest, 'position' ) + 1;
 }
 
 sub _record_audit {
@@ -96,9 +144,41 @@ sub _record_audit {
 }
 
 sub _idempotency_key {
-    my ( $event_type, $aggregate_id ) = @_;
+    my ( $command, $event_type, $aggregate_id ) = @_;
+
+    if ( defined $command->{idempotency_key}
+        && length $command->{idempotency_key} )
+    {
+        return join q{:}, 'command', $command->{idempotency_key}, $event_type;
+    }
 
     return join q{:}, $event_type, $aggregate_id;
+}
+
+sub _valid_position {
+    my ($position) = @_;
+
+    return defined $position && $position > 0 ? 1 : 0;
+}
+
+sub _schema_dbh {
+    my ($schema) = @_;
+
+    my $storage = eval { return $schema->storage; };
+    return if !$storage || !$storage->can('dbh');
+
+    my $dbh = eval { return $storage->dbh; };
+    return $dbh;
+}
+
+sub _column {
+    my ( $row, $name ) = @_;
+
+    return                         if !$row;
+    return $row->{$name}           if ref $row eq 'HASH';
+    return $row->get_column($name) if $row->can('get_column');
+
+    return;
 }
 
 1;

@@ -42,7 +42,9 @@ event, outbox, or audit row commits.
 
 Idempotency is explicit at the domain edge, not inferred from transport retry:
 
-- event idempotency keys are deterministic for the aggregate/action;
+- forum write commands carry the boundary `idempotency_key` into event/outbox
+  idempotency keys when supplied;
+- event idempotency keys are deterministic for the command or aggregate/action;
 - outbox idempotency keys are unique per event handoff;
 - repeated moderation report assignment/release/resolve calls avoid duplicate
   events;
@@ -59,10 +61,11 @@ ordering is deterministic on `next_attempt_at, created_at, outbox_id`, and the
 partial ready-queue indexes split `pending`, `failed`, and stale `running`
 paths. Expired `running` locks are claimable for stale-lock recovery.
 
-Reply position allocation is still protected by the `(thread_id, position)`
-database uniqueness constraint. A future production-readiness block should
-replace the current max-position allocator with an advisory lock or sequence
-allocator so hot threads avoid conflict-driven retries under heavy write load.
+Reply position allocation is performed inside `PostStore` in the same
+transaction as the canonical post/event/audit/outbox writes. The store locks the
+target thread row with PostgreSQL `FOR UPDATE`, then allocates the next position
+before inserting the post. The `(thread_id, position)` uniqueness constraint
+remains the final database invariant.
 
 ## Failure Injection
 

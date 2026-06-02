@@ -200,8 +200,8 @@ my $created_reply = $reply_workflow->create_reply(
 ok( $created_reply->{ok}, 'posting workflow creates reply' );
 is( $created_reply->{status},
     'ok', 'posting workflow normalizes successful reply status' );
-is( $reply_workflow->post_composer->last_input->{position},
-    3, 'reply workflow allocates next post position' );
+is( $reply_workflow->post_composer->last_input->{allocate_position},
+    1, 'reply workflow defers post position allocation to store' );
 is( $reply_workflow->post_composer->last_input->{visibility},
     'members', 'reply workflow inherits thread visibility by default' );
 is( $reply_workflow->mention_store->last_input->{thread_id},

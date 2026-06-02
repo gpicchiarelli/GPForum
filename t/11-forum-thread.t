@@ -16,7 +16,7 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 36;
+const my $EXPECTED_TESTS => 39;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -26,12 +26,13 @@ my $composer =
 
 my $prepared = $composer->prepare(
     {
-        category_id    => 'category-1',
-        author_user_id => 'user-1',
-        title          => '  Welcome to GP Forum  ',
-        body_source    => 'Hello <forum> & welcome',
-        body_hash      => 'hash-1',
-        visibility     => 'public',
+        category_id     => 'category-1',
+        author_user_id  => 'user-1',
+        title           => '  Welcome to GP Forum  ',
+        body_source     => 'Hello <forum> & welcome',
+        body_hash       => 'hash-1',
+        idempotency_key => 'thread-command-1',
+        visibility      => 'public',
     }
 );
 
@@ -40,6 +41,8 @@ is( $prepared->{command}{thread}{thread_id},
     'generated-1', 'thread id is generated' );
 is( $prepared->{command}{post}{post_id},
     'generated-2', 'post id is generated' );
+is( $prepared->{command}{idempotency_key},
+    'thread-command-1', 'thread command preserves boundary idempotency key' );
 is( $prepared->{command}{body}{body_id},
     'generated-3', 'body id is generated' );
 is( $prepared->{command}{revision}{revision_id},
@@ -122,6 +125,16 @@ is( $schema->created_for('EventLog')->[0]{event_type},
     'thread.created', 'thread creation event is recorded' );
 is( $schema->created_for('EventLog')->[1]{event_type},
     'post.created', 'post creation event is recorded' );
+is(
+    $schema->created_for('EventLog')->[0]{idempotency_key},
+    'command:thread-command-1:thread.created',
+    'thread creation event uses command idempotency key'
+);
+is(
+    $schema->created_for('EventLog')->[1]{idempotency_key},
+    'command:thread-command-1:post.created',
+    'first post event uses command idempotency key without colliding'
+);
 is(
     $schema->created_for('OutboxMessage')->[0]{event_id},
     $schema->created_for('EventLog')->[0]{event_id},

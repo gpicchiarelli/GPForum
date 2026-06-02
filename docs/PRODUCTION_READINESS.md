@@ -64,7 +64,8 @@ Recommended production posture:
 - `statement_timeout`, `idle_in_transaction_session_timeout`, and migration
   `lock_timeout` configured at role or deployment level.
 - `LimitNOFILE=65536` or equivalent OS limit.
-- `/metrics` restricted by reverse proxy allowlist or private network.
+- `/metrics` restricted by reverse proxy allowlist or private network, with
+  `GPFORUM_METRICS_TOKEN` set for app-level protection.
 
 ## Required Environment
 
@@ -76,6 +77,8 @@ Production must set:
 - `GPFORUM_DATABASE_DSN`
 - `GPFORUM_DATABASE_USER`
 - `GPFORUM_DATABASE_PASSWORD`
+- `GPFORUM_METRICS_TOKEN` for production metrics scrapes unless `/metrics` is
+  isolated by a private listener with equivalent network controls
 - `GPFORUM_RUNTIME_LISTEN`
 - `GPFORUM_LOG_LEVEL=info` or stricter
 
@@ -229,8 +232,9 @@ carton exec prove -lr t/06-identity-web.t \
 
 Known residual risk:
 
-- `/metrics` is currently unauthenticated by the application and must be
-  restricted at nginx/Caddy/network level before production exposure.
+- `/metrics` supports app-level token protection through
+  `GPFORUM_METRICS_TOKEN`; reverse proxy allowlists or private networking are
+  still required before production exposure.
 - Controllers still duplicate CSRF/auth/error response helpers, increasing
   drift risk.
 
@@ -241,7 +245,9 @@ Endpoints:
 - `GET /health/live`: process liveness.
 - `GET /health/ready`: readiness, including database/resultset availability.
 - `GET /health`: summary for operators; keep internal.
-- `GET /metrics`: process-local operational snapshot; keep internal.
+- `GET /metrics`: process-local operational snapshot; keep internal. When
+  `GPFORUM_METRICS_TOKEN` is configured, scrape with `Authorization: Bearer
+  $GPFORUM_METRICS_TOKEN` or `X-GPForum-Metrics-Token`.
 
 Every HTTP response carries `X-Request-ID`. If a safe incoming `X-Request-ID`
 header is supplied, GPForum echoes it; otherwise it generates a UUID. DB query
@@ -264,7 +270,8 @@ Production diagnosis:
 ```sh
 curl -fsS http://127.0.0.1:8080/health/live
 curl -fsS http://127.0.0.1:8080/health/ready
-curl -fsS http://127.0.0.1:8080/metrics
+curl -fsS -H "Authorization: Bearer $GPFORUM_METRICS_TOKEN" \
+  http://127.0.0.1:8080/metrics
 journalctl -u gpforum -n 200 --no-pager
 journalctl -u gpforum-outbox -n 200 --no-pager
 ```
@@ -361,7 +368,8 @@ GPForum is production-ready only when all are true:
 - CI gates pass without local-only assumptions.
 - Migrations have been applied to staging from an empty and restored database.
 - Backups and restores have been drilled.
-- `/metrics` is not publicly exposed.
+- `/metrics` is not publicly exposed and token protection is enabled when the
+  endpoint shares the application listener.
 - Worker retry/dead-letter handling has been observed in staging.
 - Query-plan evidence is green on a representative dataset.
 - Rollback/forward-fix steps are rehearsed with the exact systemd/nginx shape.

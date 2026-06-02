@@ -64,7 +64,11 @@ query detection is also enforced for routes mapped to the query-budget catalog.
 
 ## Metrics Surface
 
-`/metrics` now includes `db_query_stats` from `MetricsSnapshot`.
+`/metrics` now includes `db_query_stats` from `MetricsSnapshot`. If
+`GPFORUM_METRICS_TOKEN` is set, the endpoint requires either
+`Authorization: Bearer $GPFORUM_METRICS_TOKEN` or
+`X-GPForum-Metrics-Token`; reverse proxy/network restrictions remain part of
+the production posture.
 
 The snapshot exposes:
 

@@ -69,8 +69,9 @@ sub _record_thread_event {
         actor_id          => $command->{thread}{author_user_id},
         correlation_id    => $correlation_id,
         causation_id      => undef,
-        idempotency_key   =>
-          _idempotency_key( 'thread.created', $command->{thread}{thread_id} ),
+        idempotency_key   => _idempotency_key(
+            $command, 'thread.created', $command->{thread}{thread_id}
+        ),
         payload => {
             thread_id      => $command->{thread}{thread_id},
             category_id    => $command->{thread}{category_id},
@@ -94,8 +95,9 @@ sub _record_post_event {
         actor_id          => $command->{post}{author_user_id},
         correlation_id    => $correlation_id,
         causation_id      => $causation_id,
-        idempotency_key   =>
-          _idempotency_key( 'post.created', $command->{post}{post_id} ),
+        idempotency_key   => _idempotency_key(
+            $command, 'post.created', $command->{post}{post_id}
+        ),
         payload => {
             post_id        => $command->{post}{post_id},
             thread_id      => $command->{post}{thread_id},
@@ -124,7 +126,13 @@ sub _record_audit {
 }
 
 sub _idempotency_key {
-    my ( $event_type, $aggregate_id ) = @_;
+    my ( $command, $event_type, $aggregate_id ) = @_;
+
+    if ( defined $command->{idempotency_key}
+        && length $command->{idempotency_key} )
+    {
+        return join q{:}, 'command', $command->{idempotency_key}, $event_type;
+    }
 
     return join q{:}, $event_type, $aggregate_id;
 }
