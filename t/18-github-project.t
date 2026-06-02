@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 82;
+const my $EXPECTED_TESTS => 89;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -81,11 +81,16 @@ for my $required_file (
     ok( -f $required_file, "$required_file exists" );
 }
 
-my $ci         = path('.github/workflows/ci.yml')->slurp;
-my $pull       = path('.github/pull_request_template.md')->slurp;
-my $prompt     = path('prompt/44.txt')->slurp;
-my $readme     = path('README.md')->slurp;
-my $governance = path('GOVERNANCE.md')->slurp;
+my $ci             = path('.github/workflows/ci.yml')->slurp;
+my $pull           = path('.github/pull_request_template.md')->slurp;
+my $prompt         = path('prompt/44.txt')->slurp;
+my $readme         = path('README.md')->slurp;
+my $governance     = path('GOVERNANCE.md')->slurp;
+my $deployment     = path('docs/DEPLOYMENT.md')->slurp;
+my $readiness      = path('docs/PRODUCTION_READINESS.md')->slurp;
+my $systemd_web    = path('deploy/systemd/gpforum.service')->slurp;
+my $systemd_outbox = path('deploy/systemd/gpforum-outbox.service')->slurp;
+my $systemd_socket = path('deploy/systemd/gpforum-unix-socket.service')->slurp;
 
 like(
     $ci,
@@ -171,6 +176,41 @@ like(
     $governance,
     qr/Giacomo [ ] Picchiarelli/msx,
     'governance keeps the correct maintainer identity'
+);
+like(
+    $systemd_web,
+    qr/EnvironmentFile=\/etc\/gpforum\/gpforum[.]env/msx,
+    'systemd web unit loads production environment file'
+);
+like(
+    $systemd_outbox,
+    qr/EnvironmentFile=\/etc\/gpforum\/gpforum[.]env/msx,
+    'systemd outbox unit loads production environment file'
+);
+like(
+    $systemd_socket,
+    qr/EnvironmentFile=\/etc\/gpforum\/gpforum[.]env/msx,
+    'systemd unix socket unit loads production environment file'
+);
+like(
+    $deployment,
+    qr/\/etc\/gpforum\/gpforum[.]env/msx,
+    'deployment docs name the systemd environment file'
+);
+like(
+    $readiness,
+    qr/\/etc\/gpforum\/gpforum[.]env/msx,
+    'production readiness docs name the systemd environment file'
+);
+like(
+    $deployment,
+    qr/script\/query-budget [ ] --sync/msx,
+    'deployment docs require query budget sync before readiness'
+);
+like(
+    $readiness,
+    qr/script\/query-budget [ ] --sync/msx,
+    'production readiness docs require query budget sync'
 );
 
 1;

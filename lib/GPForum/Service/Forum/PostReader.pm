@@ -17,10 +17,10 @@ sub list_thread_posts {
 
     my $plan  = $self->page_window->plan($request);
     my $query = {
-        thread_id        => $request->{thread_id},
-        deleted_at       => undef,
-        moderation_state => 'visible',
-        visibility       => 'public',
+        'me.thread_id'        => $request->{thread_id},
+        'me.deleted_at'       => undef,
+        'me.moderation_state' => 'visible',
+        'me.visibility'       => 'public',
     };
     if ( $plan->{after} ) {
         $query->{-or} = _post_cursor_clause( $plan->{after} );
@@ -75,10 +75,10 @@ sub _post_cursor_clause {
     my ($after) = @_;
 
     return [
-        { position => { '>' => $after->{sort_value} } },
+        { 'me.position' => { '>' => $after->{sort_value} } },
         {
-            position => $after->{sort_value},
-            post_id  => { '>' => $after->{id} },
+            'me.position' => $after->{sort_value},
+            'me.post_id'  => { '>' => $after->{id} },
         },
     ];
 }

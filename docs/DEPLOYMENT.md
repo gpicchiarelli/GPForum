@@ -66,8 +66,14 @@ Recommended operator actions:
 - install dependencies with Carton;
 - set `GPFORUM_SESSION_SECRET`;
 - set database credentials with environment or an environment file;
+- install `/etc/gpforum/gpforum.env` with `GPFORUM_SESSION_SECRET`,
+  `GPFORUM_DATABASE_DSN`, `GPFORUM_DATABASE_USER`,
+  `GPFORUM_DATABASE_PASSWORD`, `GPFORUM_PUBLIC_BASE_URL`, and
+  `GPFORUM_METRICS_TOKEN`;
 - set `LimitNOFILE=65536`;
 - run migrations before first start;
+- run `script/query-budget --sync` and `script/query-budget --check` before
+  readiness validation;
 - keep the app behind nginx or Caddy;
 - use `kill -QUIT` or `systemctl stop` for graceful shutdown.
 

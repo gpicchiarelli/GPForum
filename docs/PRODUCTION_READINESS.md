@@ -82,6 +82,10 @@ Production must set:
 - `GPFORUM_RUNTIME_LISTEN`
 - `GPFORUM_LOG_LEVEL=info` or stricter
 
+For Linux systemd deployments, install these values in
+`/etc/gpforum/gpforum.env`; the provided systemd units load that file before
+starting the web and outbox services.
+
 Optional but production-relevant:
 
 - `GPFORUM_WEB_PROCESSES`
@@ -116,6 +120,8 @@ script/bootstrap-deps --postgres
 carton check
 carton exec bin/gpforum-migrate --plan
 carton exec bin/gpforum-migrate --apply
+script/query-budget --sync
+script/query-budget --check
 carton exec bin/gpforum-admin-bootstrap --user-id USER_ID
 ```
 
@@ -348,11 +354,12 @@ GPFORUM_DATABASE_DSN='dbi:Pg:dbname=gpforum_restore;host=127.0.0.1' \
 4. Run `script/gpforum-os-preflight --strict --json`.
 5. Backup database and attachment storage.
 6. Apply migrations with the migrator role.
-7. Start/reload Hypnotoad through systemd.
-8. Start/reload outbox worker.
-9. Validate `/health/live`, `/health/ready`, and internal `/metrics`.
-10. Run a smoke route set: `/`, `/categories`, `/health/ready`, `/metrics`.
-11. Watch logs and outbox/dead-letter counts.
+7. Sync and check endpoint query budgets.
+8. Start/reload Hypnotoad through systemd.
+9. Start/reload outbox worker.
+10. Validate `/health/live`, `/health/ready`, and internal `/metrics`.
+11. Run a smoke route set: `/`, `/categories`, `/health/ready`, `/metrics`.
+12. Watch logs and outbox/dead-letter counts.
 
 ## Performance Baseline
 

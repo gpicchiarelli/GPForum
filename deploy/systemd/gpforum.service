@@ -10,6 +10,7 @@ Group=gpforum
 WorkingDirectory=/opt/gpforum
 Environment=MOJO_MODE=production
 Environment=GPFORUM_ENV=production
+EnvironmentFile=/etc/gpforum/gpforum.env
 Environment=GPFORUM_RUNTIME_LISTEN=http://127.0.0.1:8080
 Environment=GPFORUM_RUNTIME_WORKER_POLICY=cap-to-cpu
 Environment=GPFORUM_RUNTIME_BACKLOG=256

@@ -22,7 +22,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 41;
+const my $EXPECTED_TESTS         => 44;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -211,6 +211,14 @@ is( $schema->resultset('Post')->last_attrs->{order_by}[0]{-asc},
     'me.position', 'post reader qualifies position ordering' );
 is( $schema->resultset('Post')->last_attrs->{order_by}[1]{-asc},
     'me.post_id', 'post reader qualifies post id ordering after body join' );
+is( $schema->resultset('Post')->last_query->{'me.thread_id'},
+    'thread-1', 'post reader qualifies thread filter after body join' );
+is( $schema->resultset('Post')->last_query->{'me.deleted_at'},
+    undef, 'post reader qualifies deleted filter after body join' );
+ok(
+    !exists $schema->resultset('Post')->last_query->{deleted_at},
+    'post reader avoids ambiguous unqualified deleted filter'
+);
 
 my $missing_page = $detail_reader->thread_page( { thread_id => 'missing' } );
 ok( !$missing_page->{ok}, 'missing thread page is not ok' );

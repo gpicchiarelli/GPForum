@@ -10,6 +10,7 @@ Group=gpforum
 WorkingDirectory=/opt/gpforum
 Environment=MOJO_MODE=production
 Environment=GPFORUM_ENV=production
+EnvironmentFile=/etc/gpforum/gpforum.env
 ExecStart=/opt/gpforum/local/bin/carton exec /opt/gpforum/bin/gpforum-outbox-dispatch --loop --limit 100 --sleep 5
 Restart=on-failure
 RestartSec=5

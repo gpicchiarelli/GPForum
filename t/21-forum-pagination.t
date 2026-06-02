@@ -164,9 +164,9 @@ my $thread_post_page = $post_reader->list_thread_posts(
 
 is( scalar @{ $thread_post_page->{items} },
     $REQUEST_LIMIT, 'post reader returns page items' );
-is( $post_resultset->last_query->{thread_id},
+is( $post_resultset->last_query->{'me.thread_id'},
     'thread-1', 'post reader filters thread' );
-is( $post_resultset->last_query->{deleted_at},
+is( $post_resultset->last_query->{'me.deleted_at'},
     undef, 'post reader excludes deleted posts' );
 is_deeply(
     $post_resultset->last_attrs->{join},
@@ -194,7 +194,7 @@ $post_reader->list_thread_posts(
 );
 
 ok( $post_resultset->last_query->{-or}, 'post reader applies cursor clause' );
-is( $post_resultset->last_query->{-or}[0]{position}{'>'},
+is( $post_resultset->last_query->{-or}[0]{'me.position'}{'>'},
     2, 'post cursor pages by position' );
 
 sub _row {
