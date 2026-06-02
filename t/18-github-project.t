@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 78;
+const my $EXPECTED_TESTS => 82;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -44,7 +44,9 @@ for my $required_file (
     docs/OS_RUNTIME_EVIDENCE.md
     docs/DEPLOYMENT.md
     docs/DEPLOYMENT_EVIDENCE.md
+    docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
+    deploy/systemd/gpforum-outbox.service
     deploy/systemd/gpforum-unix-socket.service
     deploy/freebsd/gpforum
     deploy/launchd/com.gpforum.app.plist
@@ -65,6 +67,7 @@ for my $required_file (
     script/bench-hypnotoad-scaling
     script/benchmark-http
     script/cpan-license-check
+    script/perl-syntax-check
     script/perltidy-check
     script/gpforum-os-preflight
     script/profile-nytprof
@@ -86,8 +89,13 @@ my $governance = path('GOVERNANCE.md')->slurp;
 
 like(
     $ci,
-    qr/script\/perlcritic [ ] --severity [ ] 5/msx,
-    'CI runs Perl::Critic at severity 5'
+    qr/run: [ ] script\/perlcritic/msx,
+    'CI runs Perl::Critic through the repository baseline gate'
+);
+like(
+    $ci,
+    qr/carton [ ] exec [ ] script\/perl-syntax-check/msx,
+    'CI runs Perl syntax check'
 );
 like(
     $ci,

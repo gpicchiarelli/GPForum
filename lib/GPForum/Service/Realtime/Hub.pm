@@ -15,6 +15,11 @@ our $VERSION = '0.001';
 const my $FALLBACK_POLL_SECONDS => 30;
 const my $THREAD_UPDATE         => 'thread.update';
 const my $NOTIFICATION_BADGE    => 'notification.badge';
+const my $MODERATION_INVALIDATE => 'moderation.queue.invalidate';
+const my %CHANNEL_TYPE_FOR_EVENT => (
+    $THREAD_UPDATE      => 'thread',
+    $NOTIFICATION_BADGE => 'notifications',
+);
 
 has authorizer =>
   sub { return GPForum::Service::Realtime::ChannelAuthorizer->new; };
@@ -24,9 +29,12 @@ has registry =>
   sub { return GPForum::Service::Realtime::ConnectionRegistry->new; };
 has stats => sub {
     return {
+        broadcast          => 0,
         broadcast_failures => 0,
         broadcasts         => 0,
         delivered          => 0,
+        failed             => 0,
+        malformed          => 0,
         malformed_events   => 0,
     };
 };
@@ -69,6 +77,7 @@ sub broadcast {
     my @subscribers = $self->registry->subscribers($channel);
     my $delivered   = 0;
     my $failed      = 0;
+    $self->stats->{broadcast}  += 1;
     $self->stats->{broadcasts} += 1;
 
     for my $subscriber (@subscribers) {
@@ -81,6 +90,7 @@ sub broadcast {
         }
     }
     $self->stats->{delivered}          += $delivered;
+    $self->stats->{failed}             += $failed;
     $self->stats->{broadcast_failures} += $failed;
 
     return {
@@ -125,15 +135,29 @@ sub broadcast_notification_badge {
 sub broadcast_event {
     my ( $self, $event ) = @_;
 
-    my $validation = $self->event_contract->validate($event);
-    if ( !$validation->{ok} ) {
-        $self->stats->{malformed_events} += 1;
-        return { ok => 0, reason => $validation->{reason} };
-    }
+    my $rejection = $self->_event_rejection($event);
+    return $rejection if $rejection;
 
     my @channels = _channels_for_event($event);
-    return { ok => 1, delivered => 0, failed => 0, channels => [] }
-      if !@channels;
+    return _empty_broadcast_event_summary() if !@channels;
+
+    return $self->_broadcast_to_channels( $event, @channels );
+}
+
+sub _event_rejection {
+    my ( $self, $event ) = @_;
+
+    my $validation = $self->event_contract->validate($event);
+    return if $validation->{ok};
+
+    $self->stats->{malformed}        += 1;
+    $self->stats->{malformed_events} += 1;
+
+    return { ok => 0, reason => $validation->{reason} };
+}
+
+sub _broadcast_to_channels {
+    my ( $self, $event, @channels ) = @_;
 
     my %summary = (
         ok        => 1,
@@ -149,6 +173,10 @@ sub broadcast_event {
     }
 
     return \%summary;
+}
+
+sub _empty_broadcast_event_summary {
+    return { ok => 1, delivered => 0, failed => 0, channels => [] };
 }
 
 sub fallback_state {
@@ -187,16 +215,29 @@ sub _channel {
 sub _channels_for_event {
     my ($event) = @_;
 
-    return ( _channel( 'thread', $event->{aggregate_id} ) )
-      if $event->{type} eq $THREAD_UPDATE
-      && defined $event->{aggregate_id};
+    my $event_type = $event->{type} || q{};
+    if ( exists $CHANNEL_TYPE_FOR_EVENT{$event_type} ) {
+        my $channel_type = $CHANNEL_TYPE_FOR_EVENT{$event_type};
+        return _aggregate_channel( $channel_type, $event );
+    }
 
-    return ( _channel( 'notifications', $event->{aggregate_id} ) )
-      if $event->{type} eq $NOTIFICATION_BADGE
-      && defined $event->{aggregate_id};
+    return _moderation_channels($event);
+}
 
-    return ('moderation:queue')
-      if $event->{type} eq 'moderation.queue.invalidate';
+sub _aggregate_channel {
+    my ( $channel_type, $event ) = @_;
+
+    return if !defined $event->{aggregate_id};
+
+    return ( _channel( $channel_type, $event->{aggregate_id} ) );
+}
+
+sub _moderation_channels {
+    my ($event) = @_;
+
+    if ( ( $event->{type} || q{} ) eq $MODERATION_INVALIDATE ) {
+        return ('moderation:queue');
+    }
 
     return;
 }

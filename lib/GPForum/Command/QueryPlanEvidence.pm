@@ -31,7 +31,7 @@ const my @DEFAULT_ENDPOINT_NAMES => qw(
   search
   autocomplete
   feed
-  notifications
+  notifications outbox_claim
   moderation_queue
   health_ready
   metrics
@@ -434,6 +434,28 @@ sub _endpoint_definition {
             },
             bind => [],
         },
+        outbox_claim => {
+            purpose   => 'outbox worker ready-claim scan',
+            sql_label => 'outbox_claim_ready',
+            sql       => join( "\n",
+                'SELECT outbox_id',
+                '  FROM outbox_messages',
+                ' WHERE (',
+                q{           status IN ('pending', 'failed')},
+                '       AND next_attempt_at <= now()',
+                '       AND (locked_until IS NULL OR locked_until <= now())',
+                '       )',
+                '    OR (',
+                q{           status = 'running'},
+                '       AND locked_until IS NOT NULL',
+                '       AND locked_until <= now()',
+                '       )',
+                ' ORDER BY next_attempt_at ASC, created_at ASC, outbox_id ASC',
+                ' LIMIT 100',
+                ' FOR UPDATE SKIP LOCKED',
+            ),
+            bind => [],
+        },
     );
 
     croak _usage() if !exists $definitions{$endpoint};
@@ -519,6 +541,7 @@ sub _consume_option {
     my $argument = shift @{$arguments};
     my %handler  = (
         '--check'      => sub { $options->{check}   = 1; },
+        '--analyze'    => sub { $options->{analyze} = 1; },
         '--dry-run'    => sub { $options->{dry_run} = 1; },
         '--json'       => sub { $options->{format}  = 'json'; },
         '--help'       => sub { $options->{help}    = 1; },
@@ -568,7 +591,7 @@ sub _print_usage {
 
 sub _usage {
     return
-'Usage: script/query-plan-evidence [--dry-run] [--json] [--check] [--no-analyze] [--profile small|medium|hot-thread] [--endpoint NAME] ...';
+'Usage: script/query-plan-evidence [--dry-run] [--json] [--check] [--analyze] [--no-analyze] [--profile small|medium|hot-thread] [--endpoint NAME] ...';
 }
 
 sub _db_error {

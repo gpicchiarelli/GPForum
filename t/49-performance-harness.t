@@ -72,9 +72,14 @@ my $query_plan_json =
   _capture_command( 'script/query-plan-evidence', '--dry-run', '--json' );
 my $query_plan = decode_json($query_plan_json);
 is( $query_plan->{status}, 'ok', 'query plan evidence has dry-run mode' );
-is( scalar @{ $query_plan->{endpoints} },
-    11, 'query plan evidence covers hot endpoints' );
-is( $query_plan->{endpoints}[5]{endpoint},
+is(
+    scalar @{ $query_plan->{endpoints} },
+    ( $EXPECTED_TESTS / 2 ) + 1,
+    'query plan evidence covers hot endpoints'
+);
+my ($autocomplete_endpoint) =
+  grep { $_->{endpoint} eq 'autocomplete' } @{ $query_plan->{endpoints} };
+is( $autocomplete_endpoint->{endpoint},
     'autocomplete', 'query plan evidence includes autocomplete' );
 
 my $hotpaths =

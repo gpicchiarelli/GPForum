@@ -1,4 +1,7 @@
-.PHONY: architecture bootstrap check critic preflight test tidy
+.PHONY: architecture bootstrap check critic preflight syntax test tidy
+
+syntax:
+	carton exec script/perl-syntax-check
 
 test:
 	carton exec prove -lr t
@@ -12,7 +15,7 @@ tidy:
 architecture:
 	script/architecture-check
 
-check: test critic tidy architecture
+check: syntax test critic tidy architecture
 
 bootstrap:
 	script/bootstrap-deps

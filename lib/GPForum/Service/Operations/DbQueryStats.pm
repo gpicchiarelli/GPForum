@@ -4,12 +4,14 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use parent qw(DBIx::Class::Storage::Statistics);
+use parent      qw(DBIx::Class::Storage::Statistics);
+use Time::HiRes qw(time);
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_RECENT_LIMIT => 25;
-const my $FIRST_REPEAT         => 2;
+const my $DEFAULT_RECENT_LIMIT    => 25;
+const my $FIRST_REPEAT            => 2;
+const my $MILLISECONDS_PER_SECOND => 1_000;
 
 sub new {
     my ( $class, @arguments ) = @_;
@@ -51,9 +53,12 @@ sub start_request {
     $self->{request_sequence}++;
     my $request = {
         request_id             => $self->{request_sequence},
+        correlation_id         => $metadata->{correlation_id},
         route                  => $metadata->{route} || 'unknown',
         endpoint_name          => $metadata->{endpoint_name},
         status                 => undef,
+        started_at             => time,
+        duration_ms            => undef,
         queries                => 0,
         transactions           => 0,
         duplicate_queries      => 0,
@@ -82,6 +87,9 @@ sub finish_request {
       if defined $metadata->{endpoint_name};
     $request->{status} = $metadata->{status}
       if defined $metadata->{status};
+    $request->{duration_ms} =
+      int( ( time - $request->{started_at} ) * $MILLISECONDS_PER_SECOND );
+    delete $request->{started_at};
 
     delete $request->{fingerprints};
     $self->_push_recent($request);

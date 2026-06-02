@@ -28,6 +28,11 @@ Observed per-request data includes:
 The observer is wired before session validation so session lookup queries are
 included in the same request envelope.
 
+Every HTTP response includes `X-Request-ID`. GPForum accepts a safe incoming
+`X-Request-ID` from the reverse proxy or generates one through the application
+id service. The same value is recorded as the DB query observation
+`correlation_id`, and finished request observations include `duration_ms`.
+
 ## Benchmark Integration
 
 `script/benchmark-http --configured` and `bin/gpforum-benchmark --configured`
@@ -82,13 +87,15 @@ adapter.
 ## Realtime And Outbox Signals
 
 Realtime metrics include active websocket connections, subscription count,
-broadcast attempts, delivered messages, failed websocket sends, malformed
-events, and configured connection/subscription quotas.
+broadcast attempts (`broadcast`/`broadcasts`), delivered messages, failed
+websocket sends, malformed events, and configured connection/subscription
+quotas.
 
 PostgreSQL LISTEN/NOTIFY services expose local snapshots for degraded transport,
 notify failures, invalid payloads, duplicate event suppression, reconnect count,
-delivered fanout count, supervisor running state, scheduled polls, poll
-failures and heartbeats.
+`listen_notify_received`, cursor-based outbox polling receives, delivered
+fanout count, supervisor running state, scheduled polls, poll failures and
+heartbeats.
 
 Outbox metrics include pending rows, failed rows, ready retry backlog, and dead
 letter count. Failure classification is persisted as `failure_type` with the
@@ -232,8 +239,8 @@ Validated degradation behavior:
 * failed realtime delivery records a failed count and keeps SSR continuity;
 * PostgreSQL NOTIFY failure is classified as degraded transport and does not
   make canonical writes fail;
-* PostgreSQL LISTEN failure makes the listener degraded while polling fallback
-  remains valid;
+* PostgreSQL LISTEN failure makes the listener degraded while cursor polling
+  fallback remains valid;
 * notification fanout records per-recipient failure without aborting the whole
   fanout;
 * core forum rendering does not depend on websocket availability;

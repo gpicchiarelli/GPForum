@@ -195,17 +195,25 @@ that event, outbox, and projection resultsets are reachable.
 
 ## Local Limits
 
-Realtime websocket fanout remains process-local. Multi-process fanout still
-needs PostgreSQL `LISTEN/NOTIFY` or outbox polling.
+Realtime websocket connections remain process-local, but fanout no longer does:
+outbox-dispatched domain events emit bounded PostgreSQL `LISTEN/NOTIFY`
+messages on `gpforum_domain_events`, and every web process forwards matching
+events only to its locally connected websocket clients. PostgreSQL/outbox stays
+authoritative; if a process misses NOTIFY while offline or degraded, the
+listener falls back to bounded cursor polling over completed outbox rows.
+Notification badge fallback is rebuilt from PostgreSQL notification tables, and
+clients still receive polling fallback metadata in the websocket handshake.
 
 The rate limiter remains process-local. It is acceptable as a fallback and test
 boundary, but a PostgreSQL-backed limiter is the next production-grade step.
 
 The local cache remains process-local and disposable. It is TTL bounded,
 max-entry bounded, namespace-aware, tag-invalidatable, and visible through
-`/metrics`. It is currently used only for read-mostly category lists. Cache
-invalidation workers derive tags from authoritative domain events; cached data
-is never authoritative and is safe to discard.
+`/metrics`. It backs read-mostly category lists and anonymous public SSR cache
+for category/thread pages with `ETag`, `Last-Modified`, and
+`stale-while-revalidate` response headers. Cache invalidation workers derive
+tags from authoritative domain events; cached data is never authoritative and is
+safe to discard.
 
 Reply position allocation currently uses the latest visible database position
 and increments it. The unique `(thread_id, position)` constraint protects data

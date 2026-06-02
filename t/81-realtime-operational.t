@@ -3,6 +3,7 @@ package main;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Test::More;
 
 use lib 'lib';
@@ -19,6 +20,8 @@ use GPForum::Test::RealtimeConnection;
 use GPForum::Test::RealtimePermissionEngine;
 
 our $VERSION = '0.001';
+
+const my $QUEUED_NOTIFICATIONS => 3;
 
 my $contract = GPForum::Service::Realtime::EventEnvelope->new(
     clock             => GPForum::Test::RealtimeClock->new,
@@ -173,9 +176,9 @@ $hub->subscribe(
 
 my $listener_dbh = GPForum::Test::RealtimePgDbh->new(
     notifies => [
-        [ 'gpforum_realtime_events', 1, $serialized->{json} ],
-        [ 'gpforum_realtime_events', 1, $serialized->{json} ],
-        [ 'gpforum_realtime_events', 1, '{bad-json' ],
+        [ 'gpforum_domain_events', 1, $serialized->{json} ],
+        [ 'gpforum_domain_events', 1, $serialized->{json} ],
+        [ 'gpforum_domain_events', 1, '{bad-json' ],
     ],
 );
 my $listener = GPForum::Service::Realtime::PgListener->new(
@@ -185,11 +188,14 @@ my $listener = GPForum::Service::Realtime::PgListener->new(
 );
 ok( $listener->start->{ok}, 'PostgreSQL listener starts LISTEN lifecycle' );
 my $poll = $listener->poll_once;
-is( $poll->{received},   3, 'listener receives queued notifications' );
+is( $poll->{received},
+    $QUEUED_NOTIFICATIONS, 'listener receives queued notifications' );
 is( $poll->{delivered},  1, 'listener fans out valid event once' );
 is( $poll->{duplicates}, 1, 'listener suppresses duplicate event ids' );
 is( $poll->{invalid},    1, 'listener rejects malformed payload' );
 is( scalar @{ $connection->sent }, 1, 'websocket receives one event' );
+is( $listener->snapshot->{listen_notify_received},
+    $QUEUED_NOTIFICATIONS, 'listener exposes received LISTEN/NOTIFY metric' );
 
 $listener->reconnect;
 is( $listener->snapshot->{reconnect_count},

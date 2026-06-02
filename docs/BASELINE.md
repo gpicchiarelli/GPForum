@@ -31,7 +31,7 @@ script/perltidy-check
 script/perlcritic --severity 5
 script/architecture-check
 script/query-plan-check
-script/query-plan-evidence --check
+script/query-plan-evidence --check --analyze --profile medium
 script/bench-hotpaths
 carton exec prove -lr t
 script/query-budget --check

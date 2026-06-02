@@ -9,7 +9,7 @@ messages, SSR pages, and polling endpoints remain authoritative.
 Domain event
   -> outbox_messages
   -> outbox dispatcher / domain event transport
-  -> PostgreSQL NOTIFY gpforum_realtime_events
+  -> PostgreSQL NOTIFY gpforum_domain_events
   -> GPForum::Service::Realtime::PgListener
   -> GPForum::Service::Realtime::ListenerSupervisor
   -> GPForum::Service::Realtime::Hub
@@ -17,7 +17,11 @@ Domain event
 ```
 
 If LISTEN/NOTIFY is unavailable, writes still succeed, the listener/notifier
-report degraded transport state, and clients continue to use polling fallback.
+report degraded transport state, the listener can replay recent completed
+outbox messages through bounded cursor polling, and clients continue to use
+polling fallback for canonical state. Missed notification badges are rebuilt
+from `notifications` and `notification_inbox`, not from in-memory handler
+results.
 
 ## Listener Lifecycle
 
@@ -117,7 +121,9 @@ objects. Evolution is additive: new consumers must ignore unknown fields.
 - configured connection/subscription quotas
 
 `PgNotifier` and `PgListener` expose snapshots for notify failures, degraded
-transport, invalid payloads, duplicates, reconnect count, and delivered events.
+transport, invalid payloads, malformed payloads, duplicate event suppression,
+`listen_notify_received`, outbox polling receives, reconnect count, and
+delivered events.
 `ListenerSupervisor` exposes enabled/running state, scheduled polls, poll
 failures, reconnects and heartbeats.
 

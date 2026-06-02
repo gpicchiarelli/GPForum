@@ -10,6 +10,13 @@ our $VERSION = '0.001';
 
 has outbox_resultset      => undef;
 has dead_letter_resultset => undef;
+has storage               => undef;
+
+sub txn_do {
+    my ( $self, $code ) = @_;
+
+    return $code->();
+}
 
 sub resultset {
     my ( $self, $name ) = @_;

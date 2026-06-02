@@ -11,7 +11,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 6;
+const my $EXPECTED_TESTS => 7;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -22,7 +22,7 @@ like(
     qr/query-plan-check [ ] status=ok/msx,
     'query plan check passes'
 );
-like( $output, qr/indexes=26/msx,
+like( $output, qr/indexes=31/msx,
     'query plan check covers required hot path indexes' );
 like( $output, qr/db_evidence=skipped/msx,
     'query plan check skips DB evidence without DSN' );
@@ -30,6 +30,11 @@ like( $output, qr/db_evidence=skipped/msx,
 my $script = path('script/query-plan-check')->slurp;
 like( $script, qr/GPFORUM_DATABASE_DSN/msx,
     'query plan check detects configured database DSN' );
+like(
+    $script,
+    qr/--profile', [ ] 'medium'/msx,
+    'query plan check uses medium profile for DB-backed evidence'
+);
 
 my $ci = path('.github/workflows/ci.yml')->slurp;
 like( $ci, qr/script\/query-plan-check/msx, 'CI runs query plan check' );

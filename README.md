@@ -122,6 +122,10 @@ This repository currently contains:
 * real readiness checks for database/resultset availability;
 * automation scripts in [script](script).
 
+The production gate is tracked in
+[docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md). Treat that
+checklist as the release contract before adding new product scope.
+
 The current implementation has reached **Milestone 17: Forum HTTP MVP** under the
 constraints in [prompt/20.txt](prompt/20.txt). See [docs/MVP.md](docs/MVP.md)
 for the route surface that is actually traversable today.

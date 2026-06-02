@@ -18,7 +18,7 @@ use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 153;
+const my $EXPECTED_TESTS       => 163;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
@@ -26,6 +26,7 @@ const my $HTTP_UNAUTHORIZED    => 401;
 const my $HTTP_FORBIDDEN       => 403;
 const my $HTTP_NOT_FOUND       => 404;
 const my $HTTP_TOO_MANY        => 429;
+const my $HTTP_NOT_MODIFIED    => 304;
 const my $HTTP_SERVICE_UNAVAIL => 503;
 
 plan tests => $EXPECTED_TESTS;
@@ -37,6 +38,20 @@ _install_test_session_route($test);
 _get_json_ok( $test, '/categories' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/categories/0/category_id' => 'category-1' );
+
+$test->get_ok('/categories');
+$test->status_is($HTTP_OK);
+$test->header_like( 'Cache-Control' => qr/\bpublic\b/msx );
+$test->header_like( 'ETag'          => qr/\A W\/"[[:xdigit:]]{40}" \z/msx );
+$test->header_like( 'Last-Modified' => qr/\b GMT \z/msx );
+$test->header_is( 'X-GPForum-Cache' => 'miss' );
+my $cache_response_tx      = $test->tx;
+my $public_categories_etag = $cache_response_tx->res->headers->header('ETag');
+$test->get_ok(
+    '/categories' => { 'If-None-Match' => $public_categories_etag } );
+$test->status_is($HTTP_NOT_MODIFIED);
+$test->header_is( 'X-GPForum-Cache' => 'revalidated' );
+$test->content_is(q{});
 
 $test->get_ok('/robots.txt');
 $test->status_is($HTTP_OK);

@@ -196,6 +196,7 @@ sub _helper_names {
       gp_posting_workflow
       gp_profile_reader
       gp_privacy_view_model
+      gp_public_http_cache
       gp_rate_limiter
       gp_readiness
       gp_realtime_listener_supervisor

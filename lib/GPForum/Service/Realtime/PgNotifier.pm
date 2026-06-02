@@ -9,7 +9,7 @@ use GPForum::Service::Realtime::EventEnvelope;
 
 our $VERSION = '0.001';
 
-has channel => 'gpforum_realtime_events';
+has channel => 'gpforum_domain_events';
 has event_contract =>
   sub { return GPForum::Service::Realtime::EventEnvelope->new; };
 has schema => undef;

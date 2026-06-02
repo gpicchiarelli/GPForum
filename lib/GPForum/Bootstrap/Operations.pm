@@ -3,6 +3,7 @@ package GPForum::Bootstrap::Operations;
 use strict;
 use warnings;
 
+use Const::Fast;
 use English qw(-no_match_vars);
 
 use GPForum::Log;
@@ -17,6 +18,9 @@ use GPForum::Service::Operations::Readiness;
 use GPForum::Service::Operations::SecurityTelemetry;
 
 our $VERSION = '0.001';
+
+const my $MAX_REQUEST_ID_LENGTH => 128;
+my $request_sequence = 0;
 
 sub register {
     my ( undef, %input ) = @_;
@@ -180,10 +184,16 @@ sub _configure_db_query_observer {
         before_dispatch => sub {
             my ($controller) = @_;
 
+            my $request_id = _request_id($controller);
+            $controller->stash( gp_request_id => $request_id );
+            $controller->res->headers->header( 'X-Request-ID' => $request_id );
+
             my $stats = $controller->gp_db_query_stats;
+            my $path  = $controller->req->url->path;
             my $token = $stats->start_request(
                 {
-                    route => $controller->req->url->path->to_string,
+                    correlation_id => $request_id,
+                    route          => $path->to_string,
                 }
             );
             $controller->stash( gp_db_query_stats_token => $token );
@@ -194,9 +204,14 @@ sub _configure_db_query_observer {
         after_dispatch => sub {
             my ($controller) = @_;
 
-            my $stats  = $controller->gp_db_query_stats;
-            my $token  = $controller->stash('gp_db_query_stats_token');
-            my $record = $stats->finish_request(
+            if ( $controller->stash('gp_request_id') ) {
+                $controller->res->headers->header(
+                    'X-Request-ID' => $controller->stash('gp_request_id') );
+            }
+
+            my $stats         = $controller->gp_db_query_stats;
+            my $token         = $controller->stash('gp_db_query_stats_token');
+            my $request_stats = $stats->finish_request(
                 $token,
                 {
                     route         => _current_route_name($controller),
@@ -205,13 +220,41 @@ sub _configure_db_query_observer {
                 }
             );
             my $observation =
-              _record_query_budget_observation( $stats, $record );
-            _add_benchmark_query_headers( $controller, $record, $observation );
-            _enforce_query_budget( $config, $record, $observation );
+              _record_query_budget_observation( $stats, $request_stats );
+            _add_benchmark_query_headers( $controller, $request_stats,
+                $observation );
+            _enforce_query_budget( $config, $request_stats, $observation );
         }
     );
 
     return;
+}
+
+sub _request_id {
+    my ($controller) = @_;
+
+    my $header = $controller->req->headers->header('X-Request-ID') || q{};
+    return $header if _safe_request_id($header);
+
+    my $id_service = eval { return $controller->gp_id; };
+    return $id_service->uuid if $id_service;
+
+    return _fallback_request_id();
+}
+
+sub _safe_request_id {
+    my ($request_id) = @_;
+
+    return 0 if !defined $request_id;
+    return 0 if !length $request_id;
+    return 0 if length $request_id > $MAX_REQUEST_ID_LENGTH;
+    return $request_id =~ /\A [[:alnum:]_.:-]+ \z/msx ? 1 : 0;
+}
+
+sub _fallback_request_id {
+    $request_sequence++;
+
+    return join q{-}, 'gpforum', $PROCESS_ID, time, $request_sequence;
 }
 
 sub _current_route_name {
@@ -276,43 +319,45 @@ sub _query_budget_endpoint {
 }
 
 sub _record_query_budget_observation {
-    my ( $stats, $record ) = @_;
+    my ( $stats, $request_stats ) = @_;
 
-    return if !$record || !$record->{endpoint_name};
+    return if !$request_stats || !$request_stats->{endpoint_name};
 
     my $observation = GPForum::Service::Operations::QueryBudget->new->observe(
-        $record->{endpoint_name},
+        $request_stats->{endpoint_name},
         {
-            queries           => $record->{queries},
-            transactions      => $record->{transactions},
-            duplicate_queries => $record->{duplicate_queries},
+            queries           => $request_stats->{queries},
+            transactions      => $request_stats->{transactions},
+            duplicate_queries => $request_stats->{duplicate_queries},
         }
     );
-    $stats->record_budget_observation( $record->{request_id}, $observation );
+    $stats->record_budget_observation( $request_stats->{request_id},
+        $observation );
 
     return $observation;
 }
 
 sub _add_benchmark_query_headers {
-    my ( $controller, $record, $observation ) = @_;
+    my ( $controller, $request_stats, $observation ) = @_;
 
     return if ( $ENV{GPFORUM_BENCHMARK_QUERY_HEADERS} || q{} ) ne '1';
-    return if !$record;
+    return if !$request_stats;
 
     my $headers = $controller->res->headers;
     $headers->header(
-        'X-GPForum-DB-Queries' => defined $record->{queries}
-        ? $record->{queries}
+        'X-GPForum-DB-Queries' => defined $request_stats->{queries}
+        ? $request_stats->{queries}
         : 0
     );
     $headers->header(
-        'X-GPForum-DB-Transactions' => defined $record->{transactions}
-        ? $record->{transactions}
+        'X-GPForum-DB-Transactions' => defined $request_stats->{transactions}
+        ? $request_stats->{transactions}
         : 0
     );
     $headers->header(
-        'X-GPForum-DB-Duplicate-Queries' => defined $record->{duplicate_queries}
-        ? $record->{duplicate_queries}
+        'X-GPForum-DB-Duplicate-Queries' =>
+          defined $request_stats->{duplicate_queries}
+        ? $request_stats->{duplicate_queries}
         : 0
     );
     $headers->header(
@@ -320,7 +365,8 @@ sub _add_benchmark_query_headers {
         ? $observation->{status}
         : 'none'
     );
-    $headers->header( 'X-GPForum-DB-Budget-Endpoint' => $record->{endpoint_name}
+    $headers->header(
+             'X-GPForum-DB-Budget-Endpoint' => $request_stats->{endpoint_name}
           || 'none' );
     $headers->header(
         'X-GPForum-DB-Budget-Max-Queries' => $observation
@@ -333,16 +379,16 @@ sub _add_benchmark_query_headers {
 }
 
 sub _enforce_query_budget {
-    my ( $config, $record, $observation ) = @_;
+    my ( $config, $request_stats, $observation ) = @_;
 
     return if ( $ENV{GPFORUM_QUERY_BUDGET_ENFORCE} || q{} ) ne '1';
     return if $config->environment eq 'production';
-    return if !$record || !$observation;
+    return if !$request_stats || !$observation;
     return if ( $observation->{status} || q{} ) ne 'fail';
 
     die join q{:},
       'query budget exceeded',
-      $record->{endpoint_name} || 'unknown',
+      $request_stats->{endpoint_name} || 'unknown',
       join q{,}, @{ $observation->{violations} || [] };
 }
 

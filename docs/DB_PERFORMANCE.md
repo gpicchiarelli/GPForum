@@ -199,7 +199,7 @@ rerun:
 script/seed-performance-data
 script/seed-benchmark --profile medium
 script/benchmark-http --configured --iterations 20 --warmup 3
-script/query-plan-evidence --check
+script/query-plan-evidence --check --analyze --profile medium
 ```
 
 The DB-backed report now includes `EXPLAIN (ANALYZE, BUFFERS)` for:

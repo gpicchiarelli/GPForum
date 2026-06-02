@@ -11,7 +11,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 226;
+const my $TEST_COUNT => 230;
 
 plan tests => $TEST_COUNT;
 
@@ -135,6 +135,7 @@ use_ok('GPForum::Web::DiscoveryPayload');
 use_ok('GPForum::Web::ErrorPayload');
 use_ok('GPForum::Web::HealthPayload');
 use_ok('GPForum::Web::OperationsPayload');
+use_ok('GPForum::Web::PublicHttpCache');
 use_ok('GPForum::Web::RealtimePayload');
 use_ok('GPForum::Web::RenderPolicy');
 use_ok('GPForum::Service::Attachment::Delivery');
@@ -209,6 +210,7 @@ use_ok('GPForum::Service::Forum::ThreadReader');
 use_ok('GPForum::Service::Forum::ThreadDetailReader');
 use_ok('GPForum::Service::Forum::PostComposer');
 use_ok('GPForum::Service::Forum::PostStore');
+use_ok('GPForum::Service::Outbox::ClaimedMessage');
 use_ok('GPForum::Service::Outbox::Dispatcher');
 use_ok('GPForum::Service::Outbox::DeadLetterRecorder');
 use_ok('GPForum::Service::Outbox::DomainEventTransport');
@@ -220,6 +222,8 @@ use_ok('GPForum::Service::Realtime::ConnectionRegistry');
 use_ok('GPForum::Service::Realtime::EventEnvelope');
 use_ok('GPForum::Service::Realtime::Hub');
 use_ok('GPForum::Service::Realtime::ListenerSupervisor');
+use_ok('GPForum::Service::Realtime::NotificationBadgeReader');
+use_ok('GPForum::Service::Realtime::OutboxEventMapper');
 use_ok('GPForum::Service::Realtime::PgListener');
 use_ok('GPForum::Service::Realtime::PgNotifier');
 use_ok('GPForum::Service::Realtime::SubscriptionPolicy');

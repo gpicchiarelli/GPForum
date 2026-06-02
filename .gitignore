@@ -2,5 +2,6 @@
 /.carton/
 /local/
 /cover_db/
+/artifacts/
 /var/profile/
 nytprof.out*

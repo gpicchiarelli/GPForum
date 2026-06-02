@@ -56,11 +56,14 @@ jobs:
       - name: Check whitespace
         run: git diff --check
 
+      - name: Check Perl syntax
+        run: carton exec script/perl-syntax-check
+
       - name: Check Perl formatting
         run: script/perltidy-check
 
       - name: Run Perl::Critic
-        run: script/perlcritic --severity 5
+        run: script/perlcritic
 
       - name: Apply database migrations
         run: carton exec bin/gpforum-migrate --apply

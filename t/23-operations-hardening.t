@@ -42,14 +42,17 @@ our $VERSION = '0.001';
         my ($self) = @_;
 
         return {
-            enabled => $self->{enabled} ? 1 : 0,
-            running => 0,
-            stats   => {},
+            enabled  => $self->{enabled} ? 1 : 0,
+            running  => 0,
+            stats    => {},
+            listener => {
+                listen_notify_received => 0,
+            },
         };
     }
 }
 
-const my $EXPECTED_TESTS            => 73;
+const my $EXPECTED_TESTS            => 83;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -216,8 +219,26 @@ is( $metrics->{local_caches}[0]{stats}{writes},
     $CACHE_ENTRIES, 'metrics exposes local cache writes' );
 is( $metrics->{realtime}{connections},
     $REALTIME_PROCESSES, 'metrics exposes realtime snapshot' );
+ok(
+    exists $metrics->{realtime}{broadcast},
+    'metrics exposes realtime broadcast counter'
+);
+ok(
+    exists $metrics->{realtime}{delivered},
+    'metrics exposes realtime delivered counter'
+);
+ok(
+    exists $metrics->{realtime}{failed},
+    'metrics exposes realtime failed counter'
+);
+ok(
+    exists $metrics->{realtime}{malformed},
+    'metrics exposes realtime malformed counter'
+);
 is( $metrics->{realtime_listener}{enabled},
     1, 'metrics exposes realtime listener supervisor snapshot' );
+ok( exists $metrics->{realtime_listener}{listener}{listen_notify_received},
+    'metrics exposes listener LISTEN/NOTIFY counter' );
 is( $metrics->{rate_limits}{buckets},
     $BUCKET_COUNT, 'metrics exposes limiter snapshot' );
 is( $metrics->{rate_limits}{rate_limit_allowed},
@@ -413,5 +434,10 @@ $test->json_has('/runtime/web_processes');
 $test->json_has('/local_caches/0/namespace');
 $test->json_is( '/rate_limits/buckets'  => $EXHAUSTED_ALLOWANCE );
 $test->json_is( '/realtime/connections' => $EXHAUSTED_ALLOWANCE );
+$test->json_has('/realtime/broadcast');
+$test->json_has('/realtime/delivered');
+$test->json_has('/realtime/failed');
+$test->json_has('/realtime/malformed');
+$test->json_has('/realtime_listener/listener/listen_notify_received');
 
 1;

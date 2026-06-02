@@ -10,6 +10,8 @@ The current repository already has strong boundaries:
 - `GPForum.pm` is a small composition root that delegates to bootstrap modules.
 - Controllers are HTTP-oriented and increasingly delegate write flows to services.
 - DBIx::Class access is outside controllers and enforced by `script/architecture-check`.
+- Internal `GPForum::*` module dependency cycles are rejected by
+  `script/architecture-check`.
 - Forum read paths use reader services and presenter view models.
 - Event log and outbox tables are real, durable boundaries.
 - Minion-facing workers consume outbox domain event payloads.
@@ -18,6 +20,8 @@ The current repository already has strong boundaries:
 Priority risks found during the audit:
 
 1. `Controller::Forum` remains too large and still owns several response/error helpers.
+   `Controller::Identity`, `Controller::Admin`, and `Controller::Moderation`
+   have the same drift risk at smaller scale.
 2. Event, audit, and outbox creation was duplicated in write stores.
 3. Raw HTML output existed in templates without a central rendering policy.
 4. Browser security headers lived directly in bootstrap, making policy drift harder to test.

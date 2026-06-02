@@ -19,7 +19,10 @@ if [ "$has_target" -eq 1 ]; then
 fi
 
 tmp_file="${TMPDIR:-/tmp}/gpforum-perlcritic-files.$$"
-trap 'rm -f "$tmp_file"' EXIT HUP INT TERM
+tmp_dir="${TMPDIR:-/tmp}/gpforum-perlcritic.$$"
+baseline_file="etc/perlcritic-baseline.txt"
+mkdir -p "$tmp_dir"
+trap 'rm -rf "$tmp_dir" "$tmp_file"' EXIT HUP INT TERM
 
 find bin lib script t \
     -type f \( -path 'bin/*' -o -name '*.pm' -o -name '*.pl' -o -name '*.t' \) -print0 \
@@ -30,4 +33,45 @@ if [ ! -s "$tmp_file" ]; then
     exit 0
 fi
 
-exec xargs -0 $runner --profile .perlcriticrc "$@" < "$tmp_file"
+raw_output="$tmp_dir/raw-output"
+violations="$tmp_dir/violations"
+baseline="$tmp_dir/baseline"
+new_violations="$tmp_dir/new-violations"
+resolved_violations="$tmp_dir/resolved-violations"
+
+set +e
+xargs -0 $runner --profile .perlcriticrc "$@" < "$tmp_file" > "$raw_output" 2>&1
+critic_status=$?
+set -e
+
+grep '^\[' "$raw_output" | LC_ALL=C sort -u > "$violations" || true
+
+if [ ! -f "$baseline_file" ]; then
+    cat "$raw_output"
+    exit "$critic_status"
+fi
+
+LC_ALL=C sort -u "$baseline_file" > "$baseline"
+LC_ALL=C comm -13 "$baseline" "$violations" > "$new_violations"
+LC_ALL=C comm -23 "$baseline" "$violations" > "$resolved_violations"
+
+new_count="$(wc -l < "$new_violations" | tr -d ' ')"
+resolved_count="$(wc -l < "$resolved_violations" | tr -d ' ')"
+baseline_count="$(wc -l < "$baseline" | tr -d ' ')"
+
+if [ "$new_count" -ne 0 ]; then
+    echo "perlcritic: found $new_count violation(s) outside baseline" >&2
+    cat "$new_violations" >&2
+    if [ "$resolved_count" -ne 0 ]; then
+        echo "perlcritic: $resolved_count baseline violation(s) disappeared; update $baseline_file after review" >&2
+    fi
+    exit 1
+fi
+
+if [ "$resolved_count" -ne 0 ]; then
+    echo "perlcritic: $resolved_count baseline violation(s) disappeared; update $baseline_file after review" >&2
+    cat "$resolved_violations" >&2
+    exit 1
+fi
+
+echo "perlcritic status=ok baseline_violations=$baseline_count new_violations=0"

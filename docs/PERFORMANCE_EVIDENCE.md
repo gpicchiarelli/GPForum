@@ -70,10 +70,10 @@ The static gate now requires `idx_notification_inbox_recipient_created`,
 because the existing notification inbox reader orders by `(recipient_user_id,
 created_at DESC, notification_id DESC)`.
 
-DB-backed evidence is run with:
+DB-backed evidence is run by the gate with:
 
 ```sh
-script/query-plan-evidence --check
+script/query-plan-evidence --check --analyze --profile medium
 ```
 
 It executes `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for:
@@ -88,6 +88,7 @@ It executes `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` for:
 | autocomplete | `search_documents_title_trgm` |
 | feed | `user_feed_items_user_created` |
 | notifications | `notification_inbox_recipient_created` |
+| outbox_claim | `outbox_claim_ready` |
 | moderation_queue | `reports_queue` |
 | health_ready | `readiness_regclass` |
 | metrics | `outbox_ready` |
@@ -107,9 +108,9 @@ the deterministic `small`, `medium`, and `hot-thread` seeds, and
 `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)`.
 
 ```text
-small      query_plan_evidence status=ok endpoints=11 violations=none
-medium     query_plan_evidence status=ok endpoints=11 violations=none
-hot-thread query_plan_evidence status=ok endpoints=11 violations=none
+small      query_plan_evidence status=ok endpoints=12 violations=none
+medium     query_plan_evidence status=ok endpoints=12 violations=none
+hot-thread query_plan_evidence status=ok endpoints=12 violations=none
 ```
 
 Dry-run evidence:
@@ -117,6 +118,87 @@ Dry-run evidence:
 ```text
 query_plan_evidence status=ok mode=dry-run analyze=1
 ```
+
+## HTTP Cache Evidence
+
+Anonymous public SSR cache is covered by `t/32-forum-web.t`. The test performs
+a normal anonymous `GET /categories`, verifies `Cache-Control`, `ETag`, and
+`Last-Modified`, then repeats the request with `If-None-Match` and expects
+`304 Not Modified` plus `X-GPForum-Cache: revalidated`.
+
+This proves the read-heavy path can avoid repeat Perl rendering and response
+body transfer for fresh anonymous clients. The cache remains local and
+disposable; event/outbox invalidation tags are attached so stale entries can be
+discarded without making cache state authoritative.
+
+## Outbox Dispatcher Claim Benchmark
+
+The outbox dispatcher now claims work with a PostgreSQL-safe atomic batch claim:
+ready `pending`/`failed` rows and expired `running` locks are selected in
+`next_attempt_at, created_at, outbox_id` order with `FOR UPDATE SKIP LOCKED`,
+then marked `running` with `locked_at`, `locked_until`, and `locked_by` in the
+same transaction. Supporting claim indexes are enforced by
+`script/query-plan-check`. PostgreSQL claims now return lightweight DBI-backed
+messages directly, avoiding the former DBIx::Class reload, and successful
+dispatches are acknowledged with one batch `UPDATE` per worker claim batch.
+
+Local deterministic harness:
+
+```sh
+script/bench-outbox-dispatcher \
+  --messages 1000,10000,100000 \
+  --workers 1,2,4,8 \
+  --batch-size 100 \
+  --json \
+  --artifact artifacts/outbox-dispatcher.json
+```
+
+Latest local DBI-direct dispatcher harness, using batch size 100 and
+duplicate/lost-message checks:
+
+| Messages | Workers | Delivered | Lost | Duplicates | Ack batches | msg/s | p95 claim ms |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1,000 | 1 | 1,000 | 0 | 0 | 10 | 114,130.721 | 0.987 |
+| 1,000 | 2 | 1,000 | 0 | 0 | 10 | 114,758.379 | 0.924 |
+| 1,000 | 4 | 1,000 | 0 | 0 | 10 | 115,580.589 | 0.898 |
+| 1,000 | 8 | 1,000 | 0 | 0 | 10 | 113,060.111 | 0.937 |
+| 10,000 | 1 | 10,000 | 0 | 0 | 100 | 115,788.945 | 0.946 |
+| 10,000 | 2 | 10,000 | 0 | 0 | 100 | 117,434.218 | 0.930 |
+| 10,000 | 4 | 10,000 | 0 | 0 | 100 | 116,737.704 | 0.961 |
+| 10,000 | 8 | 10,000 | 0 | 0 | 100 | 116,340.075 | 0.939 |
+| 100,000 | 1 | 100,000 | 0 | 0 | 1,000 | 111,959.140 | 1.125 |
+| 100,000 | 2 | 100,000 | 0 | 0 | 1,000 | 117,957.619 | 0.926 |
+| 100,000 | 4 | 100,000 | 0 | 0 | 1,000 | 117,386.890 | 0.924 |
+| 100,000 | 8 | 100,000 | 0 | 0 | 1,000 | 116,702.884 | 0.934 |
+
+This harness proves the dispatcher-level no-duplicate invariant across simulated
+worker counts. PostgreSQL row-lock behavior is covered by unit tests that assert
+the generated claim SQL uses `FOR UPDATE SKIP LOCKED`.
+
+## Realtime Multi-Process Evidence
+
+Realtime fanout now follows the same outbox boundary: domain events dispatched
+from outbox produce bounded realtime envelopes, `PgNotifier` publishes them on
+`gpforum_domain_events`, and each web process runs a listener that broadcasts
+only to its local websocket clients through `Realtime::Hub`.
+
+Covered event families:
+
+| Realtime event | Source |
+| --- | --- |
+| `thread.update` | `thread.created`, `post.created` |
+| `notification.badge` | notification fanout results produced during outbox dispatch; outbox polling rebuilds missed badges from `notifications`/`notification_inbox` |
+| `moderation.queue.invalidate` | moderation/report domain events |
+
+`t/85-realtime-outbox-multiprocess.t` simulates separate worker/listener hubs
+on a shared PostgreSQL notification bus and verifies that an outbox event
+produced by one process reaches websocket subscribers connected to another.
+The same test covers bounded, cursor-based outbox polling fallback for missed
+NOTIFY events and verifies that polling advances across batches without
+replaying the first row.
+
+Realtime metrics exposed through `/metrics` include `broadcast`, `delivered`,
+`failed`, `malformed`, and listener-side `listen_notify_received`.
 
 ## HTTP Benchmark Gate
 
@@ -223,7 +305,7 @@ script/benchmark-http --fixture --check --iterations 2 --warmup 1 \
   --route /health/live --route /categories
 carton exec bin/gpforum-migrate --apply
 script/seed-benchmark --profile small
-script/query-plan-evidence --check
+script/query-plan-evidence --check --analyze --profile medium
 script/benchmark-http --configured --check --iterations 3 --warmup 1 \
   --route /categories --route /health/ready
 script/bench-hypnotoad --check --profile small --workers 2 \

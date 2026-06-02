@@ -1,0 +1,63 @@
+#!/usr/bin/env perl
+use strict;
+use warnings;
+
+use File::Find;
+
+my @inputs = @ARGV ? @ARGV : qw(bin lib script t);
+my @roots  = grep { -d $_ } @inputs;
+my @files  = grep { -f $_ && _is_perl_file($_) } @inputs;
+
+if ( !@roots && !@files ) {
+    print "No Perl roots found.\n";
+    exit 0;
+}
+
+find(
+    {
+        no_chdir => 1,
+        wanted   => sub {
+            return if !-f $File::Find::name;
+            return if $File::Find::name =~ m{/(?:local|blib|cover_db)/}msx;
+            return if !_is_perl_file($File::Find::name);
+
+            push @files, $File::Find::name;
+        },
+    },
+    @roots
+);
+
+if ( !@files ) {
+    print "No Perl files found.\n";
+    exit 0;
+}
+
+my $failed = 0;
+for my $file ( sort @files ) {
+    system $^X, '-Ilib', '-It/lib', '-c', $file;
+    if ( $? != 0 ) {
+        $failed = 1;
+    }
+}
+
+exit( $failed ? 1 : 0 );
+
+sub _is_perl_file {
+    my ($file) = @_;
+
+    return 1 if $file =~ m{[.](?:pm|pl|t)\z}msx;
+    return 1 if $file =~ m{\Abin/}msx;
+    return 1 if $file =~ m{\Ascript/}msx && _has_perl_shebang($file);
+
+    return 0;
+}
+
+sub _has_perl_shebang {
+    my ($file) = @_;
+
+    open my $handle, '<', $file or return 0;
+    my $first_line = <$handle> || q{};
+    close $handle or return 0;
+
+    return $first_line =~ /\A [#]! .* perl \b/msx ? 1 : 0;
+}

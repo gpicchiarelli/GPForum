@@ -31,6 +31,7 @@ use GPForum::Service::Notification::Renderer;
 use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Search::PermissionEngine;
 use GPForum::Service::Search::Searcher;
+use GPForum::Web::PublicHttpCache;
 
 our $VERSION = '0.001';
 
@@ -52,6 +53,16 @@ sub register {
 sub _register_forum_helpers {
     my ( $application, $config ) = @_;
 
+    $application->helper(
+        gp_public_http_cache => sub {
+            my ($controller) = @_;
+
+            return GPForum::Web::PublicHttpCache->new(
+                cache       => $controller->gp_local_cache,
+                ttl_seconds => $config->category_cache_ttl_seconds,
+            );
+        }
+    );
     $application->helper(
         gp_category_reader => sub {
             my ($controller) = @_;

@@ -14,12 +14,14 @@ as an enhancement but insufficient for multi-process Hypnotoad deployments.
 
 Introduce `GPForum::Service::Realtime::PgNotifier` and
 `GPForum::Service::Realtime::PgListener` as a PostgreSQL LISTEN/NOTIFY transport
-between outbox dispatch and websocket fanout. Run `PgListener` under
+between outbox dispatch and websocket fanout on the domain-event channel
+`gpforum_domain_events`. Run `PgListener` under
 `GPForum::Service::Realtime::ListenerSupervisor` inside each web process when
 `GPFORUM_REALTIME_LISTENER_ENABLED=1`.
 
-Websocket state remains disposable. Durable state stays in PostgreSQL tables and
-clients retain polling fallback.
+Websocket state remains disposable. Durable state stays in PostgreSQL tables,
+the listener can recover missed notifications through cursor-based outbox
+polling, and clients retain polling fallback.
 
 ## Consequences
 

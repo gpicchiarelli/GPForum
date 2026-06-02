@@ -16,7 +16,7 @@ use GPForum::Test::QueryPlanEvidenceDbh;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 30;
+const my $EXPECTED_TESTS => 33;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -121,7 +121,7 @@ my $dry_run = GPForum::Command::QueryPlanEvidence->new->evidence_report(
 );
 is( $dry_run->{mode}, 'dry-run', 'dry-run report avoids PostgreSQL' );
 is( scalar @{ $dry_run->{endpoints} },
-    11, 'dry-run report lists default evidence endpoints' );
+    12, 'dry-run report lists default evidence endpoints' );
 like(
     GPForum::Command::QueryPlanEvidence->new->format_report( $dry_run, 'text' ),
     qr/query_plan_evidence [ ] status=ok/msx,
@@ -290,5 +290,22 @@ throws_ok(
     qr/Usage/msx,
     'run rejects unknown endpoint names before DB access'
 );
+
+my $outbox_claim = GPForum::Command::QueryPlanEvidence->new->evidence_report(
+    {
+        analyze   => 1,
+        dry_run   => 1,
+        endpoints => ['outbox_claim'],
+    }
+);
+is( $outbox_claim->{endpoints}[0]{sql_label},
+    'outbox_claim_ready', 'outbox claim evidence has a dedicated label' );
+like(
+    $outbox_claim->{endpoints}[0]{purpose},
+    qr/outbox [ ] worker/msx,
+    'outbox claim evidence documents worker claim intent'
+);
+is( $outbox_claim->{endpoints}[0]{status},
+    'ok', 'outbox claim evidence participates in dry-run gate' );
 
 1;

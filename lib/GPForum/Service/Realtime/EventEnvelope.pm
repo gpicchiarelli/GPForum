@@ -14,7 +14,8 @@ our $VERSION = '0.001';
 
 const my $DEFAULT_SCHEMA_VERSION => 1;
 const my $MAX_PAYLOAD_BYTES      => 8192;
-const my $TYPE_PATTERN => qr/\A [a-z][a-z0-9_]* [.] [a-z][a-z0-9_]* \z/msx;
+const my $TYPE_FRAGMENT          => qr/[[:lower:]][[:lower:][:digit:]_]*/msx;
+const my $TYPE_PATTERN => qr/\A $TYPE_FRAGMENT (?: [.] $TYPE_FRAGMENT )+ \z/msx;
 
 has clock             => sub { return GPForum::Service::Clock->new; };
 has id_service        => sub { return GPForum::Service::Id->new; };
@@ -45,24 +46,74 @@ sub validate {
 
     return _invalid('malformed_payload') if ref $event ne 'HASH';
 
-    for my $field (qw(event_id type schema_version occurred_at payload)) {
-        return _invalid( 'missing_' . $field )
-          if !defined $event->{$field} || !length "$event->{$field}";
-    }
-
-    return _invalid('invalid_type')
-      if $event->{type} !~ $TYPE_PATTERN;
-    return _invalid('invalid_schema_version')
-      if $event->{schema_version} !~ /\A [[:digit:]]+ \z/msx
-      || $event->{schema_version} < 1;
-    return _invalid('invalid_payload') if ref $event->{payload} ne 'HASH';
-    return _invalid('invalid_metadata')
-      if exists $event->{metadata} && ref $event->{metadata} ne 'HASH';
+    my $reason = _event_rejection_reason($event);
+    return _invalid($reason) if $reason;
 
     my $size = length encode_json($event);
     return _invalid('payload_too_large') if $size > $self->max_payload_bytes;
 
     return { ok => 1, bytes => $size };
+}
+
+sub _event_rejection_reason {
+    my ($event) = @_;
+
+    return
+         _missing_required_field($event)
+      || _type_rejection_reason($event)
+      || _schema_version_rejection_reason($event)
+      || _payload_rejection_reason($event)
+      || _metadata_rejection_reason($event);
+}
+
+sub _missing_required_field {
+    my ($event) = @_;
+
+    for my $field (qw(event_id type schema_version occurred_at payload)) {
+        if ( !defined $event->{$field} || !length "$event->{$field}" ) {
+            return 'missing_' . $field;
+        }
+    }
+
+    return;
+}
+
+sub _type_rejection_reason {
+    my ($event) = @_;
+
+    return if $event->{type} =~ $TYPE_PATTERN;
+
+    return 'invalid_type';
+}
+
+sub _schema_version_rejection_reason {
+    my ($event) = @_;
+
+    if (   $event->{schema_version} =~ /\A [[:digit:]]+ \z/msx
+        && $event->{schema_version} >= 1 )
+    {
+        return;
+    }
+
+    return 'invalid_schema_version';
+}
+
+sub _payload_rejection_reason {
+    my ($event) = @_;
+
+    return if ref $event->{payload} eq 'HASH';
+
+    return 'invalid_payload';
+}
+
+sub _metadata_rejection_reason {
+    my ($event) = @_;
+
+    return if !exists $event->{metadata};
+
+    return if ref $event->{metadata} eq 'HASH';
+
+    return 'invalid_metadata';
 }
 
 sub serialize {

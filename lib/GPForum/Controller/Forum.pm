@@ -45,7 +45,17 @@ sub categories {
     my $payload =
       $self->gp_forum_view_model->categories_page( categories => $categories );
 
-    return _render_payload( $self, 'forum/categories', $payload, $HTTP_OK );
+    return _render_payload(
+        {
+            cache_options => _public_cache_options(
+                $self, 'categories', ['forum:categories']
+            ),
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/categories',
+        }
+    );
 }
 
 sub category {
@@ -69,7 +79,18 @@ sub category {
         threads_page => $threads,
     );
 
-    return _render_payload( $self, 'forum/category', $payload, $HTTP_OK );
+    return _render_payload(
+        {
+            cache_options => _public_cache_options(
+                $self, 'category',
+                [ 'forum:categories', "forum:category:$category_id" ]
+            ),
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/category',
+        }
+    );
 }
 
 sub thread {
@@ -105,7 +126,18 @@ sub thread {
         ),
     );
 
-    return _render_payload( $self, 'forum/thread', $payload, $HTTP_OK );
+    return _render_payload(
+        {
+            cache_options => _public_cache_options(
+                $self, 'thread',
+                [ 'forum:thread:' . $self->param('thread_id') ]
+            ),
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/thread',
+        }
+    );
 }
 
 sub new_thread_form {
@@ -121,7 +153,14 @@ sub new_thread_form {
         values               => {},
     );
 
-    return _render_payload( $self, 'forum/new_thread', $payload, $HTTP_OK );
+    return _render_payload(
+        {
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/new_thread',
+        }
+    );
 }
 
 sub create_thread {
@@ -225,7 +264,14 @@ sub feed {
 
     my $payload = $self->gp_community_view_model->feed_page( page => $page );
 
-    return _render_payload( $self, 'forum/feed', $payload, $HTTP_OK );
+    return _render_payload(
+        {
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/feed',
+        }
+    );
 }
 
 sub bookmarks {
@@ -246,7 +292,14 @@ sub bookmarks {
     my $payload =
       $self->gp_community_view_model->bookmarks_page( page => $page );
 
-    return _render_payload( $self, 'forum/bookmarks', $payload, $HTTP_OK );
+    return _render_payload(
+        {
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/bookmarks',
+        }
+    );
 }
 
 sub create_thread_bookmark {
@@ -683,17 +736,19 @@ sub search {
 
     if ( !length $query ) {
         return _render_payload(
-            $self,
-            'forum/search',
-            $self->gp_forum_view_model->search_page(
-                filters    => $filters,
-                has_more   => 0,
-                limit      => $limit,
-                more_limit => undef,
-                query      => q{},
-                results    => [],
-            ),
-            $HTTP_OK
+            {
+                controller => $self,
+                payload    => $self->gp_forum_view_model->search_page(
+                    filters    => $filters,
+                    has_more   => 0,
+                    limit      => $limit,
+                    more_limit => undef,
+                    query      => q{},
+                    results    => [],
+                ),
+                status   => $HTTP_OK,
+                template => 'forum/search',
+            }
         );
     }
 
@@ -710,18 +765,20 @@ sub search {
     if ($EVAL_ERROR) {
         $self->app->log->warn("search degraded: $EVAL_ERROR");
         return _render_payload(
-            $self,
-            'forum/search',
-            $self->gp_forum_view_model->search_page(
-                filters    => $filters,
-                has_more   => 0,
-                limit      => $limit,
-                more_limit => undef,
-                query      => $query,
-                results    => [],
-                status     => 'degraded',
-            ),
-            $HTTP_OK
+            {
+                controller => $self,
+                payload    => $self->gp_forum_view_model->search_page(
+                    filters    => $filters,
+                    has_more   => 0,
+                    limit      => $limit,
+                    more_limit => undef,
+                    query      => $query,
+                    results    => [],
+                    status     => 'degraded',
+                ),
+                status   => $HTTP_OK,
+                template => 'forum/search',
+            }
         );
     }
 
@@ -734,17 +791,19 @@ sub search {
       : undef;
 
     return _render_payload(
-        $self,
-        'forum/search',
-        $self->gp_forum_view_model->search_page(
-            query      => $query,
-            filters    => $filters,
-            has_more   => $has_more,
-            limit      => $limit,
-            more_limit => $more_limit,
-            results    => \@results,
-        ),
-        $HTTP_OK
+        {
+            controller => $self,
+            payload    => $self->gp_forum_view_model->search_page(
+                query      => $query,
+                filters    => $filters,
+                has_more   => $has_more,
+                limit      => $limit,
+                more_limit => $more_limit,
+                results    => \@results,
+            ),
+            status   => $HTTP_OK,
+            template => 'forum/search',
+        }
     );
 }
 
@@ -801,20 +860,41 @@ sub search_autocomplete {
 }
 
 sub _render_payload {
-    my ( $controller, $template, $payload, $status ) = @_;
+    my ($input) = @_;
 
-    if ( _wants_json($controller) ) {
-        return $controller->render(
-            json   => $payload,
-            status => $status,
+    if ( _wants_json( $input->{controller} ) ) {
+        return $input->{controller}->render(
+            json   => $input->{payload},
+            status => $input->{status},
         );
     }
 
-    return $controller->render(
-        template => $template,
-        %{$payload},
-        status => $status,
+    if ( $input->{cache_options} ) {
+        return $input->{controller}->gp_public_http_cache->render(
+            controller => $input->{controller},
+            template   => $input->{template},
+            payload    => $input->{payload},
+            status     => $input->{status},
+            %{ $input->{cache_options} },
+        );
+    }
+
+    return $input->{controller}->render(
+        template => $input->{template},
+        %{ $input->{payload} },
+        status => $input->{status},
     );
+}
+
+sub _public_cache_options {
+    my ( $controller, $name, $tags ) = @_;
+
+    my $path_query = q{} . $controller->req->url->path_query;
+
+    return {
+        key  => join( q{:}, 'forum-ssr', $name, $path_query ),
+        tags => [ 'forum:public-html', @{$tags} ],
+    };
 }
 
 sub _wants_json {
