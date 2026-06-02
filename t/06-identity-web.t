@@ -10,6 +10,7 @@ use Test::Mojo;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Test::AllowLimiter;
 use GPForum::Test::IdentityStore;
 use GPForum::Test::DenyLimiter;
 use GPForum::Test::IdentitySecurityAudit;
@@ -41,6 +42,11 @@ $test->app->helper(
     }
 );
 $test->app->helper( gp_identity_security_audit => sub { return $audit; } );
+$test->app->helper(
+    gp_rate_limiter => sub {
+        return GPForum::Test::AllowLimiter->new;
+    }
+);
 
 $test->get_ok('/register');
 $test->status_is($HTTP_OK);
@@ -142,6 +148,11 @@ $invalid_login_test->app->helper(
         return GPForum::Test::IdentitySecurityAudit->new;
     }
 );
+$invalid_login_test->app->helper(
+    gp_rate_limiter => sub {
+        return GPForum::Test::AllowLimiter->new;
+    }
+);
 $invalid_login_test->get_ok('/login');
 my $invalid_login_token = _csrf_token($invalid_login_test);
 $invalid_login_test->post_ok(
@@ -223,6 +234,11 @@ $duplicate_test->app->helper(
 $duplicate_test->app->helper(
     gp_identity_security_audit => sub {
         return GPForum::Test::IdentitySecurityAudit->new;
+    }
+);
+$duplicate_test->app->helper(
+    gp_rate_limiter => sub {
+        return GPForum::Test::AllowLimiter->new;
     }
 );
 $duplicate_test->get_ok('/register');
