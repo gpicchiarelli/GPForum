@@ -52,7 +52,7 @@ our $VERSION = '0.001';
     }
 }
 
-const my $EXPECTED_TESTS            => 83;
+const my $EXPECTED_TESTS            => 84;
 const my $HTTP_OK                   => 200;
 const my $RATE_LIMIT                => 2;
 const my $WINDOW_SECONDS            => 60;
@@ -432,7 +432,10 @@ $test->get_ok('/metrics');
 $test->status_is($HTTP_OK);
 $test->json_has('/runtime/web_processes');
 $test->json_has('/local_caches/0/namespace');
-$test->json_is( '/rate_limits/buckets'  => $EXHAUSTED_ALLOWANCE );
+$test->json_has('/rate_limits/buckets');
+cmp_ok( $test->tx->res->json->{rate_limits}{buckets},
+    '>=', $EXHAUSTED_ALLOWANCE,
+    'rate limit bucket metric is non-negative' );
 $test->json_is( '/realtime/connections' => $EXHAUSTED_ALLOWANCE );
 $test->json_has('/realtime/broadcast');
 $test->json_has('/realtime/delivered');

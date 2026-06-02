@@ -47,6 +47,15 @@ like(
 );
 
 sub _run_query_plan_check {
+    local %ENV = %ENV;
+    delete @ENV{
+        qw(
+          GPFORUM_DATABASE_DSN
+          GPFORUM_DATABASE_USER
+          GPFORUM_DATABASE_PASSWORD
+        )
+    };
+
     open my $check, q{-|}, 'script/query-plan-check'
       or croak 'failed to run query plan check';
 
