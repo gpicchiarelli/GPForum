@@ -14,7 +14,12 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS            => 58;
+const my $EXPECTED_TESTS            => 63;
+const my $DEFAULT_RUNTIME_BACKLOG   => 256;
+const my $DEFAULT_RUNTIME_CLIENTS   => 250;
+const my $DEFAULT_RUNTIME_REQUESTS  => 1_000;
+const my $DEFAULT_RUNTIME_KEEPALIVE => 5;
+const my $DEFAULT_MAX_OPEN_FDS      => 65_536;
 const my $CUSTOM_WEB_PROCESSES      => 8;
 const my $CUSTOM_WORKER_PROCESSES   => 3;
 const my $CUSTOM_REALTIME_PROCESSES => 2;
@@ -151,8 +156,20 @@ is( $config->minion_pg_url,
     $CUSTOM_MINION_PG_URL, 'Minion PostgreSQL URL loads from env' );
 is( $config->metrics_token,
     $CUSTOM_METRICS_TOKEN, 'metrics token loads from env' );
-is( GPForum::Config->new->metrics_token,
+my $default_config = GPForum::Config->new;
+is( $default_config->metrics_token,
     q{}, 'metrics token is optional by default' );
+is( $default_config->runtime_backlog,
+    $DEFAULT_RUNTIME_BACKLOG, 'runtime backlog default is production-sized' );
+is( $default_config->runtime_clients,
+    $DEFAULT_RUNTIME_CLIENTS, 'runtime clients default is production-sized' );
+is( $default_config->runtime_requests,
+    $DEFAULT_RUNTIME_REQUESTS, 'runtime request recycle default is bounded' );
+is( $default_config->runtime_keep_alive,
+    $DEFAULT_RUNTIME_KEEPALIVE, 'runtime keep-alive default is conservative' );
+is( $default_config->os_max_open_file_descriptors,
+    $DEFAULT_MAX_OPEN_FDS,
+    'OS file descriptor default matches production floor' );
 is( $runtime->as_hash->{os_features}{reuseport}{setting},
     'off', 'runtime exposes OS feature settings' );
 is( $runtime->as_hash->{os_preflight_settings}{min_recommended_workers},

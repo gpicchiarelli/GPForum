@@ -3,7 +3,8 @@ package main;
 use strict;
 use warnings;
 
-use Carp          qw(croak);
+use Carp qw(croak);
+use Const::Fast;
 use JSON::MaybeXS qw(decode_json);
 use Test::More;
 
@@ -20,6 +21,9 @@ use GPForum::Test::OSResourceSnapshot;
 use GPForum::Test::OSTinyLinux;
 
 our $VERSION = '0.001';
+
+const my $PRODUCTION_NOFILE_FLOOR => 65_536;
+const my $HIGH_NOFILE_LIMIT       => 131_072;
 
 my $resource = GPForum::Test::OSResourceSnapshot->new;
 my $linux    = GPForum::OS::Linux->new( resource_probe => $resource );
@@ -38,9 +42,9 @@ my $report = GPForum::OS::Preflight->from_runtime($runtime)->report;
 is( $report->{status},            'ok',    'Linux OS preflight is healthy' );
 is( $report->{os}{event_backend}, 'epoll', 'Linux declares epoll backend' );
 is( $report->{resources}{file_descriptor_limit},
-    4096, 'preflight reports file descriptor limit' );
+    $HIGH_NOFILE_LIMIT, 'preflight reports file descriptor limit' );
 is( $report->{recommendations}{ulimit_nofile}{recommended_minimum},
-    1024, 'preflight reports recommended ulimit floor' );
+    $PRODUCTION_NOFILE_FLOOR, 'preflight reports recommended ulimit floor' );
 ok(
     $report->{sockets}{keepalive}{enabled},
     'preflight reports keepalive policy'
@@ -136,7 +140,7 @@ ok(
 my $swap_resource = GPForum::Test::OSResourceSnapshot->new(
     snapshot_data => {
         open_file_descriptors => 4,
-        file_descriptor_limit => 4096,
+        file_descriptor_limit => $HIGH_NOFILE_LIMIT,
         swap_pressure         => {
             status => 'high',
         },

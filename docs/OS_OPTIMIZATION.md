@@ -69,8 +69,10 @@ Environment variables:
 - `GPFORUM_OS_MIN_RECOMMENDED_WORKERS=<integer>`
 - `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS=<integer>`
 
-Defaults are conservative. Affinity is never applied by the application; it is
-a deployment-level declaration.
+Defaults are production-oriented but still conservative. The default nofile
+floor is `65536`; lower host limits should be treated as deployment drift.
+Affinity is never applied by the application; it is a deployment-level
+declaration.
 
 ## Worker Priority
 
@@ -97,6 +99,7 @@ portable `sysconf(_SC_OPEN_MAX)` when the platform exposes it.
 
 Low limits are deployment warnings because they affect concurrent sockets,
 database connections, logs, static assets, uploads, and worker pipes.
+Production preflight expects `LimitNOFILE=65536` or an equivalent OS limit.
 
 ## Static Files And Attachments
 

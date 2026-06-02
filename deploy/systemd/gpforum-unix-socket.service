@@ -13,6 +13,10 @@ Environment=GPFORUM_ENV=production
 Environment=GPFORUM_RUNTIME_LISTEN=http+unix://%2Frun%2Fgpforum%2Fgpforum.sock
 Environment=GPFORUM_RUNTIME_WORKER_POLICY=cap-to-cpu
 Environment=GPFORUM_RUNTIME_BACKLOG=256
+Environment=GPFORUM_RUNTIME_CLIENTS=250
+Environment=GPFORUM_RUNTIME_REQUESTS=1000
+Environment=GPFORUM_RUNTIME_KEEP_ALIVE_TIMEOUT=5
+Environment=GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS=65536
 ExecStartPre=/usr/bin/install -d -o gpforum -g gpforum /run/gpforum
 ExecStartPre=/opt/gpforum/script/gpforum-os-preflight --json
 ExecStart=/opt/gpforum/local/bin/carton exec hypnotoad /opt/gpforum/bin/gpforum
