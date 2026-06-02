@@ -21,12 +21,8 @@ if [ "$with_postgres" -eq 1 ]; then
         exit 1
     fi
 
-    if carton inject --help >/dev/null 2>&1; then
-        exec carton inject DBD::Pg Test::PostgreSQL
-    fi
-
     if ! command -v cpanm >/dev/null 2>&1; then
-        echo "cpanm is required to install PostgreSQL development dependencies when carton inject is unavailable."
+        echo "cpanm is required to install PostgreSQL development dependencies."
         exit 1
     fi
 
