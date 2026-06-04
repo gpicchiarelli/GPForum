@@ -8,6 +8,7 @@ use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller';
 
 use GPForum::Web::ErrorPayload;
+use GPForum::Web::RequestPreference;
 
 our $VERSION = '0.001';
 
@@ -373,11 +374,7 @@ sub _trim {
 sub _wants_json {
     my ($controller) = @_;
 
-    my $format = $controller->param('format') || q{};
-    return 1 if $format eq 'json';
-
-    my $accept = $controller->req->headers->accept || q{};
-    return $accept =~ m{application/json}msx ? 1 : 0;
+    return GPForum::Web::RequestPreference->wants_json($controller);
 }
 
 sub _bad_request {
