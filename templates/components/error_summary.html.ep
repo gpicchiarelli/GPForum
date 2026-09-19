@@ -1,0 +1,16 @@
+% my $errors = stash('errors') || {};
+% my $fields = stash('fields') || [];
+% my $summary = stash('summary') || t('form.error_summary');
+% my $summary_id = stash('summary_id') || 'form-error-summary';
+% my @visible_fields = grep { ref $_ eq 'HASH' && $errors->{ $_->{name} } } @{$fields};
+
+% if (@visible_fields) {
+  <div id="<%= $summary_id %>" class="form-error-summary" role="alert" tabindex="-1">
+    <p><%= $summary %></p>
+    <ul>
+      % for my $field (@visible_fields) {
+        <li><a href="#<%= $field->{id} %>"><%= $errors->{ $field->{name} } %></a></li>
+      % }
+    </ul>
+  </div>
+% }

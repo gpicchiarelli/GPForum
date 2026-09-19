@@ -1,0 +1,61 @@
+% layout 'default';
+% title t('admin.health_runtime') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-status-heading">
+  <%= include 'components/page_header', heading_id => 'admin-status-heading', component_title => t('admin.health_runtime'), actions_label => t('admin.status'), actions => ui_actions({ href => url_for('admin_dashboard'), label => t('admin.admin') }, { href => url_for('admin_jobs'), label => t('admin.async_jobs') }) %>
+
+  <section aria-labelledby="admin-readiness-heading">
+    <%= include 'components/section_header', heading_id => 'admin-readiness-heading', component_title => t('admin.readiness') %>
+    <p><%= include 'components/status_badge', value => $readiness->{status} || 'unknown' %></p>
+    % if (@{ $readiness->{checks} || [] }) {
+      <ol aria-label="<%= t('admin.readiness_checks') %>">
+        % for my $check (@{ $readiness->{checks} }) {
+          <li><%= $check->{name} %>: <%= include 'components/status_badge', value => $check->{status} || 'unknown' %></li>
+        % }
+      </ol>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-runtime-heading">
+    <%= include 'components/section_header', heading_id => 'admin-runtime-heading', component_title => t('admin.runtime') %>
+    <dl>
+      <dt><%= t('admin.mode') %></dt>
+      <dd><%= ui_label('state', $metrics->{runtime}{mode} || 'unknown') %></dd>
+      <dt><%= t('admin.outbox_pending') %></dt>
+      <dd><%= $metrics->{outbox}{pending} || 0 %></dd>
+      <dt><%= t('admin.observed_requests') %></dt>
+      <dd><%= $metrics->{db_query_stats}{requests_observed} || 0 %></dd>
+    </dl>
+  </section>
+
+  <section aria-labelledby="admin-query-budget-heading">
+    <%= include 'components/section_header', heading_id => 'admin-query-budget-heading', component_title => t('admin.query_budgets') %>
+    <p><%= t('admin.query_budget_drift') %>: <%= include 'components/status_badge', value => $query_budget_drift->{status} || 'unknown' %></p>
+    % if (@{$query_budget_rows}) {
+      % my @query_budget_table_rows = map {
+      %   { endpoint => $_->{endpoint}, budget => t('admin.queries', { count => $_->{max_queries} }) }
+      % } @{$query_budget_rows};
+      <%= include 'components/admin_table',
+        label => t('admin.query_budget_list'),
+        columns => [
+          { key => 'endpoint', label => t('admin.endpoint') },
+          { key => 'budget', label => t('admin.query_budget') },
+        ],
+        rows => \@query_budget_table_rows %>
+    % } else {
+      <%= include 'components/empty_state', heading_id => 'admin-query-budget-empty-heading', component_title => t('admin.no_query_budget') %>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-benchmark-heading">
+    <%= include 'components/section_header', heading_id => 'admin-benchmark-heading', component_title => t('admin.benchmark_status') %>
+    <dl>
+      <dt><%= t('admin.status') %></dt>
+      <dd><%= include 'components/status_badge', value => $benchmark->{status} %></dd>
+      <dt><%= t('admin.fixture_command') %></dt>
+      <dd><code><%= $benchmark->{fixture_command} %></code></dd>
+      <dt><%= t('admin.configured_command') %></dt>
+      <dd><code><%= $benchmark->{configured_command} %></code></dd>
+    </dl>
+  </section>
+</section>

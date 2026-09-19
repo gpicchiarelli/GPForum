@@ -1,0 +1,41 @@
+#!/bin/sh
+
+# PROVIDE: gpforum
+# REQUIRE: LOGIN postgresql
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="gpforum"
+rcvar="gpforum_enable"
+
+: ${gpforum_enable:="NO"}
+: ${gpforum_user:="gpforum"}
+: ${gpforum_group:="gpforum"}
+: ${gpforum_home:="/usr/local/www/gpforum"}
+: ${gpforum_env:="production"}
+
+pidfile="${gpforum_home}/hypnotoad.pid"
+command="/usr/sbin/daemon"
+# carton install --deployment does not create local/bin/carton.
+# script/gpforum-carton matches script/bootstrap-deps.
+procname="${gpforum_home}/local/bin/hypnotoad"
+command_args="-f -p ${pidfile} -u ${gpforum_user} /usr/bin/env GPFORUM_ENV=${gpforum_env} MOJO_MODE=production ${gpforum_home}/script/gpforum-carton exec hypnotoad ${gpforum_home}/bin/gpforum"
+start_precmd="gpforum_preflight"
+stop_cmd="gpforum_stop"
+
+gpforum_preflight()
+{
+    cd "${gpforum_home}" || return 1
+    su -m "${gpforum_user}" -c "${gpforum_home}/script/gpforum-os-preflight --json" || return 1
+}
+
+gpforum_stop()
+{
+    if [ -f "${pidfile}" ]; then
+        kill -QUIT "$(cat "${pidfile}")"
+    fi
+}
+
+load_rc_config $name
+run_rc_command "$1"

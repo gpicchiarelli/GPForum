@@ -1,0 +1,462 @@
+package GPForum::Controller::Forum::Community;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use English qw(-no_match_vars);
+use Mojo::Base 'GPForum::Controller::Forum::Base';
+
+our $VERSION = '0.001';
+
+const my $HTTP_OK => 200;
+
+sub feed {
+    my ($self) = @_;
+
+    my $user_id = $self->_current_user_id;
+    if ( !$user_id ) {
+        return $self->_unauthorized;
+    }
+
+    my $page = $self->gp_feed_reader->list_page_for_user(
+        $user_id,
+        {
+            limit => $self->list_page_limit,
+            after => $self->param('after'),
+        }
+    );
+
+    my $payload = $self->gp_community_view_model->feed_page( page => $page );
+
+    return $self->render_payload(
+        {
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/feed',
+        }
+    );
+}
+
+sub bookmarks {
+    my ($self) = @_;
+
+    my $user_id = $self->_current_user_id;
+    if ( !$user_id ) {
+        return $self->_unauthorized;
+    }
+
+    my $page = $self->gp_bookmark_store->list_page_for_user(
+        $user_id,
+        {
+            target_type => $self->forum_access->thread_target,
+            limit       => $self->list_page_limit,
+            after       => $self->param('after'),
+        }
+    );
+
+    my $payload =
+      $self->gp_community_view_model->bookmarks_page( page => $page );
+
+    return $self->render_payload(
+        {
+            controller => $self,
+            payload    => $payload,
+            status     => $HTTP_OK,
+            template   => 'forum/bookmarks',
+        }
+    );
+}
+
+sub create_thread_bookmark {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('thread.bookmark');
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->visible_thread ) {
+        return;
+    }
+
+    return $self->_save_thread_bookmark($user_id);
+}
+
+sub _save_thread_bookmark {
+    my ( $self, $user_id ) = @_;
+
+    my $bookmark = eval {
+        return $self->gp_bookmark_store->save_bookmark(
+            {
+                user_id     => $user_id,
+                target_type => $self->forum_access->thread_target,
+                target_id   => $self->param('thread_id'),
+                note        => $self->param('note'),
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        return $self->_system_failure;
+    }
+
+    return $self->bookmark_action_response(
+        $self->forum_access->bookmarked_status, $bookmark );
+}
+
+sub remove_thread_bookmark {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('thread.bookmark.remove');
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->visible_thread ) {
+        return;
+    }
+
+    return $self->_delete_thread_bookmark($user_id);
+}
+
+sub _delete_thread_bookmark {
+    my ( $self, $user_id ) = @_;
+
+    my $removed = eval {
+        return $self->gp_bookmark_store->remove_for_user_target(
+            {
+                user_id     => $user_id,
+                target_type => $self->forum_access->thread_target,
+                target_id   => $self->param('thread_id'),
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        return $self->_system_failure;
+    }
+    if ( !$removed->{ok} ) {
+        return $self->_not_found('bookmark not found');
+    }
+
+    return $self->bookmark_action_response(
+        $self->forum_access->bookmark_removed_status, $removed );
+}
+
+sub subscribe_thread {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('thread.subscribe');
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->visible_thread ) {
+        return;
+    }
+
+    return $self->_save_thread_subscription($user_id);
+}
+
+sub _save_thread_subscription {
+    my ( $self, $user_id ) = @_;
+
+    my $subscription = eval {
+        return $self->gp_subscription_store->save_subscription(
+            {
+                user_id     => $user_id,
+                target_type => $self->forum_access->thread_target,
+                target_id   => $self->param('thread_id'),
+                preference  => $self->param('preference') || 'all',
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        return $self->_system_failure;
+    }
+
+    return $self->subscription_action_response(
+        $self->forum_access->subscribed_status,
+        $subscription );
+}
+
+sub mute_thread_subscription {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('thread.subscription.mute');
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->visible_thread ) {
+        return;
+    }
+
+    return $self->_mute_visible_subscription($user_id);
+}
+
+sub _mute_visible_subscription {
+    my ( $self, $user_id ) = @_;
+
+    my $muted = eval {
+        return $self->gp_subscription_store->mute_for_user_target(
+            {
+                user_id     => $user_id,
+                target_type => $self->forum_access->thread_target,
+                target_id   => $self->param('thread_id'),
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        return $self->_system_failure;
+    }
+    if ( !$muted->{ok} ) {
+        return $self->_not_found('subscription not found');
+    }
+
+    return $self->subscription_action_response(
+        $self->forum_access->subscription_muted_status, $muted );
+}
+
+sub unsubscribe_thread {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('thread.unsubscribe');
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->visible_thread ) {
+        return;
+    }
+
+    return $self->_revoke_visible_subscription($user_id);
+}
+
+sub _revoke_visible_subscription {
+    my ( $self, $user_id ) = @_;
+
+    my $revoked = eval {
+        return $self->gp_subscription_store->revoke_for_user_target(
+            {
+                user_id     => $user_id,
+                target_type => $self->forum_access->thread_target,
+                target_id   => $self->param('thread_id'),
+            }
+        );
+    };
+
+    if ($EVAL_ERROR) {
+        return $self->_system_failure;
+    }
+    if ( !$revoked->{ok} ) {
+        return $self->_not_found('subscription not found');
+    }
+
+    return $self->subscription_action_response(
+        $self->forum_access->unsubscribed_status, $revoked );
+}
+
+sub report_thread {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('report.create');
+    if ( !$user_id ) {
+        return;
+    }
+
+    my $thread = $self->visible_thread;
+    if ( !$thread ) {
+        return;
+    }
+
+    return $self->_submit_thread_report( $user_id, $thread );
+}
+
+sub _submit_thread_report {
+    my ( $self, $user_id, $thread ) = @_;
+
+    my $thread_id = $self->_column( $thread, 'thread_id' );
+
+    return $self->report_response(
+        $self->create_report(
+            {
+                reporter_user_id => $user_id,
+                target_type      => $self->forum_access->thread_target,
+                target_id        => $thread_id,
+            }
+        ),
+        $thread_id,
+        undef,
+    );
+}
+
+sub report_post {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('report.create');
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->_submit_visible_post_report($user_id);
+}
+
+sub _submit_visible_post_report {
+    my ( $self, $user_id ) = @_;
+
+    my $post =
+      $self->gp_post_reader->find_visible_post( $self->param('post_id') );
+    if ( !$post ) {
+        return $self->_not_found('post not found');
+    }
+
+    my $thread_id = $self->_column( $post, 'thread_id' );
+    if ( !$self->gp_thread_detail_reader->find_thread($thread_id) ) {
+        return $self->_not_found('post not found');
+    }
+
+    return $self->report_response(
+        $self->create_report(
+            {
+                reporter_user_id => $user_id,
+                target_type      => $self->forum_access->post_target,
+                target_id        => $self->_column( $post, 'post_id' ),
+            }
+        ),
+        $thread_id,
+        $self->_column( $post, 'post_id' ),
+    );
+}
+
+sub report_profile {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('report.create');
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->_submit_profile_report($user_id);
+}
+
+sub _submit_profile_report {
+    my ( $self, $user_id ) = @_;
+
+    my $username = $self->param('username');
+    my $profile  = $self->gp_profile_reader->public_profile(
+        $username,
+        {
+            limit => 1,
+        }
+    );
+
+    if ( !$profile->{ok} ) {
+        return $self->_not_found('profile not found');
+    }
+
+    return $self->profilereport_response(
+        $self->create_report(
+            {
+                reporter_user_id => $user_id,
+                target_type      => $self->forum_access->user_target,
+                target_id        => $profile->{profile}{user}{user_id},
+            }
+        ),
+        $profile->{profile}{user}{username} || $username,
+    );
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Controller::Forum::Community - Feed, bookmarks, subscriptions, reports.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    $routes->get('/feed')->to('Forum::Community#feed');
+
+=head1 DESCRIPTION
+
+Handles authenticated community surfaces around visible threads and profiles.
+Bookmark and report target types and write-success statuses live on
+L<GPForum::Web::ForumAccess>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 feed
+
+Renders the signed-in member feed.
+
+=head2 bookmarks
+
+Renders the signed-in bookmark list.
+
+=head2 create_thread_bookmark
+
+Saves a thread bookmark.
+
+=head2 remove_thread_bookmark
+
+Removes a thread bookmark.
+
+=head2 subscribe_thread
+
+Subscribes the viewer to a visible thread.
+
+=head2 mute_thread_subscription
+
+Mutes an existing thread subscription.
+
+=head2 unsubscribe_thread
+
+Revokes an existing thread subscription.
+
+=head2 report_thread
+
+Creates a thread report.
+
+=head2 report_post
+
+Creates a post report.
+
+=head2 report_profile
+
+Creates a profile report.
+
+=head1 DIAGNOSTICS
+
+Missing threads, bookmarks, and subscriptions render as not found.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Uses community stores configured during application startup.
+
+=head1 DEPENDENCIES
+
+Uses L<GPForum::Controller::Forum::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Reports require a reason and are rate-limited separately from other writes.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

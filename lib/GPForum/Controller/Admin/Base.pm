@@ -1,0 +1,414 @@
+package GPForum::Controller::Admin::Base;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use Mojo::Base 'Mojolicious::Controller';
+
+use GPForum::Web::Access;
+use GPForum::Web::AdminAccess;
+use GPForum::Web::Guard;
+use GPForum::Web::Responder;
+
+our $VERSION = '0.001';
+
+const my $HTTP_OK           => 200;
+const my $HTTP_UNAUTHORIZED => 401;
+const my $HTTP_FORBIDDEN    => 403;
+
+sub admin_access {
+    return GPForum::Web::AdminAccess->new;
+}
+
+sub limit_param {
+    my ($self) = @_;
+
+    return $self->admin_access->page_limit( $self->param('limit') );
+}
+
+sub authorized_write_user_id {
+    my ($self) = @_;
+
+    if ( GPForum::Web::Access->new->csrf_invalid($self) ) {
+        $self->_csrf_failure;
+        return;
+    }
+
+    return $self->authorized_user_id( $self->admin_access->manage_action );
+}
+
+sub authorized_user_id {
+    my ( $self, $action ) = @_;
+
+    my $user_id = $self->_current_user_id;
+    if ( !$user_id ) {
+        $self->_unauthorized;
+        return;
+    }
+    if ( !$self->_permission_allowed( $user_id, $action ) ) {
+        $self->_forbidden;
+        return;
+    }
+
+    return $user_id;
+}
+
+sub role_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->role_response( $ok_status, $result->{stored} );
+}
+
+sub permission_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->permission_response( $ok_status, $result->{stored} );
+}
+
+sub role_permission_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->role_permission_response( $ok_status, $result->{stored} );
+}
+
+sub binding_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->binding_response( $ok_status, $result->{stored} );
+}
+
+sub category_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->category_response( $ok_status, $result->{stored} );
+}
+
+sub write_failure {
+    my ( $self, $result ) = @_;
+
+    if ( $self->admin_access->is_failed($result) ) {
+        return $self->_system_failure;
+    }
+
+    return $self->_mapped_failure($result);
+}
+
+sub _mapped_failure {
+    my ( $self, $result ) = @_;
+
+    my $status = $self->admin_access->failure_status($result) || q{};
+    if ( $status eq 'not_found' ) {
+        return $self->_not_found( $result->{error} );
+    }
+    if ( $status eq 'invalid' ) {
+        return $self->_bad_request( $result->{errors} );
+    }
+
+    return;
+}
+
+sub role_response {
+    my ( $self, $status, $role ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json =>
+              $self->gp_admin_view_model->role_response( $status, $role, ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to( $self->admin_access->default_redirect );
+}
+
+sub permission_response {
+    my ( $self, $status, $permission ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_admin_view_model->permission_response(
+                $status, $permission,
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to( $self->admin_access->default_redirect );
+}
+
+sub role_permission_response {
+    my ( $self, $status, $role_permission ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_admin_view_model->role_permission_response(
+                $status, $role_permission,
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to( $self->admin_access->default_redirect );
+}
+
+sub binding_response {
+    my ( $self, $status, $binding ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_admin_view_model->role_binding_response(
+                $status, $binding,
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to( $self->admin_access->default_redirect );
+}
+
+sub category_response {
+    my ( $self, $status, $category ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_admin_view_model->category_response(
+                $status, $category,
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to( $self->admin_access->categories_redirect );
+}
+
+sub render_payload {
+    my ( $self, $input ) = @_;
+
+    return GPForum::Web::Responder->new->payload(
+        {
+            controller => $self,
+            payload    => $input->{payload},
+            status     => $input->{status},
+            template   => $input->{template},
+        }
+    );
+}
+
+sub optional_param {
+    my ( $self, $name ) = @_;
+
+    my $value = $self->_trim( $self->param($name) );
+    my $optional;
+    if ( length $value ) {
+        $optional = $value;
+    }
+
+    return $optional;
+}
+
+sub _permission_allowed {
+    my ( $self, $user_id, $action ) = @_;
+
+    return $self->gp_permission_gate->allowed( { user_id => $user_id },
+        $self->admin_access->permission_target($action) );
+}
+
+sub _current_user_id {
+    my ($self) = @_;
+
+    return GPForum::Web::Access->new->user_id($self);
+}
+
+sub _wants_json {
+    my ($self) = @_;
+
+    return GPForum::Web::Access->new->wants_json($self);
+}
+
+sub _trim {
+    my ( undef, $value ) = @_;
+
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}
+
+sub _bad_request {
+    my ( $self, $errors ) = @_;
+
+    return GPForum::Web::Guard->new->bad_request( $self,
+        $self->admin_access->invalid_request($errors) );
+}
+
+sub _csrf_failure {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'csrf_failure',
+        {
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
+    return GPForum::Web::Guard->new->csrf_failure($self);
+}
+
+sub _unauthorized {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'auth_denial',
+        {
+            status => $HTTP_UNAUTHORIZED,
+        }
+    );
+
+    return GPForum::Web::Guard->new->unauthorized($self);
+}
+
+sub _forbidden {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'auth_denial',
+        {
+            reason => 'forbidden',
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
+    return GPForum::Web::Guard->new->forbidden($self);
+}
+
+sub _not_found {
+    my ( $self, $error ) = @_;
+
+    return GPForum::Web::Guard->new->not_found( $self, $error );
+}
+
+sub _system_failure {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->system_failure($self);
+}
+
+sub _record_security_event {
+    my ( $self, $event_type, $metadata ) = @_;
+
+    return $self->gp_security_telemetry->record(
+        $event_type,
+        {
+            %{$metadata}, route => $self->_current_route_name,
+        }
+    );
+}
+
+sub _current_route_name {
+    my ($self) = @_;
+
+    my $route = eval { return $self->current_route; };
+    if ($route) {
+        return $route;
+    }
+
+    return 'unknown';
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Controller::Admin::Base - Shared admin HTTP helpers.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    use Mojo::Base 'GPForum::Controller::Admin::Base';
+
+=head1 DESCRIPTION
+
+Owns CSRF, authorization, telemetry, and Guard errors used by admin review,
+catalog, and binding controllers. Page limits, permission-target hashes,
+and failure-status mapping live on L<GPForum::Web::AdminAccess>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 authorized_write_user_id
+
+Rejects invalid CSRF tokens and unauthorized admin writes.
+
+=head2 authorized_user_id
+
+Requires an authenticated actor with the requested admin permission.
+
+=head2 write_failure
+
+Maps workflow statuses to HTTP error responses.
+
+=head1 DIAGNOSTICS
+
+HTTP errors are rendered as JSON or HTML depending on the request.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Uses permission and admin helpers registered during application startup.
+
+=head1 DEPENDENCIES
+
+Uses L<Mojolicious::Controller>, L<GPForum::Web::Access>,
+L<GPForum::Web::AdminAccess>, L<GPForum::Web::Guard>, and
+L<GPForum::Web::Responder>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Helpers are HTTP-oriented and must not talk to DBIx::Class resultsets.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

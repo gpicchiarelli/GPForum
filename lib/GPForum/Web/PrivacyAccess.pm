@@ -1,0 +1,211 @@
+package GPForum::Web::PrivacyAccess;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use Mojo::Base -base;
+
+our $VERSION = '0.001';
+
+const my $DEFAULT_LIMIT            => 25;
+const my $PRIVACY_RESOURCE         => 'privacy_rights';
+const my $ACTION_MANAGE            => 'manage';
+const my $ACTION_VIEW              => 'view';
+const my $STATUS_DELETION_APPROVED => 'deletion_approved';
+const my $STATUS_DELETION_HELD     => 'deletion_held';
+const my $DEFAULT_REDIRECT         => 'privacy_dashboard';
+const my $STATUS_FAILED            => 'failed';
+const my $STATUS_NOT_FOUND         => 'not_found';
+const my $STATUS_INVALID           => 'invalid';
+const my $STATUS_CONFLICT          => 'conflict';
+const my $CONFLICT_STATUS          => 'blocked';
+
+sub page_limit {
+    my ( undef, $requested ) = @_;
+
+    return $requested || $DEFAULT_LIMIT;
+}
+
+sub manage_action {
+    return $ACTION_MANAGE;
+}
+
+sub view_action {
+    return $ACTION_VIEW;
+}
+
+sub deletion_approved_status {
+    return $STATUS_DELETION_APPROVED;
+}
+
+sub deletion_held_status {
+    return $STATUS_DELETION_HELD;
+}
+
+sub permission_target {
+    my ( undef, $action ) = @_;
+
+    return {
+        action        => $action,
+        resource_type => $PRIVACY_RESOURCE,
+    };
+}
+
+sub default_redirect {
+    return $DEFAULT_REDIRECT;
+}
+
+sub is_failed {
+    my ( $self, $result ) = @_;
+
+    return $self->_status($result) eq $STATUS_FAILED ? 1 : 0;
+}
+
+sub failure_status {
+    my ( $self, $result ) = @_;
+
+    my $status = $self->_status($result);
+    if ( $status eq $STATUS_NOT_FOUND ) {
+        return $status;
+    }
+    if ( $status eq $STATUS_INVALID ) {
+        return $status;
+    }
+    if ( $status eq $STATUS_CONFLICT ) {
+        return $status;
+    }
+
+    return;
+}
+
+sub invalid_request {
+    my ( undef, $errors ) = @_;
+
+    return {
+        error  => 'The submitted privacy request was invalid.',
+        errors => $errors,
+        title  => 'Invalid privacy request',
+    };
+}
+
+sub conflict_payload {
+    my ( undef, $error ) = @_;
+
+    return {
+        error  => $error,
+        status => $CONFLICT_STATUS,
+        title  => 'Privacy action blocked',
+    };
+}
+
+sub _status {
+    my ( undef, $result ) = @_;
+
+    return $result->{status} || q{};
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Web::PrivacyAccess - Privacy page limits and HTTP policy.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $limit = $access->page_limit($requested);
+
+=head1 DESCRIPTION
+
+Owns privacy list page limits, the C<privacy_rights>/C<manage> permission
+hash, the catalog C<view> action, review write-success statuses, workflow
+failure-status mapping including C<conflict>, Guard payloads for invalid and
+blocked actions, and the default dashboard redirect. It does
+not render HTTP responses or load deletion requests.
+L<GPForum::Controller::Privacy::Base> still checks CSRF, sessions,
+permissions, and Guard errors.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 page_limit
+
+Returns a requested page size or the default of 25.
+
+=head2 manage_action
+
+Returns the staff-review permission action.
+
+=head2 view_action
+
+Returns the privacy-review permission action.
+
+=head2 deletion_approved_status
+
+Returns C<deletion_approved>.
+
+=head2 deletion_held_status
+
+Returns C<deletion_held>.
+
+=head2 permission_target
+
+Returns the C<privacy_rights> permission hash for an action.
+
+=head2 default_redirect
+
+Returns the member dashboard route name.
+
+=head2 is_failed
+
+True when the workflow status is C<failed>.
+
+=head2 failure_status
+
+Returns C<not_found>, C<invalid>, or C<conflict> when those statuses are
+present.
+
+=head2 invalid_request
+
+Returns the Guard bad-request payload for an invalid privacy command.
+
+=head2 conflict_payload
+
+Returns the Guard conflict payload for a blocked privacy action.
+
+=head1 DIAGNOSTICS
+
+None. HTTP rendering stays on the privacy controllers.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+Uses L<Const::Fast> and L<Mojo::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+CSRF, authentication, permission checks, and Guard rendering remain on
+L<GPForum::Controller::Privacy::Base>.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

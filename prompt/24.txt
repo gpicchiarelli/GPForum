@@ -1,0 +1,264 @@
+GPForum - HTTP Routes, Controllers & Application Workflow Constitution
+
+Prompt 46 alignment: HTTP workflows that render user-facing pages MUST return
+accessible SSR by default. Forms MUST have labels and associated errors,
+mutating controls MUST be semantic buttons, composer routes MUST support
+keyboard-only use, and no core route may require JavaScript as the only path to
+participation.
+
+Prompt 52 alignment: HTTP workflows MUST enforce authorization, visibility, and
+moderation state before rendering or mutating. Controllers MUST remain thin and
+MUST NOT bypass domain services, event emission, audit records, projection
+updates, cache invalidation, CSRF, or anti-leak filtering.
+
+This document defines the initial route map, controller responsibilities, request lifecycle, validation rules, and application workflow contracts for GPForum.
+
+This specification is mandatory for web implementation.
+
+---
+
+Request Philosophy
+
+Every mutating HTTP request MUST follow this order:
+
+* authenticate where required;
+* authorize;
+* validate input;
+* perform canonical persistence;
+* emit durable events;
+* enqueue asynchronous work where needed;
+* return safe response.
+
+Controllers MUST remain thin.
+
+Business rules MUST live in services, domain workflows, or authorization policy modules.
+
+---
+
+Public Routes
+
+GET /
+
+* renders forum home or public feed;
+* permission-aware;
+* cache-safe for anonymous users.
+
+GET /spaces/:space_slug
+
+* renders space view;
+* lists visible categories and recent threads.
+
+GET /c/:category_slug
+
+* renders category thread list;
+* supports pagination;
+* filters by permission.
+
+GET /t/:thread_id/:slug
+
+* renders thread view;
+* supports post pagination;
+* shows lock/archive/moderation state safely.
+
+GET /search
+
+* renders search form and results;
+* permission-aware.
+
+---
+
+Identity Routes
+
+GET /register
+
+* renders registration form.
+
+POST /register
+
+* creates user;
+* validates credentials;
+* emits user.registered.
+
+GET /login
+
+* renders login form.
+
+POST /login
+
+* validates credentials;
+* creates session;
+* emits user.logged_in.
+
+POST /logout
+
+* revokes current session;
+* emits session.revoked.
+
+GET /u/:username
+
+* renders public-safe profile.
+
+GET /settings
+
+* renders current user settings.
+
+POST /settings/profile
+
+* updates profile fields;
+* emits user.profile_updated if implemented.
+
+---
+
+Thread And Post Routes
+
+GET /c/:category_slug/new
+
+* renders thread composer;
+* requires thread.create permission.
+
+POST /c/:category_slug/threads
+
+* creates thread and initial post;
+* emits thread.created and post.created;
+* enqueues search and notification workflows.
+
+GET /t/:thread_id/reply
+
+* renders reply composer;
+* requires thread.reply permission.
+
+POST /t/:thread_id/posts
+
+* creates post;
+* rejects locked/archived threads for normal users;
+* emits post.created.
+
+GET /posts/:post_id/edit
+
+* renders edit form;
+* checks edit_own or edit_any.
+
+POST /posts/:post_id/edit
+
+* creates post revision;
+* updates current revision pointer;
+* emits post.edited.
+
+POST /posts/:post_id/delete
+
+* soft-deletes post where policy allows;
+* emits post.hidden or post.deleted_soft.
+
+---
+
+Subscription Routes
+
+POST /subscriptions
+
+* creates subscription;
+* validates target visibility;
+* emits subscription.created if implemented.
+
+DELETE /subscriptions/:id
+
+* revokes subscription;
+* emits subscription.revoked if implemented.
+
+GET /notifications
+
+* renders notification list.
+
+POST /notifications/:id/read
+
+* marks notification read;
+* emits notification.read.
+
+---
+
+Moderation Routes
+
+POST /reports
+
+* creates content report;
+* emits report.created.
+
+GET /moderation/reports
+
+* renders moderation queue;
+* requires report.view_queue.
+
+POST /moderation/reports/:id/resolve
+
+* resolves report;
+* emits report.resolved.
+
+POST /moderation/threads/:id/lock
+
+* locks thread;
+* emits thread.locked.
+
+POST /moderation/threads/:id/move
+
+* moves thread;
+* emits thread.moved.
+
+POST /moderation/posts/:id/hide
+
+* hides post;
+* emits post.hidden.
+
+POST /moderation/posts/:id/restore
+
+* restores post;
+* emits post.restored.
+
+POST /moderation/users/:id/suspend
+
+* suspends user;
+* emits user.suspended.
+
+---
+
+Admin Routes
+
+GET /admin
+
+* renders admin dashboard;
+* requires admin.view_dashboard.
+
+GET /admin/audit
+
+* renders audit log;
+* requires admin.view_audit_log.
+
+GET /admin/roles
+
+* renders role management;
+* requires admin.manage_roles.
+
+POST /admin/roles/bindings
+
+* creates scoped role binding;
+* emits role_binding.created if implemented.
+
+---
+
+Response Rules
+
+HTML responses MUST be server-rendered.
+
+HTMX responses MAY return fragments.
+
+API-style responses MUST include:
+
+* success or error state;
+* safe message;
+* correlation_id where available.
+
+Errors MUST NOT leak:
+
+* SQL;
+* stack traces;
+* internal paths;
+* secret values;
+* infrastructure topology.

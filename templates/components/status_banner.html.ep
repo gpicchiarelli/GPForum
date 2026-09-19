@@ -1,0 +1,12 @@
+% my $tone = stash('tone') || 'notice';
+% my $heading_id = stash('heading_id') || 'status-banner-heading';
+% my $component_title = stash('component_title') || t('ui.status_banner');
+% my $message = stash('message') || q{};
+% my $role = $tone eq 'error' ? 'alert' : 'status';
+
+<section class="ui-status-banner ui-status-banner--<%= $tone %>" aria-labelledby="<%= $heading_id %>" role="<%= $role %>">
+  <h2 id="<%= $heading_id %>"><%= $component_title %></h2>
+  % if (length $message) {
+    <p><%= $message %></p>
+  % }
+</section>

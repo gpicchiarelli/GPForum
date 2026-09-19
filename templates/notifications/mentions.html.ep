@@ -1,0 +1,42 @@
+% layout 'default';
+% title t('nav.mentions') . ' - ' . t('app.name');
+
+<section aria-labelledby="mentions-heading">
+  <%= include 'components/page_header', heading_id => 'mentions-heading', component_title => t('nav.mentions') %>
+  % if (@{$mentions}) {
+    <ol class="ui-card-list" aria-label="<%= t('mentions.list_label') %>">
+      % for my $mention (@{$mentions}) {
+        % my $presentation = $mention->{presentation} || {};
+        <li>
+          <article aria-labelledby="mention-<%= $mention->{mention_id} %>-heading">
+            <h2 id="mention-<%= $mention->{mention_id} %>-heading">
+              <%= $presentation->{by_label} || t('mentions.by') %>
+              % if ($mention->{actor_username}) {
+                <a href="<%= url_for('profile', username => $mention->{actor_username}) %>"><%= $mention->{actor_profile_label} || $mention->{actor_display_name} %></a>
+              % } else {
+                <%= $mention->{actor_id} %>
+              % }
+            </h2>
+            % if ($presentation->{summary}) {
+              <p><%= $presentation->{summary} %></p>
+            % }
+            % if (($mention->{source_type} || q{}) eq 'thread') {
+              <p><a href="<%= url_for('thread', thread_id => $mention->{source_id}) %>"><%= $presentation->{action_label} || t('mentions.open_discussion') %></a></p>
+            % } else {
+              <p><%= t('mentions.source') %> <%= $mention->{source_type} %> <%= $mention->{source_id} %></p>
+            % }
+            <p>
+              <%= t('mentions.mentioned_at') %>
+              <time datetime="<%= $mention->{created_at} %>"><%= $mention->{created_at} %></time>
+            </p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state', heading_id => 'mentions-empty-heading', component_title => t('mentions.empty') %>
+  % }
+  % if ($next_cursor) {
+    <%= include 'components/pagination', label => t('mentions.pagination'), items => ui_next_page(href => url_for('mentions')->query(after => $next_cursor), label => t('mentions.older')) %>
+  % }
+</section>

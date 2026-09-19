@@ -1,0 +1,22 @@
+[Unit]
+Description=GPForum scheduled operational jobs
+After=network-online.target postgresql.service gpforum.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gpforum
+Group=gpforum
+WorkingDirectory=/opt/gpforum
+Environment=MOJO_MODE=production
+Environment=GPFORUM_ENV=production
+EnvironmentFile=/etc/gpforum/gpforum.env
+# carton install --deployment does not create local/bin/carton.
+ExecStart=/opt/gpforum/script/gpforum-carton exec /opt/gpforum/bin/gpforum-scheduled-jobs --once --limit 100
+Nice=10
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/gpforum

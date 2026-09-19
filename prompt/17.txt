@@ -1,0 +1,416 @@
+GPForum - Community Operations, Forum Structure & Product Behavior Constitution
+
+Prompt 46 alignment: community participation MUST be accessible. Category
+navigation, thread lists, posting flows, reporting flows, profile surfaces,
+bookmarks, mentions, and community operations MUST preserve semantic rendering,
+keyboard operation, assistive-technology compatibility, and low-bandwidth
+graceful degradation.
+
+Prompt 47 alignment: GPForum community operations MUST support human-centered
+lifecycle design: anonymous visitor, newcomer, participant, regular, trusted
+contributor, moderator, and long-term steward. Discovery, onboarding,
+continuity, recognition, moderation care, and retention systems MUST remain
+explainable, privacy-aware, permission-aware, and anti-dark-pattern.
+
+This document defines the mandatory operational structure of the forum, community hierarchy, discussion lifecycle, user-facing workflows, moderation behavior, subscription model, feeds, trust signals, archival strategy, and practical product rules of GPForum.
+
+This specification is foundational and mandatory.
+
+---
+
+Operational Philosophy
+
+GPForum is a living community system, not only a technical platform.
+
+The product MUST prioritize:
+
+* clear conversation structure;
+* predictable moderation;
+* user trust;
+* readable information architecture;
+* long-term content preservation;
+* operational scalability;
+* low social ambiguity.
+
+The platform MUST avoid:
+
+* opaque content movement;
+* hidden moderation;
+* confusing hierarchy;
+* irreversible routine actions;
+* engagement mechanics that reward abuse;
+* product behavior that conflicts with governance.
+
+---
+
+Community Hierarchy
+
+Canonical hierarchy:
+
+* site
+* space
+* category
+* thread
+* post
+* revision
+
+A site MAY contain multiple spaces.
+
+A space represents a high-level community area.
+
+A category represents an operational discussion boundary inside a space.
+
+A thread is the primary conversation container.
+
+A post is the primary user-authored content unit.
+
+Hierarchy rules MUST remain:
+
+* explicit;
+* permission-aware;
+* moderation-aware;
+* searchable;
+* stable under scale.
+
+---
+
+Space Philosophy
+
+Spaces are:
+
+* community-level containers;
+* navigation anchors;
+* governance scopes;
+* optional permission boundaries.
+
+Spaces SHOULD support:
+
+* title;
+* slug;
+* description;
+* visibility state;
+* display order;
+* moderation policy reference;
+* archival state.
+
+Spaces MUST NOT become unbounded policy dumping grounds.
+
+---
+
+Category Philosophy
+
+Categories are:
+
+* topic boundaries;
+* moderation scopes;
+* permission scopes;
+* feed groupings;
+* search filters.
+
+Categories MUST support:
+
+* public, restricted, hidden, archived, and quarantined visibility;
+* per-category posting rules;
+* moderator assignment;
+* thread ordering policy;
+* subscription eligibility.
+
+Category movement MUST be:
+
+* authorized;
+* audited;
+* event-emitting;
+* visible to moderators.
+
+---
+
+Thread Lifecycle
+
+Thread states MUST be explicit.
+
+Canonical thread states:
+
+* draft
+* open
+* locked
+* hidden
+* quarantined
+* archived
+* deleted
+
+Open threads MAY accept replies.
+
+Locked threads MUST reject normal replies.
+
+Archived threads SHOULD remain readable when permitted.
+
+Quarantined threads MUST be hidden from public rendering until reviewed.
+
+Deleted threads SHOULD use soft deletion by default.
+
+Thread lifecycle changes MUST emit events.
+
+---
+
+Post Lifecycle
+
+Post states MUST be explicit.
+
+Canonical post states:
+
+* draft
+* published
+* edited
+* hidden
+* quarantined
+* deleted
+
+Post creation MUST:
+
+* validate input;
+* check authorization;
+* persist authoritative state;
+* create an audit/event record;
+* trigger asynchronous projections.
+
+Post editing MUST preserve revision history.
+
+Hard deletion MUST remain exceptional, authorized, audited, and usually reserved for legal or security requirements.
+
+---
+
+Composer Behavior
+
+The post composer MUST support:
+
+* server-side validation;
+* preview where feasible;
+* attachment intent;
+* CSRF protection;
+* rate-limit feedback;
+* draft-safe failure behavior.
+
+The composer MUST NOT:
+
+* trust client-side validation;
+* render unsafe HTML;
+* bypass moderation gates;
+* lose user text silently on recoverable errors.
+
+---
+
+Subscriptions
+
+Subscriptions represent user intent to follow activity.
+
+Supported subscription targets SHOULD include:
+
+* spaces;
+* categories;
+* threads;
+* users where policy allows;
+* search queries where policy allows.
+
+Subscriptions MUST support:
+
+* creation;
+* revocation;
+* notification preferences;
+* digest eligibility;
+* mute controls.
+
+Subscriptions MUST remain user-scoped and permission-aware.
+
+---
+
+Feeds
+
+GPForum SHOULD provide multiple feed views:
+
+* recent discussions;
+* unread subscriptions;
+* category feed;
+* space feed;
+* user activity feed;
+* moderation queue feed;
+* search result feed.
+
+Feeds MUST be:
+
+* permission-aware;
+* cache-safe;
+* pagination-aware;
+* stable under concurrent writes.
+
+Feeds MUST NOT become authoritative persistence.
+
+---
+
+Unread State
+
+Unread state SHOULD be derived from:
+
+* user read markers;
+* thread activity timestamps;
+* subscription state;
+* visibility permissions.
+
+Unread state MUST tolerate eventual consistency.
+
+Unread calculations MUST avoid expensive per-post scans during normal page rendering.
+
+---
+
+Moderation Operations
+
+Moderation actions MUST be explicit.
+
+Canonical moderation actions:
+
+* hide content;
+* unhide content;
+* lock thread;
+* unlock thread;
+* move thread;
+* quarantine content;
+* approve quarantined content;
+* reject quarantined content;
+* warn user;
+* suspend user;
+* ban user;
+* restore content.
+
+Every moderation action MUST be:
+
+* authorized;
+* scoped;
+* attributable;
+* timestamped;
+* audited;
+* reversible where safe.
+
+---
+
+Reporting
+
+Users SHOULD be able to report:
+
+* posts;
+* threads;
+* profiles;
+* attachments;
+* private abuse surfaces if implemented.
+
+Reports MUST support:
+
+* reason;
+* optional details;
+* target reference;
+* reporter reference;
+* status;
+* review assignment;
+* resolution record.
+
+Reports MUST NOT expose reporter identity to unauthorized users.
+
+---
+
+Trust And Reputation
+
+Trust signals MAY influence:
+
+* rate limits;
+* moderation pre-review;
+* attachment permissions;
+* posting velocity;
+* report weight.
+
+Trust MUST NOT become opaque authority.
+
+Trust-impacting changes MUST be explainable, bounded, and auditable.
+
+Reputation mechanics MUST avoid rewarding spam, harassment, brigading, or low-quality engagement loops.
+
+---
+
+Notifications
+
+Notification triggers SHOULD include:
+
+* reply to subscribed thread;
+* mention;
+* moderation action;
+* report resolution;
+* account security event;
+* digest generation.
+
+Notifications MUST be:
+
+* permission-aware;
+* asynchronous;
+* deduplicated where appropriate;
+* revocable through user preferences.
+
+---
+
+Archival
+
+Archival is a first-class lifecycle state.
+
+Archived content SHOULD:
+
+* remain readable when authorized;
+* stop accepting normal mutation;
+* remain searchable where policy allows;
+* remain reconstructable from canonical persistence.
+
+Archival MUST NOT be used as a hidden deletion mechanism.
+
+---
+
+Operational UX
+
+User-facing behavior MUST be predictable.
+
+The interface SHOULD make the following states clear:
+
+* locked;
+* archived;
+* hidden;
+* deleted;
+* quarantined;
+* unread;
+* subscribed;
+* rate-limited.
+
+The UI MUST NOT disclose sensitive moderation or security details to unauthorized users.
+
+---
+
+Scalability Rules
+
+Community operations MUST scale through:
+
+* append-oriented writes;
+* asynchronous projections;
+* permission-aware caching;
+* denormalized read models;
+* partition-aware persistence.
+
+Thread rendering MUST avoid unbounded queries.
+
+Large categories MUST support pagination, filtering, and archival.
+
+---
+
+Long-Term Product Goal
+
+GPForum MUST remain:
+
+* understandable to users;
+* governable by moderators;
+* inspectable by operators;
+* scalable by engineers;
+* durable over many years.
+
+The community structure is the product foundation of GPForum.

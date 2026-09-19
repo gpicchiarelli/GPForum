@@ -1,0 +1,55 @@
+% layout 'default';
+% title t('admin.users') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-users-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-users-heading',
+    component_title => t('admin.users'),
+    actions_label => t('admin.users'),
+    actions => ui_actions(
+      { href => url_for('admin_dashboard'), label => t('admin.admin') },
+      { href => url_for('admin_roles'), label => t('admin.roles') },
+      { href => url_for('admin_categories'), label => t('admin.categories') },
+    ) %>
+
+  <form method="get" action="<%= url_for('admin_users') %>">
+    <label for="admin-user-status"><%= t('admin.status') %></label>
+    <select id="admin-user-status" name="status">
+      <option value="" <%= !$status ? 'selected' : '' %>><%= t('common.any') %></option>
+      <option value="pending" <%= $status && $status eq 'pending' ? 'selected' : '' %>><%= ui_label('state', 'pending') %></option>
+      <option value="active" <%= $status && $status eq 'active' ? 'selected' : '' %>><%= ui_label('state', 'active') %></option>
+      <option value="suspended" <%= $status && $status eq 'suspended' ? 'selected' : '' %>><%= ui_label('state', 'suspended') %></option>
+    </select>
+    <button type="submit"><%= t('common.filter') %></button>
+  </form>
+
+  % if (@{$users}) {
+    <ol class="ui-card-list" aria-label="<%= t('admin.user_list') %>">
+      % for my $user (@{$users}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="<%= $user->{ui}{heading_id} %>">
+            <h2 id="<%= $user->{ui}{heading_id} %>"><%= $user->{username} %></h2>
+            <dl>
+              <dt><%= t('admin.display_name') %></dt>
+              <dd><%= $user->{display_name} %></dd>
+              <dt><%= t('admin.email') %></dt>
+              <dd><%= $user->{email_normalized} %></dd>
+              <dt><%= t('admin.status') %></dt>
+              <dd><%= ui_label('state', $user->{status}) %></dd>
+              <dt><%= t('admin.trust_level') %></dt>
+              <dd><%= $user->{trust_level} %></dd>
+              <dt><%= t('common.created') %></dt>
+              <dd><time datetime="<%= $user->{created_at} %>"><%= $user->{created_at} %></time></dd>
+            </dl>
+            <p><a href="<%= url_for('admin_user_roles', user_id => $user->{id}) %>"><%= t('admin.roles') %></a></p>
+            <p><a href="<%= url_for('admin_audit')->query(target_type => $user->{ui}{audit_link_target_type}, target_id => $user->{id}) %>"><%= t('admin.audit') %></a></p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'admin-users-empty-heading',
+      component_title => t('admin.no_users') %>
+  % }
+</section>

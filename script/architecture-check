@@ -1,0 +1,130 @@
+#!/bin/sh
+set -eu
+
+status=0
+
+check_controller_forbidden_persistence() {
+    file="$1"
+
+    if grep -nE -- '->resultset[[:space:]]*\(|DBIx::Class|GPForum::Schema' "$file"; then
+        echo "architecture-check: controller persistence boundary violation in $file" >&2
+        status=1
+    fi
+}
+
+check_os_specific_logic() {
+    if grep -RInE -- '\$\^O|OSNAME' lib t script bin \
+        | grep -vE '^lib/GPForum/OS([.]pm|/[^:]*[.]pm):' \
+        | grep -vE '^script/architecture-check:'; then
+        echo "architecture-check: OS-specific logic must live behind lib/GPForum/OS*.pm" >&2
+        status=1
+    fi
+}
+
+check_query_topology_gate() {
+    if ! script/query-plan-check >/dev/null; then
+        echo "architecture-check: query topology/static hot-path gate failed" >&2
+        status=1
+    fi
+}
+
+check_template_business_logic() {
+    if [ ! -d templates ]; then
+        return
+    fi
+
+    if grep -RInE -- 'resultset|DBIx::Class|GPForum::Schema|->search[[:space:]]*\(|->create[[:space:]]*\(|->update[[:space:]]*\(|->delete[[:space:]]*\(|gp_[[:alnum:]_]+' templates; then
+        echo "architecture-check: templates must render prepared view models only" >&2
+        status=1
+    fi
+}
+
+check_authority_language() {
+    if grep -RInE -- 'cache[^[:cntrl:]]*authoritative|authoritative[^[:cntrl:]]*cache|projection[^[:cntrl:]]*authoritative|authoritative[^[:cntrl:]]*projection' lib templates script bin \
+        | grep -vE '^script/architecture-check:'; then
+        echo "architecture-check: cache/projection authority language is forbidden in runtime code" >&2
+        status=1
+    fi
+}
+
+check_internal_dependency_cycles() {
+    if ! perl -MFile::Find -e '
+        my %file_for;
+        find(
+            {
+                no_chdir => 1,
+                wanted => sub {
+                    return if !/[.]pm\z/;
+                    my $path = $File::Find::name;
+                    ( my $module = $path ) =~ s{\Alib/|[.]pm\z}{}g;
+                    $module =~ s{/}{::}g;
+                    $file_for{$module} = $path;
+                },
+            },
+            q{lib}
+        );
+
+        my %edges;
+        for my $module ( keys %file_for ) {
+            open my $handle, q{<}, $file_for{$module}
+              or die qq{cannot read $file_for{$module}: $!};
+            while ( my $line = <$handle> ) {
+                while ( $line =~ /\buse\s+(GPForum(?:::\w+)+)/gmsx ) {
+                    push @{ $edges{$module} }, $1 if exists $file_for{$1};
+                }
+            }
+            close $handle or die qq{cannot close $file_for{$module}: $!};
+        }
+
+        my ( @stack, %seen, %active, @cycles );
+        sub walk {
+            my ($module) = @_;
+            $seen{$module}   = 1;
+            $active{$module} = 1;
+            push @stack, $module;
+
+            for my $next ( @{ $edges{$module} || [] } ) {
+                if ( !$seen{$next} ) {
+                    walk($next);
+                }
+                elsif ( $active{$next} ) {
+                    my @cycle = @stack;
+                    shift @cycle while @cycle && $cycle[0] ne $next;
+                    push @cycles, [ @cycle, $next ];
+                }
+            }
+
+            pop @stack;
+            delete $active{$module};
+            return;
+        }
+
+        for my $module ( keys %file_for ) {
+            walk($module) if !$seen{$module};
+        }
+
+        if (@cycles) {
+            print join qq{\n}, map { join q{ -> }, @{$_} } @cycles;
+            print qq{\n};
+            exit 1;
+        }
+
+        exit 0;
+    '; then
+        echo "architecture-check: internal GPForum dependency cycle detected" >&2
+        status=1
+    fi
+}
+
+for file in lib/GPForum/Controller/*.pm; do
+    [ -f "$file" ] || continue
+    check_controller_forbidden_persistence "$file"
+done
+
+check_os_specific_logic
+check_query_topology_gate
+check_template_business_logic
+check_authority_language
+check_internal_dependency_cycles
+
+exit "$status"

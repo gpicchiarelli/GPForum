@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gpforum.scheduled-jobs</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/gpforum</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GPFORUM_ENV</key>
+    <string>production</string>
+    <key>MOJO_MODE</key>
+    <string>production</string>
+  </dict>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/gpforum/script/gpforum-carton</string>
+    <string>exec</string>
+    <string>/opt/gpforum/bin/gpforum-scheduled-jobs</string>
+    <string>--once</string>
+    <string>--limit</string>
+    <string>100</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>Nice</key>
+  <integer>10</integer>
+</dict>
+</plist>

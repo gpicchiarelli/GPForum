@@ -1,0 +1,427 @@
+package main;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use MIME::Base64 qw(encode_base64url);
+use Test::More;
+
+use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Service::Community::BookmarkStore;
+use GPForum::Service::Community::FeedReader;
+use GPForum::Service::Community::FeedProjector;
+use GPForum::Service::Community::MentionExtractor;
+use GPForum::Service::Community::MentionReader;
+use GPForum::Service::Community::MentionStore;
+use GPForum::Service::Community::ReputationLedger;
+use GPForum::Test::CommunityResultSet;
+use GPForum::Test::CommunitySchema;
+use GPForum::Test::FixedClock;
+use GPForum::Test::Id;
+use GPForum::Test::NotificationDispatcher;
+
+our $VERSION = '0.001';
+
+const my $EXPECTED_TESTS       => 90;
+const my $BOOKMARK_LIMIT       => 20;
+const my $MENTION_COUNT        => 2;
+const my $DEFAULT_RANK         => 0;
+const my $REPUTATION_DELTA     => 15;
+const my $CURRENT_SCORE        => 40;
+const my $EXPECTED_SCORE       => 55;
+const my $FOLLOW_ON_SCORE      => 70;
+const my $FOLLOW_ON_EVENTS     => 2;
+const my $EXPECTED_TRUST_LEVEL => 2;
+const my $FEED_USER_COUNT      => 2;
+const my $DEFAULT_VERSION      => 1;
+const my $AT_CODE              => 64;
+const my $AT_SIGN              => chr $AT_CODE;
+const my $MENTION_READER_LIMIT => 10;
+const my $MENTION_FETCH_ROWS   => $MENTION_READER_LIMIT + 1;
+const my $FEED_READER_LIMIT    => 10;
+const my $FEED_FETCH_ROWS      => $FEED_READER_LIMIT + 1;
+
+plan tests => $EXPECTED_TESTS;
+
+my $extractor = GPForum::Service::Community::MentionExtractor->new;
+my $mentions  = $extractor->extract(
+    join q{},
+    'Ciao ',
+    $AT_SIGN,
+    'Giacomo, grazie a ',
+    $AT_SIGN,
+    'alice e ancora ',
+    $AT_SIGN,
+    'giacomo. Email a',
+    $AT_SIGN,
+    'b.it no.'
+);
+
+is( scalar @{$mentions},      $MENTION_COUNT, 'mentions are unique' );
+is( $mentions->[0]{username}, 'giacomo', 'mention usernames are normalized' );
+is( $mentions->[0]{label}, $AT_SIGN . 'giacomo', 'mention label is explicit' );
+is( $mentions->[1]{username}, 'alice',           'second mention is detected' );
+is_deeply( $extractor->extract(undef), [], 'empty body has no mentions' );
+
+my $bookmarks         = GPForum::Test::CommunityResultSet->new;
+my $mentions_rows     = GPForum::Test::CommunityResultSet->new;
+my $users             = GPForum::Test::CommunityResultSet->new;
+my $reputation_events = GPForum::Test::CommunityResultSet->new;
+my $trust_snapshots   = GPForum::Test::CommunityResultSet->new;
+my $feed_items        = GPForum::Test::CommunityResultSet->new;
+my $schema            = GPForum::Test::CommunitySchema->new(
+    resultsets => {
+        Bookmark           => $bookmarks,
+        Mention            => $mentions_rows,
+        User               => $users,
+        ReputationEvent    => $reputation_events,
+        TrustScoreSnapshot => $trust_snapshots,
+        UserFeedItem       => $feed_items,
+    },
+);
+my $clock      = GPForum::Test::FixedClock->new;
+my $id_service = GPForum::Test::Id->new;
+
+my $bookmark_store = GPForum::Service::Community::BookmarkStore->new(
+    schema     => $schema,
+    clock      => $clock,
+    id_service => $id_service,
+);
+my $bookmark = $bookmark_store->create_bookmark(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        note        => 'rileggi',
+    }
+);
+
+is( $bookmark->{bookmark_id}, 'generated-1', 'bookmark id is generated' );
+is( $bookmark->{user_id},     'user-1',      'bookmark stores owner' );
+is( $bookmark->{target_type}, 'thread',      'bookmark stores target type' );
+is( $bookmark->{target_id},   'thread-1',    'bookmark stores target id' );
+is( $bookmark->{note},        'rileggi',     'bookmark stores note' );
+is( $bookmark->{created_at},
+    '2026-05-23T12:00:00Z', 'bookmark stores creation time' );
+is( scalar @{ $bookmarks->created }, 1, 'bookmark row is inserted' );
+
+my $bookmark_status =
+  $bookmark_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $bookmark_status->{bookmarked}, 1, 'bookmark status is active' );
+is( $bookmark_status->{bookmark_id},
+    'generated-1', 'bookmark status exposes bookmark id' );
+
+my $saved_bookmark = $bookmark_store->save_bookmark(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        note        => 'aggiornato',
+    }
+);
+is( $saved_bookmark->{bookmark_id},
+    'generated-1', 'saving an existing bookmark is idempotent' );
+is( $saved_bookmark->{note}, 'aggiornato', 'save updates bookmark note' );
+is( scalar @{ $bookmarks->created },
+    1, 'idempotent bookmark save does not insert a duplicate' );
+
+my $listed =
+  $bookmark_store->list_for_user( 'user-1',
+    { target_type => 'thread', limit => $BOOKMARK_LIMIT } );
+is( scalar @{$listed},                 1,        'bookmarks can be listed' );
+is( $bookmarks->last_query->{user_id}, 'user-1', 'bookmark list filters user' );
+is( $bookmarks->last_query->{target_type},
+    'thread', 'bookmark list filters target type' );
+is( $bookmarks->last_query->{deleted_at},
+    undef, 'bookmark list hides deleted rows' );
+is( $bookmarks->last_attrs->{rows},
+    $BOOKMARK_LIMIT, 'bookmark list applies limit' );
+
+my $removed = $bookmark_store->remove_bookmark('generated-1');
+is( $removed->{bookmark_id}, 'generated-1', 'bookmark removal returns id' );
+is( $removed->{deleted_at},
+    '2026-05-23T12:00:00Z', 'bookmark removal is soft delete' );
+is( $bookmarks->find('generated-1')->get_column('deleted_at'),
+    '2026-05-23T12:00:00Z', 'bookmark row receives deleted timestamp' );
+my $removed_status =
+  $bookmark_store->status_for_user_target( 'user-1', 'thread', 'thread-1' );
+is( $removed_status->{bookmarked}, 0, 'removed bookmark status is inactive' );
+
+my $bookmark_page =
+  $bookmark_store->list_page_for_user( 'user-1',
+    { target_type => 'thread', limit => $BOOKMARK_LIMIT } );
+is( scalar @{ $bookmark_page->{items} }, 1, 'bookmark page returns items' );
+is( $bookmark_page->{next_cursor},
+    undef, 'bookmark page omits cursor when complete' );
+
+$users->create(
+    {
+        id         => 'user-1',
+        username   => 'giacomo',
+        deleted_at => undef,
+    }
+);
+$users->create(
+    {
+        id         => 'user-2',
+        username   => 'alice',
+        deleted_at => undef,
+    }
+);
+my $mention_dispatcher = GPForum::Test::NotificationDispatcher->new;
+my $mention_store      = GPForum::Service::Community::MentionStore->new(
+    schema                  => $schema,
+    clock                   => $clock,
+    id_service              => GPForum::Test::Id->new,
+    notification_dispatcher => $mention_dispatcher,
+);
+my $stored_mentions = $mention_store->record_for_source(
+    {
+        source_type => 'post',
+        source_id   => 'post-1',
+        actor_id    => 'user-1',
+        body_source => 'Grazie ' . $AT_SIGN . 'alice e ' . $AT_SIGN . 'ghost',
+    }
+);
+
+ok( $stored_mentions->{ok}, 'mention recording succeeds' );
+is( scalar @{ $stored_mentions->{created} },
+    1, 'mention recording creates resolved users only' );
+is( $stored_mentions->{created}[0]{mentioned_user_id},
+    'user-2', 'mention stores resolved user id' );
+is( $stored_mentions->{created}[0]{mentioned_username},
+    'alice', 'mention stores normalized username' );
+is( scalar @{ $stored_mentions->{skipped} },
+    1, 'mention recording reports skipped unresolved users' );
+is( $stored_mentions->{skipped}[0]{reason},
+    'unknown_user', 'unknown mention skip reason is explicit' );
+is( scalar @{ $mentions_rows->created }, 1, 'mention row is upserted' );
+is( scalar @{ $stored_mentions->{notifications} },
+    1, 'mention recording creates mention notification' );
+is( $mention_dispatcher->notifications->[0]{recipient_user_id},
+    'user-2', 'mention notification targets mentioned user' );
+is( $mention_dispatcher->notifications->[0]{notification_type},
+    'mention', 'mention notification has explicit type' );
+is( $mention_dispatcher->notifications->[0]{payload}{post_id},
+    'post-1', 'mention notification links source post' );
+
+my $duplicate_mentions = $mention_store->record_for_source(
+    {
+        source_type => 'post',
+        source_id   => 'post-1',
+        actor_id    => 'user-1',
+        body_source => $AT_SIGN . 'alice',
+    }
+);
+is( scalar @{ $duplicate_mentions->{created} },
+    0, 'duplicate mention recording is idempotent' );
+is( scalar @{ $duplicate_mentions->{skipped} },
+    0, 'duplicate mentions do not report user-facing skips' );
+is( scalar @{ $duplicate_mentions->{notifications} },
+    0, 'duplicate mention creates no notification' );
+is( scalar @{ $mentions_rows->created },
+    1, 'duplicate mention does not add rows' );
+
+my $self_mention = $mention_store->record_for_source(
+    {
+        source_type => 'post',
+        source_id   => 'post-2',
+        actor_id    => 'user-1',
+        body_source => $AT_SIGN . 'giacomo',
+    }
+);
+
+is( scalar @{ $self_mention->{created} },
+    0, 'self mention does not create rows' );
+is( $self_mention->{skipped}[0]{reason},
+    'self_mention', 'self mention skip reason is explicit' );
+is( scalar @{ $mentions_rows->created },
+    1, 'self mention does not add mention rows' );
+
+my $mention_reader =
+  GPForum::Service::Community::MentionReader->new( schema => $schema );
+my $mention_page =
+  $mention_reader->list_page_for_recipient( 'user-2',
+    { limit => $MENTION_READER_LIMIT } );
+is( scalar @{ $mention_page->{items} }, 1, 'mention reader returns mentions' );
+is( $mention_page->{items}[0]->get_column('mention_id'),
+    'generated-1', 'mention reader preserves mention rows' );
+is( $mentions_rows->last_query->{'me.mentioned_user_id'},
+    'user-2', 'mention reader filters recipient' );
+is( $mentions_rows->last_attrs->{order_by}[0]{-desc},
+    'me.created_at', 'mention reader qualifies keyset order against actor' );
+is( $mentions_rows->last_attrs->{rows},
+    $MENTION_FETCH_ROWS, 'mention reader fetches one extra keyset row' );
+ok(
+    !exists $mentions_rows->last_attrs->{offset},
+    'mention reader does not use offset'
+);
+is( $mention_page->{next_cursor}, undef, 'mention reader omits empty cursor' );
+
+my $mention_cursor = encode_base64url('2026-05-23T12:00:00Z|generated-1');
+$mention_reader->list_page_for_recipient(
+    'user-2',
+    {
+        limit => $MENTION_READER_LIMIT,
+        after => $mention_cursor,
+    }
+);
+ok(
+    exists $mentions_rows->last_query->{-or},
+    'mention reader applies keyset cursor predicate'
+);
+
+my $reputation = GPForum::Service::Community::ReputationLedger->new(
+    schema     => $schema,
+    clock      => $clock,
+    id_service => GPForum::Test::Id->new,
+);
+my $reputation_result = $reputation->record_event(
+    {
+        user_id       => 'user-1',
+        actor_id      => 'moderator-1',
+        source_type   => 'post',
+        source_id     => 'post-1',
+        delta         => $REPUTATION_DELTA,
+        reason        => 'helpful_post',
+        current_score => $CURRENT_SCORE,
+    }
+);
+
+ok( $reputation_result->{ok}, 'reputation event succeeds' );
+is( $reputation_result->{event}{reputation_event_id},
+    'generated-1', 'reputation event id is generated' );
+is( $reputation_result->{event}{delta},
+    $REPUTATION_DELTA, 'reputation event stores delta' );
+is( $reputation_result->{snapshot}{score},
+    $EXPECTED_SCORE, 'trust snapshot stores calculated score' );
+is( $reputation_result->{snapshot}{trust_level},
+    $EXPECTED_TRUST_LEVEL, 'trust snapshot stores trust level' );
+is( $reputation_result->{snapshot}{version},
+    $DEFAULT_VERSION, 'trust snapshot stores version' );
+is( scalar @{ $reputation_events->created },
+    1, 'reputation event row is inserted' );
+is( scalar @{ $trust_snapshots->created }, 1,
+    'trust snapshot row is upserted' );
+is( $users->find('user-1')->get_column('trust_level'),
+    $EXPECTED_TRUST_LEVEL, 'ledger syncs the user trust level' );
+
+my $follow_on = $reputation->record_event(
+    {
+        actor_id    => 'moderator-1',
+        delta       => $REPUTATION_DELTA,
+        reason      => 'helpful_post',
+        source_id   => 'post-2',
+        source_type => 'post',
+        user_id     => 'user-1',
+    }
+);
+ok( $follow_on->{ok}, 'follow-on reputation event succeeds' );
+is( $follow_on->{snapshot}{score},
+    $FOLLOW_ON_SCORE, 'ledger continues from the stored snapshot score' );
+is( scalar @{ $reputation_events->created },
+    $FOLLOW_ON_EVENTS, 'follow-on reputation event inserts another row' );
+
+my $replayed = $reputation->record_event(
+    {
+        actor_id    => 'moderator-1',
+        delta       => $REPUTATION_DELTA,
+        reason      => 'helpful_post',
+        source_id   => 'post-2',
+        source_type => 'post',
+        user_id     => 'user-1',
+    }
+);
+ok( $replayed->{skipped}, 'duplicate source reputation event is skipped' );
+is( $replayed->{snapshot}{score},
+    $FOLLOW_ON_SCORE, 'replayed reputation keeps the stored snapshot score' );
+is( scalar @{ $reputation_events->created },
+    $FOLLOW_ON_EVENTS, 'replayed reputation does not insert another row' );
+
+my $feed_projector =
+  GPForum::Service::Community::FeedProjector->new( schema => $schema, );
+my $feed = $feed_projector->project_item(
+    {
+        user_ids   => [ 'user-1', 'user-2', 'user-1' ],
+        item_type  => 'post',
+        item_id    => 'post-1',
+        created_at => '2026-05-23T12:00:00Z',
+    }
+);
+
+ok( $feed->{ok}, 'feed projection succeeds' );
+is( $feed->{projected}, $FEED_USER_COUNT,
+    'feed projection deduplicates users' );
+is( scalar @{ $feed_items->created },
+    $FEED_USER_COUNT, 'feed items are upserted' );
+is( $feed->{items}[0]{user_id},    'user-1', 'feed item stores first user' );
+is( $feed->{items}[1]{user_id},    'user-2', 'feed item stores second user' );
+is( $feed->{items}[0]{rank_score}, $DEFAULT_RANK, 'feed item defaults rank' );
+is( $feed->{items}[0]{visibility_version},
+    $DEFAULT_VERSION, 'feed item carries visibility version' );
+is( $feed->{items}[0]{permission_version},
+    $DEFAULT_VERSION, 'feed item carries permission version' );
+
+my $feed_reader =
+  GPForum::Service::Community::FeedReader->new( schema => $schema );
+my $feed_page =
+  $feed_reader->list_page_for_user( 'user-1', { limit => $FEED_READER_LIMIT } );
+is( scalar @{ $feed_page->{items} },
+    $FEED_USER_COUNT, 'feed reader returns projection rows' );
+is( $feed_page->{items}[0]->get_column('item_id'),
+    'post-1', 'feed reader preserves feed item rows' );
+is( $feed_items->last_query->{user_id}, 'user-1', 'feed reader filters user' );
+is( $feed_items->last_attrs->{rows},
+    $FEED_FETCH_ROWS, 'feed reader fetches one extra keyset row' );
+ok(
+    !exists $feed_items->last_attrs->{offset},
+    'feed reader does not use offset'
+);
+is( $feed_page->{next_cursor}, undef, 'feed reader omits empty cursor' );
+
+my $feed_cursor = encode_base64url('2026-05-23T12:00:00Z|post-1');
+$feed_reader->list_page_for_user(
+    'user-1',
+    {
+        limit => $FEED_READER_LIMIT,
+        after => $feed_cursor,
+    }
+);
+ok(
+    exists $feed_items->last_query->{-or},
+    'feed reader applies keyset cursor predicate'
+);
+
+my $withdrawn = $feed_projector->remove_item(
+    {
+        item_id   => 'post-1',
+        item_type => 'post',
+    }
+);
+ok( $withdrawn->{ok}, 'feed removal succeeds' );
+is( $withdrawn->{removed}, $FEED_USER_COUNT,
+    'feed removal deletes every projected user row' );
+is( scalar @{ $feed_items->deleted },
+    $FEED_USER_COUNT, 'feed item rows are deleted' );
+
+my $hidden_page =
+  $feed_reader->list_page_for_user( 'user-1', { limit => $FEED_READER_LIMIT } );
+is( scalar @{ $hidden_page->{items} },
+    0, 'feed reader hides removed moderated items' );
+
+my $restored = $feed_projector->project_item(
+    {
+        created_at => '2026-05-23T12:00:00Z',
+        item_id    => 'post-1',
+        item_type  => 'post',
+        user_ids   => [ 'user-1', 'user-2' ],
+    }
+);
+ok( $restored->{ok}, 'feed restore reuses project_item' );
+is( $restored->{projected},
+    $FEED_USER_COUNT, 'feed restore projects the original recipients' );
+
+1;

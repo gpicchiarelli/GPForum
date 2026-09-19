@@ -1,0 +1,262 @@
+GPForum - Perl Multi-Process, Threading & Dynamic Runtime Scalability Constitution
+
+Prompt 45 alignment: scaling claims MUST be verified by measurable invariants.
+Multi-process and threading behavior MUST preserve authoritative PostgreSQL
+state, disposable realtime/cache state, idempotent workers, observable
+coordination, and bounded query cost. Any distributed dependency introduced for
+coordination requires ADR justification and tests for degraded operation.
+
+Prompt 49 alignment: process scaling MUST be OS-aware and resource-bounded.
+GPForum MUST use persistent Perl processes, never fork per request, and MUST
+centralize OS-specific behavior behind `GPForum::OS`. Worker counts MUST account
+for CPU, memory, file descriptors, PostgreSQL connection pressure, event
+backend, and deployment profile.
+
+Prompt 51 alignment: horizontal scaling MUST preserve projection stability,
+outbox idempotency, worker restart safety, hot-row avoidance, bounded hot-path
+queries, and graceful degradation when optional derived subsystems lag.
+
+This document defines the mandatory Perl runtime scalability model for GPForum, including multi-process execution, dynamic process scaling, bounded threading, workload isolation, and capacity estimation rules.
+
+This specification is foundational and mandatory.
+
+---
+
+Runtime Scalability Philosophy
+
+GPForum is Perl-first, not Perl-single-process.
+
+Application runtime code MUST remain Perl-only unless an ADR explicitly approves an exception.
+
+External infrastructure such as PostgreSQL, Nginx or HAProxy, object storage, and operating-system supervisors MAY be used because they are infrastructure components, not application runtime languages.
+
+The platform MUST scale the application tier through:
+
+* multiple Perl web processes;
+* multiple Perl worker processes;
+* multiple Perl realtime processes where realtime is enabled;
+* multiple application nodes;
+* explicit process supervision;
+* bounded concurrency per process.
+
+The platform MUST NOT assume that one Perl process represents the application.
+
+---
+
+Primary Concurrency Unit
+
+The primary concurrency unit is the Perl process.
+
+Processes are preferred because they provide:
+
+* memory isolation;
+* crash isolation;
+* predictable restart behavior;
+* clear supervisor integration;
+* safer operational reasoning;
+* straightforward horizontal and vertical scaling.
+
+Perl process multiplicity is mandatory for production.
+
+---
+
+Dynamic Process Scaling
+
+Each deployment MUST allow process counts to be configured per workload class.
+
+Configurable process classes SHOULD include:
+
+* web;
+* worker;
+* scheduled jobs;
+* realtime websocket;
+* indexing;
+* maintenance.
+
+Process counts SHOULD be adjustable by:
+
+* environment configuration;
+* supervisor configuration;
+* deploy profile;
+* capacity plan;
+* emergency runbook.
+
+Process scaling MUST remain observable.
+
+Process scaling MUST be profiled under representative workloads before production reliance.
+
+---
+
+Per-Node Scaling
+
+A single physical or virtual node MAY run many Perl processes.
+
+Per-node capacity MUST account for:
+
+* CPU cores;
+* memory per process;
+* database connections;
+* file descriptors;
+* websocket connections;
+* queue concurrency;
+* cache memory;
+* operating system limits.
+
+Per-node capacity plans MUST include profiling data for:
+
+* CPU time;
+* memory growth;
+* request latency;
+* worker throughput;
+* database connection pressure.
+
+The system MUST avoid increasing Perl processes beyond downstream capacity.
+
+More Perl processes MUST NOT be used to hide database, lock, or query design problems.
+
+---
+
+Multi-Node Scaling
+
+Multiple nodes MAY run the same process classes.
+
+The system MUST support:
+
+* stateless web nodes;
+* distributed worker nodes;
+* isolated realtime nodes;
+* rolling process restart;
+* node replacement;
+* load-balanced traffic.
+
+Application correctness MUST NOT depend on a specific node owning durable state.
+
+---
+
+Threading Model
+
+Perl interpreter threads MAY be used.
+
+Threads MUST be:
+
+* bounded;
+* isolated;
+* explicitly configured;
+* reviewed for shared-state safety;
+* observable;
+* optional for correctness.
+
+Threads MAY be appropriate for:
+
+* CPU-bound isolated helper work;
+* bounded local parallelism;
+* carefully reviewed internal processing;
+* workloads where process overhead is operationally worse.
+
+Threads MUST NOT be used for:
+
+* shared mutable business state;
+* authorization correctness;
+* session correctness;
+* unbounded request fanout;
+* replacing durable queues;
+* hiding blocking I/O in request paths.
+
+The default scaling strategy remains process-first.
+
+---
+
+Mojolicious Runtime
+
+Mojolicious deployment MUST support a production prefork-style runtime.
+
+Web runtime MUST provide:
+
+* multiple workers;
+* graceful restart;
+* bounded request concurrency;
+* health endpoints;
+* structured logs per process;
+* supervisor compatibility.
+
+Blocking work MUST be moved out of request handlers.
+
+---
+
+Worker Runtime
+
+Minion worker capacity MUST scale through multiple Perl worker processes.
+
+Worker pools SHOULD be separated by workload class where needed.
+
+Examples:
+
+* notification workers;
+* search indexing workers;
+* media workers;
+* retention workers;
+* digest workers;
+* import workers.
+
+Worker concurrency MUST be tuned against PostgreSQL, object storage, and search-indexing capacity.
+
+---
+
+Realtime Runtime
+
+Realtime workloads MAY run in separate Perl process pools.
+
+Realtime processes MUST:
+
+* keep per-connection state ephemeral;
+* avoid authoritative state;
+* enforce backpressure;
+* support reconnect;
+* survive process loss through client recovery and durable events.
+
+Millions of concurrent realtime users require dedicated realtime capacity planning.
+
+---
+
+Database Connection Discipline
+
+Process scaling MUST be coordinated with database connection budgets.
+
+The deployment MUST define:
+
+* maximum web processes;
+* maximum worker processes;
+* maximum database connections per process;
+* connection pool behavior;
+* reserved admin/maintenance connections.
+
+PostgreSQL exhaustion is a release blocker.
+
+---
+
+Capacity Estimation Rule
+
+Capacity estimates MUST distinguish between:
+
+* registered users;
+* daily active users;
+* hourly active users;
+* concurrent web users;
+* concurrent websocket users;
+* write rate;
+* read rate;
+* worker backlog.
+
+Claims about "millions of active users" MUST specify which active-user meaning is being used.
+
+---
+
+Operational Goal
+
+GPForum MUST be able to grow from:
+
+* one node with many Perl processes;
+* to several nodes with separated process classes;
+* to a distributed deployment with dedicated web, worker, realtime, search, and database capacity.
+
+The project remains Perl-first while allowing specialized infrastructure for persistence, search, edge routing, and storage.

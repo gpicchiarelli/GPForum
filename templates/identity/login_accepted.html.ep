@@ -1,0 +1,16 @@
+% layout 'default';
+% title t('auth.login_accepted_title') . ' - ' . t('app.name');
+
+<section aria-labelledby="login-accepted-heading">
+  <%= include 'components/page_header',
+    heading_id => 'login-accepted-heading',
+    component_title => t('auth.login_accepted_title'),
+    actions_label => t('auth.login_next_steps'),
+    actions => ui_actions(
+      { href => url_for('new_thread'), label => t('nav.start_thread') },
+      { href => url_for('categories'), label => t('forum.browse_categories') },
+      { href => url_for('forum_search'), label => t('nav.search') },
+      { href => url_for('bookmarks'), label => t('nav.bookmarks') },
+    ) %>
+  <%= include 'components/alert', tone => 'success', message => t('auth.login_status') %>
+</section>

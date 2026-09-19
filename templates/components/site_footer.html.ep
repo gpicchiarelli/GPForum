@@ -1,0 +1,11 @@
+<footer class="site-footer" aria-label="<%= t('layout.footer_label') %>">
+  <div>
+    <strong><%= t('app.name') %></strong>
+    <span><%= t('layout.footer_tagline') %></span>
+  </div>
+  <nav aria-label="<%= t('layout.footer_help') %>">
+    <a href="<%= url_for('categories') %>"><%= t('nav.categories') %></a>
+    <a href="<%= url_for('forum_search') %>"><%= t('nav.search') %></a>
+    <span><%= t('layout.footer_license') %></span>
+  </nav>
+</footer>

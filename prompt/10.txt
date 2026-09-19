@@ -1,0 +1,521 @@
+GPForum — Observability, Logging & Operational Intelligence Constitution
+
+Prompt 51 alignment: observability MUST expose operational scalability state:
+hot-path latency, retry counts, projection lag, rebuild progress, dead letters,
+queue depth, slow query visibility, worker progress, cache posture, and active
+projection generation where relevant.
+
+Prompt 53 alignment: search, feed, syndication, autocomplete, metadata, and
+retrieval workflows MUST expose operational visibility for search latency,
+projection lag, rebuild progress, indexing throughput, failed indexing jobs,
+dead letters, feed generation latency, cache invalidation lag, active
+generation, and degraded no-leak states.
+
+This document defines the mandatory observability architecture, structured logging model, metrics strategy, distributed tracing philosophy, monitoring requirements, operational visibility standards, alerting rules, and incident analysis framework of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Observability Philosophy
+
+Observability is mandatory.
+
+GPForum MUST remain:
+
+* measurable;
+* traceable;
+* inspectable;
+* debuggable;
+* operationally transparent.
+
+The platform MUST assume:
+
+* distributed failures;
+* asynchronous workflows;
+* eventual consistency;
+* node churn;
+* realtime propagation delays;
+* operational anomalies.
+
+Observability is required to:
+
+* maintain reliability;
+* debug distributed systems;
+* investigate abuse;
+* diagnose performance;
+* support incident response;
+* sustain long-term operations.
+
+⸻
+
+Foundational Principles
+
+The observability architecture MUST provide:
+
+* structured logs;
+* metrics;
+* tracing;
+* correlation;
+* health visibility;
+* auditability.
+
+Operational state MUST remain:
+
+* externally inspectable;
+* centralized where possible;
+* machine-readable.
+
+⸻
+
+Structured Logging
+
+All logs MUST be:
+
+* structured;
+* machine-readable;
+* timestamped;
+* correlation-aware.
+
+Preferred log format:
+
+* JSON structured logs.
+
+Logs MUST avoid:
+
+* multiline ambiguity;
+* ad hoc formatting;
+* unstructured text dumps.
+
+⸻
+
+Mandatory Log Metadata
+
+Recommended log metadata:
+
+* timestamp
+* correlation_id
+* request_id
+* node_id
+* actor_id
+* session_id
+* event_type
+* severity
+* subsystem
+* workflow
+
+The logging architecture MUST support:
+
+* distributed debugging;
+* replay investigation;
+* abuse investigation.
+
+⸻
+
+Correlation IDs
+
+Every request and asynchronous workflow MUST support:
+
+* correlation identifiers.
+
+Correlation IDs MUST propagate through:
+
+* HTTP requests;
+* websocket flows;
+* worker jobs;
+* event propagation;
+* search indexing;
+* notifications.
+
+Distributed workflows MUST remain traceable end-to-end.
+
+⸻
+
+Logging Philosophy
+
+Logs SHOULD capture:
+
+* operational state;
+* workflow transitions;
+* failures;
+* retries;
+* authorization decisions;
+* moderation actions;
+* infrastructure anomalies.
+
+Logs MUST avoid:
+
+* secrets;
+* credentials;
+* raw tokens;
+* unsafe personal data exposure.
+
+⸻
+
+Severity Discipline
+
+Recommended severities:
+
+* debug
+* info
+* warning
+* error
+* critical
+
+Severity usage MUST remain:
+
+* consistent;
+* operationally meaningful;
+* queryable.
+
+⸻
+
+Metrics Philosophy
+
+The platform MUST expose:
+
+* infrastructure metrics;
+* application metrics;
+* queue metrics;
+* websocket metrics;
+* database metrics;
+* moderation metrics;
+* security metrics.
+
+Metrics MUST remain:
+
+* low-overhead;
+* machine-readable;
+* historically queryable.
+
+⸻
+
+Mandatory Metrics Categories
+
+Examples:
+
+* request latency
+* queue depth
+* websocket connections
+* retry rates
+* database latency
+* cache hit ratio
+* authorization failures
+* login failures
+* moderation throughput
+* replication lag
+* event propagation latency
+
+⸻
+
+Distributed Tracing
+
+The platform SHOULD support:
+
+* distributed tracing.
+
+Tracing SHOULD cover:
+
+* HTTP requests;
+* websocket workflows;
+* asynchronous jobs;
+* event propagation;
+* search indexing;
+* notification workflows.
+
+Tracing MUST support:
+
+* latency analysis;
+* bottleneck detection;
+* dependency mapping.
+
+⸻
+
+Profiling
+
+The platform MUST support profiling.
+
+Profiling SHOULD cover:
+
+* HTTP request handlers;
+* template rendering;
+* authorization checks;
+* database query paths;
+* worker execution;
+* event consumers;
+* websocket fanout paths.
+
+Preferred Perl profiler:
+
+* Devel::NYTProf.
+
+Profiling artifacts MUST be safe to collect, archive, and compare across releases.
+
+Profiling MUST NOT expose secrets or private user data.
+
+⸻
+
+Realtime Observability
+
+Realtime systems MUST expose:
+
+* active websocket counts;
+* reconnect rates;
+* fanout latency;
+* pub/sub propagation metrics;
+* dropped message metrics.
+
+Realtime observability is mandatory for distributed websocket systems.
+
+⸻
+
+Queue Observability
+
+Worker systems MUST expose:
+
+* queue depth;
+* retry count;
+* dead-letter count;
+* execution latency;
+* worker saturation;
+* scheduling delay.
+
+Operational queue visibility is mandatory.
+
+⸻
+
+Database Observability
+
+Database monitoring MUST include:
+
+* query latency;
+* replication lag;
+* partition growth;
+* vacuum pressure;
+* index bloat;
+* connection pool metrics;
+* WAL growth.
+
+The platform MUST remain:
+
+* partition-aware;
+* replication-aware;
+* storage-aware.
+
+⸻
+
+Security Observability
+
+Security-sensitive events MUST remain observable.
+
+Examples:
+
+* login failures
+* MFA failures
+* rate-limit triggers
+* permission escalation attempts
+* moderation abuse
+* suspicious websocket activity
+* abuse heuristics
+
+Security visibility is mandatory.
+
+⸻
+
+Auditability
+
+Critical operations MUST generate:
+
+* immutable audit records;
+* attributable metadata;
+* operational traceability.
+
+Auditability MUST support:
+
+* incident investigation;
+* moderation review;
+* security analysis;
+* governance oversight.
+
+⸻
+
+Alerting Philosophy
+
+Alerts MUST remain:
+
+* actionable;
+* low-noise;
+* operationally meaningful.
+
+The platform MUST avoid:
+
+* alert storms;
+* non-actionable alerts;
+* excessive operator fatigue.
+
+Critical alerts SHOULD include:
+
+* queue backlog
+* database degradation
+* replication failure
+* websocket cluster instability
+* authentication anomalies
+* infrastructure outage
+
+⸻
+
+Health Check Philosophy
+
+The platform MUST expose:
+
+* liveness checks;
+* readiness checks;
+* dependency health;
+* queue health;
+* replication status.
+
+Health endpoints MUST support:
+
+* orchestration systems;
+* load balancers;
+* operational automation.
+
+⸻
+
+Incident Philosophy
+
+The architecture MUST assume:
+
+* outages;
+* degraded nodes;
+* propagation failure;
+* partial data inconsistency;
+* replay requirements;
+* infrastructure instability.
+
+The observability system MUST support:
+
+* rapid diagnosis;
+* forensic investigation;
+* replay analysis;
+* recovery workflows.
+
+⸻
+
+Retention Philosophy
+
+Operational telemetry SHOULD support:
+
+* retention policies;
+* tiered storage;
+* archival workflows.
+
+The platform MUST balance:
+
+* observability value;
+* storage cost;
+* operational sustainability.
+
+⸻
+
+Privacy & Compliance
+
+Observability systems MUST:
+
+* minimize sensitive exposure;
+* support data minimization;
+* avoid unsafe logging.
+
+Sensitive data SHOULD remain:
+
+* masked;
+* redacted;
+* excluded where possible.
+
+⸻
+
+Tooling Philosophy
+
+Preferred tooling MAY include:
+
+* Prometheus
+* Grafana
+* Loki
+* OpenTelemetry
+
+Tooling choices MUST remain:
+
+* replaceable;
+* standards-oriented;
+* operationally sustainable.
+
+⸻
+
+Dashboard Philosophy
+
+Operational dashboards SHOULD expose:
+
+* realtime system state;
+* queue health;
+* replication status;
+* profiling summaries;
+* slow path reports;
+* moderation throughput;
+* security anomalies;
+* websocket metrics.
+
+Dashboards MUST prioritize:
+
+* operational clarity;
+* actionable visibility.
+
+⸻
+
+Replay & Forensics
+
+The observability system SHOULD support:
+
+* replay investigation;
+* workflow reconstruction;
+* distributed tracing reconstruction;
+* abuse analysis;
+* moderation reconstruction.
+
+Distributed systems MUST remain explainable after failure.
+
+⸻
+
+Long-Term Operational Goal
+
+GPForum observability architecture MUST remain:
+
+* distributed-safe;
+* scalable;
+* audit-friendly;
+* operationally sustainable;
+* incident-ready;
+* transparent under extreme concurrency.
+
+A distributed system that cannot be observed cannot be reliably operated.
+
+All future observability and operational tooling MUST comply with this constitution.
+
+⸻
+
+Engineering Invariants Amendment
+
+Observability is an engineering invariant under prompt/45.txt.
+
+Every critical workflow MUST expose enough correlation data to reconstruct:
+
+* request entry;
+* actor where safe;
+* command/service boundary;
+* event/audit/outbox effects;
+* worker execution where applicable;
+* projection generation or lag where applicable;
+* classified failure behavior.
+
+Silent workflow failure is prohibited.
+
+Metrics and logs MUST verify operational guarantees without leaking secrets.

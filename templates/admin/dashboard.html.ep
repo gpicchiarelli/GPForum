@@ -1,0 +1,125 @@
+% layout 'default';
+% title t('admin.admin') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-dashboard-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-dashboard-heading',
+    component_title => t('admin.admin'),
+    actions_label => t('admin.admin'),
+    actions => ui_actions(
+      { href => url_for('admin_users'), label => t('admin.users') },
+      { href => url_for('admin_roles'), label => t('admin.roles') },
+      { href => url_for('admin_categories'), label => t('admin.categories') },
+      { href => url_for('admin_audit'), label => t('admin.audit') },
+      { href => url_for('moderation_reports'), label => t('moderation.queue') },
+      { href => url_for('moderation_actions'), label => t('moderation.actions') },
+      { href => url_for('moderation_suspensions'), label => t('moderation.suspensions') },
+      { href => url_for('admin_jobs'), label => t('admin.async_jobs') },
+      { href => url_for('admin_status'), label => t('admin.health_runtime') },
+      { href => url_for('privacy_review'), label => t('admin.privacy_review') },
+    ) %>
+
+  <section aria-labelledby="admin-dashboard-health-heading">
+    <%= include 'components/section_header',
+      heading_id => 'admin-dashboard-health-heading',
+      component_title => t('admin.health_runtime') %>
+    <dl>
+      <dt><%= t('admin.health_runtime') %></dt>
+      <dd><%= ui_label('state', $summary->{health}{readiness}{status} || 'unknown') %></dd>
+      <dt><%= t('admin.benchmark_evidence') %></dt>
+      <dd><%= ui_label('state', $summary->{health}{benchmark}{status} || 'manual') %></dd>
+    </dl>
+  </section>
+
+  <section aria-labelledby="admin-dashboard-users-heading">
+    <%= include 'components/section_header',
+      heading_id => 'admin-dashboard-users-heading',
+      component_title => t('admin.users') %>
+    % if (@{ $summary->{users} || [] }) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.user_summary') %>">
+        % for my $user (@{ $summary->{users} }) {
+          <li class="ui-card-list__item">
+            <a href="<%= url_for('admin_user_roles', user_id => $user->{id}) %>"><%= $user->{username} %></a>
+            <%= include 'components/status_badge', value => $user->{status} %>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'admin-dashboard-users-empty-heading',
+        component_title => t('admin.no_users') %>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-dashboard-moderation-heading">
+    <%= include 'components/section_header',
+      heading_id => 'admin-dashboard-moderation-heading',
+      component_title => t('moderation.queue') %>
+    % if (@{ $summary->{moderation}{reports} || [] }) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.moderation_summary') %>">
+        % for my $report (@{ $summary->{moderation}{reports} }) {
+          <li class="ui-card-list__item"><%= ui_label('target', $report->{target_type}) %> <%= $report->{reason} %></li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'admin-dashboard-moderation-empty-heading',
+        component_title => t('admin.no_open_reports') %>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-dashboard-async-heading">
+    <%= include 'components/section_header',
+      heading_id => 'admin-dashboard-async-heading',
+      component_title => t('admin.async_jobs') %>
+    <dl>
+      <dt><%= t('admin.outbox_rows') %></dt>
+      <dd><%= scalar @{ $summary->{async}{outbox_messages} || [] } %></dd>
+      <dt><%= t('admin.dead_letters') %></dt>
+      <dd><%= scalar @{ $summary->{async}{dead_letters} || [] } %></dd>
+    </dl>
+  </section>
+
+  <section aria-labelledby="admin-dashboard-roles-heading">
+    <%= include 'components/section_header',
+      heading_id => 'admin-dashboard-roles-heading',
+      component_title => t('admin.roles') %>
+    % if (@{$roles}) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.role_summary') %>">
+        % for my $role (@{$roles}) {
+          <li class="ui-card-list__item"><strong><%= $role->{name} %></strong> <%= $role->{description} %></li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'admin-dashboard-roles-empty-heading',
+        component_title => t('admin.no_roles') %>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-dashboard-audit-heading">
+    <%= include 'components/section_header',
+      heading_id => 'admin-dashboard-audit-heading',
+      component_title => t('admin.audit') %>
+    % if (@{$audit_rows}) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.audit_summary') %>">
+        % for my $row (@{$audit_rows}) {
+          <li class="ui-card-list__item">
+            <article aria-labelledby="<%= $row->{ui}{heading_id} %>">
+              <h3 id="<%= $row->{ui}{heading_id} %>"><%= $row->{action} %></h3>
+              <p class="ui-meta">
+                <%= ui_label('target', $row->{target_type} || 'system') %>
+                <%= $row->{target_id} || '' %>
+                <time datetime="<%= $row->{created_at} %>"><%= $row->{created_at} %></time>
+              </p>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'admin-dashboard-audit-empty-heading',
+        component_title => t('admin.no_audit_rows') %>
+    % }
+  </section>
+</section>

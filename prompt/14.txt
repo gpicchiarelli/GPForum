@@ -1,0 +1,493 @@
+GPForum — Search, Indexing & Information Retrieval Constitution
+
+Prompt 45 alignment: search is a derived, rebuildable, permission-aware system.
+Search documents MUST NOT become authoritative state. Search invariants MUST be
+contract-tested, including negative tests that hidden, deleted, quarantined, or
+unauthorized content never appears in search output.
+
+Prompt 46 alignment: search interfaces MUST be accessible. Search forms,
+filters, result lists, snippets, empty states, and pagination MUST use semantic
+HTML, accessible labels, keyboard navigation, and screen-reader-safe result
+counts/status messages.
+
+Prompt 51 alignment: search is a hot, derived, rebuildable projection. Search
+documents MUST support idempotent rebuilds, inactive rebuild generations,
+activation swaps where needed, permission-safe stale-state handling, and
+graceful degradation when indexing stalls.
+
+Prompt 53 alignment: search, autocomplete, ranking, feeds, metadata, and
+syndication MUST remain PostgreSQL-native by default, derived, rebuildable,
+permission-aware, moderation-aware, deletion-aware, observable, bounded,
+anti-leak, and operationally optional.
+
+This document defines the mandatory search architecture, indexing philosophy, retrieval model, ranking strategy, query discipline, synchronization workflows, language analysis rules, authorization-aware filtering, and long-term information retrieval principles of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Search Philosophy
+
+Search is:
+
+* a distributed projection system;
+* an asynchronous retrieval layer;
+* a derived information model.
+
+Search is NOT:
+
+* the canonical persistence layer;
+* the authoritative business database;
+* the primary transactional system.
+
+The authoritative source of truth remains:
+
+* PostgreSQL.
+
+Search MUST remain:
+
+* rebuildable;
+* eventually consistent;
+* permission-aware;
+* operationally isolated.
+
+⸻
+
+Search Architecture
+
+Preferred search technology:
+
+* PostgreSQL full-text search.
+
+Preferred supporting PostgreSQL features:
+
+* tsvector;
+* tsquery;
+* GIN indexes;
+* pg_trgm;
+* unaccent where appropriate;
+* language-aware text search configurations.
+
+Perl MUST own:
+
+* indexing orchestration;
+* query normalization;
+* ranking policy;
+* rebuild workflows;
+* authorization-aware filtering.
+
+The search subsystem MUST remain:
+
+* PostgreSQL-native by default;
+* asynchronously synchronized;
+* process-scalable through Perl workers;
+* operationally observable.
+
+External search engines MAY be added only as optional acceleration.
+
+External search engines MUST remain separated from:
+
+* transactional persistence;
+* request-critical workflows.
+
+⸻
+
+Indexing Philosophy
+
+Indexing MUST occur:
+
+* asynchronously;
+* event-driven;
+* replay-aware.
+
+Canonical persistence MUST complete before:
+
+* indexing propagation;
+* ranking updates;
+* aggregation updates.
+
+Indexing MUST NOT block:
+
+* post creation;
+* thread creation;
+* moderation actions;
+* user workflows.
+
+⸻
+
+Search Synchronization
+
+Search synchronization SHOULD consume:
+
+* domain events;
+* moderation events;
+* visibility events;
+* authorization changes.
+
+Examples:
+
+* post.created
+* post.edited
+* thread.locked
+* user.suspended
+* category.visibility_changed
+
+Search MUST tolerate:
+
+* delayed propagation;
+* replay;
+* duplicate indexing attempts.
+
+⸻
+
+Search Document Philosophy
+
+Search indexes SHOULD use:
+
+* denormalized search documents.
+
+Search documents MAY aggregate:
+
+* thread metadata;
+* post excerpts;
+* author metadata;
+* category metadata;
+* moderation visibility state.
+
+Search documents MUST remain:
+
+* rebuildable;
+* traceable;
+* asynchronously generated.
+
+⸻
+
+Search Document Ownership
+
+Search documents are:
+
+* projections;
+* derived representations;
+* disposable read models.
+
+Search indexes MUST NOT become:
+
+* authoritative persistence;
+* canonical moderation state;
+* permission authority.
+
+⸻
+
+Authorization-Aware Search
+
+Search results MUST remain:
+
+* permission-filtered;
+* moderation-aware;
+* visibility-aware.
+
+The search layer MUST enforce:
+
+* authorization filtering;
+* moderation visibility;
+* quarantine restrictions;
+* soft deletion semantics.
+
+Search MUST NOT leak:
+
+* hidden content;
+* quarantined content;
+* restricted moderation data.
+
+⸻
+
+Ranking Philosophy
+
+Ranking SHOULD prioritize:
+
+* relevance;
+* freshness;
+* permission safety;
+* operational predictability.
+
+Ranking MUST remain:
+
+* deterministic where possible;
+* explainable;
+* tunable.
+
+The platform SHOULD avoid:
+
+* opaque ranking systems;
+* unstable scoring behavior.
+
+⸻
+
+Language Analysis
+
+The search system SHOULD support:
+
+* multilingual analysis;
+* stemming;
+* token normalization;
+* Unicode-aware indexing.
+
+Italian language support SHOULD include:
+
+* stemming;
+* stopword handling;
+* accent normalization;
+* token-aware ranking.
+
+⸻
+
+Search Query Philosophy
+
+Queries MUST remain:
+
+* validated;
+* bounded;
+* rate-limited;
+* abuse-aware.
+
+The platform MUST avoid:
+
+* unrestricted wildcard explosion;
+* backend query injection;
+* unbounded aggregation.
+
+Search input MUST be treated as hostile.
+
+⸻
+
+Full-Text Search
+
+Search SHOULD support:
+
+* thread search;
+* post search;
+* category search;
+* tag search;
+* user search.
+
+Search SHOULD support:
+
+* phrase search;
+* relevance ranking;
+* recency boosting;
+* partial matching where appropriate.
+
+⸻
+
+Incremental Indexing
+
+The architecture MUST support:
+
+* incremental indexing;
+* partial document updates;
+* asynchronous refresh.
+
+The indexing pipeline SHOULD minimize:
+
+* full index rebuild dependency.
+
+⸻
+
+Rebuild Philosophy
+
+The search architecture MUST support:
+
+* full rebuild;
+* partial rebuild;
+* replay-based reconstruction.
+
+Search indexes MUST remain:
+
+* disposable;
+* reconstructable from authoritative persistence.
+
+Rebuild workflows MUST remain:
+
+* operationally safe;
+* observable;
+* resumable.
+
+⸻
+
+Moderation & Search
+
+Moderation state MUST influence:
+
+* indexing visibility;
+* search ranking;
+* search eligibility.
+
+Moderated or quarantined content MUST:
+
+* remain filterable;
+* remain authorization-aware.
+
+Soft-deleted content SHOULD remain:
+
+* operationally reconstructable;
+* publicly hidden.
+
+⸻
+
+Search Caching
+
+Search caching MAY support:
+
+* query acceleration;
+* aggregation reuse;
+* autocomplete optimization.
+
+Caches MUST remain:
+
+* disposable;
+* permission-aware;
+* invalidation-aware.
+
+⸻
+
+Autocomplete & Suggestions
+
+Autocomplete systems SHOULD:
+
+* remain rate-limited;
+* remain abuse-resistant;
+* remain permission-aware.
+
+Autocomplete MUST avoid:
+
+* leaking hidden entities;
+* leaking moderation-sensitive content.
+
+⸻
+
+Search Pagination
+
+Search responses MUST:
+
+* paginate;
+* remain bounded;
+* expose deterministic ordering.
+
+Unbounded search result retrieval is prohibited.
+
+⸻
+
+Search Analytics
+
+Search analytics MAY include:
+
+* query popularity;
+* failed searches;
+* ranking performance;
+* latency metrics.
+
+Analytics MUST remain:
+
+* privacy-aware;
+* operationally useful.
+
+⸻
+
+Search Abuse Mitigation
+
+The search subsystem MUST defend against:
+
+* scraping;
+* query flooding;
+* wildcard abuse;
+* aggregation abuse;
+* automated harvesting.
+
+Search rate limits MUST remain:
+
+* configurable;
+* observable;
+* adaptive.
+
+⸻
+
+Search Observability
+
+The search subsystem MUST expose:
+
+* indexing latency;
+* queue depth;
+* query latency;
+* shard health;
+* rebuild progress;
+* failed indexing metrics.
+
+Operational visibility is mandatory.
+
+⸻
+
+Search Failure Philosophy
+
+The platform MUST tolerate:
+
+* delayed indexing;
+* partial index outage;
+* shard degradation;
+* stale projections.
+
+Search failure MUST NOT:
+
+* corrupt authoritative persistence;
+* block posting workflows.
+
+The system MUST degrade gracefully.
+
+⸻
+
+Search Scalability
+
+Search infrastructure MUST support:
+
+* horizontal scaling;
+* distributed indexing;
+* partition-aware ingestion;
+* high query concurrency.
+
+The architecture MUST assume:
+
+* large communities;
+* massive post volumes;
+* realtime indexing demand.
+
+⸻
+
+Search API Philosophy
+
+Search APIs MUST:
+
+* enforce authorization;
+* support pagination;
+* validate queries;
+* remain abuse-resistant.
+
+Search APIs MUST remain:
+
+* operationally bounded;
+* observable.
+
+⸻
+
+Long-Term Information Retrieval Goal
+
+GPForum search architecture MUST remain:
+
+* scalable;
+* rebuildable;
+* permission-aware;
+* operationally sustainable;
+* distributed-safe;
+* resilient under extreme data growth.
+
+Search is a derived retrieval system over authoritative persistence.
+
+All future search and indexing development MUST comply with this constitution.

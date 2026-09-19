@@ -1,0 +1,513 @@
+GPForum — Authorization, Moderation & Governance Constitution
+
+Prompt 46 alignment: authorization, moderation, and governance workflows MUST
+remain accessible to keyboard and assistive-technology users. Moderation queues,
+audit views, dialogs, filters, confirmations, and emergency controls MUST be
+semantic, focus-safe, screen-reader compatible, and non-color-only. Inaccessible
+staff tooling is an operational safety failure.
+
+Prompt 52 alignment: authorization, moderation, and governance workflows are
+execution invariants. Each workflow MUST answer who can read, write, moderate,
+delete, restore, move, search, subscribe, and export; visibility, moderation
+state, event emission, audit records, projection effects, cache invalidation,
+anti-leak behavior, and replay preservation MUST be explicit.
+
+This document defines the mandatory authorization architecture, permission model, moderation system, trust framework, governance rules, administrative boundaries, escalation policies, and operational control philosophy of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Governance Philosophy
+
+GPForum MUST assume:
+
+* hostile actors;
+* abuse attempts;
+* coordinated spam;
+* social engineering;
+* privilege escalation attempts;
+* moderation misuse;
+* insider abuse.
+
+The governance architecture MUST prioritize:
+
+* explicit authority;
+* least privilege;
+* traceability;
+* revocability;
+* auditability;
+* bounded authority domains.
+
+The platform MUST avoid:
+
+* implicit privilege;
+* hidden authority;
+* untraceable moderation;
+* global unrestricted access.
+
+⸻
+
+Authorization Philosophy
+
+Authorization MUST remain:
+
+* centralized;
+* explicit;
+* deny-by-default;
+* auditable.
+
+Every sensitive action MUST:
+
+* verify authorization;
+* verify scope;
+* verify context.
+
+Authorization MUST NOT depend on:
+
+* frontend visibility;
+* template logic;
+* client-side enforcement.
+
+The server is authoritative.
+
+⸻
+
+Mandatory Authorization Model
+
+The platform MUST implement:
+
+* RBAC + ABAC hybrid authorization.
+
+RBAC provides:
+
+* roles;
+* coarse permissions;
+* operational grouping.
+
+ABAC provides:
+
+* contextual evaluation;
+* ownership logic;
+* dynamic constraints;
+* resource-specific policy.
+
+⸻
+
+Permission Model
+
+Permissions MUST support:
+
+* global scope;
+* category scope;
+* thread scope;
+* resource ownership;
+* temporary grants;
+* contextual restrictions.
+
+Examples:
+
+* edit own post
+* moderate category
+* suspend user
+* manage tags
+* delete attachments
+* review reports
+
+Permissions MUST remain:
+
+* granular;
+* composable;
+* revocable.
+
+⸻
+
+Forbidden Authorization Patterns
+
+The platform MUST avoid:
+
+* hardcoded admin booleans;
+* hidden superuser bypasses;
+* authorization inside templates;
+* duplicated permission logic.
+
+Forbidden examples:
+
+* is_admin
+* magic moderator checks
+* frontend-only restrictions
+
+⸻
+
+Authorization Evaluation
+
+Authorization MUST evaluate:
+
+* actor identity;
+* role bindings;
+* resource ownership;
+* contextual restrictions;
+* trust status;
+* moderation state.
+
+Authorization MUST remain:
+
+* deterministic;
+* testable;
+* centralized.
+
+⸻
+
+Permission Storage
+
+Recommended entities:
+
+* roles
+* permissions
+* role_bindings
+* resource_policies
+* moderation_actions
+
+The system MUST support:
+
+* auditability;
+* revocation;
+* historical analysis.
+
+⸻
+
+Resource Ownership
+
+Ownership MUST remain explicit.
+
+Examples:
+
+* post ownership
+* attachment ownership
+* thread ownership
+* moderation ownership
+
+Ownership alone MUST NOT automatically grant unrestricted authority.
+
+⸻
+
+Moderation Philosophy
+
+Moderation is:
+
+* operational governance;
+* abuse mitigation;
+* community stability management.
+
+Moderation MUST remain:
+
+* auditable;
+* attributable;
+* reversible where possible;
+* scope-bound.
+
+Moderators MUST NOT operate invisibly.
+
+⸻
+
+Moderation Scopes
+
+The platform MUST support:
+
+* global moderators;
+* category moderators;
+* scoped moderation teams;
+* temporary moderation authority.
+
+Moderation authority MUST remain:
+
+* explicitly assigned;
+* explicitly revocable.
+
+⸻
+
+Moderation Actions
+
+Examples:
+
+* hide content
+* soft delete
+* suspend account
+* mute account
+* lock thread
+* freeze edits
+* quarantine uploads
+* revoke permissions
+
+All moderation actions MUST generate:
+
+* audit events;
+* actor attribution;
+* timestamps;
+* contextual metadata.
+
+⸻
+
+Soft Deletion Philosophy
+
+Destructive deletion SHOULD be minimized.
+
+Preferred strategy:
+
+* soft deletion;
+* reversible moderation;
+* immutable audit history.
+
+Permanent destructive deletion SHOULD remain:
+
+* exceptional;
+* restricted;
+* auditable.
+
+⸻
+
+Suspension Philosophy
+
+The platform MUST support:
+
+* temporary suspension;
+* permanent suspension;
+* scoped restriction;
+* progressive penalties.
+
+Suspension systems SHOULD support:
+
+* expiration;
+* escalation;
+* reviewability.
+
+⸻
+
+Trust System
+
+The platform SHOULD support:
+
+* trust levels;
+* behavioral scoring;
+* progressive capability unlocks.
+
+Trust systems MAY influence:
+
+* rate limits;
+* moderation thresholds;
+* posting permissions;
+* anti-spam heuristics.
+
+Trust systems MUST remain:
+
+* explainable;
+* bounded;
+* reviewable.
+
+⸻
+
+Abuse Mitigation
+
+The governance system MUST support:
+
+* spam mitigation;
+* flood control;
+* bot detection;
+* abuse throttling;
+* coordinated attack response.
+
+Abuse mitigation MUST remain:
+
+* observable;
+* tunable;
+* auditable.
+
+⸻
+
+Reporting System
+
+Users SHOULD support:
+
+* content reporting;
+* abuse reporting;
+* escalation workflows.
+
+Reports MUST:
+
+* remain attributable;
+* support moderation workflows;
+* support audit trails.
+
+⸻
+
+Administrative Philosophy
+
+Administrative access MUST remain:
+
+* minimal;
+* attributable;
+* auditable;
+* revocable.
+
+Administrative authority MUST require:
+
+* explicit authentication;
+* explicit authorization;
+* elevated verification where appropriate.
+
+⸻
+
+Separation of Duties
+
+The architecture SHOULD support:
+
+* separation of operational authority;
+* limited moderation scope;
+* bounded infrastructure access.
+
+The platform SHOULD avoid:
+
+* universal unrestricted operators.
+
+⸻
+
+Security-Sensitive Actions
+
+The following MUST generate audit events:
+
+* permission changes
+* role assignment
+* moderation escalation
+* administrative login
+* suspension actions
+* security policy changes
+
+Auditability is mandatory.
+
+⸻
+
+Appeal & Review Philosophy
+
+The governance architecture SHOULD support:
+
+* moderation review;
+* escalation review;
+* administrative oversight;
+* reversible actions where appropriate.
+
+The system SHOULD minimize:
+
+* irreversible silent actions.
+
+⸻
+
+Rate-Limit Governance
+
+The governance system SHOULD support:
+
+* dynamic restrictions;
+* behavioral throttling;
+* abuse scoring;
+* emergency lockdown policies.
+
+Rate limiting MAY vary by:
+
+* trust level;
+* moderation history;
+* behavioral reputation.
+
+⸻
+
+Content Governance
+
+Content workflows SHOULD support:
+
+* quarantine;
+* staged visibility;
+* moderation review;
+* revision tracking.
+
+Content governance MUST remain:
+
+* traceable;
+* reviewable;
+* auditable.
+
+⸻
+
+Anti-Abuse Automation
+
+The architecture MAY support:
+
+* automated moderation;
+* spam scoring;
+* heuristic filtering;
+* AI-assisted analysis.
+
+Automated systems MUST remain:
+
+* reviewable;
+* overrideable;
+* auditable.
+
+Automated systems MUST NOT become opaque authority systems.
+
+⸻
+
+Federation Governance
+
+If federation is implemented in the future:
+
+* remote trust boundaries MUST remain explicit;
+* remote moderation MUST remain constrained;
+* remote authority MUST remain revocable.
+
+Federation MUST NOT bypass local governance rules.
+
+⸻
+
+Emergency Controls
+
+The platform SHOULD support:
+
+* emergency lockdown;
+* emergency moderation escalation;
+* temporary feature restriction;
+* abuse containment workflows.
+
+Emergency actions MUST remain auditable.
+
+⸻
+
+Governance Logging
+
+Governance operations MUST expose:
+
+* moderation metrics;
+* abuse metrics;
+* escalation metrics;
+* suspension history;
+* administrative action trails.
+
+Operational visibility is mandatory.
+
+⸻
+
+Long-Term Governance Goal
+
+GPForum governance architecture MUST remain:
+
+* auditable;
+* transparent;
+* abuse-resistant;
+* scalable under large communities;
+* operationally sustainable;
+* resistant to privilege abuse.
+
+Authority MUST always remain:
+
+* explicit;
+* attributable;
+* reviewable.
+
+All future authorization and moderation systems MUST comply with this constitution.

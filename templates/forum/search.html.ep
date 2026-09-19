@@ -1,0 +1,75 @@
+% layout 'default';
+% title t('search.title') . ' - ' . t('app.name');
+
+<section aria-labelledby="search-heading">
+  <%= include 'components/page_header', heading_id => 'search-heading', component_title => t('search.title'), description => t('search.help') %>
+  % my $active_filters = $filters || {};
+  % my $current_limit = $limit || 20;
+  % my $result_count = scalar @{$results};
+  <form method="get" action="<%= url_for('forum_search') %>" role="search" aria-describedby="search-help">
+    <p id="search-help"><%= t('search.help') %></p>
+    <label for="search-query"><%= t('search.query') %></label>
+    <input id="search-query" name="q" value="<%= $query // q{} %>" autocomplete="off">
+    <fieldset>
+      <legend><%= t('search.filters') %></legend>
+      <label for="search-category"><%= t('search.category') %></label>
+      <input id="search-category" name="category_id" value="<%= $active_filters->{category_id} // q{} %>">
+      <label for="search-author"><%= t('search.author') %></label>
+      <input id="search-author" name="author_user_id" value="<%= $active_filters->{author_user_id} // q{} %>">
+      <label for="search-from"><%= t('search.from') %></label>
+      <input id="search-from" name="from" type="date" value="<%= $active_filters->{from} // q{} %>">
+      <label for="search-to"><%= t('search.to') %></label>
+      <input id="search-to" name="to" type="date" value="<%= $active_filters->{to} // q{} %>">
+    </fieldset>
+    <input type="hidden" name="limit" value="<%= $current_limit %>">
+    <button type="submit"><%= t('search.submit') %></button>
+  </form>
+  % if (defined $status && $status eq 'degraded') {
+    <%= include 'components/status_banner',
+      tone => 'warning',
+      heading_id => 'search-status-heading',
+      component_title => t('search.title'),
+      message => t('search.degraded') %>
+  % }
+  % if (@{$results}) {
+    <p role="status"><%= t('search.results_summary', { count => $result_count }) %></p>
+    <p><%= t('search.permission_note') %></p>
+    <ol class="ui-card-list" aria-label="<%= t('search.results') %>">
+      % for my $result (@{$results}) {
+        <li>
+          <h2>
+            % if (($result->{entity_type} || q{}) eq 'thread') {
+              <a href="<%= url_for('thread', thread_id => $result->{entity_id}) %>"><%= $result->{title} %></a>
+            % } else {
+              <%= $result->{title} %>
+            % }
+          </h2>
+          <p>
+            % if ($result->{snippet_html}) {
+              <%== ui_trusted_html($result->{snippet_html}, 'search.snippet') %>
+            % } else {
+              <%= $result->{snippet} || $result->{body} %>
+            % }
+          </p>
+          % if ($result->{source_created_at}) {
+            <time datetime="<%= $result->{source_created_at} %>"><%= $result->{source_created_at} %></time>
+          % }
+          % if ($result->{author_username}) {
+            <p>
+              <%= t('search.by_author') %>
+              <a href="<%= url_for('profile', username => $result->{author_username}) %>"><%= $result->{author_profile_label} || $result->{author_display_name} %></a>
+            </p>
+          % }
+        </li>
+      % }
+    </ol>
+    % if ($has_more && $more_limit) {
+      % my %next_params = (q => $query, %{$active_filters}, limit => $more_limit);
+      <%= include 'components/pagination', label => t('search.pagination'), items => ui_next_page(href => url_for('forum_search')->query(%next_params), label => t('search.more_results')) %>
+    % }
+  % } elsif (defined $query && length $query) {
+    <%= include 'components/empty_state', heading_id => 'search-no-results-heading', component_title => t('search.no_results'), description => t('search.no_results_guidance') %>
+  % } else {
+    <%= include 'components/empty_state', heading_id => 'search-empty-heading', component_title => t('search.empty_title'), description => t('search.empty_guidance') %>
+  % }
+</section>

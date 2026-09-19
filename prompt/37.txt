@@ -1,0 +1,138 @@
+GPForum - API Contracts, OpenAPI & Websocket Schema Constitution
+
+Prompt 46 alignment: browser-facing API and websocket schemas that drive UI
+state MUST preserve accessibility semantics. Dynamic states, realtime messages,
+notification updates, validation errors, and dialog/menu states MUST expose
+enough structured data for accessible rendering and assistive-safe updates.
+
+This document defines the mandatory API contract format, OpenAPI expectations, websocket message schemas, pagination standards, error response format, webhook contracts, and compatibility rules for GPForum.
+
+This specification is mandatory for external and internal API design.
+
+---
+
+Contract Philosophy
+
+APIs are contracts, not incidental controller output.
+
+Every public API MUST be:
+
+* documented;
+* versioned;
+* permission-aware;
+* testable;
+* backward-compatible within a version.
+
+---
+
+OpenAPI
+
+HTTP APIs SHOULD be described with OpenAPI where exposed to clients.
+
+OpenAPI specs SHOULD define:
+
+* paths;
+* methods;
+* request schemas;
+* response schemas;
+* error schemas;
+* authentication;
+* authorization notes;
+* rate-limit behavior.
+
+The OpenAPI spec MUST not document endpoints that are not implemented unless marked experimental.
+
+---
+
+Error Format
+
+API errors SHOULD use a consistent shape:
+
+* error_code;
+* message;
+* correlation_id;
+* details where safe;
+* retry_after where applicable.
+
+Messages MUST be safe for the caller.
+
+Internal details MUST remain hidden.
+
+---
+
+Pagination
+
+Pagination MUST be explicit.
+
+Supported models MAY include:
+
+* cursor pagination;
+* keyset pagination;
+* limited offset pagination for small admin views.
+
+Large public lists SHOULD prefer cursor or keyset pagination.
+
+Responses SHOULD include:
+
+* items;
+* next_cursor where applicable;
+* has_more;
+* limit.
+
+---
+
+Authentication
+
+API authentication MAY include:
+
+* browser session;
+* API token;
+* signed webhook secret;
+* future OAuth-like integration.
+
+Authentication MUST be separated from authorization.
+
+---
+
+Websocket Messages
+
+Websocket messages MUST define:
+
+* type;
+* schema_version;
+* correlation_id where applicable;
+* payload.
+
+Subscription messages MUST be authorized.
+
+Server messages MUST be safe under replay, reconnect, and duplicate delivery.
+
+---
+
+Webhook Contracts
+
+Webhooks MUST define:
+
+* event type;
+* schema version;
+* signature;
+* timestamp;
+* delivery id;
+* retry policy.
+
+Webhook receivers MUST validate signatures.
+
+Webhook senders MUST avoid duplicate side effects through idempotency keys.
+
+---
+
+Compatibility
+
+Breaking API changes MUST require:
+
+* version change;
+* migration notes;
+* deprecation period where feasible;
+* contract tests.
+
+Experimental APIs MUST be clearly marked.

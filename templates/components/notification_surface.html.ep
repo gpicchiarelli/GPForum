@@ -1,0 +1,33 @@
+% my $heading_id = stash('heading_id') || 'notification-heading';
+% my $component_title = stash('component_title') || t('notifications.title.notification');
+% my $summary = stash('summary') || q{};
+% my $href = stash('href') || q{};
+% my $action_label = stash('action_label') || t('notifications.open_discussion');
+% my $time_label = stash('time_label') || t('notifications.received_at');
+% my $created_at = stash('created_at') || q{};
+% my $read = stash('read') || 0;
+% my $read_action = stash('read_action') || q{};
+
+<article class="ui-notification-surface" aria-labelledby="<%= $heading_id %>">
+  <h2 id="<%= $heading_id %>"><%= $component_title %></h2>
+  % if (length $summary) {
+    <p><%= $summary %></p>
+  % }
+  % if (length $href) {
+    <p><a href="<%= $href %>"><%= $action_label %></a></p>
+  % }
+  % if (length $created_at) {
+    <p>
+      <%= $time_label %>
+      <time datetime="<%= $created_at %>"><%= $created_at %></time>
+    </p>
+  % }
+  % if ($read) {
+    <p role="status"><%= t('notifications.read') %></p>
+  % } elsif (length $read_action) {
+    <form method="post" action="<%= $read_action %>">
+      <%= csrf_field %>
+      <button type="submit"><%= t('notifications.mark_read') %></button>
+    </form>
+  % }
+</article>

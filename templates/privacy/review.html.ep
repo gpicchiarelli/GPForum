@@ -1,0 +1,119 @@
+% layout 'default';
+% title t('privacy.review') . ' - ' . t('app.name');
+
+<section aria-labelledby="privacy-review-heading">
+  <%= include 'components/page_header',
+    heading_id => 'privacy-review-heading',
+    component_title => t('privacy.review') %>
+
+  <section aria-labelledby="privacy-review-deletions-heading">
+    <%= include 'components/section_header',
+      heading_id => 'privacy-review-deletions-heading',
+      component_title => t('privacy.deletion_requests') %>
+    % if (@{$deletion_requests}) {
+      <ol class="ui-card-list" aria-label="<%= t('privacy.pending_deletion_requests') %>">
+        % for my $request (@{$deletion_requests}) {
+          <li class="ui-card-list__item">
+            <article aria-labelledby="<%= $request->{ui}{heading_id} %>">
+              <h3 id="<%= $request->{ui}{heading_id} %>"><%= $request->{requester_user_id} %></h3>
+              <p>
+                <%= $request->{resource_type} %>
+                <%= $request->{resource_id} %>
+                <time datetime="<%= $request->{created_at} %>"><%= $request->{created_at} %></time>
+              </p>
+              <p><%= $request->{reason} %></p>
+
+              <form method="post" action="<%= url_for('privacy_deletion_approve', request_id => $request->{deletion_request_id}) %>">
+                <%= csrf_field %>
+                <label for="approve-reason-<%= $request->{deletion_request_id} %>"><%= t('privacy.approval_reason') %></label>
+                <input id="approve-reason-<%= $request->{deletion_request_id} %>" name="reason" required>
+                <button type="submit"><%= t('privacy.approve_erasure') %></button>
+              </form>
+
+              <form method="post" action="<%= url_for('privacy_deletion_hold', request_id => $request->{deletion_request_id}) %>">
+                <%= csrf_field %>
+                <label for="hold-reason-<%= $request->{deletion_request_id} %>"><%= t('privacy.hold_reason') %></label>
+                <input id="hold-reason-<%= $request->{deletion_request_id} %>" name="reason" required>
+                <button type="submit"><%= t('privacy.apply_hold') %></button>
+              </form>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'privacy-review-deletions-empty-heading',
+        component_title => t('privacy.no_deletion_review') %>
+    % }
+  </section>
+
+  <section aria-labelledby="privacy-review-erasure-heading">
+    <%= include 'components/section_header',
+      heading_id => 'privacy-review-erasure-heading',
+      component_title => t('privacy.erasure_jobs') %>
+    % if (@{$erasure_jobs}) {
+      <ol class="ui-card-list" aria-label="<%= t('privacy.pending_erasure_jobs') %>">
+        % for my $job (@{$erasure_jobs}) {
+          <li class="ui-card-list__item">
+            <article aria-labelledby="<%= $job->{ui}{heading_id} %>">
+              <h3 id="<%= $job->{ui}{heading_id} %>"><%= ui_label('state', $job->{status}) %></h3>
+              <p>
+                <%= $job->{deletion_request_id} %>
+                <time datetime="<%= $job->{scheduled_at} %>"><%= $job->{scheduled_at} %></time>
+              </p>
+              % if ($job->{last_error}) {
+                <p><%= $job->{last_error} %></p>
+              % }
+              <form method="post" action="<%= url_for('privacy_erasure_run', job_id => $job->{erasure_job_id}) %>">
+                <%= csrf_field %>
+                <button type="submit"><%= t('privacy.run_erasure') %></button>
+              </form>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'privacy-review-erasure-empty-heading',
+        component_title => t('privacy.no_erasure_pending') %>
+    % }
+  </section>
+
+  <section aria-labelledby="privacy-review-exports-heading">
+    <%= include 'components/section_header',
+      heading_id => 'privacy-review-exports-heading',
+      component_title => t('privacy.export_requests') %>
+    % if (@{$export_requests}) {
+      <ol class="ui-card-list" aria-label="<%= t('privacy.pending_export_requests') %>">
+        % for my $request (@{$export_requests}) {
+          <li class="ui-card-list__item">
+            <strong><%= $request->{requester_user_id} %></strong>
+            <span><%= $request->{export_type} %></span>
+            <time datetime="<%= $request->{created_at} %>"><%= $request->{created_at} %></time>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'privacy-review-exports-empty-heading',
+        component_title => t('privacy.no_export_pending') %>
+    % }
+  </section>
+
+  % if (@{$active_holds}) {
+    <section aria-labelledby="privacy-review-holds-heading">
+      <%= include 'components/section_header',
+        heading_id => 'privacy-review-holds-heading',
+        component_title => t('privacy.active_holds') %>
+      <ol class="ui-card-list" aria-label="<%= t('privacy.active_legal_holds') %>">
+        % for my $hold (@{$active_holds}) {
+          <li class="ui-card-list__item">
+            <strong><%= $hold->{resource_type} %></strong>
+            <span><%= $hold->{resource_id} %></span>
+            <span><%= $hold->{reason} %></span>
+          </li>
+        % }
+      </ol>
+    </section>
+  % }
+</section>

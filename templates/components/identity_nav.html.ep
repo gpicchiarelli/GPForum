@@ -1,0 +1,14 @@
+% if (session('user_id')) {
+  <form class="identity-form" method="post" action="<%= url_for('logout') %>" aria-label="<%= t('auth.logout_aria') %>">
+    <%= csrf_field %>
+    <span><%= t('auth.signed_in_as', { user_id => session('user_id') }) %></span>
+    <a href="<%= url_for('settings') %>"><%= t('nav.settings') %></a>
+    <button type="submit"><%= t('auth.logout') %></button>
+  </form>
+% } else {
+  <nav class="identity-nav" aria-label="<%= t('nav.identity') %>">
+    <a href="<%= url_for('register') %>"><%= t('auth.register') %></a>
+    <a href="<%= url_for('login') %>"><%= t('auth.login') %></a>
+    <a href="<%= url_for('password_reset_request') %>"><%= t('auth.forgot_password') %></a>
+  </nav>
+% }

@@ -1,0 +1,3 @@
+requires 'DBD::Pg', '3.21.2';
+requires 'Mojo::Pg', '5.0';
+requires 'Test::PostgreSQL', '1.29';

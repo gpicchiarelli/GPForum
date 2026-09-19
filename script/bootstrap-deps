@@ -1,0 +1,173 @@
+#!/bin/sh
+set -eu
+
+# Install locked CPAN distributions through Carton. Production and CI use
+# `carton install --deployment` against cpanfile.snapshot. This script does
+# not download from unsigned URLs, does not sideload with cpanm, and does
+# not delete local/.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+with_postgres=0
+update=0
+cached=0
+
+usage() {
+    cat <<'EOF'
+Usage: script/bootstrap-deps [--postgres] [--update] [--cached]
+
+  --postgres  include the cpanfile postgres feature (DBD::Pg, Mojo::Pg,
+              Test::PostgreSQL). Requires pg_config / libpq.
+  --update    refresh cpanfile.snapshot (development lock update). Do not
+              use this on production hosts.
+  --cached    install from vendor/cache after `carton bundle`.
+
+Default production/CI path: carton install --deployment
+HTTPS mirror: PERL_CARTON_MIRROR=https://cpan.metacpan.org/
+EOF
+}
+
+for argument in "$@"; do
+    case "$argument" in
+        --postgres)
+            with_postgres=1
+            ;;
+        --update|--dev)
+            update=1
+            ;;
+        --cached)
+            cached=1
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "bootstrap-deps: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ ! -f cpanfile ]; then
+    echo "bootstrap-deps: cpanfile is missing" >&2
+    exit 1
+fi
+
+if [ ! -f cpanfile.snapshot ]; then
+    if [ "$update" -eq 0 ]; then
+        echo "bootstrap-deps: cpanfile.snapshot is required for --deployment." >&2
+        echo "Refresh the lock on a development host with: script/bootstrap-deps --update" >&2
+        exit 1
+    fi
+    echo "bootstrap-deps: no snapshot yet; carton install will create cpanfile.snapshot" >&2
+fi
+
+if [ "$with_postgres" -eq 1 ] && [ ! -f cpanfile.postgres ]; then
+    echo "bootstrap-deps: cpanfile.postgres is missing" >&2
+    exit 1
+fi
+
+current_perl=$(perl -MConfig -e 'print $Config{version}')
+if [ -d local/lib/perl5 ]; then
+    if ! perl -Ilocal/lib/perl5 -e '1' >/dev/null 2>&1; then
+        echo "bootstrap-deps: local/ is not usable with Perl $current_perl." >&2
+        echo "Refusing to delete local/. Use the matching Perl or move local/ aside yourself." >&2
+        exit 1
+    fi
+fi
+
+find_pg_config() {
+    if [ -n "${GPFORUM_PG_CONFIG:-}" ] && [ -x "${GPFORUM_PG_CONFIG}" ]; then
+        printf '%s\n' "${GPFORUM_PG_CONFIG}"
+        return 0
+    fi
+    if command -v pg_config >/dev/null 2>&1; then
+        command -v pg_config
+        return 0
+    fi
+    for candidate in \
+        /opt/local/lib/postgresql18/bin/pg_config \
+        /opt/local/lib/postgresql17/bin/pg_config \
+        /opt/local/lib/postgresql16/bin/pg_config \
+        /opt/homebrew/opt/libpq/bin/pg_config \
+        /usr/local/opt/libpq/bin/pg_config \
+        /Applications/Postgres.app/Contents/Versions/latest/bin/pg_config
+    do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ "$with_postgres" -eq 1 ]; then
+    pg_config_bin=$(find_pg_config) || {
+        echo "bootstrap-deps: pg_config is required for DBD::Pg." >&2
+        echo "Run script/system-preflight for OS package guidance." >&2
+        exit 1
+    }
+    PATH="$(dirname "$pg_config_bin"):$PATH"
+    export PATH
+    PG_CONFIG="$pg_config_bin"
+    export PG_CONFIG
+    printf 'bootstrap-deps: using pg_config -> %s\n' "$pg_config_bin"
+fi
+
+if [ -z "${PERL_CARTON_MIRROR:-}" ]; then
+    PERL_CARTON_MIRROR=https://cpan.metacpan.org/
+fi
+export PERL_CARTON_MIRROR
+
+case "$PERL_CARTON_MIRROR" in
+    https://*|file://*|/*)
+        ;;
+    *)
+        echo "bootstrap-deps: PERL_CARTON_MIRROR must be HTTPS or a local path (got $PERL_CARTON_MIRROR)" >&2
+        exit 1
+        ;;
+esac
+
+set -- install
+if [ "$update" -eq 0 ]; then
+    set -- "$@" --deployment
+fi
+if [ "$cached" -eq 1 ]; then
+    set -- "$@" --cached
+fi
+if [ "$with_postgres" -eq 0 ]; then
+    set -- "$@" --without postgres
+fi
+
+snapshot_count() {
+    if [ ! -f cpanfile.snapshot ]; then
+        echo 0
+        return
+    fi
+    grep -c '^  [A-Za-z0-9_.-]*$' cpanfile.snapshot || echo 0
+}
+
+before_count=$(snapshot_count)
+if [ "$update" -eq 1 ] && [ -f cpanfile.snapshot ]; then
+    cp cpanfile.snapshot "${TMPDIR:-/tmp}/gpforum-cpanfile.snapshot.bak.$$"
+fi
+
+echo "bootstrap-deps: PERL_CARTON_MIRROR=$PERL_CARTON_MIRROR"
+echo "bootstrap-deps: running carton $*"
+script/gpforum-carton "$@"
+
+after_count=$(snapshot_count)
+if [ "$update" -eq 1 ] && [ "$before_count" -gt 20 ] && [ "$after_count" -lt "$before_count" ]; then
+    echo "bootstrap-deps: carton install shrank cpanfile.snapshot from $before_count to $after_count distributions." >&2
+    echo "Restoring the previous lock. Review local/ Perl compatibility and retry." >&2
+    cp "${TMPDIR:-/tmp}/gpforum-cpanfile.snapshot.bak.$$" cpanfile.snapshot
+    rm -f "${TMPDIR:-/tmp}/gpforum-cpanfile.snapshot.bak.$$"
+    exit 1
+fi
+rm -f "${TMPDIR:-/tmp}/gpforum-cpanfile.snapshot.bak.$$"
+
+echo "bootstrap-deps: verifying lock with carton check"
+script/gpforum-carton check

@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+
+if [ ! -d t ] || ! find t -type f -name '*.t' | grep -q .; then
+    echo "No tests found."
+    exit 0
+fi
+
+exec carton exec prove -lr t "$@"
+

@@ -1,0 +1,514 @@
+GPForum — Worker, Queue & Asynchronous Processing Constitution
+
+Prompt 51 alignment: projection and outbox workers MUST remain idempotent,
+retry-tolerant, restart-safe, replay-tolerant, duplicate-delivery-tolerant,
+observable, and safe for projection lag reconciliation. Worker failure MUST NOT
+corrupt canonical state or make derived state authoritative.
+
+Prompt 45 alignment: workers MUST preserve idempotent, observable, replay-safe
+contracts. Queue payloads MUST be versioned where long-lived, failures MUST be
+classified, retries MUST be bounded, and asynchronous state MUST NOT become
+authoritative.
+
+This document defines the mandatory asynchronous processing architecture, worker orchestration philosophy, queue discipline, retry model, job lifecycle standards, distributed execution behavior, scheduling principles, and operational workload isolation model of GPForum.
+
+This specification is foundational and mandatory.
+
+⸻
+
+Asynchronous Processing Philosophy
+
+GPForum MUST operate as:
+
+* asynchronous-first;
+* event-driven;
+* distributed;
+* latency-aware.
+
+The platform MUST avoid:
+
+* blocking request workflows;
+* synchronous heavy processing;
+* request-bound orchestration;
+* long-lived HTTP operations.
+
+Asynchronous execution is foundational to:
+
+* scalability;
+* responsiveness;
+* operational resilience;
+* workload isolation.
+
+⸻
+
+Worker Philosophy
+
+Workers are:
+
+* distributed execution units;
+* asynchronous orchestration processors;
+* non-interactive execution systems.
+
+Workers MUST remain:
+
+* stateless;
+* horizontally scalable;
+* multi-process scalable;
+* restart-safe;
+* replay-tolerant.
+
+Workers MUST tolerate:
+
+* crashes;
+* retries;
+* duplicate delivery;
+* delayed execution.
+
+⸻
+
+Mandatory Queue System
+
+Preferred queue system:
+
+* Minion.
+
+Minion is the canonical asynchronous orchestration layer.
+
+All slow or high-latency operations SHOULD execute through:
+
+* queued jobs;
+* asynchronous workflows;
+* distributed workers;
+* dynamically sized Perl worker pools.
+
+⸻
+
+Queue Ownership Philosophy
+
+HTTP requests MUST:
+
+* validate;
+* persist authoritative state;
+* emit events;
+* enqueue asynchronous work.
+
+HTTP requests MUST NOT:
+
+* block on slow workflows;
+* execute heavy orchestration;
+* wait for distributed side effects.
+
+⸻
+
+Mandatory Asynchronous Workloads
+
+Examples of mandatory asynchronous workloads:
+
+* email delivery
+* search indexing
+* moderation analysis
+* notification fanout
+* media processing
+* antivirus scanning
+* analytics aggregation
+* audit shipping
+* cache invalidation
+* federation propagation
+* digest generation
+* websocket propagation assistance
+
+⸻
+
+Job Design Philosophy
+
+Jobs MUST remain:
+
+* deterministic;
+* bounded;
+* idempotent;
+* observable;
+* replay-safe.
+
+Jobs SHOULD:
+
+* perform one responsibility;
+* remain composable;
+* remain retry-safe.
+
+⸻
+
+Idempotency
+
+All distributed jobs MUST support:
+
+* idempotent execution.
+
+Repeated execution MUST NOT:
+
+* corrupt state;
+* duplicate authoritative records;
+* generate duplicate side effects;
+* bypass authorization.
+
+Idempotency is mandatory.
+
+⸻
+
+Retry Philosophy
+
+Jobs MUST support:
+
+* retry;
+* bounded retry policies;
+* exponential backoff;
+* dead-letter handling.
+
+Retries MUST remain:
+
+* observable;
+* auditable;
+* failure-aware.
+
+The system MUST tolerate transient failure.
+
+⸻
+
+Failure Isolation
+
+Worker failure MUST NOT:
+
+* crash application nodes;
+* block HTTP traffic;
+* corrupt persistence;
+* halt unrelated workloads.
+
+Worker queues SHOULD remain:
+
+* isolated by responsibility;
+* operationally separable.
+
+⸻
+
+Queue Categories
+
+Recommended queue separation:
+
+* notifications
+* search
+* media
+* analytics
+* moderation
+* federation
+* maintenance
+* cleanup
+
+Queue isolation SHOULD minimize:
+
+* noisy neighbor effects;
+* workload starvation;
+* latency amplification.
+
+⸻
+
+Job Payload Philosophy
+
+Job payloads SHOULD contain:
+
+* identifiers;
+* timestamps;
+* minimal replay-safe metadata.
+
+Jobs SHOULD avoid:
+
+* giant embedded payloads;
+* mutable embedded state;
+* hidden authority assumptions.
+
+Workers SHOULD retrieve authoritative state from PostgreSQL when required.
+
+⸻
+
+Distributed Worker Execution
+
+Workers MUST support:
+
+* distributed execution;
+* multi-node processing;
+* rolling deployment;
+* crash recovery;
+* replay safety.
+
+Workers MUST NOT depend on:
+
+* local filesystem state;
+* local memory persistence;
+* node affinity.
+
+⸻
+
+Scheduling Philosophy
+
+The system SHOULD support:
+
+* scheduled jobs;
+* delayed execution;
+* recurring maintenance tasks.
+
+Scheduled execution MUST remain:
+
+* observable;
+* replay-safe;
+* idempotent-aware.
+
+⸻
+
+Long-Running Workloads
+
+Long-running workloads MUST:
+
+* remain isolated;
+* support cancellation;
+* support timeout policies;
+* scale by process count first;
+* avoid blocking worker pools indefinitely.
+
+The architecture MUST avoid:
+
+* infinite jobs;
+* unbounded execution;
+* resource exhaustion.
+
+⸻
+
+Worker Resource Discipline
+
+Workers MUST:
+
+* maintain bounded memory usage;
+* avoid uncontrolled buffering;
+* avoid unbounded concurrency;
+* support graceful shutdown.
+
+Worker nodes SHOULD support:
+
+* autoscaling;
+* queue-aware scaling;
+* workload-specific scaling.
+
+⸻
+
+Distributed Coordination
+
+Worker coordination MUST:
+
+* avoid global locks where possible;
+* tolerate retries;
+* tolerate delayed execution;
+* support partial failure.
+
+The architecture SHOULD prefer:
+
+* optimistic workflows;
+* append-oriented workflows;
+* replay-safe orchestration.
+
+⸻
+
+Queue Persistence Philosophy
+
+Queue persistence MUST remain:
+
+* durable;
+* observable;
+* recoverable.
+
+Critical workflows MUST survive:
+
+* node crashes;
+* worker restarts;
+* temporary infrastructure outages.
+
+⸻
+
+Dead Letter Philosophy
+
+Failed jobs SHOULD support:
+
+* dead-letter queues;
+* quarantine workflows;
+* operator review;
+* replay mechanisms.
+
+Permanent failure MUST remain visible.
+
+⸻
+
+Security of Worker Systems
+
+Workers MUST:
+
+* validate all payloads;
+* authenticate infrastructure access;
+* avoid unsafe shell execution;
+* avoid unsafe deserialization.
+
+Workers MUST assume:
+
+* hostile payload injection attempts;
+* replay attempts;
+* malformed jobs.
+
+⸻
+
+Event-Driven Integration
+
+Workers SHOULD consume:
+
+* domain events;
+* synchronization events;
+* indexing events;
+* moderation events.
+
+Workers are foundational to:
+
+* event-driven orchestration;
+* distributed synchronization;
+* asynchronous scalability.
+
+⸻
+
+Search Indexing
+
+Search indexing MUST:
+
+* execute asynchronously;
+* tolerate replay;
+* tolerate delayed propagation;
+* support rebuild workflows.
+
+Indexing MUST NOT block user-facing persistence.
+
+⸻
+
+Notification Fanout
+
+Notification delivery MUST:
+
+* remain asynchronous;
+* support retry;
+* tolerate delayed propagation;
+* support distributed fanout.
+
+Realtime delivery MUST remain eventually consistent.
+
+⸻
+
+Media Processing
+
+Media workflows MUST execute asynchronously.
+
+Examples:
+
+* image resizing
+* thumbnail generation
+* transcoding
+* metadata extraction
+* virus scanning
+
+Media processing MUST remain isolated from request latency.
+
+⸻
+
+Maintenance Workloads
+
+Background maintenance MAY include:
+
+* partition cleanup
+* retention enforcement
+* cache pruning
+* analytics compaction
+* audit archival
+* stale session cleanup
+
+Maintenance MUST remain:
+
+* bounded;
+* partition-aware;
+* low-impact.
+
+⸻
+
+Observability
+
+Worker infrastructure MUST expose:
+
+* queue depth;
+* retry metrics;
+* failure rates;
+* execution latency;
+* worker throughput;
+* dead-letter counts.
+
+Operational visibility is mandatory.
+
+⸻
+
+Logging Philosophy
+
+Worker logs MUST:
+
+* remain structured;
+* support correlation IDs;
+* support distributed tracing;
+* avoid secret leakage.
+
+All failures MUST remain traceable.
+
+⸻
+
+Replay Philosophy
+
+Critical asynchronous workflows SHOULD support:
+
+* replay;
+* reconstruction;
+* partial reprocessing;
+* recovery after outage.
+
+Replay MUST remain:
+
+* idempotent-aware;
+* audit-safe.
+
+⸻
+
+Operational Philosophy
+
+Worker systems MUST prioritize:
+
+* operational simplicity;
+* deterministic scaling;
+* failure isolation;
+* graceful degradation;
+* recoverability.
+
+The queueing system MUST remain understandable and maintainable.
+
+⸻
+
+Long-Term Asynchronous Goal
+
+GPForum asynchronous architecture MUST remain:
+
+* scalable;
+* replayable;
+* resilient;
+* distributed-safe;
+* operationally predictable;
+* sustainable under extreme concurrency.
+
+Workers are not background utilities.
+
+Workers are a foundational distributed systems layer.
+
+All future asynchronous processing MUST comply with this constitution.

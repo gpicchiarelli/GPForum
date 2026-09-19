@@ -1,0 +1,13 @@
+<form class="locale-form" method="post" action="<%= url_for('locale_update') %>" aria-label="<%= t('locale.selector_label') %>">
+  <%= csrf_field %>
+  <input type="hidden" name="return_to" value="<%= ui_return_to %>">
+  <label for="locale-selector">
+    <span><%= t('locale.choose') %></span>
+    <select id="locale-selector" name="locale">
+      % for my $option (@{ ui_locale_options() }) {
+        <option value="<%= $option->{locale} %>"<%= $option->{current} ? ' selected' : '' %>><%= $option->{native_name} %></option>
+      % }
+    </select>
+  </label>
+  <button type="submit"><%= t('locale.apply') %></button>
+</form>

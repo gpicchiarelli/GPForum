@@ -1,0 +1,13 @@
+<form class="theme-form" method="post" action="<%= url_for('theme_update') %>" aria-label="<%= t('theme.selector_label') %>">
+  <%= csrf_field %>
+  <input type="hidden" name="return_to" value="<%= ui_return_to %>">
+  <label for="theme-selector">
+    <span><%= t('theme.choose') %></span>
+    <select id="theme-selector" name="theme">
+      % for my $option (@{ ui_theme_options() }) {
+        <option value="<%= $option->{name} %>"<%= $option->{current} ? ' selected' : '' %>><%= $option->{label} %></option>
+      % }
+    </select>
+  </label>
+  <button type="submit"><%= t('theme.apply') %></button>
+</form>

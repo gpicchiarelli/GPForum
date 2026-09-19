@@ -1,0 +1,129 @@
+package GPForum::Web::NotificationAccess;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use Mojo::Base -base;
+
+our $VERSION = '0.001';
+
+const my $DEFAULT_LIMIT     => 25;
+const my $WRITE_RATE_LIMIT  => 120;
+const my $WRITE_RATE_WINDOW => 60;
+const my $STATUS_FAILED     => 'failed';
+const my $STATUS_NOT_FOUND  => 'not_found';
+
+sub page_limit {
+    my ( undef, $requested ) = @_;
+
+    return $requested || $DEFAULT_LIMIT;
+}
+
+sub write_rate_input {
+    my ( undef, $input ) = @_;
+
+    return {
+        action         => $input->{action},
+        actor_id       => $input->{actor_id},
+        limit          => $WRITE_RATE_LIMIT,
+        scope          => 'notification_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    };
+}
+
+sub is_failed {
+    my ( $self, $result ) = @_;
+
+    return $self->_status($result) eq $STATUS_FAILED ? 1 : 0;
+}
+
+sub failure_status {
+    my ( $self, $result ) = @_;
+
+    my $status = $self->_status($result);
+    if ( $status eq $STATUS_NOT_FOUND ) {
+        return $status;
+    }
+
+    return;
+}
+
+sub _status {
+    my ( undef, $result ) = @_;
+
+    return $result->{status} || q{};
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Web::NotificationAccess - Notification page limits and HTTP policy.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $limit = $access->page_limit($requested);
+
+=head1 DESCRIPTION
+
+Owns inbox/mention page limits, the C<notification_http> write rate-limit
+hash, and workflow failure-status mapping. It does not render HTTP responses
+or load inbox rows. L<GPForum::Controller::Notifications::Base> still checks
+CSRF, sessions, and Guard errors.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 page_limit
+
+Returns a requested page size or the default of 25.
+
+=head2 write_rate_input
+
+Returns the C<notification_http> rate-limit arguments.
+
+=head2 is_failed
+
+True when the workflow status is C<failed>.
+
+=head2 failure_status
+
+Returns C<not_found> when that status is present.
+
+=head1 DIAGNOSTICS
+
+None. HTTP rendering stays on the notification controllers.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+Uses L<Const::Fast> and L<Mojo::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+CSRF, authentication, telemetry, and Guard rendering remain on
+L<GPForum::Controller::Notifications::Base>.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

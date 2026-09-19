@@ -1,0 +1,102 @@
+#!/usr/bin/env perl
+package main;
+
+use strict;
+use warnings;
+
+use Carp qw(croak);
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use GPForum::Config;
+use GPForum::OS::Preflight;
+use GPForum::Runtime;
+
+our $VERSION = '0.001';
+
+exit run(@ARGV);
+
+sub run {
+    my (@arguments) = @_;
+
+    my $options = _options(@arguments);
+    if ( $options->{help} ) {
+        print _usage() or croak 'failed to write usage';
+        return 0;
+    }
+
+    my $preflight = _preflight();
+    my $report    = $preflight->report;
+    my $output =
+      $options->{json} ? $preflight->as_json : $preflight->human_text;
+
+    print $output or croak 'failed to write OS preflight report';
+
+    return _exit_status( $report, $options );
+}
+
+sub _preflight {
+    my $config  = GPForum::Config->from_environment;
+    my $runtime = GPForum::Runtime->from_config($config);
+
+    return GPForum::OS::Preflight->from_runtime(
+        $runtime,
+        min_recommended_workers   => $config->os_min_recommended_workers,
+        max_open_file_descriptors => $config->os_max_open_file_descriptors,
+    );
+}
+
+sub _options {
+    my (@arguments) = @_;
+
+    my $options = {
+        help   => 0,
+        json   => 0,
+        strict => 0,
+    };
+
+    for my $argument (@arguments) {
+        _apply_option( $options, $argument );
+    }
+
+    return $options;
+}
+
+sub _apply_option {
+    my ( $options, $argument ) = @_;
+
+    if ( $argument eq '--help' ) {
+        $options->{help} = 1;
+        return;
+    }
+    if ( $argument eq '--json' ) {
+        $options->{json} = 1;
+        return;
+    }
+    if ( $argument eq '--human' ) {
+        $options->{json} = 0;
+        return;
+    }
+    if ( $argument eq '--strict' ) {
+        $options->{strict} = 1;
+        return;
+    }
+
+    croak _usage();
+}
+
+sub _exit_status {
+    my ( $report, $options ) = @_;
+
+    return 1 if $report->{status} eq 'fail';
+    return 0 if !$options->{strict};
+
+    return $report->{status} eq 'ok' ? 0 : 1;
+}
+
+sub _usage {
+    return
+"Usage: script/gpforum-os-preflight [--human|--json] [--strict] [--help]\n";
+}
+
+1;

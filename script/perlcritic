@@ -1,0 +1,82 @@
+#!/bin/sh
+set -eu
+
+runner="perlcritic"
+
+if command -v carton >/dev/null 2>&1 && [ -d local ]; then
+    runner="carton exec perlcritic"
+fi
+
+has_target=0
+for argument in "$@"; do
+    if [ -e "$argument" ]; then
+        has_target=1
+    fi
+done
+
+if [ "$has_target" -eq 1 ]; then
+    exec $runner --profile .perlcriticrc "$@"
+fi
+
+tmp_file="${TMPDIR:-/tmp}/gpforum-perlcritic-files.$$"
+tmp_dir="${TMPDIR:-/tmp}/gpforum-perlcritic.$$"
+baseline_file="etc/perlcritic-baseline.txt"
+mkdir -p "$tmp_dir"
+trap 'rm -rf "$tmp_dir" "$tmp_file"' EXIT HUP INT TERM
+
+find bin lib script t \
+    -type f \( -path 'bin/*' -o -name '*.pm' -o -name '*.pl' -o -name '*.t' \) -print0 \
+    > "$tmp_file" 2>/dev/null || true
+
+if [ ! -s "$tmp_file" ]; then
+    echo "No Perl files found."
+    exit 0
+fi
+
+raw_output="$tmp_dir/raw-output"
+violations="$tmp_dir/violations"
+canonical_violations="$tmp_dir/canonical-violations"
+baseline="$tmp_dir/baseline"
+canonical_baseline="$tmp_dir/canonical-baseline"
+new_violations="$tmp_dir/new-violations"
+resolved_violations="$tmp_dir/resolved-violations"
+
+set +e
+xargs -0 $runner --profile .perlcriticrc "$@" < "$tmp_file" > "$raw_output" 2>&1
+critic_status=$?
+set -e
+
+grep '^\[' "$raw_output" | LC_ALL=C sort -u > "$violations" || true
+sed -E 's/ line [[:digit:]]+, column [[:digit:]]+\./ line <line>, column <column>./' \
+    "$violations" | LC_ALL=C sort -u > "$canonical_violations"
+
+if [ ! -f "$baseline_file" ]; then
+    cat "$raw_output"
+    exit "$critic_status"
+fi
+
+LC_ALL=C sort -u "$baseline_file" > "$baseline"
+sed -E 's/ line [[:digit:]]+, column [[:digit:]]+\./ line <line>, column <column>./' \
+    "$baseline" | LC_ALL=C sort -u > "$canonical_baseline"
+LC_ALL=C comm -13 "$canonical_baseline" "$canonical_violations" > "$new_violations"
+LC_ALL=C comm -23 "$canonical_baseline" "$canonical_violations" > "$resolved_violations"
+
+new_count="$(wc -l < "$new_violations" | tr -d ' ')"
+resolved_count="$(wc -l < "$resolved_violations" | tr -d ' ')"
+baseline_count="$(wc -l < "$canonical_baseline" | tr -d ' ')"
+
+if [ "$new_count" -ne 0 ]; then
+    echo "perlcritic: found $new_count violation(s) outside baseline" >&2
+    cat "$new_violations" >&2
+    if [ "$resolved_count" -ne 0 ]; then
+        echo "perlcritic: $resolved_count baseline violation(s) disappeared; update $baseline_file after review" >&2
+    fi
+    exit 1
+fi
+
+if [ "$resolved_count" -ne 0 ]; then
+    echo "perlcritic: $resolved_count baseline violation(s) not observed in this environment; review $baseline_file before removing them" >&2
+    cat "$resolved_violations" >&2
+fi
+
+echo "perlcritic status=ok baseline_violations=$baseline_count new_violations=0"

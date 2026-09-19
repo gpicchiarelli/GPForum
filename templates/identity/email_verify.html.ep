@@ -1,0 +1,11 @@
+% layout 'default';
+% title t('auth.email_verify_title') . ' - ' . t('app.name');
+
+<section aria-labelledby="<%= $ui->{heading_id} %>">
+  <h1 id="<%= $ui->{heading_id} %>"><%= t('auth.email_verify_title') %></h1>
+  <form method="post" action="<%= url_for('email_verify') %>">
+    <%= csrf_field %>
+    <input type="hidden" name="token" value="<%= $token %>">
+    <button type="submit"><%= t('auth.email_verify_submit') %></button>
+  </form>
+</section>

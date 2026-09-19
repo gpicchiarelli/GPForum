@@ -1,0 +1,74 @@
+% layout 'default';
+% title t('admin.async_jobs') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-jobs-heading">
+  <%= include 'components/page_header', heading_id => 'admin-jobs-heading', component_title => t('admin.async_jobs'), actions_label => t('admin.jobs_nav'), actions => ui_actions({ href => url_for('admin_dashboard'), label => t('admin.admin') }, { href => url_for('admin_status'), label => t('admin.health_runtime') }) %>
+
+  <form method="get" action="<%= url_for('admin_jobs') %>">
+    <label for="admin-job-status"><%= t('admin.outbox_status') %></label>
+    <select id="admin-job-status" name="status">
+      <option value="" <%= !$status ? 'selected' : '' %>><%= t('common.any') %></option>
+      <option value="pending" <%= $status && $status eq 'pending' ? 'selected' : '' %>><%= ui_label('state', 'pending') %></option>
+      <option value="failed" <%= $status && $status eq 'failed' ? 'selected' : '' %>><%= ui_label('state', 'failed') %></option>
+      <option value="cancelled" <%= $status && $status eq 'cancelled' ? 'selected' : '' %>><%= ui_label('state', 'cancelled') %></option>
+      <option value="done" <%= $status && $status eq 'done' ? 'selected' : '' %>><%= ui_label('state', 'done') %></option>
+    </select>
+    <button type="submit"><%= t('common.filter') %></button>
+  </form>
+
+  <section aria-labelledby="admin-outbox-heading">
+    <%= include 'components/section_header', heading_id => 'admin-outbox-heading', component_title => t('admin.outbox') %>
+    % if (@{ $jobs->{outbox_messages} || [] }) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.outbox_list') %>">
+        % for my $message (@{ $jobs->{outbox_messages} }) {
+          <li>
+            <article aria-labelledby="<%= $message->{ui}{heading_id} %>">
+              <h3 id="<%= $message->{ui}{heading_id} %>"><%= $message->{job_type} %></h3>
+              <dl>
+                <dt><%= t('admin.status') %></dt>
+                <dd><%= include 'components/status_badge', value => $message->{status} %></dd>
+                <dt><%= t('admin.queue') %></dt>
+                <dd><%= $message->{queue} %></dd>
+                <dt><%= t('admin.retries') %></dt>
+                <dd><%= $message->{attempt_count} || $message->{attempts} || 0 %></dd>
+                <dt><%= t('admin.next_attempt') %></dt>
+                <dd><time datetime="<%= $message->{next_attempt_at} %>"><%= $message->{next_attempt_at} %></time></dd>
+                <dt><%= t('admin.last_error') %></dt>
+                <dd><%= $message->{last_error} || t('common.none') %></dd>
+              </dl>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state', heading_id => 'admin-outbox-empty-heading', component_title => t('admin.no_outbox') %>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-dead-letter-heading">
+    <%= include 'components/section_header', heading_id => 'admin-dead-letter-heading', component_title => t('admin.dead_letters') %>
+    % if (@{ $jobs->{dead_letters} || [] }) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.dead_letter_list') %>">
+        % for my $letter (@{ $jobs->{dead_letters} }) {
+          <li>
+            <article aria-labelledby="<%= $letter->{ui}{heading_id} %>">
+              <h3 id="<%= $letter->{ui}{heading_id} %>"><%= $letter->{error_class} %></h3>
+              <dl>
+                <dt><%= t('admin.source') %></dt>
+                <dd><%= $letter->{source_table} %>: <%= $letter->{source_id} %></dd>
+                <dt><%= t('admin.retries') %></dt>
+                <dd><%= $letter->{retry_count} %></dd>
+                <dt><%= t('admin.last_failed') %></dt>
+                <dd><time datetime="<%= $letter->{last_failed_at} %>"><%= $letter->{last_failed_at} %></time></dd>
+                <dt><%= t('admin.error') %></dt>
+                <dd><%= $letter->{error_message} %></dd>
+              </dl>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state', heading_id => 'admin-dead-letter-empty-heading', component_title => t('admin.no_dead_letters') %>
+    % }
+  </section>
+</section>

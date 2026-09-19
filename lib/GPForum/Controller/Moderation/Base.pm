@@ -1,0 +1,391 @@
+package GPForum::Controller::Moderation::Base;
+
+use strict;
+use warnings;
+
+use Const::Fast;
+use Mojo::Base 'Mojolicious::Controller';
+
+use GPForum::Web::Access;
+use GPForum::Web::Guard;
+use GPForum::Web::ModerationAccess;
+use GPForum::Web::Responder;
+
+our $VERSION = '0.001';
+
+const my $HTTP_OK           => 200;
+const my $HTTP_UNAUTHORIZED => 401;
+const my $HTTP_FORBIDDEN    => 403;
+
+sub moderation_access {
+    return GPForum::Web::ModerationAccess->new;
+}
+
+sub queue_limit {
+    my ($self) = @_;
+
+    return $self->moderation_access->queue_limit( $self->param('limit') );
+}
+
+sub authorized_write_user_id {
+    my ( $self, $resource_type, $action ) = @_;
+
+    if ( GPForum::Web::Access->new->csrf_invalid($self) ) {
+        $self->_csrf_failure;
+        return;
+    }
+
+    return $self->authorized_user_id( $resource_type, $action );
+}
+
+sub authorized_user_id {
+    my ( $self, $resource_type, $action ) = @_;
+
+    my $decision =
+      $self->moderation_access->authorization_target( $resource_type, $action );
+    my $user_id = $self->_current_user_id;
+    if ( !$user_id ) {
+        $self->_unauthorized;
+        return;
+    }
+    if ( !$self->_permission_allowed( $user_id, $decision ) ) {
+        $self->_forbidden;
+        return;
+    }
+
+    return $user_id;
+}
+
+sub report_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->action_response( $ok_status, $result->{stored} );
+}
+
+sub moderation_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->moderation_action_response( $ok_status, $result->{stored} );
+}
+
+sub suspension_write_response {
+    my ( $self, $result, $ok_status ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->suspension_response( $ok_status, $result->{stored} );
+}
+
+sub write_failure {
+    my ( $self, $result ) = @_;
+
+    if ( $self->moderation_access->is_failed($result) ) {
+        return $self->_system_failure;
+    }
+
+    return $self->_mapped_failure($result);
+}
+
+sub _mapped_failure {
+    my ( $self, $result ) = @_;
+
+    my $status = $self->moderation_access->failure_status($result) || q{};
+    if ( $status eq 'not_found' ) {
+        return $self->_not_found( $result->{error} );
+    }
+    if ( $status eq 'invalid' ) {
+        return $self->_bad_request( $result->{errors} );
+    }
+
+    return;
+}
+
+sub moderation_action_response {
+    my ( $self, $status, $action ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_moderation_view_model->moderation_action_response(
+                $status, $action
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to('moderation_reports');
+}
+
+sub suspension_response {
+    my ( $self, $status, $suspension ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_moderation_view_model->suspension_response(
+                $status, $suspension,
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to('moderation_reports');
+}
+
+sub action_response {
+    my ( $self, $status, $report ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_moderation_view_model->report_action_response(
+                $status, $report
+            ),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->redirect_to('moderation_reports');
+}
+
+sub render_payload {
+    my ( $self, $input ) = @_;
+
+    return GPForum::Web::Responder->new->payload(
+        {
+            controller => $self,
+            payload    => $input->{payload},
+            status     => $input->{status},
+            template   => $input->{template},
+        }
+    );
+}
+
+sub status_param {
+    my ($self) = @_;
+
+    return $self->moderation_access->queue_status(
+        $self->_trim( $self->param('status') ) );
+}
+
+sub suspension_status_param {
+    my ($self) = @_;
+
+    return $self->moderation_access->suspension_status(
+        $self->_trim( $self->param('status') ) );
+}
+
+sub reason_param {
+    my ($self) = @_;
+
+    return $self->_trim( $self->param('reason') );
+}
+
+sub optional_param {
+    my ( $self, $name ) = @_;
+
+    my $value = $self->_trim( $self->param($name) );
+    my $optional;
+    if ( length $value ) {
+        $optional = $value;
+    }
+
+    return $optional;
+}
+
+sub _permission_allowed {
+    my ( $self, $user_id, $decision ) = @_;
+
+    return $self->gp_permission_gate->allowed(
+        { user_id => $user_id },
+        {
+            resource_type => $decision->{resource_type},
+            action        => $decision->{action},
+        }
+    );
+}
+
+sub _current_user_id {
+    my ($self) = @_;
+
+    return GPForum::Web::Access->new->user_id($self);
+}
+
+sub _wants_json {
+    my ($self) = @_;
+
+    return GPForum::Web::Access->new->wants_json($self);
+}
+
+sub _trim {
+    my ( undef, $value ) = @_;
+
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}
+
+sub _bad_request {
+    my ( $self, $errors ) = @_;
+
+    return GPForum::Web::Guard->new->bad_request( $self,
+        $self->moderation_access->invalid_request($errors) );
+}
+
+sub _csrf_failure {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'csrf_failure',
+        {
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
+    return GPForum::Web::Guard->new->csrf_failure($self);
+}
+
+sub _unauthorized {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'auth_denial',
+        {
+            status => $HTTP_UNAUTHORIZED,
+        }
+    );
+
+    return GPForum::Web::Guard->new->unauthorized($self);
+}
+
+sub _forbidden {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'auth_denial',
+        {
+            reason => 'forbidden',
+            status => $HTTP_FORBIDDEN,
+        }
+    );
+
+    return GPForum::Web::Guard->new->forbidden($self);
+}
+
+sub _not_found {
+    my ( $self, $error ) = @_;
+
+    return GPForum::Web::Guard->new->not_found( $self, $error );
+}
+
+sub _system_failure {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->system_failure($self);
+}
+
+sub _record_security_event {
+    my ( $self, $event_type, $metadata ) = @_;
+
+    return $self->gp_security_telemetry->record(
+        $event_type,
+        {
+            %{$metadata}, route => $self->_current_route_name,
+        }
+    );
+}
+
+sub _current_route_name {
+    my ($self) = @_;
+
+    my $route = eval { return $self->current_route; };
+    if ($route) {
+        return $route;
+    }
+
+    return 'unknown';
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Controller::Moderation::Base - Shared moderation HTTP helpers.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    use Mojo::Base 'GPForum::Controller::Moderation::Base';
+
+=head1 DESCRIPTION
+
+Owns CSRF, authorization, telemetry, and Guard errors used by moderation
+queue, action, and suspension controllers. Queue limits, default filters,
+permission-target hashes, and failure-status mapping live on
+L<GPForum::Web::ModerationAccess>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 authorized_write_user_id
+
+Rejects invalid CSRF tokens and unauthorized moderation writes.
+
+=head2 authorized_user_id
+
+Requires an authenticated actor with the requested moderation permission.
+
+=head2 write_failure
+
+Maps workflow statuses to HTTP error responses.
+
+=head1 DIAGNOSTICS
+
+HTTP errors are rendered as JSON or HTML depending on the request.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Uses permission and moderation helpers registered during application startup.
+
+=head1 DEPENDENCIES
+
+Uses L<Mojolicious::Controller>, L<GPForum::Web::Access>,
+L<GPForum::Web::Guard>, L<GPForum::Web::ModerationAccess>, and
+L<GPForum::Web::Responder>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Helpers are HTTP-oriented and must not talk to DBIx::Class resultsets.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

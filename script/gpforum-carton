@@ -1,0 +1,32 @@
+#!/bin/sh
+set -eu
+
+# Locate Carton for the current `perl` and exec it. Carton is the only
+# supported installer for GPForum CPAN distributions.
+
+if [ -n "${GPFORUM_CARTON:-}" ]; then
+    if [ ! -x "${GPFORUM_CARTON}" ]; then
+        echo "gpforum-carton: GPFORUM_CARTON is not executable: ${GPFORUM_CARTON}" >&2
+        exit 1
+    fi
+    exec "${GPFORUM_CARTON}" "$@"
+fi
+
+perl_bin=$(command -v perl)
+if [ -z "$perl_bin" ]; then
+    echo "gpforum-carton: perl is required on PATH" >&2
+    exit 1
+fi
+
+perl_dir=$(dirname "$perl_bin")
+if [ -x "$perl_dir/carton" ]; then
+    exec "$perl_dir/carton" "$@"
+fi
+
+if perl -S carton version >/dev/null 2>&1; then
+    exec perl -S carton "$@"
+fi
+
+echo "gpforum-carton: Carton was not found for $perl_bin." >&2
+echo "Install it for this Perl with: cpanm -M https://cpan.metacpan.org/ Carton" >&2
+exit 1

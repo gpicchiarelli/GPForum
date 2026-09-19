@@ -1,0 +1,348 @@
+#!/usr/bin/env perl
+package main;
+
+use strict;
+use warnings;
+
+use Carp qw(croak);
+use Const::Fast;
+use JSON::MaybeXS qw(encode_json);
+use Time::HiRes   qw(time);
+
+use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Service::Outbox::Dispatcher;
+use GPForum::Test::OutboxBenchmarkDbh;
+use GPForum::Test::OutboxClock;
+use GPForum::Test::OutboxCreateResultSet;
+use GPForum::Test::OutboxResultSet;
+use GPForum::Test::OutboxSchema;
+use GPForum::Test::OutboxStorage;
+use GPForum::Test::OutboxTransport;
+
+our $VERSION = '0.001';
+
+const my @DEFAULT_WORKER_COUNTS  => ( 1, 2, 4, 8 );
+const my @DEFAULT_MESSAGE_COUNTS => (1_000);
+const my $DEFAULT_BATCH_SIZE     => 100;
+const my $MILLISECONDS           => 1_000;
+const my $MINIMUM_ELAPSED_SEC    => 0.000_001;
+const my $PERCENTILE_SCALE       => 100;
+const my $ROUND_HALF_UP          => 0.5;
+const my $P95                    => 0.95;
+const my $READY_AT               => '2026-05-23T12:00:00Z';
+
+my $options = _options(@ARGV);
+if ( $options->{help} ) {
+    print _usage(), "\n" or croak 'failed to write usage';
+    exit 0;
+}
+
+my $report = _benchmark_report($options);
+if ( defined $options->{artifact} ) {
+    _write_artifact( $options->{artifact}, $report );
+}
+
+if ( $options->{json} ) {
+    print encode_json($report), "\n" or croak 'failed to write JSON report';
+}
+else {
+    _print_text_report($report);
+}
+
+exit( $report->{status} eq 'ok' ? 0 : 1 );
+
+sub _benchmark_report {
+    my ($options) = @_;
+
+    my @results;
+    for my $message_count ( @{ $options->{message_counts} } ) {
+        for my $worker_count ( @{ $options->{worker_counts} } ) {
+            push @results,
+              _run_benchmark( $message_count, $worker_count,
+                $options->{batch_size} );
+        }
+    }
+
+    return {
+        status => ( grep { $_->{status} ne 'ok' } @results ) ? 'fail' : 'ok',
+        mode   => 'fixture',
+        batch_size     => $options->{batch_size},
+        message_counts => $options->{message_counts},
+        worker_counts  => $options->{worker_counts},
+        results        => \@results,
+    };
+}
+
+sub _run_benchmark {
+    my ( $message_count, $worker_count, $batch_size ) = @_;
+
+    my @rows = map {
+        _ready_row(
+            'bench-' . $message_count . q{-} . $worker_count . q{-} . $_ )
+    } ( 1 .. $message_count );
+    my $schema    = _schema_for_rows(@rows);
+    my $transport = GPForum::Test::OutboxTransport->new;
+    my @workers   = _dispatchers( $schema, $transport, $worker_count );
+
+    my $started = time;
+    my $drain   = _drain_pool( $batch_size, @workers );
+    my $elapsed = time - $started;
+
+    return _result_for( $message_count, $worker_count, $batch_size, $elapsed,
+        $drain, $transport );
+}
+
+sub _result_for {
+    my ( $message_count, $worker_count, $batch_size, $elapsed, $drain,
+        $transport )
+      = @_;
+
+    my $delivered  = scalar @{ $transport->delivered };
+    my $duplicates = _duplicate_count( $transport->delivered );
+    my $lost       = $message_count - $delivered + $duplicates;
+    my $safe_time =
+        $elapsed > $MINIMUM_ELAPSED_SEC
+      ? $elapsed
+      : $MINIMUM_ELAPSED_SEC;
+
+    return {
+        status          => $duplicates || $lost ? 'fail' : 'ok',
+        ack_batches     => $drain->{ack_batches},
+        workers         => $worker_count,
+        messages        => $message_count,
+        batch_size      => $batch_size,
+        delivered       => $delivered,
+        lost            => $lost,
+        duplicates      => $duplicates,
+        dispatch_calls  => $drain->{dispatch_calls},
+        nonempty_claims => $drain->{nonempty_claims},
+        elapsed_ms      => $elapsed * $MILLISECONDS,
+        msg_s           => $delivered / $safe_time,
+        p95_claim_ms    => _percentile( $drain->{claim_ms}, $P95 ),
+        max_claim_ms    => _max( $drain->{claim_ms} ),
+    };
+}
+
+sub _drain_pool {
+    my ( $batch_size, @workers ) = @_;
+
+    my @claim_ms;
+    my $dispatch_calls  = 0;
+    my $nonempty_claims = 0;
+
+    while (1) {
+        my $selected = 0;
+        for my $worker (@workers) {
+            my $started = time;
+            my $summary = $worker->dispatch_pending($batch_size);
+            my $elapsed = time - $started;
+            push @claim_ms, $elapsed * $MILLISECONDS;
+            $dispatch_calls++;
+            if ( $summary->{selected} ) {
+                $nonempty_claims++;
+            }
+            $selected += $summary->{selected};
+        }
+        last if !$selected;
+    }
+
+    return {
+        ack_batches     => $nonempty_claims,
+        claim_ms        => \@claim_ms,
+        dispatch_calls  => $dispatch_calls,
+        nonempty_claims => $nonempty_claims,
+    };
+}
+
+sub _dispatchers {
+    my ( $schema, $transport, $worker_count ) = @_;
+
+    return
+      map { _dispatcher( $schema, $transport, 'bench-worker-' . $_ ) }
+      ( 1 .. $worker_count );
+}
+
+sub _dispatcher {
+    my ( $schema, $transport, $worker_id ) = @_;
+
+    return GPForum::Service::Outbox::Dispatcher->new(
+        schema    => $schema,
+        transport => $transport,
+        clock     => GPForum::Test::OutboxClock->new,
+        worker_id => $worker_id,
+    );
+}
+
+sub _schema_for_rows {
+    my (@rows) = @_;
+
+    return GPForum::Test::OutboxSchema->new(
+        outbox_resultset      => GPForum::Test::OutboxResultSet->new,
+        dead_letter_resultset => GPForum::Test::OutboxCreateResultSet->new,
+        storage               => GPForum::Test::OutboxStorage->new(
+            dbh => GPForum::Test::OutboxBenchmarkDbh->new( rows => \@rows ),
+        ),
+    );
+}
+
+sub _ready_row {
+    my ($outbox_id) = @_;
+
+    return {
+        outbox_id       => $outbox_id,
+        attempt_count   => 0,
+        payload         => {},
+        next_attempt_at => $READY_AT,
+        created_at      => $READY_AT,
+    };
+}
+
+sub _duplicate_count {
+    my ($values) = @_;
+
+    my %seen;
+    my $duplicates = 0;
+    for my $value ( @{$values} ) {
+        if ( $seen{$value} ) {
+            $duplicates++;
+        }
+        $seen{$value} = 1;
+    }
+
+    return $duplicates;
+}
+
+sub _percentile {
+    my ( $values, $percentile ) = @_;
+
+    return 0 if !@{$values};
+
+    my @sorted = sort { $a <=> $b } @{$values};
+    my $index  = int( ( @sorted - 1 ) * $percentile + $ROUND_HALF_UP );
+
+    return $sorted[$index];
+}
+
+sub _max {
+    my ($values) = @_;
+
+    return 0 if !@{$values};
+
+    my $max = $values->[0];
+    for my $value ( @{$values} ) {
+        if ( $value > $max ) {
+            $max = $value;
+        }
+    }
+
+    return $max;
+}
+
+sub _print_text_report {
+    my ($report) = @_;
+
+    for my $result ( @{ $report->{results} } ) {
+        printf
+'outbox_dispatch_benchmark status=%s workers=%d messages=%d batch_size=%d delivered=%d lost=%d duplicates=%d ack_batches=%d elapsed_ms=%.3f msg_s=%.3f p95_claim_ms=%.3f max_claim_ms=%.3f'
+          . "\n",
+          @{$result}{
+            qw(status workers messages batch_size delivered lost duplicates ack_batches elapsed_ms msg_s p95_claim_ms max_claim_ms)
+          }
+          or croak 'failed to write outbox benchmark result';
+    }
+
+    return;
+}
+
+sub _write_artifact {
+    my ( $artifact, $report ) = @_;
+
+    open my $handle, '>', $artifact
+      or croak "failed to write artifact $artifact";
+    print {$handle} encode_json($report), "\n"
+      or croak "failed to write artifact $artifact";
+    close $handle
+      or croak "failed to close artifact $artifact";
+
+    return;
+}
+
+sub _options {
+    my (@arguments) = @_;
+
+    my $options = {
+        artifact       => undef,
+        batch_size     => $DEFAULT_BATCH_SIZE,
+        help           => 0,
+        json           => 0,
+        message_counts => [@DEFAULT_MESSAGE_COUNTS],
+        worker_counts  => [@DEFAULT_WORKER_COUNTS],
+    };
+
+    while (@arguments) {
+        _consume_option( $options, \@arguments );
+    }
+
+    return $options;
+}
+
+sub _consume_option {
+    my ( $options, $arguments ) = @_;
+
+    my $argument = shift @{$arguments};
+    my %handler  = (
+        '--artifact'   => sub { $options->{artifact} = _value($arguments); },
+        '--batch-size' => sub {
+            $options->{batch_size} = _positive_integer( _value($arguments) );
+        },
+        '--help'     => sub { $options->{help} = 1; },
+        '--json'     => sub { $options->{json} = 1; },
+        '--messages' => sub {
+            $options->{message_counts} =
+              _positive_integer_list( _value($arguments) );
+        },
+        '--workers' => sub {
+            $options->{worker_counts} =
+              _positive_integer_list( _value($arguments) );
+        },
+    );
+
+    my $handler = $handler{$argument};
+    croak _usage() if !$handler;
+    $handler->();
+
+    return;
+}
+
+sub _value {
+    my ($arguments) = @_;
+
+    croak _usage() if !@{$arguments};
+
+    return shift @{$arguments};
+}
+
+sub _positive_integer_list {
+    my ($value) = @_;
+
+    my @values = map { _positive_integer($_) } split /,/msx, $value;
+    croak _usage() if !@values;
+
+    return \@values;
+}
+
+sub _positive_integer {
+    my ($value) = @_;
+
+    croak _usage()
+      if !defined $value || $value !~ /\A [1-9][[:digit:]]* \z/msx;
+
+    return int $value;
+}
+
+sub _usage {
+    return
+'Usage: script/bench-outbox-dispatcher [--json] [--artifact FILE] [--messages 1000,10000,100000] [--workers 1,2,4,8] [--batch-size N]';
+}
