@@ -27,6 +27,12 @@ sub throw {
     croak _message($constraint);
 }
 
+sub rethrow {
+    my ( undef, $error ) = @_;
+
+    croak $error;
+}
+
 sub _matches_unique {
     my ($error) = @_;
 
@@ -52,7 +58,7 @@ sub _message {
     }
 
     return
-"duplicate key value violates unique constraint \"$name\" ($PG_UNIQUE)";
+      "duplicate key value violates unique constraint \"$name\" ($PG_UNIQUE)";
 }
 
 sub _has_text {
@@ -98,6 +104,10 @@ True when the error text is a unique constraint violation.
 =head2 throw
 
 Raises a unique-violation error for test fakes.
+
+=head2 rethrow
+
+Propagates a non-unique error with croak.
 
 =head1 DIAGNOSTICS
 

@@ -370,6 +370,7 @@ is_deeply(
         action => {
             action_type          => undef,
             actor_user_id        => undef,
+            command_id           => undef,
             created_at           => undef,
             metadata             => undef,
             moderation_action_id => 'action-1',

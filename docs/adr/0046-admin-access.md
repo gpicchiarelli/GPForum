@@ -20,6 +20,7 @@ Introduce `GPForum::Web::AdminAccess` behind the existing admin HTTP base.
 It owns:
 
 - the default catalog page size;
+- the `admin_http` / `admin.write` rate-limit arguments;
 - the dashboard summary/audit/role row cap;
 - the staff `manage` action, catalog `view` action, and `admin_console`
   permission hash;
@@ -31,8 +32,9 @@ It owns:
 - the default `admin_roles` redirect.
 
 `Admin::Base` still checks CSRF, cookie-session identity, permission gates,
-records telemetry, and renders through `Web::Guard`. Public `limit_param`,
-`authorized_write_user_id`, and `write_failure` stay on the controller.
+the rate limiter, records telemetry, and renders through `Web::Guard`.
+Public `limit_param`, `authorized_write_user_id`, and `write_failure` stay
+on the controller.
 
 ## Consequences
 

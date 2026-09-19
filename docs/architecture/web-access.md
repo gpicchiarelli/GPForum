@@ -26,17 +26,20 @@ invalid uploads and rate limits.
 `GPForum::Web::NotificationAccess` owns inbox/mention page limits, the
 `notification_http` write rate-limit hash, and `failed`/`not_found` mapping.
 `GPForum::Web::ModerationAccess` owns report-queue page limits, default
-open/active filters, permission action and resource names, write-success
-statuses, permission-target hashes, and Guard payloads for invalid
-moderation commands.
+open/active filters, the `moderation_http` write rate-limit hash,
+permission action and resource names, write-success statuses,
+permission-target hashes, and Guard payloads for invalid moderation
+commands.
 `GPForum::Web::PrivacyAccess` owns privacy list page limits, the
-`privacy_rights`/`manage` permission hash, catalog `view` action, review
-write-success statuses, conflict blocked-hold payloads, and Guard titles for
-invalid privacy commands.
+`privacy_http` write rate-limit hash, the `privacy_rights`/`manage`
+permission hash, catalog `view` action, review write-success statuses,
+conflict blocked-hold payloads, and Guard titles for invalid privacy
+commands.
 `GPForum::Web::AdminAccess` owns catalog page limits, the dashboard row
-cap, the `admin_console`/`manage` permission hash, catalog `view` action,
-catalog and binding write-success statuses, Guard payloads for invalid
-admin commands, and the default roles redirect.
+cap, the `admin_http` write rate-limit hash, the `admin_console`/`manage`
+permission hash, catalog `view` action, catalog and binding write-success
+statuses, Guard payloads for invalid admin commands, and the default roles
+redirect.
 `GPForum::Web::OperationsAccess` owns `/metrics` token presence, Bearer and
 `X-GPForum-Metrics-Token` comparison, and the unauthorized JSON payload.
 

@@ -36,15 +36,17 @@ GPForum keeps SSR presentation in three layers:
 - `GPForum::Web::NotificationAccess` owns inbox/mention page limits and the
   notification write rate-limit hash without using `Web::Guard`;
 - `GPForum::Web::ModerationAccess` owns report-queue limits, default filters,
-  permission action and resource names, write-success statuses, and
-  permission-target hashes without rendering responses;
-- `GPForum::Web::PrivacyAccess` owns privacy list limits, manage/view
-  actions, review write-success statuses, permission-target hashes, and
-  blocked-hold Guard payloads without rendering responses;
-- `GPForum::Web::AdminAccess` owns catalog page limits, the dashboard row
-  cap, manage/view actions, catalog and binding write-success statuses,
-  permission-target hashes, and invalid-request Guard payloads without
+  the moderation write rate-limit hash, permission action and resource
+  names, write-success statuses, and permission-target hashes without
   rendering responses;
+- `GPForum::Web::PrivacyAccess` owns privacy list limits, the privacy write
+  rate-limit hash, manage/view actions, review write-success statuses,
+  permission-target hashes, and blocked-hold Guard payloads without
+  rendering responses;
+- `GPForum::Web::AdminAccess` owns catalog page limits, the dashboard row
+  cap, the admin write rate-limit hash, manage/view actions, catalog and
+  binding write-success statuses, permission-target hashes, and
+  invalid-request Guard payloads without rendering responses;
 - `GPForum::Web::OperationsAccess` owns `/metrics` token matching and the
   unauthorized JSON payload without rendering responses;
 - `GPForum::Web::OperationsPayload` and `GPForum::Web::DiscoveryPayload`
@@ -87,4 +89,7 @@ Current presenter boundaries:
   surfaces, including privacy workflow and attachment upload mutation responses.
 
 Services must not render HTML. The only exception is already-sanitized post body
-HTML produced by the forum read model and passed through by the presenter.
+HTML produced by `GPForum::Service::Forum::BodyRenderer` at compose time
+(`body_rendered_safe`) and again by forum post presenters when `body_source` is
+present. Markdown is a safe subset: emphasis, http/https/mailto links, quotes,
+and fenced code. Output is escaped first, then sanitized markup is introduced.

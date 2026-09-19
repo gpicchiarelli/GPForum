@@ -109,6 +109,7 @@ sub moderation_action {
     return {
         action_type          => $self->column( $action, 'action_type' ),
         actor_user_id        => $self->column( $action, 'actor_user_id' ),
+        command_id           => $self->column( $action, 'command_id' ),
         created_at           => $self->column( $action, 'created_at' ),
         metadata             => $self->column( $action, 'metadata' ),
         moderation_action_id =>
@@ -152,6 +153,7 @@ sub report {
     return {
         assigned_moderator_user_id =>
           $self->column( $row, 'assigned_moderator_user_id' ),
+        command_id       => $self->column( $row, 'command_id' ),
         created_at       => $self->column( $row, 'created_at' ),
         details          => $self->column( $row, 'details' ),
         reason           => $self->column( $row, 'reason' ),

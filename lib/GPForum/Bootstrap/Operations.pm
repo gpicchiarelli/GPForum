@@ -16,6 +16,7 @@ use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Operations::RateLimiter::PostgreSQLStore;
 use GPForum::Service::Operations::Readiness;
+use GPForum::Service::Operations::ScheduledJobs;
 use GPForum::Service::Operations::SecurityTelemetry;
 
 our $VERSION = '0.001';
@@ -166,6 +167,16 @@ sub _register_operational_helpers {
                 runtime_policy => $runtime_policy,
                 schema         => $controller->gp_schema,
             );
+        }
+    );
+
+    $application->helper(
+        gp_scheduled_jobs => sub {
+            my ($controller) = @_;
+
+            return
+              GPForum::Service::Operations::ScheduledJobs->from_controller(
+                $controller);
         }
     );
 

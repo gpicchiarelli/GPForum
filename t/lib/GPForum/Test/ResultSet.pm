@@ -197,20 +197,28 @@ sub _assert_command_unique {
     if ( $self->name ne 'CommandLog' ) {
         return;
     }
+    if ( _command_key_taken( $self, $row->{idempotency_key} ) ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'command_log_idempotency_key_key');
+    }
 
-    my $key = $row->{idempotency_key};
+    return;
+}
+
+sub _command_key_taken {
+    my ( $self, $key ) = @_;
+
     if ( !defined $key ) {
-        return;
+        return 0;
     }
 
     for my $existing ( @{ $self->schema->command_logs } ) {
         if ( ( $existing->{idempotency_key} || q{} ) eq $key ) {
-            GPForum::Infrastructure::UniqueConflict->throw(
-                'command_log_idempotency_key_key');
+            return 1;
         }
     }
 
-    return;
+    return 0;
 }
 
 sub _has_storage_rows {

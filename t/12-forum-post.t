@@ -56,7 +56,7 @@ is( $prepared->{command}{post}{current_revision_id},
     'generated-3', 'post points at current revision' );
 is(
     $prepared->{command}{body}{body_rendered_safe},
-    'Reply &lt;body&gt; &amp; thanks',
+    '<p>Reply &lt;body&gt; &amp; thanks</p>',
     'body is rendered safely'
 );
 is( $prepared->{command}{counter_shard}{thread_id},
@@ -183,14 +183,15 @@ ok( $allocated_stored->{ok}, 'post store persists deferred position command' );
 is( $allocated_schema->created_for('Post')->[0]{position},
     $ALLOCATED_REPLY_POSITION,
     'post store allocates next position inside persistence boundary' );
-is( scalar @{ $lock_dbh->calls },
-    1, 'position allocation locks the thread row' );
+my @row_locks =
+  grep { $_->{sql} =~ m/FOR [ ] UPDATE/msx } @{ $lock_dbh->calls };
+is( scalar @row_locks, 1, 'position allocation locks the thread row' );
 like(
-    $lock_dbh->calls->[0]{sql},
+    $row_locks[0]{sql},
     qr/FOR [ ] UPDATE/msx,
     'thread row lock uses FOR UPDATE'
 );
-is( $lock_dbh->calls->[0]{bind}[0],
+is( $row_locks[0]{bind}[0],
     'thread-1', 'thread row lock targets the reply thread' );
 is(
     $allocated_schema->created_for('EventLog')->[0]{idempotency_key},

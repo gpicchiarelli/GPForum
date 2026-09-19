@@ -13,7 +13,8 @@ use GPForum::Web::Responder;
 
 our $VERSION = '0.001';
 
-const my $HTTP_OK => 200;
+const my $HTTP_OK       => 200;
+const my $HTTP_TOO_MANY => 429;
 
 sub privacy_access {
     return GPForum::Web::PrivacyAccess->new;
@@ -45,7 +46,8 @@ sub write_user_id {
         return;
     }
 
-    return $self->member_user_id;
+    return $self->_rate_limited_user_id( $self->member_user_id,
+        $self->privacy_access->request_action );
 }
 
 sub authorized_write_user_id {
@@ -56,7 +58,10 @@ sub authorized_write_user_id {
         return;
     }
 
-    return $self->authorized_user_id( $self->privacy_access->manage_action );
+    return $self->_rate_limited_user_id(
+        $self->authorized_user_id( $self->privacy_access->manage_action ),
+        $self->privacy_access->review_action,
+    );
 }
 
 sub authorized_user_id {
@@ -197,6 +202,35 @@ sub _permission_allowed {
         $self->privacy_access->permission_target($action) );
 }
 
+sub _rate_limited_user_id {
+    my ( $self, $user_id, $action ) = @_;
+
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->_allowed( $user_id, $action ) ) {
+        $self->_rate_limited;
+        return;
+    }
+
+    return $user_id;
+}
+
+sub _allowed {
+    my ( $self, $user_id, $action ) = @_;
+
+    my $decision = $self->gp_rate_limiter->check(
+        $self->privacy_access->write_rate_input(
+            {
+                action   => $action,
+                actor_id => $user_id,
+            }
+        )
+    );
+
+    return $decision->{ok};
+}
+
 sub _current_user_id {
     my ($self) = @_;
 
@@ -232,6 +266,41 @@ sub _forbidden {
     my ($self) = @_;
 
     return GPForum::Web::Guard->new->forbidden($self);
+}
+
+sub _rate_limited {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'rate_limit_hit',
+        {
+            status => $HTTP_TOO_MANY,
+        }
+    );
+
+    return GPForum::Web::Guard->new->rate_limited($self);
+}
+
+sub _record_security_event {
+    my ( $self, $event_type, $metadata ) = @_;
+
+    return $self->gp_security_telemetry->record(
+        $event_type,
+        {
+            %{$metadata}, route => $self->_current_route_name,
+        }
+    );
+}
+
+sub _current_route_name {
+    my ($self) = @_;
+
+    my $route = eval { return $self->current_route; };
+    if ($route) {
+        return $route;
+    }
+
+    return 'unknown';
 }
 
 sub _not_found {
@@ -271,20 +340,22 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Owns CSRF, authorization, and Guard errors used by member privacy and staff
-review controllers. Page limits, permission-target hashes, conflict
-payloads, and failure-status mapping live on
-L<GPForum::Web::PrivacyAccess>.
+Owns CSRF, authorization, rate-limit checks, telemetry, and Guard errors
+used by member privacy and staff review controllers. Page limits, write
+rate-limit hashes, permission-target hashes, conflict payloads, and
+failure-status mapping live on L<GPForum::Web::PrivacyAccess>.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 write_user_id
 
-Rejects invalid CSRF tokens and anonymous member writes.
+Rejects invalid CSRF tokens, anonymous member writes, and rate-limited
+actors.
 
 =head2 authorized_write_user_id
 
-Rejects invalid CSRF tokens and unauthorized staff writes.
+Rejects invalid CSRF tokens, unauthorized staff writes, and rate-limited
+actors.
 
 =head2 authorized_user_id
 

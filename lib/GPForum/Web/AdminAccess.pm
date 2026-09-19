@@ -10,6 +10,9 @@ our $VERSION = '0.001';
 
 const my $DEFAULT_LIMIT               => 50;
 const my $DASHBOARD_LIMIT             => 10;
+const my $WRITE_RATE_LIMIT            => 20;
+const my $WRITE_RATE_WINDOW           => 60;
+const my $WRITE_ACTION                => 'admin.write';
 const my $ADMIN_RESOURCE              => 'admin_console';
 const my $ACTION_MANAGE               => 'manage';
 const my $ACTION_VIEW                 => 'view';
@@ -34,6 +37,22 @@ sub page_limit {
 
 sub dashboard_limit {
     return $DASHBOARD_LIMIT;
+}
+
+sub write_action {
+    return $WRITE_ACTION;
+}
+
+sub write_rate_input {
+    my ( undef, $input ) = @_;
+
+    return {
+        action         => $input->{action},
+        actor_id       => $input->{actor_id},
+        limit          => $WRITE_RATE_LIMIT,
+        scope          => 'admin_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    };
 }
 
 sub manage_action {
@@ -144,15 +163,23 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Owns admin catalog page limits, the dashboard row cap, the
-C<admin_console>/C<manage> permission hash, the catalog C<view> action,
-catalog, binding, and category write-success statuses, workflow
-failure-status mapping,
+C<admin_http> write rate-limit hash, the C<admin_console>/C<manage>
+permission hash, the catalog C<view> action, catalog, binding, and
+category write-success statuses, workflow failure-status mapping,
 Guard payloads for invalid admin commands, and the default roles redirect.
 It does not render HTTP responses or load roles.
 L<GPForum::Controller::Admin::Base> still checks CSRF, sessions,
-permissions, telemetry, and Guard errors.
+permissions, the rate limiter, telemetry, and Guard errors.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 write_action
+
+Returns C<admin.write>.
+
+=head2 write_rate_input
+
+Returns the C<admin_http> rate-limit arguments.
 
 =head2 page_limit
 
@@ -240,8 +267,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-CSRF, authentication, permission checks, telemetry, and Guard rendering
-remain on L<GPForum::Controller::Admin::Base>.
+CSRF, authentication, permission checks, rate-limiter calls, telemetry,
+and Guard rendering remain on L<GPForum::Controller::Admin::Base>.
 
 =head1 AUTHOR
 

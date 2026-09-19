@@ -19,10 +19,9 @@ const my $STATE_HIDDEN  => 'hidden';
 const my $STATE_LOCKED  => 'locked';
 const my $TARGET_POST   => 'post';
 const my $TARGET_THREAD => 'thread';
-const my %LOCK_SQL_FOR  => (
-    post => 'SELECT post_id FROM posts WHERE post_id = ? FOR UPDATE',
-    thread =>
-      'SELECT thread_id FROM threads WHERE thread_id = ? FOR UPDATE',
+const my %LOCK_SQL_FOR => (
+    post   => 'SELECT post_id FROM posts WHERE post_id = ? FOR UPDATE',
+    thread => 'SELECT thread_id FROM threads WHERE thread_id = ? FOR UPDATE',
 );
 
 has clock      => sub { return GPForum::Service::Clock->new; };
@@ -253,10 +252,9 @@ sub _replayed_command {
 sub _find_command_action {
     my ( $self, $command_id ) = @_;
 
-    return $self->schema->resultset('ModerationAction')->search(
-        { command_id => $command_id },
-        { rows       => 1 },
-    )->single;
+    return $self->schema->resultset('ModerationAction')
+      ->search( { command_id => $command_id }, { rows => 1 }, )
+      ->single;
 }
 
 sub _lock_target {
@@ -318,12 +316,12 @@ sub _action_after_conflict {
     my ( $self, $input, $error ) = @_;
 
     if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     my $existing = $self->_find_command_action( $input->{command_id} );
     if ( !$existing ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return {

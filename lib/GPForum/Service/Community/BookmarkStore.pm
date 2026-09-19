@@ -52,14 +52,14 @@ sub _restore_after_conflict {
     my ( $self, $input, $error ) = @_;
 
     if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     my $existing =
       $self->find_for_user_target( $input->{user_id}, $input->{target_type},
         $input->{target_id}, );
     if ( !$existing ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return $self->_restore_bookmark( $existing, $input );

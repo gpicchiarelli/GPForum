@@ -16,6 +16,7 @@ our $VERSION = '0.001';
 const my $HTTP_OK           => 200;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
+const my $HTTP_TOO_MANY     => 429;
 
 sub admin_access {
     return GPForum::Web::AdminAccess->new;
@@ -35,7 +36,17 @@ sub authorized_write_user_id {
         return;
     }
 
-    return $self->authorized_user_id( $self->admin_access->manage_action );
+    my $user_id =
+      $self->authorized_user_id( $self->admin_access->manage_action );
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->_allowed($user_id) ) {
+        $self->_rate_limited;
+        return;
+    }
+
+    return $user_id;
 }
 
 sub authorized_user_id {
@@ -239,6 +250,21 @@ sub _permission_allowed {
         $self->admin_access->permission_target($action) );
 }
 
+sub _allowed {
+    my ( $self, $user_id ) = @_;
+
+    my $decision = $self->gp_rate_limiter->check(
+        $self->admin_access->write_rate_input(
+            {
+                action   => $self->admin_access->write_action,
+                actor_id => $user_id,
+            }
+        )
+    );
+
+    return $decision->{ok};
+}
+
 sub _current_user_id {
     my ($self) = @_;
 
@@ -310,6 +336,19 @@ sub _forbidden {
     return GPForum::Web::Guard->new->forbidden($self);
 }
 
+sub _rate_limited {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'rate_limit_hit',
+        {
+            status => $HTTP_TOO_MANY,
+        }
+    );
+
+    return GPForum::Web::Guard->new->rate_limited($self);
+}
+
 sub _not_found {
     my ( $self, $error ) = @_;
 
@@ -362,15 +401,17 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Owns CSRF, authorization, telemetry, and Guard errors used by admin review,
-catalog, and binding controllers. Page limits, permission-target hashes,
-and failure-status mapping live on L<GPForum::Web::AdminAccess>.
+Owns CSRF, authorization, rate-limit checks, telemetry, and Guard errors
+used by admin review, catalog, and binding controllers. Page limits,
+write rate-limit hashes, permission-target hashes, and failure-status
+mapping live on L<GPForum::Web::AdminAccess>.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 authorized_write_user_id
 
-Rejects invalid CSRF tokens and unauthorized admin writes.
+Rejects invalid CSRF tokens, unauthorized admin writes, and rate-limited
+actors.
 
 =head2 authorized_user_id
 

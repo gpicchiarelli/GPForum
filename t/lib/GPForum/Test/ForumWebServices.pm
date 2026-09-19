@@ -7,7 +7,8 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-has mode => 'forum';
+has last_moderation_input => sub { return {}; };
+has mode                  => 'forum';
 
 sub can_participate {
     return { ok => 1 };
@@ -363,6 +364,7 @@ sub resolve_report {
 sub hide_post {
     my ( $self, $input ) = @_;
 
+    $self->last_moderation_input($input);
     return if $input->{post_id} ne 'post-1';
 
     return {
@@ -382,6 +384,7 @@ sub hide_post {
 sub restore_post {
     my ( $self, $input ) = @_;
 
+    $self->last_moderation_input($input);
     return if $input->{post_id} ne 'post-1';
 
     return {
@@ -401,6 +404,7 @@ sub restore_post {
 sub lock_thread {
     my ( $self, $input ) = @_;
 
+    $self->last_moderation_input($input);
     return if $input->{thread_id} ne 'thread-1';
 
     return {
@@ -420,6 +424,7 @@ sub lock_thread {
 sub unlock_thread {
     my ( $self, $input ) = @_;
 
+    $self->last_moderation_input($input);
     return if $input->{thread_id} ne 'thread-1';
 
     return {

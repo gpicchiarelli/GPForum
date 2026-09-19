@@ -9,6 +9,9 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my $DEFAULT_QUEUE_LIMIT       => 50;
+const my $WRITE_RATE_LIMIT          => 20;
+const my $WRITE_RATE_WINDOW         => 60;
+const my $WRITE_ACTION              => 'moderation.write';
 const my $REPORT_RESOURCE           => 'report';
 const my $MODERATION_RESOURCE       => 'moderation_action';
 const my $SUSPENSION_RESOURCE       => 'suspension';
@@ -63,6 +66,22 @@ sub suspension_status {
     }
 
     return $SUSPENSION_STATUS_ACTIVE;
+}
+
+sub write_action {
+    return $WRITE_ACTION;
+}
+
+sub write_rate_input {
+    my ( undef, $input ) = @_;
+
+    return {
+        action         => $input->{action},
+        actor_id       => $input->{actor_id},
+        limit          => $WRITE_RATE_LIMIT,
+        scope          => 'moderation_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    };
 }
 
 sub view_action {
@@ -224,13 +243,22 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Owns report-queue page limits, default queue and suspension filters,
-permission action and resource names, write-success statuses, permission-target
-hashes, workflow failure-status mapping, and the Guard payload for invalid
-moderation requests. It does not render HTTP responses or load reports.
+the C<moderation_http> write rate-limit hash, permission action and resource
+names, write-success statuses, permission-target hashes, workflow
+failure-status mapping, and the Guard payload for invalid moderation
+requests. It does not render HTTP responses or load reports.
 L<GPForum::Controller::Moderation::Base> still checks CSRF, sessions,
-permissions, and Guard errors.
+permissions, the rate limiter, and Guard errors.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 write_action
+
+Returns C<moderation.write>.
+
+=head2 write_rate_input
+
+Returns the C<moderation_http> rate-limit arguments.
 
 =head2 queue_limit
 
@@ -367,8 +395,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-CSRF, authentication, permission checks, telemetry, and Guard rendering
-remain on L<GPForum::Controller::Moderation::Base>.
+CSRF, authentication, permission checks, rate-limiter calls, telemetry,
+and Guard rendering remain on L<GPForum::Controller::Moderation::Base>.
 
 =head1 AUTHOR
 

@@ -39,7 +39,7 @@ sub reports {
         {
             payload => $self->gp_moderation_view_model->reports_page(
                 csrf_token => $self->csrf_token,
-                reports    => $rows,
+                reports    => $self->_with_command_ids($rows),
                 status     => $status,
             ),
             status   => $HTTP_OK,
@@ -79,7 +79,7 @@ sub actions {
         {
             payload => $self->gp_moderation_view_model->actions_page(
                 csrf_token  => $self->csrf_token,
-                page        => $page,
+                page        => $self->_actions_page_with_command_ids($page),
                 target_id   => $self->optional_param('target_id'),
                 target_type => $self->optional_param('target_type'),
             ),
@@ -129,6 +129,39 @@ sub suspensions {
             template => 'moderation/suspensions',
         }
     );
+}
+
+sub _actions_page_with_command_ids {
+    my ( $self, $page ) = @_;
+
+    $page ||= {};
+
+    return { %{$page}, items => $self->_with_command_ids( $page->{items} ), };
+}
+
+sub _with_command_ids {
+    my ( $self, $rows ) = @_;
+
+    return [ map { $self->_with_command_id($_) } @{ $rows || [] } ];
+}
+
+sub _with_command_id {
+    my ( $self, $row ) = @_;
+
+    return { %{ $self->_row_hash($row) }, command_id => $self->gp_id->uuid, };
+}
+
+sub _row_hash {
+    my ( undef, $row ) = @_;
+
+    if ( ref $row eq 'HASH' ) {
+        return { %{$row} };
+    }
+    if ( $row && $row->can('get_columns') ) {
+        return { $row->get_columns };
+    }
+
+    return {};
 }
 
 1;

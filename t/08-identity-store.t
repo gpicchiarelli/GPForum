@@ -312,12 +312,14 @@ subtest 'password reset token is one-time, locked, and audited' => sub {
         }
     );
     ok( $reset->{ok}, 'password reset succeeds with valid token' );
+    my ($token_lock) =
+      grep { $_->{sql} =~ m/FOR [ ] UPDATE/msx } @{ $lock_dbh->calls };
     is(
-        $lock_dbh->calls->[0]{sql},
+        $token_lock->{sql},
         'SELECT token_id FROM identity_tokens WHERE token_hash = ? FOR UPDATE',
         'reset locks token row before consuming it'
     );
-    is_deeply( $lock_dbh->calls->[0]{bind},
+    is_deeply( $token_lock->{bind},
         ['hash:token-1'], 'reset lock targets token hash' );
     is( $reset_schema->identity_tokens->[0]{used_at},
         '2026-05-23T12:00:00Z', 'reset marks token used' );

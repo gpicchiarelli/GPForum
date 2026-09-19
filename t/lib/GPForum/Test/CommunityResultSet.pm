@@ -12,6 +12,7 @@ use GPForum::Test::CommunitySearch;
 our $VERSION = '0.001';
 
 has created     => sub { return []; };
+has deleted     => sub { return []; };
 has find_misses => 0;
 has rows        => sub { return {}; };
 has last_query  => sub { return {}; };
@@ -56,7 +57,23 @@ sub search {
     my %seen;
     my @rows = grep { !$seen{ 0 + $_ }++ } values %{ $self->rows };
 
-    return GPForum::Test::CommunitySearch->new( rows => \@rows );
+    return GPForum::Test::CommunitySearch->new(
+        query     => $query,
+        resultset => $self,
+        rows      => \@rows,
+    );
+}
+
+sub delete_matching {
+    my ( $self, $query ) = @_;
+
+    return 0 if !_item_key($query);
+
+    my @removed = _unique_matching_rows( $self->rows, $query );
+    $self->rows( _rows_without( $self->rows, \@removed ) );
+    push @{ $self->deleted }, @removed;
+
+    return scalar @removed;
 }
 
 sub _assert_bookmark_unique {
@@ -67,11 +84,12 @@ sub _assert_bookmark_unique {
     }
 
     my $key = _composite_key($row);
-    if ( !$key || !$self->rows->{$key} ) {
-        return;
+    if ( $key && $self->rows->{$key} ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'bookmarks_user_target_key');
     }
 
-    GPForum::Infrastructure::UniqueConflict->throw('bookmarks_user_target_key');
+    return;
 }
 
 sub _store_row {
@@ -100,6 +118,49 @@ sub _row_keys {
         },
         _composite_key($row),
     );
+}
+
+sub _item_key {
+    my ($query) = @_;
+
+    return defined $query->{item_type}
+      && defined $query->{item_id} ? 1 : 0;
+}
+
+sub _unique_matching_rows {
+    my ( $rows, $query ) = @_;
+
+    my ( %seen, @removed );
+    for my $row ( values %{$rows} ) {
+        next if !$row || $seen{ 0 + $row }++;
+        push @removed, $row if _row_matches_item( $row, $query );
+    }
+
+    return @removed;
+}
+
+sub _rows_without {
+    my ( $rows, $removed ) = @_;
+
+    my %drop = map { 0 + $_ => 1 } @{$removed};
+    my %keep;
+    for my $key ( keys %{$rows} ) {
+        my $row = $rows->{$key};
+        $keep{$key} = $row if $row && !$drop{ 0 + $row };
+    }
+
+    return \%keep;
+}
+
+sub _row_matches_item {
+    my ( $row, $query ) = @_;
+
+    my $data = $row->can('data') ? $row->data : $row;
+
+    return 0 if ( $data->{item_type} || q{} ) ne $query->{item_type};
+    return 0 if ( $data->{item_id}   || q{} ) ne $query->{item_id};
+
+    return 1;
 }
 
 sub _composite_key {

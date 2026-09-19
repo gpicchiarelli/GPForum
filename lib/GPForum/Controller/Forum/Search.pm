@@ -14,6 +14,10 @@ const my $HTTP_OK => 200;
 sub search {
     my ($self) = @_;
 
+    if ( !$self->read_allowed('search') ) {
+        return $self->_rate_limited;
+    }
+
     my $query   = $self->_trim( $self->param('q') );
     my $filters = $self->search_filters;
     my $limit = $self->forum_access->search_page_limit( $self->param('limit') );
@@ -202,7 +206,8 @@ failures stay logged here.
 
 =head2 search
 
-Renders the search page, degrading to an empty result set on backend failure.
+Renders the search page after the C<forum_retrieval> rate limit, degrading
+to an empty result set on backend failure.
 
 =head2 search_autocomplete
 
@@ -226,7 +231,7 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Autocomplete is rate-limited independently of the HTML search page.
+HTML search and autocomplete are rate-limited independently.
 
 =head1 AUTHOR
 

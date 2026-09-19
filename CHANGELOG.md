@@ -4,6 +4,34 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Hidden posts now drop their `user_feed_items` rows through
+  `FeedProjector->remove_item`; restore re-projects the author and thread
+  subscribers with the existing `project_item` API. There is no
+  `thread.hidden` event.
+- Moderation hide, restore, lock, and unlock HTTP writes now mint and
+  pass `command_id` the same way forum posting does, so ActionStore
+  replay can fire on retry.
+- Wired `FeedProjector` and `ReputationLedger` onto the existing outbox
+  worker path. Created posts and threads now project into `/feed` for the
+  author and thread subscribers, and posting, hide/restore, and suspension
+  events update trust snapshots instead of leaving them at registration
+  defaults.
+- Added a oneshot `gpforum-scheduled-jobs` command, hourly systemd timer,
+  and launchd sample so expired sessions, rate-limit buckets, identity
+  tokens, completed outbox rows, and dead letters are deleted in bounded
+  batches. The same run calls attachment orphan cleanup and
+  `PartitionLifecycle` policy/evidence only (no app-owned
+  `CREATE TABLE ... PARTITION OF`). See `docs/ops/scheduled-jobs.md`.
+- Forum post bodies labeled `markdown` now render a safe subset (emphasis,
+  http/https/mailto links, quotes, fenced code) through
+  `Service::Forum::BodyRenderer` at compose time and in post presenters.
+  Source is escaped before markup is added, so script tags and unsafe URLs
+  stay text.
+- Wired the existing `forum_retrieval` limiter on `GET /search`, and added
+  `write_rate_input` hashes on `Web::ModerationAccess`, `Web::AdminAccess`,
+  and `Web::PrivacyAccess` so moderation writes, admin writes, and privacy
+  requests share the same CSRF/telemetry write helpers as forum
+  `write_user_id`.
 - Closed HIGH concurrency races on command replay, bookmarks, subscriptions,
   open reports, moderation actions, and the audit hash chain. Unique
   violations now replay the winning row, moderation hide/restore/lock take

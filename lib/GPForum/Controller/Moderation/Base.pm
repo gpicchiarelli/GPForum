@@ -16,6 +16,7 @@ our $VERSION = '0.001';
 const my $HTTP_OK           => 200;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
+const my $HTTP_TOO_MANY     => 429;
 
 sub moderation_access {
     return GPForum::Web::ModerationAccess->new;
@@ -35,7 +36,16 @@ sub authorized_write_user_id {
         return;
     }
 
-    return $self->authorized_user_id( $resource_type, $action );
+    my $user_id = $self->authorized_user_id( $resource_type, $action );
+    if ( !$user_id ) {
+        return;
+    }
+    if ( !$self->_allowed($user_id) ) {
+        $self->_rate_limited;
+        return;
+    }
+
+    return $user_id;
 }
 
 sub authorized_user_id {
@@ -191,6 +201,17 @@ sub reason_param {
     return $self->_trim( $self->param('reason') );
 }
 
+sub command_id_param {
+    my ($self) = @_;
+
+    my $command_id = $self->_trim( $self->param('command_id') );
+    if ( length $command_id ) {
+        return $command_id;
+    }
+
+    return $self->_trim( $self->param('idempotency_key') );
+}
+
 sub optional_param {
     my ( $self, $name ) = @_;
 
@@ -213,6 +234,21 @@ sub _permission_allowed {
             action        => $decision->{action},
         }
     );
+}
+
+sub _allowed {
+    my ( $self, $user_id ) = @_;
+
+    my $decision = $self->gp_rate_limiter->check(
+        $self->moderation_access->write_rate_input(
+            {
+                action   => $self->moderation_access->write_action,
+                actor_id => $user_id,
+            }
+        )
+    );
+
+    return $decision->{ok};
 }
 
 sub _current_user_id {
@@ -286,6 +322,19 @@ sub _forbidden {
     return GPForum::Web::Guard->new->forbidden($self);
 }
 
+sub _rate_limited {
+    my ($self) = @_;
+
+    $self->_record_security_event(
+        'rate_limit_hit',
+        {
+            status => $HTTP_TOO_MANY,
+        }
+    );
+
+    return GPForum::Web::Guard->new->rate_limited($self);
+}
+
 sub _not_found {
     my ( $self, $error ) = @_;
 
@@ -338,20 +387,27 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Owns CSRF, authorization, telemetry, and Guard errors used by moderation
-queue, action, and suspension controllers. Queue limits, default filters,
-permission-target hashes, and failure-status mapping live on
+Owns CSRF, authorization, rate-limit checks, telemetry, and Guard errors
+used by moderation queue, action, and suspension controllers. Queue
+limits, write rate-limit hashes, default filters, permission-target
+hashes, and failure-status mapping live on
 L<GPForum::Web::ModerationAccess>.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 authorized_write_user_id
 
-Rejects invalid CSRF tokens and unauthorized moderation writes.
+Rejects invalid CSRF tokens, unauthorized moderation writes, and
+rate-limited actors.
 
 =head2 authorized_user_id
 
 Requires an authenticated actor with the requested moderation permission.
+
+=head2 command_id_param
+
+Reads the submitted C<command_id>, falling back to C<idempotency_key>
+like L<GPForum::Controller::Forum::Base>.
 
 =head2 write_failure
 

@@ -11,6 +11,7 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Test::AllowPermissionGate;
+use GPForum::Test::DenyLimiter;
 use GPForum::Test::DenyPermissionGate;
 use GPForum::Test::ForumWebServices;
 use GPForum::Test::IdentityStore;
@@ -22,9 +23,10 @@ const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
 const my $HTTP_NOT_FOUND    => 404;
+const my $HTTP_TOO_MANY     => 429;
 
-my $test = Test::Mojo->new('GPForum');
-_install_moderation_fakes($test);
+my $test     = Test::Mojo->new('GPForum');
+my $services = _install_moderation_fakes($test);
 _install_test_session_route($test);
 
 _get_json_ok( $test, '/moderation/reports' );
@@ -46,6 +48,8 @@ $test->get_ok('/moderation/reports');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Moderation report queue"]});
 $test->element_exists(q{form[action="/moderation/posts/post-1/hide"]});
+$test->element_exists(
+    q{form[action="/moderation/posts/post-1/hide"] input[name="command_id"]});
 $test->element_exists(q{form[action="/moderation/reports/report-1/release"]});
 
 $test->get_ok( '/moderation/reports' => { 'Accept-Language' => 'it' } );
@@ -67,6 +71,9 @@ $test->get_ok('/moderation/actions');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Moderation action history"]});
 $test->element_exists(q{form[action="/moderation/posts/post-1/restore"]});
+$test->element_exists(
+    q{form[action="/moderation/posts/post-1/restore"] input[name="command_id"]}
+);
 $test->element_exists(
     q{form[action="/moderation/actions/action-post-hide/reverse"]});
 
@@ -98,42 +105,56 @@ $test->json_is( '/errors/reason' => 'reason is required' );
 $test->post_ok(
     '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
       form => {
+        command_id => 'hide-command-1',
         csrf_token => $csrf_token,
         reason     => 'spam',
       }
 );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/action_type' => 'post.hidden' );
+is( $services->last_moderation_input->{command_id},
+    'hide-command-1', 'hide_post passes command_id into the action store' );
 
 $test->post_ok(
     '/moderation/posts/post-1/restore' => { Accept => 'application/json' } =>
       form => {
+        command_id => 'restore-command-1',
         csrf_token => $csrf_token,
         reason     => 'appeal accepted',
       }
 );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/action_type' => 'post.restored' );
+is( $services->last_moderation_input->{command_id},
+    'restore-command-1',
+    'restore_post passes command_id into the action store' );
 
 $test->post_ok(
     '/moderation/threads/thread-1/lock' => { Accept => 'application/json' } =>
       form => {
+        command_id => 'lock-command-1',
         csrf_token => $csrf_token,
         reason     => 'heated discussion',
       }
 );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/action_type' => 'thread.locked' );
+is( $services->last_moderation_input->{command_id},
+    'lock-command-1', 'lock_thread passes command_id into the action store' );
 
 $test->post_ok(
     '/moderation/threads/thread-1/unlock' =>
       { Accept => 'application/json' } => form => {
+        command_id => 'unlock-command-1',
         csrf_token => $csrf_token,
         reason     => 'cooled down',
       }
 );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/action_type' => 'thread.unlocked' );
+is( $services->last_moderation_input->{command_id},
+    'unlock-command-1',
+    'unlock_thread passes command_id into the action store' );
 
 $test->post_ok(
     '/moderation/actions/action-post-hide/reverse' =>
@@ -305,6 +326,17 @@ $test->post_ok(
 $test->status_is($HTTP_NOT_FOUND);
 
 $test->app->helper(
+    gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
+$test->post_ok(
+    '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $csrf_token,
+        reason     => 'too fast',
+      }
+);
+$test->status_is($HTTP_TOO_MANY);
+
+$test->app->helper(
     gp_permission_gate => sub {
         return GPForum::Test::DenyPermissionGate->new;
     }
@@ -317,15 +349,14 @@ done_testing();
 sub _install_moderation_fakes {
     my ($test_object) = @_;
 
-    my $services = GPForum::Test::ForumWebServices->new;
-    $test_object->app->helper( gp_report_store => sub { return $services; } );
+    my $fakes = GPForum::Test::ForumWebServices->new;
+    $test_object->app->helper( gp_report_store => sub { return $fakes; } );
     $test_object->app->helper(
-        gp_moderation_action_store => sub { return $services; } );
+        gp_moderation_action_store => sub { return $fakes; } );
+    $test_object->app->helper( gp_suspension_store => sub { return $fakes; } );
     $test_object->app->helper(
-        gp_suspension_store => sub { return $services; } );
-    $test_object->app->helper(
-        gp_moderation_review_reader => sub { return $services; } );
-    $test_object->app->helper( gp_rate_limiter => sub { return $services; } );
+        gp_moderation_review_reader => sub { return $fakes; } );
+    $test_object->app->helper( gp_rate_limiter => sub { return $fakes; } );
     $test_object->app->helper(
         gp_profile_reader => sub {
             return GPForum::Test::IdentityStore->new;
@@ -337,7 +368,7 @@ sub _install_moderation_fakes {
         }
     );
 
-    return;
+    return $fakes;
 }
 
 sub _get_json_ok {

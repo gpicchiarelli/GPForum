@@ -26,8 +26,9 @@ The normalized contract is:
 Controllers use this contract to map workflow outcomes to redirects, SSR form
 errors, or JSON responses. The workflow never performs HTTP rendering and never
 duplicates persistence logic owned by stores. Catalog page limits,
-permission-target hashes, catalog `view` action, write-success statuses, and
-Guard invalid-request payloads live on `Web::AdminAccess`.
+the `admin_http` write rate-limit hash, permission-target hashes, catalog
+`view` action, write-success statuses, and Guard invalid-request payloads
+live on `Web::AdminAccess`.
 
 Category create also provisions a default public `general` space when none
 exists, so the first administrator can add the first category without

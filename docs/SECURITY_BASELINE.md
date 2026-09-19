@@ -99,8 +99,9 @@ addresses are SHA-256 hashed before entering audit metadata.
 * DB-backed security evidence requires migration `016_security_abuse_hardening`
   and has been smoke-tested against the local Postgres.app evidence database.
 * Raw post body rendering in `templates/forum/thread.html.ep` assumes the
-  `PostComposer`/`post_bodies.body_rendered_safe` sanitizer boundary. That
-  invariant is tested, but a future richer renderer must keep the same contract.
+  `BodyRenderer`/`post_bodies.body_rendered_safe` sanitizer boundary. Markdown
+  is a safe subset (emphasis, links, quotes, fenced code); raw HTML, inline
+  images, and @mentions stay escaped literal text.
 * Audit hash-chain fields exist, but external checkpoint notarization is not yet
   implemented.
 

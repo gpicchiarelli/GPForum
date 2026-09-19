@@ -57,22 +57,47 @@ sub search {
     $self->last_query($query);
     $self->last_attrs( $attrs || {} );
 
-    if ( $self->skip_search ) {
-        $self->skip_search( $self->skip_search - 1 );
-        return GPForum::Test::ModerationSearch->new( rows => [] );
+    my $skipped = $self->_skipped_search;
+    if ($skipped) {
+        return $skipped;
     }
 
-    my @candidate_rows =
-        @{ $self->created_objects }
-      ? @{ $self->created_objects }
-      : values %{ $self->rows };
-    my %seen;
-    my @rows = grep { !$seen{ 0 + $_ }++ } @candidate_rows;
+    return $self->_filtered_search($query);
+}
+
+sub _filtered_search {
+    my ( $self, $query ) = @_;
+
+    my @rows = $self->_candidate_rows;
     if ( $self->filter_search || _should_filter($query) ) {
         @rows = grep { _matches_query( $_, $query ) } @rows;
     }
 
     return GPForum::Test::ModerationSearch->new( rows => \@rows );
+}
+
+sub _candidate_rows {
+    my ($self) = @_;
+
+    my @source =
+        @{ $self->created_objects }
+      ? @{ $self->created_objects }
+      : values %{ $self->rows };
+    my %seen;
+
+    return grep { !$seen{ 0 + $_ }++ } @source;
+}
+
+sub _skipped_search {
+    my ($self) = @_;
+
+    if ( !$self->skip_search ) {
+        return;
+    }
+
+    $self->skip_search( $self->skip_search - 1 );
+
+    return GPForum::Test::ModerationSearch->new( rows => [] );
 }
 
 sub _assert_unique_row {
@@ -108,15 +133,24 @@ sub _assert_command_unique {
     if ( !defined $command_id || !length $command_id ) {
         return;
     }
-
-    for my $existing ( @{ $self->created } ) {
-        if ( ( $existing->{command_id} || q{} ) eq $command_id ) {
-            GPForum::Infrastructure::UniqueConflict->throw(
-                'idx_moderation_actions_command_id');
-        }
+    if ( $self->_command_id_taken($command_id) ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'idx_moderation_actions_command_id');
     }
 
     return;
+}
+
+sub _command_id_taken {
+    my ( $self, $command_id ) = @_;
+
+    for my $existing ( @{ $self->created } ) {
+        if ( _same_text( $existing->{command_id}, $command_id ) ) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 sub _open_status {
@@ -135,15 +169,29 @@ sub _same_open_report {
     if ( !_open_status( $existing->{status} ) ) {
         return 0;
     }
-    if ( ( $existing->{reporter_user_id} || q{} ) ne $row->{reporter_user_id} )
+
+    return _same_report_target( $existing, $row );
+}
+
+sub _same_report_target {
+    my ( $existing, $row ) = @_;
+
+    if (
+        !_same_text( $existing->{reporter_user_id}, $row->{reporter_user_id} ) )
     {
         return 0;
     }
-    if ( ( $existing->{target_type} || q{} ) ne $row->{target_type} ) {
+    if ( !_same_text( $existing->{target_type}, $row->{target_type} ) ) {
         return 0;
     }
 
-    return ( $existing->{target_id} || q{} ) eq $row->{target_id} ? 1 : 0;
+    return _same_text( $existing->{target_id}, $row->{target_id} );
+}
+
+sub _same_text {
+    my ( $expected, $actual ) = @_;
+
+    return ( $expected || q{} ) eq ( $actual || q{} ) ? 1 : 0;
 }
 
 sub _store_row {

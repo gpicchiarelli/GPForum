@@ -10,7 +10,9 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Test::AllowLimiter;
 use GPForum::Test::AllowPermissionGate;
+use GPForum::Test::DenyLimiter;
 use GPForum::Test::DenyPermissionGate;
 use GPForum::Test::PrivacyWebServices;
 
@@ -21,6 +23,7 @@ const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
 const my $HTTP_CONFLICT     => 409;
+const my $HTTP_TOO_MANY     => 429;
 
 my $test     = Test::Mojo->new('GPForum');
 my $services = GPForum::Test::PrivacyWebServices->new;
@@ -169,6 +172,15 @@ $test->status_is($HTTP_OK);
 $test->json_is( '/status'                         => 'erasure_completed' );
 $test->json_is( '/erasure_job/action/action_type' => 'anonymized' );
 
+$test->app->helper(
+    gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
+$test->post_ok(
+    '/privacy/export' => { Accept => 'application/json' } => form => {
+        csrf_token => $csrf_token,
+    }
+);
+$test->status_is($HTTP_TOO_MANY);
+
 done_testing();
 
 sub _install_privacy_fakes {
@@ -187,6 +199,8 @@ sub _install_privacy_fakes {
             return GPForum::Test::AllowPermissionGate->new;
         }
     );
+    $test_object->app->helper(
+        gp_rate_limiter => sub { return GPForum::Test::AllowLimiter->new; } );
 
     return;
 }

@@ -12,8 +12,11 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_LIMIT   => 25;
-const my $REQUESTED_LIMIT => 10;
+const my $DEFAULT_LIMIT      => 25;
+const my $REQUESTED_LIMIT    => 10;
+const my $WRITE_RATE_LIMIT   => 20;
+const my $REQUEST_RATE_LIMIT => 5;
+const my $WRITE_RATE_WINDOW  => 60;
 
 my $access = GPForum::Web::PrivacyAccess->new;
 
@@ -22,6 +25,49 @@ is( $access->page_limit(undef),
 is( $access->page_limit(0), $DEFAULT_LIMIT, 'page_limit defaults a zero size' );
 is( $access->page_limit($REQUESTED_LIMIT),
     $REQUESTED_LIMIT, 'page_limit keeps an explicit size' );
+
+is( $access->write_action, 'privacy.write',
+    'write_action is the default write action' );
+is( $access->request_action,
+    'privacy.request', 'request_action is the member write action' );
+is( $access->review_action,
+    'privacy.review', 'review_action is the staff write action' );
+is( $access->write_limit_for( $access->request_action ),
+    $REQUEST_RATE_LIMIT, 'write_limit_for caps member requests' );
+is( $access->write_limit_for( $access->review_action ),
+    $WRITE_RATE_LIMIT, 'write_limit_for keeps staff review at 20' );
+is_deeply(
+    $access->write_rate_input(
+        {
+            action   => $access->request_action,
+            actor_id => 'user-1',
+        }
+    ),
+    {
+        action         => 'privacy.request',
+        actor_id       => 'user-1',
+        limit          => $REQUEST_RATE_LIMIT,
+        scope          => 'privacy_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    },
+    'write_rate_input uses the member request window'
+);
+is_deeply(
+    $access->write_rate_input(
+        {
+            action   => $access->review_action,
+            actor_id => 'staff-1',
+        }
+    ),
+    {
+        action         => 'privacy.review',
+        actor_id       => 'staff-1',
+        limit          => $WRITE_RATE_LIMIT,
+        scope          => 'privacy_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    },
+    'write_rate_input uses the staff review window'
+);
 
 is( $access->manage_action, 'manage', 'manage_action is the staff action' );
 is( $access->view_action,   'view',   'view_action is the review action' );

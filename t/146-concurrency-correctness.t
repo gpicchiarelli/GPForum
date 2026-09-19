@@ -15,6 +15,7 @@ use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;
 use GPForum::Service::Notification::SubscriptionStore;
+use GPForum::Test::BrokenAuditSchema;
 use GPForum::Test::CommunityResultSet;
 use GPForum::Test::CommunitySchema;
 use GPForum::Test::FixedClock;
@@ -29,15 +30,13 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-ok( GPForum::Infrastructure::UniqueConflict->is_conflict(
-        'duplicate key value violates unique constraint "x" (23505)'
-    ),
+ok(
+    GPForum::Infrastructure::UniqueConflict->is_conflict(
+        'duplicate key value violates unique constraint "x" (23505)'),
     'PostgreSQL unique violations are recognized'
 );
-ok(
-    !GPForum::Infrastructure::UniqueConflict->is_conflict('connection reset'),
-    'non-unique errors are not treated as conflicts'
-);
+ok( !GPForum::Infrastructure::UniqueConflict->is_conflict('connection reset'),
+    'non-unique errors are not treated as conflicts' );
 
 _assert_bookmark_unique_replay();
 _assert_subscription_unique_replay();
@@ -66,14 +65,16 @@ sub _assert_bookmark_unique_replay {
     };
     my $first = $store->save_bookmark($input);
     $bookmarks->find_misses(1);
-    my $second = $store->save_bookmark(
-        { %{$input}, note => 'aggiornato' } );
+    my $replay = $store->save_bookmark( { %{$input}, note => 'aggiornato' } );
 
-    is( $first->{bookmark_id}, $second->{bookmark_id},
-        'bookmark unique race returns the existing bookmark' );
+    is(
+        $first->{bookmark_id},
+        $replay->{bookmark_id},
+        'bookmark unique race returns the existing bookmark'
+    );
     is( scalar @{ $bookmarks->created },
         1, 'bookmark unique race does not insert a second row' );
-    is( $second->{note}, 'aggiornato',
+    is( $replay->{note}, 'aggiornato',
         'bookmark unique race restores the winning row' );
 
     return;
@@ -96,14 +97,17 @@ sub _assert_subscription_unique_replay {
     };
     my $first = $store->save_subscription($input);
     $subscriptions->find_misses(1);
-    my $second = $store->save_subscription(
-        { %{$input}, preference => 'mentions' } );
+    my $replay =
+      $store->save_subscription( { %{$input}, preference => 'mentions' } );
 
-    is( $first->{subscription_id}, $second->{subscription_id},
-        'subscription unique race returns the existing subscription' );
+    is(
+        $first->{subscription_id},
+        $replay->{subscription_id},
+        'subscription unique race returns the existing subscription'
+    );
     is( scalar @{ $subscriptions->created },
         1, 'subscription unique race does not insert a second row' );
-    is( $second->{preference}, 'mentions',
+    is( $replay->{preference}, 'mentions',
         'subscription unique race restores the winning row' );
 
     return;
@@ -136,10 +140,11 @@ sub _assert_report_unique_replay {
     };
     my $first = $store->create_report($input);
     $reports->skip_search(1);
-    my $second = $store->create_report($input);
+    my $replay = $store->create_report($input);
 
-    is( _row_column( $first, 'report_id' ),
-        _row_column( $second, 'report_id' ),
+    is(
+        _row_column( $first,  'report_id' ),
+        _row_column( $replay, 'report_id' ),
         'report unique race returns the open report'
     );
     is( scalar @{ $reports->created },
@@ -150,8 +155,7 @@ sub _assert_report_unique_replay {
         1, 'report unique race does not emit a second outbox row' );
     is( $audits->created->[-1]{action},
         'report.duplicate_blocked',
-        'report unique race records a controlled duplicate audit'
-    );
+        'report unique race records a controlled duplicate audit' );
 
     return;
 }
@@ -189,14 +193,15 @@ sub _assert_action_command_replay {
         reason        => 'spam',
     };
     my $first  = $store->hide_post($input);
-    my $second = $store->hide_post($input);
+    my $replay = $store->hide_post($input);
 
     ok( $first->{ok},  'first hide with command id succeeds' );
-    ok( $second->{ok}, 'retry hide with the same command id succeeds' );
-    ok( $second->{replayed},
+    ok( $replay->{ok}, 'retry hide with the same command id succeeds' );
+    ok( $replay->{replayed},
         'retry hide with the same command id is replayed' );
-    is( $first->{action}{moderation_action_id},
-        $second->{action}{moderation_action_id},
+    is(
+        $first->{action}{moderation_action_id},
+        $replay->{action}{moderation_action_id},
         'retry hide returns the original action id'
     );
     is( scalar @{ $actions->created },
@@ -265,8 +270,7 @@ sub _assert_action_row_lock {
 sub _assert_audit_chain_lock {
     my $lock_dbh = GPForum::Test::PostStoreLockDbh->new;
     my $schema   = GPForum::Test::Schema->new(
-        storage =>
-          GPForum::Test::PostStoreLockStorage->new( dbh => $lock_dbh ),
+        storage => GPForum::Test::PostStoreLockStorage->new( dbh => $lock_dbh ),
     );
     my $recorder = GPForum::Infrastructure::EventRecorder->new(
         id_service => GPForum::Test::Id->new,
@@ -279,7 +283,7 @@ sub _assert_audit_chain_lock {
         target_id      => 'thread-1',
         target_type    => 'thread',
     );
-    my $second = $recorder->record_audit(
+    my $replay = $recorder->record_audit(
         action         => 'thread.updated',
         actor_id       => 'user-1',
         correlation_id => 'correlation-1',
@@ -289,18 +293,14 @@ sub _assert_audit_chain_lock {
 
     is( scalar @{ $lock_dbh->calls },
         2, 'each audit append takes the chain lock' );
-    like(
-        $lock_dbh->calls->[0]{sql},
+    like( $lock_dbh->calls->[0]{sql},
         qr/pg_advisory_xact_lock/msx,
-        'audit chain lock uses a transaction advisory lock'
-    );
-    is( $second->{previous_hash},
+        'audit chain lock uses a transaction advisory lock' );
+    is( $replay->{previous_hash},
         $first->{record_hash},
-        'advisory lock does not change audit record hashing'
-    );
-    ok( $recorder->verify_audit_record($second),
-        'chained audit still verifies after lock serialization'
-    );
+        'advisory lock does not change audit record hashing' );
+    ok( $recorder->verify_audit_record($replay),
+        'chained audit still verifies after lock serialization' );
 
     return;
 }
@@ -342,20 +342,6 @@ sub _row_column {
     }
 
     return;
-}
-
-package GPForum::Test::BrokenAuditSchema;
-
-use strict;
-use warnings;
-
-use Carp qw(croak);
-use Mojo::Base -base;
-
-our $VERSION = '0.001';
-
-sub resultset {
-    croak 'audit lookup failed';
 }
 
 1;

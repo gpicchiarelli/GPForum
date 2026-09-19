@@ -46,9 +46,12 @@ authorization, CSRF, anti-leak and abuse-control paths.
 | `POST /t/:thread_id/report` | authenticated | visible thread | required | `report.create` | `report_create:5` |
 | `POST /p/:post_id/report` | authenticated | visible post and thread | required | `report.create` | `report_create:5` |
 | `POST /notifications/:notification_id/read` | authenticated | recipient owns notification | required | `notification.read` | notification write path |
-| `POST /admin/*` | authenticated | `admin_console.manage` or scoped admin permission | required | request path budget | admin budgets |
-| `POST /moderation/*` | authenticated | resource/action specific moderation permission | required | request path budget | moderation budgets |
-| `GET /search` | anonymous or authenticated | permission-aware search projection | not applicable | read path budget | `search:2` |
+| `POST /admin/*` | authenticated | `admin_console.manage` or scoped admin permission | required | `admin.write` | admin budgets |
+| `POST /moderation/*` | authenticated | resource/action specific moderation permission | required | `moderation.write` | moderation budgets |
+| `POST /privacy/export` | authenticated | own account | required | `privacy.request` | privacy write path |
+| `POST /privacy/deletion` | authenticated | own account | required | `privacy.request` | privacy write path |
+| `POST /admin/privacy/*` | authenticated | `privacy_rights.manage` | required | `privacy.review` | privacy write path |
+| `GET /search` | anonymous or authenticated | permission-aware search projection | not applicable | `search` | `search:2` |
 | `GET /search/autocomplete` | anonymous or authenticated | permission-aware search projection | not applicable | `search.autocomplete` | `search_autocomplete:2` |
 | `GET /realtime` | authenticated websocket | `realtime.subscribe` per channel | same-origin handshake | `realtime.connect` / `realtime.subscribe` | realtime enhancement |
 

@@ -41,6 +41,7 @@
             % if ($report->{target_type} eq 'post') {
               <form method="post" action="<%= url_for('moderation_post_hide', post_id => $report->{target_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $report->{command_id} || q{} %>">
                 <label for="<%= $report->{ui}{post_reason_id} %>"><%= t('common.reason') %></label>
                 <input id="<%= $report->{ui}{post_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
                 <button type="submit"><%= t('moderation.hide_post') %></button>
@@ -49,6 +50,7 @@
             % if ($report->{target_type} eq 'thread') {
               <form method="post" action="<%= url_for('moderation_thread_lock', thread_id => $report->{target_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $report->{command_id} || q{} %>">
                 <label for="<%= $report->{ui}{thread_reason_id} %>"><%= t('common.reason') %></label>
                 <input id="<%= $report->{ui}{thread_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
                 <button type="submit"><%= t('moderation.lock_thread') %></button>

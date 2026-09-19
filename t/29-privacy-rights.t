@@ -138,12 +138,14 @@ is( scalar @{ $deletion_actions->created },
 is( scalar @{ $erasure_jobs->created }, $ONE_ROW, 'erasure job is inserted' );
 is( scalar @{ $audit_log->created },
     $TWO_ROWS, 'approval writes an audit row' );
+my ($approval_lock) =
+  grep { $_->{sql} =~ m/FOR [ ] UPDATE/msx } @{ $approval_lock_dbh->calls };
 is(
-    $approval_lock_dbh->calls->[0]{sql},
+    $approval_lock->{sql},
 'SELECT deletion_request_id FROM deletion_requests WHERE deletion_request_id = ? FOR UPDATE',
     'approval locks the deletion request row before creating erasure job'
 );
-is_deeply( $approval_lock_dbh->calls->[0]{bind},
+is_deeply( $approval_lock->{bind},
     ['generated-1'], 'approval lock targets the deletion request id' );
 
 my $approved_again =

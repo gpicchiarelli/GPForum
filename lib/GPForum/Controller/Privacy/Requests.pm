@@ -75,7 +75,8 @@ Creates an anonymize deletion request.
 
 =head1 DIAGNOSTICS
 
-CSRF, auth, and validation failures use the shared privacy helpers.
+CSRF, auth, rate-limit, and validation failures use the shared privacy
+helpers.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

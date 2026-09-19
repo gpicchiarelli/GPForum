@@ -21,6 +21,7 @@ sub hide_post {
         $self->gp_moderation_workflow->hide_post(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 post_id       => $self->param('post_id'),
                 reason        => $self->reason_param,
             }
@@ -43,6 +44,7 @@ sub restore_post {
         $self->gp_moderation_workflow->restore_post(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 post_id       => $self->param('post_id'),
                 reason        => $self->reason_param,
             }
@@ -65,6 +67,7 @@ sub lock_thread {
         $self->gp_moderation_workflow->lock_thread(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 thread_id     => $self->param('thread_id'),
                 reason        => $self->reason_param,
             }
@@ -87,6 +90,7 @@ sub unlock_thread {
         $self->gp_moderation_workflow->unlock_thread(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 thread_id     => $self->param('thread_id'),
                 reason        => $self->reason_param,
             }

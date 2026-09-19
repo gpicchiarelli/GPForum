@@ -14,8 +14,29 @@ our $VERSION = '0.001';
 
 const my $DEFAULT_QUEUE_LIMIT => 50;
 const my $REQUESTED_LIMIT     => 10;
+const my $WRITE_RATE_LIMIT    => 20;
+const my $WRITE_RATE_WINDOW   => 60;
 
 my $access = GPForum::Web::ModerationAccess->new;
+
+is( $access->write_action,
+    'moderation.write', 'write_action is the staff write action' );
+is_deeply(
+    $access->write_rate_input(
+        {
+            action   => $access->write_action,
+            actor_id => 'user-1',
+        }
+    ),
+    {
+        action         => 'moderation.write',
+        actor_id       => 'user-1',
+        limit          => $WRITE_RATE_LIMIT,
+        scope          => 'moderation_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    },
+    'write_rate_input uses the moderation HTTP window'
+);
 
 is( $access->queue_limit(undef),
     $DEFAULT_QUEUE_LIMIT, 'queue_limit defaults a missing size' );

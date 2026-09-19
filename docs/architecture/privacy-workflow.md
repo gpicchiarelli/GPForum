@@ -37,9 +37,10 @@ errors, or JSON responses. The workflow never performs HTTP rendering and never
 duplicates persistence logic owned by stores.
 
 HTTP errors go through `GPForum::Web::Guard`, which renders existing
-`ErrorPayload` contracts via `Responder`. Page limits, permission-target
-hashes, catalog `view` action, review write-success statuses, and
-blocked-hold payloads live on `Web::PrivacyAccess`.
+`ErrorPayload` contracts via `Responder`. Page limits, the `privacy_http`
+write rate-limit hash, permission-target hashes, catalog `view` action,
+review write-success statuses, and blocked-hold payloads live on
+`Web::PrivacyAccess`.
 
 Coverage lives in `t/101-privacy-workflow.t`, `t/119-privacy-erasure.t`,
 `t/125-privacy-completion.t`, `t/128-privacy-event.t`, and

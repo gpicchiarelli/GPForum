@@ -6,7 +6,7 @@ use warnings;
 use Digest::SHA qw(sha256_hex);
 use English     qw(-no_match_vars);
 use JSON::MaybeXS;
-use Mojo::Base  -base;
+use Mojo::Base -base;
 
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
@@ -94,12 +94,12 @@ sub _replay_after_conflict {
     my ( $self, $job, $error ) = @_;
 
     if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     my $existing = $self->_find_existing( $job->{key} );
     if ( !$existing ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return $self->_existing_result( $existing, $job->{request_hash} );

@@ -19,6 +19,7 @@ Introduce `GPForum::Web::ModerationAccess` behind the existing moderation
 HTTP base. It owns:
 
 - the default report-queue page size;
+- the `moderation_http` / `moderation.write` rate-limit arguments;
 - default report `open` and suspension `active` filters;
 - permission action and resource names for queue, content, and
   suspension writes;
@@ -29,9 +30,9 @@ HTTP base. It owns:
 - the Guard payload for invalid moderation commands.
 
 `Moderation::Base` still checks CSRF, cookie-session identity, permission
-gates, records telemetry, and renders through `Web::Guard`. Public
-`queue_limit`, `authorized_write_user_id`, and `write_failure` stay on the
-controller.
+gates, the rate limiter, records telemetry, and renders through
+`Web::Guard`. Public `queue_limit`, `authorized_write_user_id`, and
+`write_failure` stay on the controller.
 
 ## Consequences
 

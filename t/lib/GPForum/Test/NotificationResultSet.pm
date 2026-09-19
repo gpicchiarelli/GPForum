@@ -46,10 +46,27 @@ sub update_or_create {
 sub find {
     my ( $self, $query ) = @_;
 
-    if ( $self->find_misses ) {
-        $self->find_misses( $self->find_misses - 1 );
+    if ( $self->_consume_find_miss ) {
         return;
     }
+
+    return $self->_lookup_row($query);
+}
+
+sub _consume_find_miss {
+    my ($self) = @_;
+
+    if ( !$self->find_misses ) {
+        return 0;
+    }
+
+    $self->find_misses( $self->find_misses - 1 );
+
+    return 1;
+}
+
+sub _lookup_row {
+    my ( $self, $query ) = @_;
 
     my $unique = ref $query eq 'HASH' ? _subscription_unique($query) : undef;
     if ( $unique && $self->rows->{$unique} ) {
@@ -78,12 +95,12 @@ sub _assert_subscription_unique {
     my ( $self, $row ) = @_;
 
     my $key = _subscription_unique($row);
-    if ( !$key || !$self->rows->{$key} ) {
-        return;
+    if ( $key && $self->rows->{$key} ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'subscriptions_unique_target');
     }
 
-    GPForum::Infrastructure::UniqueConflict->throw(
-        'subscriptions_unique_target');
+    return;
 }
 
 sub _subscription_unique {
@@ -107,6 +124,14 @@ sub _store_row {
       || _composite_key($row);
     $self->rows->{$key} = $object;
     $self->rows->{ _composite_key($row) } = $object;
+    $self->_index_subscription( $row, $object );
+
+    return;
+}
+
+sub _index_subscription {
+    my ( $self, $row, $object ) = @_;
+
     my $unique = _subscription_unique($row);
     if ($unique) {
         $self->rows->{$unique} = $object;

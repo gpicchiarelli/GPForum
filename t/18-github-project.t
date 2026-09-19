@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 108;
+const my $EXPECTED_TESTS => 121;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -45,12 +45,16 @@ for my $required_file (
     docs/OS_RUNTIME_EVIDENCE.md
     docs/DEPLOYMENT.md
     docs/DEPLOYMENT_EVIDENCE.md
+    docs/ops/scheduled-jobs.md
     docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
     deploy/systemd/gpforum-outbox.service
+    deploy/systemd/gpforum-scheduled-jobs.service
+    deploy/systemd/gpforum-scheduled-jobs.timer
     deploy/systemd/gpforum-unix-socket.service
     deploy/freebsd/gpforum
     deploy/launchd/com.gpforum.app.plist
+    deploy/launchd/com.gpforum.scheduled-jobs.plist
     deploy/nginx/gpforum.conf
     deploy/nginx/gpforum-unix-socket.conf
     deploy/caddy/Caddyfile
@@ -59,6 +63,7 @@ for my $required_file (
     bin/gpforum-bench-hypnotoad
     bin/gpforum-bench-hypnotoad-scaling
     bin/gpforum-os-preflight
+    bin/gpforum-scheduled-jobs
     bin/gpforum-query-plan-evidence
     bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
@@ -92,12 +97,17 @@ my $deployment     = path('docs/DEPLOYMENT.md')->slurp;
 my $readiness      = path('docs/PRODUCTION_READINESS.md')->slurp;
 my $systemd_web    = path('deploy/systemd/gpforum.service')->slurp;
 my $systemd_outbox = path('deploy/systemd/gpforum-outbox.service')->slurp;
+my $systemd_jobs = path('deploy/systemd/gpforum-scheduled-jobs.service')->slurp;
+my $systemd_jobs_timer =
+  path('deploy/systemd/gpforum-scheduled-jobs.timer')->slurp;
 my $systemd_socket = path('deploy/systemd/gpforum-unix-socket.service')->slurp;
-my $freebsd_rc     = path('deploy/freebsd/gpforum')->slurp;
-my $launchd_plist  = path('deploy/launchd/com.gpforum.app.plist')->slurp;
-my $nginx          = path('deploy/nginx/gpforum.conf')->slurp;
-my $nginx_unix     = path('deploy/nginx/gpforum-unix-socket.conf')->slurp;
-my $caddy          = path('deploy/caddy/Caddyfile')->slurp;
+my $launchd_jobs =
+  path('deploy/launchd/com.gpforum.scheduled-jobs.plist')->slurp;
+my $freebsd_rc    = path('deploy/freebsd/gpforum')->slurp;
+my $launchd_plist = path('deploy/launchd/com.gpforum.app.plist')->slurp;
+my $nginx         = path('deploy/nginx/gpforum.conf')->slurp;
+my $nginx_unix    = path('deploy/nginx/gpforum-unix-socket.conf')->slurp;
+my $caddy         = path('deploy/caddy/Caddyfile')->slurp;
 
 like(
     $ci,
@@ -297,5 +307,30 @@ like(
 );
 like( $deployment, qr/GlifiStore::Client/msx,
     'deployment docs name the operator-supplied GlifiStore client' );
+like( $systemd_jobs, qr/Type=oneshot/msx,
+    'scheduled jobs systemd unit is oneshot, not a daemon' );
+like(
+    $systemd_jobs,
+    qr{script/gpforum-carton [ ] exec}msx,
+    'scheduled jobs systemd unit starts through script/gpforum-carton'
+);
+unlike(
+    $systemd_jobs,
+    qr{/opt/gpforum/local/bin/carton}msx,
+    'scheduled jobs systemd unit does not call local/bin/carton'
+);
+like(
+    $systemd_jobs,
+    qr/EnvironmentFile=\/etc\/gpforum\/gpforum[.]env/msx,
+    'scheduled jobs systemd unit loads production environment file'
+);
+like( $systemd_jobs_timer, qr/OnCalendar=hourly/msx,
+    'scheduled jobs timer runs hourly' );
+like( $launchd_jobs, qr{script/gpforum-carton}msx,
+    'scheduled jobs launchd starts through script/gpforum-carton' );
+like( $launchd_jobs, qr/StartInterval/msx,
+    'scheduled jobs launchd repeats on an interval' );
+like( $deployment, qr/gpforum-scheduled-jobs/msx,
+    'deployment docs name the scheduled jobs timer' );
 
 1;

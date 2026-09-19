@@ -101,12 +101,16 @@ sub _lock_audit_chain {
 sub _latest_persisted_audit_hash {
     my ($self) = @_;
 
-    my $latest = $self->schema->resultset('AuditLog')->search(
+    my $resultset = $self->schema->resultset('AuditLog');
+    if ( !$resultset->can('search') ) {
+        return;
+    }
+
+    my $latest = $resultset->search(
         {},
         {
-            order_by =>
-              [ { -desc => 'created_at' }, { -desc => 'audit_id' }, ],
-            rows => 1,
+            order_by => [ { -desc => 'created_at' }, { -desc => 'audit_id' }, ],
+            rows     => 1,
         }
     )->single;
     if ( !$latest ) {

@@ -12,9 +12,11 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_LIMIT   => 50;
-const my $REQUESTED_LIMIT => 10;
-const my $DASHBOARD_LIMIT => 10;
+const my $DEFAULT_LIMIT     => 50;
+const my $REQUESTED_LIMIT   => 10;
+const my $DASHBOARD_LIMIT   => 10;
+const my $WRITE_RATE_LIMIT  => 20;
+const my $WRITE_RATE_WINDOW => 60;
 
 my $access = GPForum::Web::AdminAccess->new;
 
@@ -25,6 +27,25 @@ is( $access->page_limit($REQUESTED_LIMIT),
     $REQUESTED_LIMIT, 'page_limit keeps an explicit size' );
 is( $access->dashboard_limit,
     $DASHBOARD_LIMIT, 'dashboard_limit keeps the summary cap' );
+
+is( $access->write_action, 'admin.write',
+    'write_action is the staff write action' );
+is_deeply(
+    $access->write_rate_input(
+        {
+            action   => $access->write_action,
+            actor_id => 'user-1',
+        }
+    ),
+    {
+        action         => 'admin.write',
+        actor_id       => 'user-1',
+        limit          => $WRITE_RATE_LIMIT,
+        scope          => 'admin_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    },
+    'write_rate_input uses the admin HTTP window'
+);
 
 is( $access->manage_action, 'manage', 'manage_action is the staff action' );
 is( $access->view_action,   'view',   'view_action is the catalog action' );

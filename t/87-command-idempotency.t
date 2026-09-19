@@ -197,11 +197,12 @@ push @{ $pending_race->command_logs },
     status => 'accepted',
   };
 $pending_race->skip_search_count(1);
-my $pending_race_service = GPForum::Service::Operations::CommandIdempotency->new(
+my $pending_race_service =
+  GPForum::Service::Operations::CommandIdempotency->new(
     clock      => GPForum::Test::FixedClock->new,
     id_service => GPForum::Test::Id->new,
     schema     => $pending_race,
-);
+  );
 my $pending_race_result = $pending_race_service->run(
     {
         actor_id     => 'user-1',

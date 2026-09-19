@@ -88,6 +88,21 @@ is_deeply(
     'optional_param keeps a present filter value'
 );
 
+is(
+    _controller_with_query( { command_id => 'hide-command-1' } )
+      ->command_id_param,
+    'hide-command-1',
+    'command_id_param reads the Forum-style command_id field'
+);
+is(
+    _controller_with_query( { idempotency_key => 'hide-command-2' } )
+      ->command_id_param,
+    'hide-command-2',
+    'command_id_param falls back to idempotency_key'
+);
+is( _controller_with_query( {} )->command_id_param,
+    q{}, 'command_id_param is empty when neither key is supplied' );
+
 done_testing();
 
 sub _assert_route {

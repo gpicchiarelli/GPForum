@@ -69,12 +69,12 @@ sub _duplicate_after_conflict {
     my ( $self, $input, $error ) = @_;
 
     if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     my $duplicate = $self->_open_duplicate_report($input);
     if ( !$duplicate ) {
-        die $error;
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     $self->_record_duplicate_audit( $input, $duplicate );

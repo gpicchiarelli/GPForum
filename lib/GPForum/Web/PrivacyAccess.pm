@@ -9,6 +9,12 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my $DEFAULT_LIMIT            => 25;
+const my $WRITE_RATE_LIMIT         => 20;
+const my $REQUEST_RATE_LIMIT       => 5;
+const my $WRITE_RATE_WINDOW        => 60;
+const my $WRITE_ACTION             => 'privacy.write';
+const my $REQUEST_ACTION           => 'privacy.request';
+const my $REVIEW_ACTION            => 'privacy.review';
 const my $PRIVACY_RESOURCE         => 'privacy_rights';
 const my $ACTION_MANAGE            => 'manage';
 const my $ACTION_VIEW              => 'view';
@@ -25,6 +31,40 @@ sub page_limit {
     my ( undef, $requested ) = @_;
 
     return $requested || $DEFAULT_LIMIT;
+}
+
+sub write_action {
+    return $WRITE_ACTION;
+}
+
+sub request_action {
+    return $REQUEST_ACTION;
+}
+
+sub review_action {
+    return $REVIEW_ACTION;
+}
+
+sub write_limit_for {
+    my ( undef, $action ) = @_;
+
+    if ( $action eq $REQUEST_ACTION ) {
+        return $REQUEST_RATE_LIMIT;
+    }
+
+    return $WRITE_RATE_LIMIT;
+}
+
+sub write_rate_input {
+    my ( $self, $input ) = @_;
+
+    return {
+        action         => $input->{action},
+        actor_id       => $input->{actor_id},
+        limit          => $self->write_limit_for( $input->{action} ),
+        scope          => 'privacy_http',
+        window_seconds => $WRITE_RATE_WINDOW,
+    };
 }
 
 sub manage_action {
@@ -123,15 +163,36 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Owns privacy list page limits, the C<privacy_rights>/C<manage> permission
-hash, the catalog C<view> action, review write-success statuses, workflow
-failure-status mapping including C<conflict>, Guard payloads for invalid and
-blocked actions, and the default dashboard redirect. It does
-not render HTTP responses or load deletion requests.
-L<GPForum::Controller::Privacy::Base> still checks CSRF, sessions,
-permissions, and Guard errors.
+Owns privacy list page limits, the C<privacy_http> write rate-limit hash
+with a tighter member-request cap,
+the C<privacy_rights>/C<manage> permission hash, the catalog C<view>
+action, review write-success statuses, workflow failure-status mapping
+including C<conflict>, Guard payloads for invalid and blocked actions, and
+the default dashboard redirect. It does not render HTTP responses or load
+deletion requests. L<GPForum::Controller::Privacy::Base> still checks CSRF,
+sessions, permissions, the rate limiter, and Guard errors.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 write_action
+
+Returns C<privacy.write>.
+
+=head2 request_action
+
+Returns C<privacy.request>.
+
+=head2 review_action
+
+Returns C<privacy.review>.
+
+=head2 write_limit_for
+
+Returns 5 for member export/deletion requests, otherwise 20.
+
+=head2 write_rate_input
+
+Returns the C<privacy_http> rate-limit arguments.
 
 =head2 page_limit
 
@@ -196,8 +257,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-CSRF, authentication, permission checks, and Guard rendering remain on
-L<GPForum::Controller::Privacy::Base>.
+CSRF, authentication, permission checks, rate-limiter calls, telemetry,
+and Guard rendering remain on L<GPForum::Controller::Privacy::Base>.
 
 =head1 AUTHOR
 

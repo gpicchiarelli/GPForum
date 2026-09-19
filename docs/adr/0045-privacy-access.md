@@ -20,6 +20,8 @@ Introduce `GPForum::Web::PrivacyAccess` behind the existing privacy HTTP
 base. It owns:
 
 - the default privacy list page size;
+- the `privacy_http` / `privacy.request` and `privacy.review` rate-limit
+  arguments (5 versus 20);
 - the staff-review `manage` action, catalog `view` action, and
   `privacy_rights` permission hash;
 - review write-success statuses (`deletion_approved`, `deletion_held`);
@@ -28,9 +30,9 @@ base. It owns:
 - the default `privacy_dashboard` redirect.
 
 `Privacy::Base` still checks CSRF, cookie-session identity, permission
-gates, and renders through `Web::Guard`. Public `limit_param`,
-`write_user_id`, `authorized_write_user_id`, and `write_failure` stay on the
-controller.
+gates, the rate limiter, records telemetry, and renders through
+`Web::Guard`. Public `limit_param`, `write_user_id`,
+`authorized_write_user_id`, and `write_failure` stay on the controller.
 
 ## Consequences
 

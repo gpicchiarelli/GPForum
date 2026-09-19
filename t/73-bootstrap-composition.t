@@ -223,6 +223,7 @@ sub _helper_names {
       gp_role_catalog
       gp_runtime
       gp_runtime_policy
+      gp_scheduled_jobs
       gp_schema
       gp_search_service
       gp_security_telemetry

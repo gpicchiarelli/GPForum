@@ -26,10 +26,10 @@ The normalized contract is:
 
 Controllers use this contract to map workflow outcomes to redirects, SSR form
 errors, or JSON responses. The workflow never performs HTTP rendering and never
-duplicates persistence logic owned by stores. Queue limits, default filters,
-permission-target hashes, and write-success statuses live on
-`Web::ModerationAccess`, including queue, content, and suspension
-action/resource names.
+duplicates persistence logic owned by stores. Queue limits, the
+`moderation_http` write rate-limit hash, default filters, permission-target
+hashes, and write-success statuses live on `Web::ModerationAccess`,
+including queue, content, and suspension action/resource names.
 
 Coverage lives in `t/95-moderation-workflow.t`, `t/130-moderation-event.t`,
 and `t/135-web-moderation-access.t` and includes success, invalid input, and

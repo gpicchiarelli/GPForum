@@ -11,7 +11,9 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Test::AdminWebServices;
+use GPForum::Test::AllowLimiter;
 use GPForum::Test::AllowPermissionGate;
+use GPForum::Test::DenyLimiter;
 use GPForum::Test::DenyPermissionGate;
 
 our $VERSION = '0.001';
@@ -21,6 +23,7 @@ const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
 const my $HTTP_NOT_FOUND    => 404;
+const my $HTTP_TOO_MANY     => 429;
 
 my $test = Test::Mojo->new('GPForum');
 _install_admin_fakes($test);
@@ -250,6 +253,18 @@ $test->post_ok(
 );
 $test->status_is($HTTP_NOT_FOUND);
 
+$test->app->helper(
+    gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
+$test->post_ok(
+    '/admin/roles' => { Accept => 'application/json' } => form => {
+        csrf_token => $csrf_token,
+        name       => 'TooFast',
+    }
+);
+$test->status_is($HTTP_TOO_MANY);
+$test->app->helper(
+    gp_rate_limiter => sub { return GPForum::Test::AllowLimiter->new; } );
+
 _get_json_ok( $test, '/admin/audit' );
 $test->status_is($HTTP_OK);
 $test->json_is( '/audit_rows/0/audit_id' => 'audit-1' );
@@ -292,6 +307,8 @@ sub _install_admin_fakes {
             return GPForum::Test::AllowPermissionGate->new;
         }
     );
+    $test_object->app->helper(
+        gp_rate_limiter => sub { return GPForum::Test::AllowLimiter->new; } );
 
     return;
 }
