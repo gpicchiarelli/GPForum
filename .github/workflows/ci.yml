@@ -97,7 +97,10 @@ jobs:
         run: script/gpforum-carton exec prove -lv t/integration/postgres.t
 
       - name: Run PostgreSQL concurrency integration test
-        run: carton exec prove -lv t/integration/postgres-concurrency.t
+        run: script/gpforum-carton exec prove -lv t/integration/postgres-concurrency.t
+
+      - name: Run PostgreSQL outbox reclaim integration test
+        run: script/gpforum-carton exec prove -lv t/integration/postgres-outbox-reclaim.t
 
       - name: Run tests
         run: script/gpforum-carton exec prove -lr t

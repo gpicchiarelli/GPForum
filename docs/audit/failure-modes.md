@@ -34,7 +34,7 @@ test fake.
 | FM-002 | Database timeout durante transazione | timeout EventLog/outbox/audit con rollback | transazione parziale o risposta 500 opaca | high | coperto da `t/86-engineering-correctness.t` |
 | FM-003 | Errore prima del commit | report, hide, approval rollback su outbox fail | side effect parziali in altre aree | high | coperto da `t/86-engineering-correctness.t` |
 | FM-004 | Errore dopo commit ma prima risposta HTTP | retry HTTP con stesso `command_id` | retry client può duplicare se manca idempotenza | high | coperto da `t/153-lost-response-retry.t` |
-| FM-005 | Worker crash dopo dispatch prima di mark done | stale lock riclamabile; handler skip su replay | side effect duplicato se handler non idempotente | medium | coperto da `t/150-outbox-handler-idempotency.t` e reclaim in `t/84-outbox-concurrent-dispatcher.t` |
+| FM-005 | Worker crash dopo dispatch prima di mark done | stale lock riclamabile; handler skip su replay | side effect duplicato se handler non idempotente | medium | coperto da `t/150-outbox-handler-idempotency.t`, reclaim fake in `t/84-outbox-concurrent-dispatcher.t`, e reclaim PG in `t/integration/postgres-outbox-reclaim.t` |
 | FM-006 | Minion non disponibile | fail-closed se abilitato; outbox-dispatch salta Minion | confusione deploy o worker assente | medium | coperto da `t/83-outbox-worker-wiring.t` |
 | FM-007 | Outbox retry esaurito | cancelled + dead-letter; permanent fail-fast; no re-claim | dead-letter non drenata in staging | medium | coperto da `t/13-outbox-dispatcher.t` e `docs/ops/dead-letters.md` |
 | FM-008 | Job duplicato privacy approval | mitigato da migration `024` e lock request; evidenza PG in `t/integration/postgres-concurrency.t` | doppia erasure job | closed | due approval concorrenti → un solo erasure job |
@@ -48,7 +48,8 @@ test fake.
 | outbox retry/dead-letter | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `docs/ops/dead-letters.md` |
 | worker wiring | `t/16-workers-phase.t`, `t/83-outbox-worker-wiring.t` |
 | handler crash/replay | `t/150-outbox-handler-idempotency.t` |
-| claim crash before dispatch | `t/84-outbox-concurrent-dispatcher.t` |
+| claim crash before dispatch | `t/84-outbox-concurrent-dispatcher.t`, `t/integration/postgres-outbox-reclaim.t` |
+| expired running lock reclaim (PG) | `t/integration/postgres-outbox-reclaim.t` |
 | forum rollback | `t/86-engineering-correctness.t` (thread, report, hide, approval) |
 | privacy erasure idempotente | `t/29-privacy-rights.t` |
 | realtime DB unavailable | `t/81-realtime-operational.t` |
@@ -72,6 +73,5 @@ test fake.
 
 ## Prossimi failure test prioritari
 
-1. Staging: lock outbox `running` scaduto e reclaim su PostgreSQL reale.
-2. Evidenza PostgreSQL concorrente ancora aperta per `event_idempotency_keys` e
+1. Evidenza PostgreSQL concorrente ancora aperta per `event_idempotency_keys` e
    reputation source unique (non coperti da `postgres-concurrency.t`).

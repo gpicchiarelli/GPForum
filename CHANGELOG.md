@@ -4,6 +4,13 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `t/integration/postgres-outbox-reclaim.t`: skippable-unless-DSN evidence
+  with two real PostgreSQL connections for expired `running` lock reclaim
+  (concurrent SKIP LOCKED race), fresh-lock hold, and claim-crash-then-reclaim;
+  wire it into CI beside the other PostgreSQL integration tests. Close the
+  residual OUT-002 / FM-005 reclaim evidence gap in the transactional and
+  failure-mode audits.
+
 - Require the OS system Perl (`/usr/bin/perl` / distro package) for bootstrap,
   Carton, make, CI, and docs. Refuse version managers and custom PREFIX
   installs via `script/gpforum-system-perl`; document distro packages and

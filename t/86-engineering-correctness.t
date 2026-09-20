@@ -797,6 +797,7 @@ sub _assert_outbox_dispatcher_source {
 
 sub _assert_outbox_concurrency_fixture {
     my $test               = _slurp('t/84-outbox-concurrent-dispatcher.t');
+    my $pg_reclaim         = _slurp('t/integration/postgres-outbox-reclaim.t');
     my $worker_counts_line = 'const my ' . chr $AT_SIGN_CODEPOINT;
     $worker_counts_line .= 'WORKER_COUNTS   => ( 2, 4, 8 );';
 
@@ -818,6 +819,16 @@ sub _assert_outbox_concurrency_fixture {
         $test,
         qr/retryable [ ] row [ ] schedules [ ] backoff/msx,
         'outbox concurrency test verifies retry/backoff'
+    );
+    like(
+        $pg_reclaim,
+qr/exactly [ ] one [ ] worker [ ] reclaims [ ] the [ ] expired [ ] running [ ] lock/msx,
+        'PostgreSQL outbox reclaim test covers concurrent stale-lock reclaim'
+    );
+    like(
+        $pg_reclaim,
+qr/second [ ] connection [ ] reclaims [ ] after [ ] locked_until [ ] expires/msx,
+        'PostgreSQL outbox reclaim test covers claim-crash then reclaim'
     );
 
     return;
