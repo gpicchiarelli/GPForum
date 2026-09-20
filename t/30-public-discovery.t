@@ -17,8 +17,9 @@ use GPForum::Service::Discovery::VisibilityPolicy;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 40;
+const my $EXPECTED_TESTS       => 45;
 const my $VISIBLE_THREAD_COUNT => 1;
+const my $LEGAL_PAGE_COUNT     => 3;
 const my $ROBOT_RULE_COUNT     => 6;
 
 plan tests => $EXPECTED_TESTS;
@@ -52,6 +53,18 @@ is(
     'https://forum.gp/t/thread-2/untitled',
     'canonical thread url handles missing slug'
 );
+is(
+    $canonical->legal_url('terms'),
+    'https://forum.gp/legal/terms',
+    'canonical terms url is stable'
+);
+is(
+    $canonical->legal_url('privacy'),
+    'https://forum.gp/legal/privacy',
+    'canonical privacy url is stable'
+);
+ok( !$canonical->legal_url('unknown'),
+    'canonical legal url rejects an unknown page' );
 is_deeply(
     $canonical->legacy_redirect(
         {
@@ -218,6 +231,14 @@ my $category_entries = $sitemap->category_entries(
 );
 is( scalar @{$category_entries},
     $VISIBLE_THREAD_COUNT, 'sitemap excludes private categories' );
+my $legal_entries = $sitemap->legal_entries;
+is( scalar @{$legal_entries},
+    $LEGAL_PAGE_COUNT, 'sitemap includes public legal pages' );
+is(
+    $legal_entries->[2]{loc},
+    'https://forum.gp/legal/terms',
+    'sitemap legal terms loc is canonical'
+);
 my $xml = $sitemap->render_xml($thread_entries);
 like( $xml, qr/<urlset/msx, 'sitemap xml renders urlset' );
 like(

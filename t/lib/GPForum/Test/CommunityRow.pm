@@ -7,7 +7,8 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-has data => sub { return {}; };
+has data    => sub { return {}; };
+has updates => sub { return []; };
 
 sub get_column {
     my ( $self, $column ) = @_;
@@ -18,6 +19,7 @@ sub get_column {
 sub update {
     my ( $self, $changes ) = @_;
 
+    push @{ $self->updates }, $changes;
     $self->data( { %{ $self->data }, %{$changes} } );
 
     return $self;

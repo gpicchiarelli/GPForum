@@ -47,7 +47,7 @@ per produzione pubblica.
 | Session security | GO | Sessioni server-side, revoca, scadenza, cookie flags e CSRF coperti da suite security | Revoca globale sessioni/device anomaly non avanzata | Accettabile per locale, estendere per beta |
 | Rate limiting | GO | PostgreSQL limiter, fallback telemetry e blocked audit coperti | Fallback local memory non cluster-wide | In beta usare PostgreSQL store e monitorare fallback |
 | Email lifecycle | PARTIAL | Reset password, cambio password, cambio email, token monouso, scadenza, CSRF, rate-limit, audit: PASS | Mail delivery non cablata, token non consegnabili agli utenti | Integrare mail adapter configurabile prima beta self-service |
-| Moderation workflow | PARTIAL | Report, hide/restore, lock/unlock, suspension e web tests PASS | Command-id/lock concorrente moderazione incompleto | Lock row e idempotency per azioni moderazione |
+| Moderation workflow | GO | Report, hide/restore, lock/unlock, assign/release/resolve/reverse, suspension e web tests PASS; queue e reverse replay da `command_log` | Evidenza PostgreSQL concorrente assente | Lock row e unique `command_id` restano sullo store hide/restore |
 | Privacy/export/deletion | PARTIAL GO | Privacy rights e web tests PASS; erasure job idempotency migration 024 | Concorrenza reale su approval/holds non provata | Test PostgreSQL concorrenti e restore evidence |
 | Audit trail integrity | PARTIAL | `record_hash` canonico e `pg_advisory_xact_lock` sul lookup | Evidenza PostgreSQL concorrente ancora assente | Due append concorrenti su staging |
 | Logging e metriche | PARTIAL GO | `/metrics` token app-level, DB query stats, outbox, readiness, OS runtime evidence | Metriche process-local non aggregate, alerting esterno assente | Scrape/alert staging, aggregazione o runbook |
@@ -106,10 +106,10 @@ per produzione pubblica.
 | `command_log` race concorrente | Chiuso in codice (catch unique → replay) | Evidenza PostgreSQL con due connessioni |
 | Bookmark/subscription check-then-insert | Chiuso in codice (unique + restore) | Evidenza PostgreSQL concorrente |
 | Report duplicati aperti | Chiuso: unique parziale `026` + catch | Evidenza PostgreSQL concorrente |
-| Moderation actions senza command-id/row lock uniforme | Store chiuso (`FOR UPDATE` + unique `command_id`) | Mint `command_id` HTTP sulle form |
+| Moderation actions senza command-id/row lock uniforme | Chiuso in codice (`FOR UPDATE` + unique `command_id` su hide/restore/lock/unlock; `command_log` su assign/release/resolve/reverse/suspend/revoke) | Evidenza PostgreSQL concorrente |
 | Failure mode DB down/timeout/write after commit | Parziale | Test end-to-end su write principali |
 | Audit chain non serializzata | Chiuso in codice (`pg_advisory_xact_lock`) | Evidenza PostgreSQL concorrente |
-| Privacy deletion/hold/export duplicabili | Aperto | Unique/replay nello stile degli altri store |
+| Privacy deletion/hold/export duplicabili | Chiuso in codice (`command_id` HTTP + replay richiesta/hold/export aperti) | Unique index e evidenza PostgreSQL concorrente |
 
 ### MEDIUM
 
@@ -118,7 +118,7 @@ per produzione pubblica.
 | Reactor backend locale Poll | Documentato | Verificare su staging Linux/FreeBSD, decidere EV/native policy |
 | Metriche process-local | Accettabile per singolo nodo | Aggregare scrape o documentare dashboard per worker multipli |
 | OS preflight degraded su Mac locale | Non blocca codice | Eseguire preflight su host target |
-| Minion opzionale | Direct outbox disponibile | Staging con `GPFORUM_MINION_ENABLED=1` se si vuole Minion |
+| Minion opzionale | Direct outbox disponibile e indipendente da Minion; web fail-closed se Minion è abilitato e il backend manca | Staging con `GPFORUM_MINION_ENABLED=1` solo con backend raggiungibile |
 | Coverage basso in alcuni moduli operativi | Gate totale verde | Aumentare coverage quando si toccano quei moduli |
 
 ### LOW

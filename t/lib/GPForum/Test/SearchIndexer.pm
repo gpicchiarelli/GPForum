@@ -25,6 +25,14 @@ sub index_post {
     return { ok => 1, entity_type => 'post', entity_id => $post_id };
 }
 
+sub index_thread_posts {
+    my ( $self, $thread_id ) = @_;
+
+    push @{ $self->calls }, [ thread_posts => $thread_id ];
+
+    return [ { ok => 1, entity_type => 'post', thread_id => $thread_id } ];
+}
+
 sub remove_post {
     my ( $self, $post_id ) = @_;
 
@@ -35,6 +43,19 @@ sub remove_post {
         removed     => 1,
         entity_type => 'post',
         entity_id   => $post_id
+    };
+}
+
+sub remove_thread {
+    my ( $self, $thread_id ) = @_;
+
+    push @{ $self->calls }, [ remove_thread => $thread_id ];
+
+    return {
+        ok          => 1,
+        removed     => 1,
+        entity_type => 'thread',
+        entity_id   => $thread_id
     };
 }
 

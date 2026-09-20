@@ -16,6 +16,10 @@ sub download {
     croak 'delivery down';
 }
 
+sub delete_linked {
+    croak 'store down';
+}
+
 1;
 
 __END__
@@ -34,8 +38,8 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Test double that inherits the attachment web fakes and throws on upload and
-download so workflow tests can assert C<failed> mapping.
+Test double that inherits the attachment web fakes and throws on upload,
+download, and delete so workflow tests can assert C<failed> mapping.
 
 =head1 SUBROUTINES/METHODS
 
@@ -46,6 +50,10 @@ Throws instead of storing an attachment.
 =head2 download
 
 Throws instead of delivering bytes.
+
+=head2 delete_linked
+
+Throws instead of deleting an attachment.
 
 =head1 DIAGNOSTICS
 

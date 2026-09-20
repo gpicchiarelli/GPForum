@@ -19,7 +19,9 @@ versioned DB lifecycle before data volume forced ad-hoc runbooks.
 Introduce `GPForum::Service::Operations::Profile` as versioned floors for
 `development`, `staging`, `production-small`, and `production-medium`.
 `production` aliases to `production-small`. Staging and production profiles
-require a rotated session secret.
+require a rotated session secret. Previous secrets listed in
+`GPFORUM_SESSION_SECRETS` still validate cookies; those environments reject
+the development default in that list.
 
 Introduce `GPForum::Service::Operations::PartitionLifecycle` to plan monthly
 partitions, recommend retention transitions, and emit restore evidence.

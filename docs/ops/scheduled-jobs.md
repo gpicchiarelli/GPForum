@@ -13,8 +13,9 @@ The runner also calls `Attachment::Store::cleanup_orphans` (policy on
 evidence only. It never executes `CREATE TABLE ... PARTITION OF` and never
 writes `partition_registry`.
 
-Every delete is a bounded batch. The default cap is 100 rows per table per
-run; the hard cap is 1000. There is no unbounded `DELETE`.
+`purge_dead_letters` deletes aged `dead_letters` rows. See
+`docs/ops/dead-letters.md` before treating purge as a drain of the live
+outbox queue.
 
 ## Timers shipped in-tree
 

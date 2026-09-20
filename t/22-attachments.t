@@ -19,6 +19,7 @@ use GPForum::Service::Attachment::UploadPipeline;
 use GPForum::Service::Attachment::Validator;
 use GPForum::Test::AttachmentResultSet;
 use GPForum::Test::AttachmentSchema;
+use GPForum::Test::CountingAttachmentStorage;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
 use GPForum::Test::WorkerSink;
@@ -156,6 +157,125 @@ is( $outbox->created->[0]{payload}{event_type},
 is( $outbox->created->[0]{payload}{domain_payload}{attachment_id},
     'generated-1', 'outbox payload carries domain payload' );
 
+my $same_intent = $store->create_intent($intent);
+ok( $same_intent->{skipped}, 'already-stored attachment intent is skipped' );
+is( scalar @{ $attachments->created },
+    1, 'already-stored intent does not insert another attachment' );
+is( scalar @{ $events->created },
+    1, 'already-stored intent does not insert another event' );
+$attachments->find_misses(1);
+my $raced_intent = $store->create_intent($intent);
+ok( $raced_intent->{skipped},
+    'unique attachment intent race reuses the object key' );
+is( scalar @{ $attachments->created },
+    1, 'unique attachment intent race does not insert another row' );
+is( scalar @{ $events->created },
+    1, 'unique attachment intent race does not insert another event' );
+
+my $id_attachments = GPForum::Test::AttachmentResultSet->new;
+my $id_events      = GPForum::Test::AttachmentResultSet->new;
+my $id_audits      = GPForum::Test::AttachmentResultSet->new;
+my $id_outbox      = GPForum::Test::AttachmentResultSet->new;
+my $id_schema      = GPForum::Test::AttachmentSchema->new(
+    resultsets => {
+        Attachment    => $id_attachments,
+        EventLog      => $id_events,
+        AuditLog      => $id_audits,
+        OutboxMessage => $id_outbox,
+    },
+);
+$id_attachments->create(
+    {
+        attachment_id => 'att-seed',
+        object_key    => 'attachments/user-other/att-seed',
+        owner_user_id => 'user-other',
+        state         => 'intent',
+    }
+);
+my $id_store = GPForum::Service::Attachment::Store->new(
+    schema     => $id_schema,
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+);
+my $id_created = $id_store->create_intent(
+    {
+        attachment_id     => 'att-seed',
+        byte_size         => 12,
+        checksum          => 'abc',
+        created_at        => '2026-05-23T12:00:00Z',
+        media_type        => 'image/jpeg',
+        object_key        => 'attachments/user-1/att-seed',
+        original_filename => 'photo.jpg',
+        owner_user_id     => 'user-1',
+        scan_status       => 'pending',
+        state             => 'intent',
+    }
+);
+ok( $id_created->{ok}, 'unique attachment id collision remints and persists' );
+ok( !$id_created->{skipped},
+    'unique attachment id collision does not return another attachment' );
+is( $id_attachments->created->[1]{attachment_id},
+    'generated-1', 'unique attachment id collision remints the id' );
+is(
+    $id_attachments->created->[1]{object_key},
+    'attachments/user-1/generated-1',
+    'unique attachment id collision remints the object key'
+);
+is( scalar @{ $id_attachments->created },
+    2, 'unique attachment id collision inserts this attachment' );
+
+my $leftover_attachments = GPForum::Test::AttachmentResultSet->new;
+my $leftover_events      = GPForum::Test::AttachmentResultSet->new;
+my $leftover_audits      = GPForum::Test::AttachmentResultSet->new;
+my $leftover_outbox      = GPForum::Test::AttachmentResultSet->new;
+$leftover_attachments->create(
+    {
+        attachment_id => 'generated-1',
+        object_key    => 'attachments/user-leftover/generated-1',
+        owner_user_id => 'user-leftover',
+        state         => 'intent',
+    }
+);
+$leftover_attachments->find_misses(1);
+my $leftover_store = GPForum::Service::Attachment::Store->new(
+    schema => GPForum::Test::AttachmentSchema->new(
+        resultsets => {
+            Attachment    => $leftover_attachments,
+            EventLog      => $leftover_events,
+            AuditLog      => $leftover_audits,
+            OutboxMessage => $leftover_outbox,
+        },
+    ),
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+);
+my $leftover_intent = $leftover_store->create_intent(
+    {
+        attachment_id     => 'generated-1',
+        byte_size         => 12,
+        checksum          => 'abc',
+        created_at        => '2026-05-23T12:00:00Z',
+        media_type        => 'image/jpeg',
+        object_key        => 'attachments/user-leftover/generated-1',
+        original_filename => 'photo.jpg',
+        owner_user_id     => 'user-leftover',
+        scan_status       => 'pending',
+        state             => 'intent',
+    }
+);
+ok( $leftover_intent->{skipped},
+    'leftover attachment id race reuses this attachment' );
+is( $leftover_intent->{attachment}->get_column('attachment_id'),
+    'generated-1', 'leftover attachment id race keeps this attachment' );
+is( scalar @{ $leftover_attachments->created },
+    1, 'leftover attachment id race does not insert a second attachment' );
+is( scalar @{ $leftover_events->created },
+    1, 'leftover attachment id race inserts the missing event' );
+is( scalar @{ $leftover_outbox->created },
+    1, 'leftover attachment id race inserts the missing outbox row' );
+is( scalar @{ $leftover_audits->created },
+    1, 'leftover attachment id race inserts the missing audit row' );
+
 my $link = $store->link_attachment(
     {
         attachment_id => 'generated-1',
@@ -168,6 +288,95 @@ is( $link->{attachment_id}, 'generated-1',
     'attachment link stores attachment' );
 is( $link->{target_type},        'post', 'attachment link stores target type' );
 is( scalar @{ $links->created }, 1,      'attachment link row is inserted' );
+
+my $linked_again = $store->link_attachment(
+    {
+        attachment_id => 'generated-1',
+        target_type   => 'post',
+        target_id     => 'post-1',
+    }
+);
+ok( $linked_again->{idempotent}, 'attachment link create is idempotent' );
+is( scalar @{ $links->created },
+    1, 'idempotent attachment link avoids a second row' );
+
+$links->skip_search(1);
+my $raced_link = $store->link_attachment(
+    {
+        attachment_id => 'generated-1',
+        target_type   => 'post',
+        target_id     => 'post-1',
+    }
+);
+ok( $raced_link->{idempotent},
+    'unique attachment link race reuses the target' );
+is( scalar @{ $links->created },
+    1, 'unique attachment link race does not insert a second row' );
+
+my $link_id_rs = GPForum::Test::AttachmentResultSet->new;
+$link_id_rs->create(
+    {
+        attachment_id      => 'att-other',
+        attachment_link_id => 'generated-1',
+        target_id          => 'post-other',
+        target_type        => 'post',
+    }
+);
+my $link_id_store = GPForum::Service::Attachment::Store->new(
+    schema => GPForum::Test::AttachmentSchema->new(
+        resultsets => { AttachmentLink => $link_id_rs },
+    ),
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+);
+my $id_link = $link_id_store->link_attachment(
+    {
+        attachment_id => 'att-ours',
+        target_id     => 'post-1',
+        target_type   => 'post',
+    }
+);
+ok( !$id_link->{idempotent},
+    'unique attachment link id collision does not reuse another link' );
+is( $id_link->{attachment_link_id},
+    'generated-2', 'unique attachment link id collision remints the id' );
+is( $id_link->{attachment_id},
+    'att-ours', 'unique attachment link id collision keeps this attachment' );
+is( scalar @{ $link_id_rs->created },
+    2, 'unique attachment link id collision inserts one retried link' );
+
+my $link_leftover_rs = GPForum::Test::AttachmentResultSet->new;
+$link_leftover_rs->create(
+    {
+        attachment_id      => 'att-leftover',
+        attachment_link_id => 'generated-1',
+        target_id          => 'post-leftover',
+        target_type        => 'post',
+    }
+);
+$link_leftover_rs->skip_search(1);
+my $link_leftover_store = GPForum::Service::Attachment::Store->new(
+    schema => GPForum::Test::AttachmentSchema->new(
+        resultsets => { AttachmentLink => $link_leftover_rs },
+    ),
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+);
+my $link_leftover = $link_leftover_store->link_attachment(
+    {
+        attachment_id => 'att-leftover',
+        target_id     => 'post-leftover',
+        target_type   => 'post',
+    }
+);
+ok( $link_leftover->{idempotent},
+    'leftover attachment link id race reuses this link' );
+is( $link_leftover->{attachment_link_id},
+    'generated-1', 'leftover attachment link id race keeps this link' );
+is( $link_leftover->{attachment_id},
+    'att-leftover', 'leftover attachment link id race keeps this attachment' );
+is( scalar @{ $link_leftover_rs->created },
+    1, 'leftover attachment link id race does not insert a second link' );
 
 my $uploaded = $store->mark_uploaded('generated-1');
 is( $uploaded->{state}, 'uploaded', 'attachment can be marked uploaded' );
@@ -249,6 +458,117 @@ ok(
 is( scalar @{ $variants->created },
     1, 'idempotent variant creation avoids duplicates' );
 
+$variants->skip_search(2);
+my $raced_variant = $store->add_variant(
+    {
+        attachment_id => 'generated-1',
+        variant_type  => 'thumbnail',
+        object_key    => 'attachments/user-1/generated-1/thumb',
+        media_type    => 'image/webp',
+        byte_size     => $VARIANT_BYTES,
+    }
+);
+ok( $raced_variant->{idempotent},
+    'unique attachment variant race reuses the variant type' );
+is( scalar @{ $variants->created },
+    1, 'unique attachment variant race does not insert a second row' );
+
+my $keyed_variant = $store->add_variant(
+    {
+        attachment_id => 'generated-1',
+        byte_size     => $VARIANT_BYTES,
+        media_type    => 'image/webp',
+        object_key    => 'attachments/user-1/generated-1/thumb',
+        variant_type  => 'preview',
+    }
+);
+ok( $keyed_variant->{idempotent}, 'variant object key reuse is idempotent' );
+is( scalar @{ $variants->created },
+    1, 'variant object key reuse does not insert another row' );
+$variants->skip_search(2);
+my $raced_key = $store->add_variant(
+    {
+        attachment_id => 'generated-1',
+        byte_size     => $VARIANT_BYTES,
+        media_type    => 'image/webp',
+        object_key    => 'attachments/user-1/generated-1/thumb',
+        variant_type  => 'preview',
+    }
+);
+ok( $raced_key->{idempotent},
+    'unique variant object-key race reuses the stored blob' );
+is( scalar @{ $variants->created },
+    1, 'unique variant object-key race does not insert a second row' );
+
+my $variant_id_rs = GPForum::Test::AttachmentResultSet->new;
+$variant_id_rs->create(
+    {
+        attachment_id         => 'att-other',
+        attachment_variant_id => 'generated-1',
+        object_key            => 'attachments/user-other/att-other/thumb',
+        variant_type          => 'thumbnail',
+    }
+);
+my $variant_id_store = GPForum::Service::Attachment::Store->new(
+    schema => GPForum::Test::AttachmentSchema->new(
+        resultsets => { AttachmentVariant => $variant_id_rs },
+    ),
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+);
+my $id_variant = $variant_id_store->add_variant(
+    {
+        attachment_id => 'att-ours',
+        byte_size     => $VARIANT_BYTES,
+        media_type    => 'image/webp',
+        object_key    => 'attachments/user-1/att-ours/thumb',
+        variant_type  => 'thumbnail',
+    }
+);
+ok( !$id_variant->{idempotent},
+    'unique variant id collision does not reuse another variant' );
+is( $id_variant->{attachment_variant_id},
+    'generated-2', 'unique variant id collision remints the id' );
+is( $id_variant->{attachment_id},
+    'att-ours', 'unique variant id collision keeps this attachment' );
+is( scalar @{ $variant_id_rs->created },
+    2, 'unique variant id collision inserts one retried variant' );
+
+my $variant_leftover_rs = GPForum::Test::AttachmentResultSet->new;
+$variant_leftover_rs->create(
+    {
+        attachment_id         => 'att-leftover',
+        attachment_variant_id => 'generated-1',
+        object_key            => 'attachments/user-leftover/att-leftover/thumb',
+        variant_type          => 'thumbnail',
+    }
+);
+$variant_leftover_rs->skip_search(2);
+my $variant_leftover_store = GPForum::Service::Attachment::Store->new(
+    schema => GPForum::Test::AttachmentSchema->new(
+        resultsets => { AttachmentVariant => $variant_leftover_rs },
+    ),
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+);
+my $variant_leftover = $variant_leftover_store->add_variant(
+    {
+        attachment_id => 'att-leftover',
+        byte_size     => $VARIANT_BYTES,
+        media_type    => 'image/webp',
+        object_key    => 'attachments/user-leftover/att-leftover/thumb',
+        variant_type  => 'thumbnail',
+    }
+);
+ok( $variant_leftover->{idempotent},
+    'leftover variant id race reuses this variant' );
+is( $variant_leftover->{attachment_variant_id},
+    'generated-1', 'leftover variant id race keeps this variant' );
+is( $variant_leftover->{attachment_id},
+    'att-leftover', 'leftover variant id race keeps this attachment' );
+is( scalar @{ $variant_leftover_rs->created },
+    1, 'leftover variant id race does not insert a second variant' );
+
 my $orphan = $attachments->create(
     {
         attachment_id     => 'orphan-1',
@@ -292,6 +612,44 @@ my $cleanup = $store->cleanup_orphans( { actor_id => 'worker', limit => 10 } );
 is( scalar @{ $cleanup->{deleted} }, 1,         'cleanup deletes one orphan' );
 is( $orphan->get_column('state'),    'deleted', 'cleanup soft-deletes orphan' );
 is( $active->get_column('state'), 'intent', 'cleanup keeps linked attachment' );
+
+my $author_delete = $store->delete_linked(
+    {
+        actor_id      => 'user-1',
+        attachment_id => 'active-1',
+        target_id     => 'post-1',
+        target_type   => 'post',
+    }
+);
+ok( $author_delete->{ok}, 'delete_linked removes a linked attachment' );
+is( $active->get_column('state'),
+    'deleted', 'delete_linked soft-deletes the linked attachment' );
+ok( !$author_delete->{idempotent},
+    'delete_linked is not a replay on the first delete' );
+
+my $author_replay = $store->delete_linked(
+    {
+        actor_id      => 'user-1',
+        attachment_id => 'active-1',
+        target_id     => 'post-1',
+        target_type   => 'post',
+    }
+);
+ok( $author_replay->{ok}, 'delete_linked replays an already-deleted row' );
+ok( $author_replay->{idempotent},
+    'delete_linked marks an already-deleted row as idempotent' );
+
+my $unlinked_delete = $store->delete_linked(
+    {
+        actor_id      => 'user-1',
+        attachment_id => 'active-1',
+        target_id     => 'post-missing',
+        target_type   => 'post',
+    }
+);
+ok( !$unlinked_delete->{ok}, 'delete_linked rejects a missing post link' );
+is( $unlinked_delete->{error},
+    'not_found', 'delete_linked names a missing post link' );
 
 my $sink = GPForum::Test::WorkerSink->new;
 my $scan_handler =
@@ -381,8 +739,10 @@ my $delivered = $delivery->download(
 ok( $delivered->{ok}, 'delivery returns public attachment' );
 is( $delivered->{content}, $PNG_BYTES, 'delivery reads stored object content' );
 
+my $media_storage =
+  GPForum::Test::CountingAttachmentStorage->new( inner => $pipeline_storage, );
 my $processor = GPForum::Service::Attachment::MediaProcessor->new(
-    storage => $pipeline_storage,
+    storage => $media_storage,
     store   => $pipeline_store,
 );
 my $processed =
@@ -390,17 +750,26 @@ my $processed =
 ok( $processed->{ok}, 'media processor handles image attachment' );
 is( $processed->{variant}{variant_type},
     'thumbnail', 'media processor creates thumbnail variant' );
+is( scalar @{ $media_storage->reads },
+    1, 'media processor reads the original object once' );
+my $replayed_media =
+  $processor->process( $pipeline_uploaded->{attachment}{attachment_id} );
+ok( $replayed_media->{skipped},
+    'already-applied thumbnail skip does not reread storage' );
 ok(
-    $processor->process( $pipeline_uploaded->{attachment}{attachment_id} )
-      ->{variant}{idempotent},
+    $replayed_media->{variant}{idempotent},
     'media processor retry is idempotent'
 );
+is( scalar @{ $media_storage->reads },
+    1, 'already-applied thumbnail does not reread the object' );
 is( scalar @{ $pipeline_fixtures->{variants}->created },
     1, 'media processor retry avoids duplicate variants' );
 
 my $scanning_worker = GPForum::Worker::Handler::AttachmentScanning->new(
-    storage => $pipeline_storage,
-    store   => $pipeline_store,
+    storage => GPForum::Test::CountingAttachmentStorage->new(
+        inner => $pipeline_storage,
+    ),
+    store => $pipeline_store,
 );
 my $event_count_before_retry =
   scalar @{ $pipeline_fixtures->{events}->created };
@@ -413,6 +782,8 @@ my $scan_retry = $scanning_worker->handle(
     }
 );
 ok( $scan_retry->{scan}{idempotent}, 'scanner retry is idempotent' );
+is( scalar @{ $scanning_worker->storage->reads },
+    0, 'already-scanned attachment does not reread the object' );
 is( scalar @{ $pipeline_fixtures->{events}->created },
     $event_count_before_retry, 'scanner retry avoids duplicate scan events' );
 

@@ -6,8 +6,11 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Id;
+
+use English qw(-no_match_vars);
 
 our $VERSION = '0.001';
 
@@ -16,6 +19,10 @@ const my $DEFAULT_HOOK_ORDER      => 100;
 const my $STATUS_INSTALLED        => 'installed';
 const my $STATUS_ENABLED          => 'enabled';
 const my $STATUS_DISABLED         => 'disabled';
+const my $ID_CONSTRAINT           => 'plugins_pkey';
+const my $NAME_CONSTRAINT         => 'plugins_name_version_key';
+const my $HOOK_ID_CONSTRAINT      => 'plugin_hooks_pkey';
+const my $HOOK_NAME_CONSTRAINT    => 'idx_plugin_hooks_plugin_name_unique';
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub { return GPForum::Service::Id->new; };
@@ -29,53 +36,448 @@ sub install {
     my ( $self, $manifest ) = @_;
 
     my $validation = $self->validator->validate($manifest);
-    return { ok => 0, errors => $validation->{errors} } if !$validation->{ok};
+    if ( !$validation->{ok} ) {
+        return { ok => 0, errors => $validation->{errors} };
+    }
 
-    my $plugin = _plugin_row( $self, $manifest );
+    return $self->_install_manifest($manifest);
+}
+
+sub _install_manifest {
+    my ( $self, $manifest ) = @_;
+
+    my $existing = $self->_existing_plugin($manifest);
+    if ($existing) {
+        return $self->_reuse_plugin( $existing, $manifest );
+    }
+
+    return $self->_insert_or_reuse_plugin($manifest);
+}
+
+sub _reuse_plugin {
+    my ( $self, $existing, $manifest ) = @_;
+
+    $self->_register_hooks( _column( $existing, 'plugin_id' ),
+        $manifest->{hooks} );
+
+    return _installed_hash( $existing, 1 );
+}
+
+sub _insert_or_reuse_plugin {
+    my ( $self, $manifest ) = @_;
+
+    my $ctx = {
+        manifest => $manifest,
+        plugin   => _plugin_row( $self, $manifest ),
+    };
+    my $created = eval { return $self->_create_plugin_rows($ctx); };
+    if ($created) {
+        return _installed_hash( $created, 0 );
+    }
+
+    return $self->_plugin_after_conflict( $ctx, $EVAL_ERROR );
+}
+
+sub _plugin_after_conflict {
+    my ( $self, $ctx, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_plugin_after_unique( $ctx, $error );
+}
+
+sub _plugin_after_unique {
+    my ( $self, $ctx, $error ) = @_;
+
+    if ( _plugin_id_conflict($error) ) {
+        return $self->_retry_or_reuse_plugin($ctx);
+    }
+    if ( _plugin_name_conflict($error) ) {
+        return $self->_reuse_plugin_row( $ctx->{manifest}, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _retry_or_reuse_plugin {
+    my ( $self, $ctx ) = @_;
+
+    my $stored = $self->_plugin_by_id( $ctx->{plugin}{plugin_id} );
+    if ( $self->_same_open_plugin( $stored, $ctx->{manifest} ) ) {
+        return $self->_reuse_plugin( $stored, $ctx->{manifest} );
+    }
+
+    return $self->_retry_plugin_id($ctx);
+}
+
+sub _same_open_plugin {
+    my ( $self, $stored, $manifest ) = @_;
+
+    if ( !$stored ) {
+        return 0;
+    }
+    if ( !_same_text( _column( $stored, 'name' ), $manifest->{name} ) ) {
+        return 0;
+    }
+
+    return _same_text( _column( $stored, 'version' ), $manifest->{version} );
+}
+
+sub _retry_plugin_id {
+    my ( $self, $ctx ) = @_;
+
+    $ctx->{plugin} =
+      { %{ $ctx->{plugin} }, plugin_id => $self->id_service->uuid, };
+    my $created = eval { return $self->_create_plugin_rows($ctx); };
+    if ($created) {
+        return _installed_hash( $created, 0 );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_plugin_row {
+    my ( $self, $manifest, $error ) = @_;
+
+    my $existing = $self->_existing_plugin($manifest);
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_reuse_plugin( $existing, $manifest );
+}
+
+sub _plugin_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _plugin_name_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $NAME_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _create_plugin_rows {
+    my ( $self, $ctx ) = @_;
+
+    my $plugin = $ctx->{plugin};
     $self->schema->resultset('Plugin')->create($plugin);
-    $self->_register_hooks( $plugin->{plugin_id}, $manifest->{hooks} );
+    $self->_register_hooks( $plugin->{plugin_id}, $ctx->{manifest}{hooks} );
 
-    return { ok => 1, plugin => $plugin };
+    return $plugin;
+}
+
+sub _plugin_by_id {
+    my ( $self, $plugin_id ) = @_;
+
+    my $search = $self->schema->resultset('Plugin')
+      ->search( { plugin_id => $plugin_id }, { rows => 1 }, );
+
+    return _first_row($search);
+}
+
+sub _same_text {
+    my ( $stored, $candidate ) = @_;
+
+    if ( !defined $stored || !defined $candidate ) {
+        return 0;
+    }
+
+    return $stored eq $candidate ? 1 : 0;
+}
+
+sub _existing_plugin {
+    my ( $self, $manifest ) = @_;
+
+    my $search = $self->schema->resultset('Plugin')->search(
+        {
+            name    => $manifest->{name},
+            version => $manifest->{version},
+        },
+        { rows => 1 },
+    );
+
+    return _first_row($search);
+}
+
+sub _first_row {
+    my ($search) = @_;
+
+    if ( $search && $search->can('single') ) {
+        return $search->single;
+    }
+
+    return;
+}
+
+sub _installed_hash {
+    my ( $plugin, $skipped ) = @_;
+
+    my $result = {
+        ok     => 1,
+        plugin => _plugin_hash($plugin),
+    };
+    if ($skipped) {
+        $result->{skipped} = 1;
+    }
+
+    return $result;
+}
+
+sub _plugin_hash {
+    my ($plugin) = @_;
+
+    return {
+        author                   => _column( $plugin, 'author' ),
+        capabilities             => _column( $plugin, 'capabilities' ),
+        compatible_gpforum_range =>
+          _column( $plugin, 'compatible_gpforum_range' ),
+        config_schema        => _column( $plugin, 'config_schema' ),
+        disabled_at          => _column( $plugin, 'disabled_at' ),
+        enabled_at           => _column( $plugin, 'enabled_at' ),
+        installed_at         => _column( $plugin, 'installed_at' ),
+        name                 => _column( $plugin, 'name' ),
+        plugin_id            => _column( $plugin, 'plugin_id' ),
+        required_permissions => _column( $plugin, 'required_permissions' ),
+        status               => _column( $plugin, 'status' ),
+        version              => _column( $plugin, 'version' ),
+    };
 }
 
 sub enable {
     my ( $self, $plugin_id ) = @_;
 
-    my $plugin = $self->schema->resultset('Plugin')->find($plugin_id);
-    $plugin->update(
-        {
-            status      => $STATUS_ENABLED,
-            enabled_at  => $self->clock->now_iso8601,
-            disabled_at => undef,
-        }
-    );
-
-    return { plugin_id => $plugin_id, status => $STATUS_ENABLED };
+    return $self->_set_status( $plugin_id, $STATUS_ENABLED );
 }
 
 sub disable {
     my ( $self, $plugin_id ) = @_;
 
-    my $plugin = $self->schema->resultset('Plugin')->find($plugin_id);
-    $plugin->update(
-        {
-            status      => $STATUS_DISABLED,
-            disabled_at => $self->clock->now_iso8601,
-        }
-    );
+    return $self->_set_status( $plugin_id, $STATUS_DISABLED );
+}
 
-    return { plugin_id => $plugin_id, status => $STATUS_DISABLED };
+sub _set_status {
+    my ( $self, $plugin_id, $status ) = @_;
+
+    my $plugin = $self->schema->resultset('Plugin')->find($plugin_id);
+    if ( _same_status( $plugin, $status ) ) {
+        return _status_hash( $plugin_id, $status, 1 );
+    }
+
+    $plugin->update( $self->_status_changes($status) );
+
+    return _status_hash( $plugin_id, $status, 0 );
+}
+
+sub _same_status {
+    my ( $plugin, $status ) = @_;
+
+    if ( _text( _column( $plugin, 'status' ) ) ne $status ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _status_changes {
+    my ( $self, $status ) = @_;
+
+    if ( $status eq $STATUS_ENABLED ) {
+        return {
+            disabled_at => undef,
+            enabled_at  => $self->clock->now_iso8601,
+            status      => $status,
+        };
+    }
+
+    return {
+        disabled_at => $self->clock->now_iso8601,
+        status      => $status,
+    };
+}
+
+sub _status_hash {
+    my ( $plugin_id, $status, $skipped ) = @_;
+
+    my $result = {
+        plugin_id => $plugin_id,
+        status    => $status,
+    };
+    if ($skipped) {
+        $result->{skipped} = 1;
+    }
+
+    return $result;
+}
+
+sub _column {
+    my ( $row, $name ) = @_;
+
+    if ( ref $row eq 'HASH' ) {
+        return $row->{$name};
+    }
+    if ( $row && $row->can('get_column') ) {
+        return $row->get_column($name);
+    }
+
+    return;
+}
+
+sub _text {
+    my ($value) = @_;
+
+    if ( defined $value ) {
+        return $value;
+    }
+
+    return q{};
 }
 
 sub _register_hooks {
     my ( $self, $plugin_id, $hooks ) = @_;
 
     for my $hook ( @{$hooks} ) {
-        my $row = _hook_row( $self, $plugin_id, $hook );
-        $self->schema->resultset('PluginHook')->create($row);
+        $self->_record_hook( $plugin_id, $hook );
     }
 
     return;
+}
+
+sub _record_hook {
+    my ( $self, $plugin_id, $hook ) = @_;
+
+    my $row = _hook_row( $self, $plugin_id, $hook );
+    if ( $self->_existing_hook($row) ) {
+        return;
+    }
+
+    return $self->_insert_or_reuse_hook($row);
+}
+
+sub _insert_or_reuse_hook {
+    my ( $self, $row ) = @_;
+
+    my $created = eval { return $self->_insert_hook($row); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_hook_after_conflict( $row, $EVAL_ERROR );
+}
+
+sub _hook_after_conflict {
+    my ( $self, $row, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_hook_after_unique( $row, $error );
+}
+
+sub _hook_after_unique {
+    my ( $self, $row, $error ) = @_;
+
+    if ( _hook_id_conflict($error) ) {
+        return $self->_hook_after_id_conflict($row);
+    }
+    if ( _hook_name_conflict($error) ) {
+        return $self->_reuse_hook_row( $row, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _hook_after_id_conflict {
+    my ( $self, $row ) = @_;
+
+    my $existing = $self->_existing_hook($row);
+    if ($existing) {
+        return $existing;
+    }
+
+    return $self->_retry_hook_id($row);
+}
+
+sub _retry_hook_id {
+    my ( $self, $row ) = @_;
+
+    $row->{hook_id} = $self->id_service->uuid;
+    my $created = eval { return $self->_insert_hook($row); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_hook_row {
+    my ( $self, $row, $error ) = @_;
+
+    my $existing = $self->_existing_hook($row);
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $existing;
+}
+
+sub _hook_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $HOOK_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _hook_name_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $HOOK_NAME_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _insert_hook {
+    my ( $self, $row ) = @_;
+
+    $self->schema->resultset('PluginHook')->create($row);
+
+    return $row;
+}
+
+sub _existing_hook {
+    my ( $self, $row ) = @_;
+
+    my $search = $self->schema->resultset('PluginHook')->search(
+        {
+            hook_name => $row->{hook_name},
+            plugin_id => $row->{plugin_id},
+        },
+        { rows => 1 },
+    );
+
+    return _first_row($search);
 }
 
 sub _plugin_row {

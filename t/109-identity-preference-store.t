@@ -47,6 +47,20 @@ is( $schema->users->[0]{preferred_locale},
     'it', 'update_preferred_locale persists the locale' );
 is( $schema->users->[0]{updated_at},
     $clock->now_iso8601, 'update_preferred_locale refreshes updated_at' );
+my $locale_updated_at = $schema->users->[0]{updated_at};
+$clock->iso8601('2026-05-23T13:00:00Z');
+my $locale_again = $store->update_preferred_locale(
+    {
+        preferred_locale => 'it',
+        user_id          => 'user-1',
+    }
+);
+ok( $locale_again->{skipped},
+    'update_preferred_locale skips an unchanged locale' );
+is( $schema->users->[0]{preferred_locale},
+    'it', 'unchanged locale stays persisted' );
+is( $schema->users->[0]{updated_at},
+    $locale_updated_at, 'unchanged locale does not restamp updated_at' );
 
 my $missing_locale = $store->update_preferred_locale(
     {
@@ -81,6 +95,20 @@ is(
     'high_contrast',
     'preferred_theme_for_user reads the stored theme'
 );
+my $theme_updated_at = $schema->users->[0]{updated_at};
+$clock->iso8601('2026-05-23T14:00:00Z');
+my $theme_again = $store->update_preferred_theme(
+    {
+        preferred_theme => 'high_contrast',
+        user_id         => 'user-1',
+    }
+);
+ok( $theme_again->{skipped},
+    'update_preferred_theme skips an unchanged theme' );
+is( $schema->users->[0]{preferred_theme},
+    'high_contrast', 'unchanged theme stays persisted' );
+is( $schema->users->[0]{updated_at},
+    $theme_updated_at, 'unchanged theme does not restamp updated_at' );
 
 my $missing_theme = $store->update_preferred_theme(
     {

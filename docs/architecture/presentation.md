@@ -27,14 +27,18 @@ GPForum keeps SSR presentation in three layers:
   using `Web::Guard`;
 - `GPForum::Web::DiscoveryAccess` owns sitemap/feed reader limits and
   crawler document rendering without using `Web::Guard` or `Web::Responder`;
+- `GPForum::Web::LegalAccess` owns public legal page names, section catalog
+  keys, and the shared `legal/page` template without using `Web::Guard`;
 - `GPForum::Web::ForumAccess` owns forum rate-limit hashes, report field
   errors, search page and autocomplete limits, list page defaults, community
   target types, community write-success statuses, search filter names, and
   integer limits without using `Web::Guard`;
 - `GPForum::Web::AttachmentAccess` owns attachment upload rate-limit hashes,
-  filename sanitizing, and Guard payloads without rendering responses;
-- `GPForum::Web::NotificationAccess` owns inbox/mention page limits and the
-  notification write rate-limit hash without using `Web::Guard`;
+  filename sanitizing, write-success flash keys, and Guard payloads without
+  rendering responses;
+- `GPForum::Web::NotificationAccess` owns inbox/mention page limits, the
+  notification write rate-limit hash, and write-success flash keys without
+  using `Web::Guard`;
 - `GPForum::Web::ModerationAccess` owns report-queue limits, default filters,
   the moderation write rate-limit hash, permission action and resource
   names, write-success statuses, and permission-target hashes without

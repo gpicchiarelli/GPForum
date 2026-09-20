@@ -58,6 +58,8 @@ is( $access->failure_status( { status => 'invalid' } ),
     'invalid', 'failure_status keeps invalid' );
 is( $access->failure_status( { status => 'forbidden' } ),
     'forbidden', 'failure_status keeps forbidden' );
+is( $access->failure_status( { status => 'conflict' } ),
+    'invalid', 'failure_status maps conflict to invalid' );
 ok( !defined $access->failure_status( { status => 'failed' } ),
     'failure_status ignores system failures' );
 ok( !defined $access->failure_status( { status => 'ok' } ),
@@ -88,6 +90,17 @@ is_deeply(
         title => 'Rate limited',
     },
     'rate_limited_payload keeps the attachment Guard extras'
+);
+is( $access->write_flash_key('uploaded'),
+    'forum.attachment_uploaded',
+    'write_flash_key maps upload to the flash key' );
+is( $access->write_flash_key('deleted'),
+    'forum.attachment_deleted',
+    'write_flash_key maps delete to the flash key' );
+is( $access->deleted_status, 'deleted', 'deleted_status exposes the status' );
+ok(
+    !defined $access->write_flash_key('unknown'),
+    'write_flash_key ignores an unmapped status'
 );
 
 done_testing();

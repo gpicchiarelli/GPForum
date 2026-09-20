@@ -26,6 +26,8 @@ __PACKAGE__->add_columns(
 GPForum::Schema::JsonColumn->inflate_json_columns(__PACKAGE__);
 
 __PACKAGE__->set_primary_key('import_failure_id');
+__PACKAGE__->add_unique_constraint( idx_import_failures_source_unique =>
+      [qw(import_job_id source_record_type source_record_id)] );
 __PACKAGE__->belongs_to(
     import_job => 'GPForum::Schema::Result::ImportJob',
     'import_job_id'

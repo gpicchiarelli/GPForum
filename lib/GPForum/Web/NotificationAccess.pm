@@ -13,6 +13,12 @@ const my $WRITE_RATE_LIMIT  => 120;
 const my $WRITE_RATE_WINDOW => 60;
 const my $STATUS_FAILED     => 'failed';
 const my $STATUS_NOT_FOUND  => 'not_found';
+const my $STATUS_READ       => 'read';
+const my $STATUS_ALL_READ   => 'all_read';
+const my %WRITE_FLASH => (
+    $STATUS_ALL_READ => 'notifications.marked_all_read',
+    $STATUS_READ     => 'notifications.marked_read',
+);
 
 sub page_limit {
     my ( undef, $requested ) = @_;
@@ -44,6 +50,27 @@ sub failure_status {
     my $status = $self->_status($result);
     if ( $status eq $STATUS_NOT_FOUND ) {
         return $status;
+    }
+
+    return;
+}
+
+sub marked_read_status {
+    return $STATUS_READ;
+}
+
+sub marked_all_read_status {
+    return $STATUS_ALL_READ;
+}
+
+sub write_flash_key {
+    my ( undef, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
+    if ( exists $WRITE_FLASH{$status} ) {
+        return $WRITE_FLASH{$status};
     }
 
     return;
@@ -95,6 +122,19 @@ True when the workflow status is C<failed>.
 =head2 failure_status
 
 Returns C<not_found> when that status is present.
+
+=head2 marked_read_status
+
+Returns C<read>.
+
+=head2 marked_all_read_status
+
+Returns C<all_read>.
+
+=head2 write_flash_key
+
+Returns the i18n catalog key for a successful HTML write, or undef when the
+status has no flash copy.
 
 =head1 DIAGNOSTICS
 

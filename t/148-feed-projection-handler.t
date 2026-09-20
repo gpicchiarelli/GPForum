@@ -22,6 +22,7 @@ use GPForum::Worker::Handler::FeedProjection;
 our $VERSION = '0.001';
 
 const my $PROJECTED_USERS => 2;
+const my $PROJECTED_ITEMS => 3;
 
 my $projector   = GPForum::Test::FeedProjector->new;
 my $subscribers = GPForum::Test::SubscriberLookup->new;
@@ -35,8 +36,20 @@ $posts->create(
         thread_id      => 'thread-9',
     }
 );
-my $schema =
-  GPForum::Test::CommunitySchema->new( resultsets => { Post => $posts }, );
+my $threads = GPForum::Test::CommunityResultSet->new;
+$threads->create(
+    {
+        author_user_id => 'user-author',
+        id             => 'thread-1',
+        thread_id      => 'thread-1',
+    }
+);
+my $schema = GPForum::Test::CommunitySchema->new(
+    resultsets => {
+        Post   => $posts,
+        Thread => $threads,
+    },
+);
 $subscribers->user_ids( [ 'user-author', 'user-follower', 'user-author' ] );
 
 my $handler = GPForum::Worker::Handler::FeedProjection->new(
@@ -55,10 +68,20 @@ ok( $handler->supports( { event_type => 'post.hidden' } ),
     'feed handler supports hidden posts' );
 ok( $handler->supports( { event_type => 'post.restored' } ),
     'feed handler supports restored posts' );
-ok(
-    !$handler->supports( { event_type => 'thread.hidden' } ),
-    'feed handler ignores missing thread.hidden events'
-);
+ok( $handler->supports( { event_type => 'post.updated' } ),
+    'feed handler supports updated posts' );
+ok( $handler->supports( { event_type => 'post.deleted' } ),
+    'feed handler supports deleted posts' );
+ok( $handler->supports( { event_type => 'post.undeleted' } ),
+    'feed handler supports undeleted posts' );
+ok( $handler->supports( { event_type => 'thread.deleted' } ),
+    'feed handler supports deleted threads' );
+ok( $handler->supports( { event_type => 'thread.hidden' } ),
+    'feed handler supports hidden threads' );
+ok( $handler->supports( { event_type => 'thread.restored' } ),
+    'feed handler supports restored threads' );
+ok( $handler->supports( { event_type => 'thread.undeleted' } ),
+    'feed handler supports undeleted threads' );
 ok( !$handler->supports( { event_type => 'profile.updated' } ),
     'feed handler ignores unrelated events' );
 
@@ -155,7 +178,70 @@ is( $projector->removals->[0]{item_type},
 is( $projector->removals->[0]{item_id},
     'post-hidden', 'hidden post removes the hidden item id' );
 is( scalar @{ $projector->calls },
-    3, 'hidden post does not project a replacement row' );
+    $PROJECTED_ITEMS, 'hidden post does not project a replacement row' );
+
+my $deleted = $handler->handle(
+    {
+        actor_id       => 'user-author',
+        aggregate_id   => 'post-hidden',
+        aggregate_type => 'post',
+        event_id       => 'event-deleted-1',
+        event_type     => 'post.deleted',
+    }
+);
+
+is( $deleted->{action}, 'feed.remove', 'deleted post task names feed removal' );
+is( $deleted->{item_id}, 'post-hidden', 'deleted post task stores post id' );
+is( $projector->removals->[-1]{item_id},
+    'post-hidden', 'deleted post removes the deleted item id' );
+is( scalar @{ $projector->calls },
+    $PROJECTED_ITEMS, 'deleted post does not project a replacement row' );
+
+my $deleted_thread = $handler->handle(
+    {
+        actor_id       => 'user-author',
+        aggregate_id   => 'thread-1',
+        aggregate_type => 'thread',
+        event_id       => 'event-thread-deleted-1',
+        event_type     => 'thread.deleted',
+    }
+);
+
+is( $deleted_thread->{action},
+    'feed.remove', 'deleted thread task names feed removal' );
+is( $deleted_thread->{item_type},
+    'thread', 'deleted thread task stores thread item type' );
+is( $deleted_thread->{item_id},
+    'thread-1', 'deleted thread task stores thread id' );
+is( $projector->removals->[-1]{item_type},
+    'thread', 'deleted thread removes thread feed items' );
+is( $projector->removals->[-1]{item_id},
+    'thread-1', 'deleted thread removes the deleted thread item id' );
+ok( $projector->removals->[-1]{cascade_posts},
+    'deleted thread also removes post feed items in the thread' );
+is( scalar @{ $projector->calls },
+    $PROJECTED_ITEMS, 'deleted thread does not project a replacement row' );
+
+my $hidden_thread = $handler->handle(
+    {
+        actor_id       => 'user-author',
+        aggregate_id   => 'thread-1',
+        aggregate_type => 'thread',
+        event_id       => 'event-thread-hidden-1',
+        event_type     => 'thread.hidden',
+    }
+);
+
+is( $hidden_thread->{action},
+    'feed.remove', 'hidden thread task names feed removal' );
+is( $hidden_thread->{item_type},
+    'thread', 'hidden thread task stores thread item type' );
+is( $projector->removals->[-1]{item_type},
+    'thread', 'hidden thread removes thread feed items' );
+ok( $projector->removals->[-1]{cascade_posts},
+    'hidden thread also removes post feed items in the thread' );
+is( scalar @{ $projector->calls },
+    $PROJECTED_ITEMS, 'hidden thread does not project a replacement row' );
 
 my $restored = $handler->handle(
     {
@@ -178,6 +264,56 @@ is_deeply(
 );
 is( $subscribers->calls->[-1]{target_id},
     'thread-9', 'restored post looks up subscribers from the stored thread' );
+
+my $undeleted = $handler->handle(
+    {
+        actor_id       => 'user-author',
+        aggregate_id   => 'post-hidden',
+        aggregate_type => 'post',
+        event_id       => 'event-undeleted-1',
+        event_type     => 'post.undeleted',
+    }
+);
+
+is( $undeleted->{action},
+    'feed.project', 'undeleted post task names feed projection' );
+is( $undeleted->{projected}{projected},
+    $PROJECTED_USERS, 'undeleted post projects to author and subscribers' );
+
+my $restored_thread = $handler->handle(
+    {
+        actor_id       => 'moderator-1',
+        aggregate_id   => 'thread-1',
+        aggregate_type => 'thread',
+        event_id       => 'event-thread-restored-1',
+        event_type     => 'thread.restored',
+    }
+);
+
+is( $restored_thread->{action},
+    'feed.project', 'restored thread task names feed projection' );
+is_deeply(
+    $projector->calls->[-1]{user_ids},
+    [ 'user-author', 'user-follower' ],
+    'restored thread uses the stored author, not the moderator'
+);
+is( $subscribers->calls->[-1]{target_id},
+    'thread-1', 'restored thread looks up subscribers from the thread id' );
+
+my $undeleted_thread = $handler->handle(
+    {
+        actor_id       => 'user-author',
+        aggregate_id   => 'thread-1',
+        aggregate_type => 'thread',
+        event_id       => 'event-thread-undeleted-1',
+        event_type     => 'thread.undeleted',
+    }
+);
+
+is( $undeleted_thread->{action},
+    'feed.project', 'undeleted thread task names feed projection' );
+is( $undeleted_thread->{projected}{projected},
+    $PROJECTED_USERS, 'undeleted thread projects to author and subscribers' );
 
 done_testing();
 

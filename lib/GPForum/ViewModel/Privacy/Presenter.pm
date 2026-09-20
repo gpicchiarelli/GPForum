@@ -13,12 +13,14 @@ sub dashboard {
     return {
         active_holds =>
           [ map { $self->retention_hold($_) } @{ $input{active_holds} || [] } ],
-        csrf_token        => $input{csrf_token},
-        deletion_requests => [
+        csrf_token          => $input{csrf_token},
+        deletion_command_id => $input{deletion_command_id},
+        deletion_requests   => [
             map { $self->deletion_request($_) }
               @{ $input{deletion_requests} || [] }
         ],
-        export_requests => [
+        export_command_id => $input{export_command_id},
+        export_requests   => [
             map { $self->export_request($_) } @{ $input{export_requests} || [] }
         ],
     };
@@ -52,6 +54,8 @@ sub deletion_request {
         completed_at        => $self->column( $row, 'completed_at' ),
         created_at          => $self->column( $row, 'created_at' ),
         deletion_request_id => $request_id,
+        approve_command_id  => $self->column( $row, 'approve_command_id' ),
+        hold_command_id     => $self->column( $row, 'hold_command_id' ),
         reason              => $self->column( $row, 'reason' ),
         request_type        => $self->column( $row, 'request_type' ),
         requester_user_id   => $self->column( $row, 'requester_user_id' ),
@@ -112,6 +116,7 @@ sub erasure_job {
     my $job_id = $self->column( $row, 'erasure_job_id' );
 
     return {
+        command_id          => $self->column( $row, 'command_id' ),
         completed_at        => $self->column( $row, 'completed_at' ),
         deletion_request_id => $self->column( $row, 'deletion_request_id' ),
         erasure_job_id      => $job_id,

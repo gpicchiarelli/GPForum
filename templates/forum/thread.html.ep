@@ -15,6 +15,41 @@
   % if ($thread->{locked_at}) {
     <%= include 'components/alert', tone => 'warning', message => t('forum.thread_locked') %>
   % }
+  % if ($thread->{deleted_at}) {
+    <p role="status"><%= t('forum.thread_deleted_notice') %></p>
+  % }
+  % if ($thread->{can_restore_thread}) {
+    <form class="forum-thread-restore" method="post" action="<%= url_for('thread_restore', thread_id => $thread->{thread_id}) %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $thread->{restore_thread_command_id} || q{} %>">
+      <button type="submit"><%= t('forum.restore_thread') %></button>
+    </form>
+  % }
+  % if ($thread->{can_edit_thread}) {
+    <form class="forum-thread-edit" method="post" action="<%= url_for('thread_edit', thread_id => $thread->{thread_id}) %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $thread->{edit_thread_command_id} || q{} %>">
+      <label for="thread-edit-title"><%= t('forum.thread_title') %></label>
+      <input id="thread-edit-title" name="title" type="text" required value="<%= $thread->{title} %>">
+      <button type="submit"><%= t('forum.save_title') %></button>
+    </form>
+    <form class="forum-thread-delete" method="post" action="<%= url_for('thread_delete', thread_id => $thread->{thread_id}) %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $thread->{delete_thread_command_id} || q{} %>">
+      <button type="submit"><%= t('forum.delete_thread') %></button>
+    </form>
+    <form class="forum-thread-move" method="post" action="<%= url_for('thread_move', thread_id => $thread->{thread_id}) %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $thread->{move_thread_command_id} || q{} %>">
+      <label for="thread-move-category"><%= t('search.category') %></label>
+      <select id="thread-move-category" name="category_id" required>
+        % for my $category (@{$thread->{move_categories} || []}) {
+          <option value="<%= $category->{category_id} %>"<%= ($category->{category_id} || q{}) eq ($thread->{category_id} || q{}) ? ' selected' : '' %>><%= $category->{title} %></option>
+        % }
+      </select>
+      <button type="submit"><%= t('forum.move_thread') %></button>
+    </form>
+  % }
   % if ($reading && $reading->{authenticated}) {
     <section aria-labelledby="reading-heading">
       <%= include 'components/section_header',
@@ -27,6 +62,7 @@
       % }
       <form method="post" action="<%= url_for('thread_mark_read', thread_id => $thread->{thread_id}) %>">
         <%= csrf_field %>
+        <input type="hidden" name="command_id" value="<%= $reading->{read_command_id} || q{} %>">
         <input type="hidden" name="last_read_position" value="<%= $reading->{last_visible_position} // 0 %>">
         <button type="submit"><%= t('forum.mark_visible_posts_read') %></button>
       </form>
@@ -42,11 +78,13 @@
       % if ($bookmark->{bookmarked}) {
         <form method="post" action="<%= url_for('thread_bookmark_remove', thread_id => $thread->{thread_id}) %>">
           <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{bookmark_remove_command_id} || q{} %>">
           <button type="submit"><%= t('community.remove_bookmark') %></button>
         </form>
       % } else {
         <form method="post" action="<%= url_for('thread_bookmark', thread_id => $thread->{thread_id}) %>">
           <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{bookmark_command_id} || q{} %>">
           <label for="bookmark-note"><%= t('community.bookmark_note') %></label>
           <input id="bookmark-note" name="note" type="text" value="">
           <button type="submit"><%= t('community.save_bookmark') %></button>
@@ -55,23 +93,27 @@
       % if ($subscription->{subscribed}) {
         <form method="post" action="<%= url_for('thread_unsubscribe', thread_id => $thread->{thread_id}) %>">
           <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{unsubscribe_command_id} || q{} %>">
           <button type="submit"><%= t('community.unfollow_thread') %></button>
         </form>
         % if (!$subscription->{muted}) {
           <form method="post" action="<%= url_for('thread_subscription_mute', thread_id => $thread->{thread_id}) %>">
             <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $engagement->{mute_command_id} || q{} %>">
             <button type="submit"><%= t('community.mute_notifications') %></button>
           </form>
         % }
       % } else {
         <form method="post" action="<%= url_for('thread_subscribe', thread_id => $thread->{thread_id}) %>">
           <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{subscribe_command_id} || q{} %>">
           <input type="hidden" name="preference" value="all">
           <button type="submit"><%= t('community.follow_thread') %></button>
         </form>
       % }
       <form method="post" action="<%= url_for('thread_report', thread_id => $thread->{thread_id}) %>">
         <%= csrf_field %>
+        <input type="hidden" name="command_id" value="<%= $engagement->{thread_report_command_id} || q{} %>">
         <label for="thread-report-reason"><%= t('moderation.report_thread') %></label>
         <select id="thread-report-reason" name="reason" required>
           <option value="spam"><%= t('moderation.reason.spam') %></option>
@@ -103,25 +145,62 @@
               % }
               <p><a href="#post-<%= $post->{post_id} %>"><%= t('forum.permalink') %></a></p>
               <div class="forum-post-body"><%== ui_trusted_html($post->{body}, 'forum.post.body') %></div>
+              % if ($post->{deleted_at}) {
+                <p role="status"><%= t('forum.post_deleted_notice') %></p>
+              % }
+              % if ($post->{can_edit}) {
+                <form class="forum-post-edit" method="post" action="<%= url_for('post_edit', post_id => $post->{post_id}) %>">
+                  <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $post->{edit_command_id} || q{} %>">
+                  <label for="post-<%= $post->{post_id} %>-edit-body"><%= t('forum.edit_body') %></label>
+                  <textarea id="post-<%= $post->{post_id} %>-edit-body" name="body_source" rows="8" required><%= $post->{body_source} %></textarea>
+                  <button type="submit"><%= t('forum.save_edit') %></button>
+                </form>
+              % }
+              % if ($post->{can_delete}) {
+                <form class="forum-post-delete" method="post" action="<%= url_for('post_delete', post_id => $post->{post_id}) %>">
+                  <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $post->{delete_command_id} || q{} %>">
+                  <button type="submit"><%= t('forum.delete_post') %></button>
+                </form>
+              % }
+              % if ($post->{can_restore}) {
+                <form class="forum-post-restore" method="post" action="<%= url_for('post_restore', post_id => $post->{post_id}) %>">
+                  <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $post->{restore_command_id} || q{} %>">
+                  <button type="submit"><%= t('forum.restore_post') %></button>
+                </form>
+              % }
               % if ($post->{attachments} && @{ $post->{attachments} }) {
                 <ul aria-label="<%= t('forum.post_attachments') %>">
                   % for my $attachment (@{ $post->{attachments} }) {
                     <li>
                       <a href="<%= url_for('attachment_download', attachment_id => $attachment->{attachment_id}) %>"><%= $attachment->{original_filename} %></a>
                       <span><%= $attachment->{media_type} %></span>
+                      % if ($post->{can_edit}) {
+                        <form method="post" action="<%= url_for('post_attachment_delete', post_id => $post->{post_id}, attachment_id => $attachment->{attachment_id}) %>">
+                          <%= csrf_field %>
+                          <input type="hidden" name="command_id" value="<%= $attachment->{delete_command_id} || q{} %>">
+                          <button type="submit"><%= t('forum.delete_attachment') %></button>
+                        </form>
+                      % }
                     </li>
                   % }
                 </ul>
               % }
-              % if ($engagement && $engagement->{authenticated}) {
+              % if ($post->{can_edit}) {
                 <form method="post" enctype="multipart/form-data" action="<%= url_for('post_attachment_upload', post_id => $post->{post_id}) %>">
                   <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $post->{upload_command_id} || q{} %>">
                   <label for="post-<%= $post->{post_id} %>-attachment"><%= t('form.attach_file') %></label>
                   <input id="post-<%= $post->{post_id} %>-attachment" name="attachment" type="file" required>
                   <button type="submit"><%= t('form.upload_attachment') %></button>
                 </form>
+              % }
+              % if ($engagement && $engagement->{authenticated}) {
                 <form method="post" action="<%= url_for('post_report', post_id => $post->{post_id}) %>">
                   <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $post->{report_command_id} || q{} %>">
                   <label for="post-<%= $post->{post_id} %>-report-reason"><%= t('moderation.report_post') %></label>
                   <select id="post-<%= $post->{post_id} %>-report-reason" name="reason" required>
                     <option value="spam"><%= t('moderation.reason.spam') %></option>
@@ -152,6 +231,7 @@
         ) %>
     % }
   </section>
+  % if (!$thread->{deleted_at}) {
   <section aria-labelledby="reply-heading">
     <%= include 'components/section_header',
       heading_id => 'reply-heading',
@@ -165,4 +245,5 @@
       <button type="submit"><%= t('forum.post_reply') %></button>
     </form>
   </section>
+  % }
 </article>

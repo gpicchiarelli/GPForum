@@ -64,6 +64,23 @@ sub export_requests_for_user {
     );
 }
 
+sub completed_export_for_user {
+    my ( $self, $user_id, $export_request_id ) = @_;
+
+    my $rows = $self->_search(
+        'ExportRequest',
+        {
+            export_request_id => $export_request_id,
+            requester_user_id => $user_id,
+            status            => 'completed',
+            subject_user_id   => $user_id,
+        },
+        { rows => 1 },
+    );
+
+    return $rows->[0];
+}
+
 sub pending_export_requests {
     my ( $self, $options ) = @_;
 

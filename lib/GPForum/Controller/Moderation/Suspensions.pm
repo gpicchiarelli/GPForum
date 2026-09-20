@@ -21,6 +21,7 @@ sub suspend_user {
         $self->gp_moderation_workflow->suspend_user(
             {
                 actor_user_id => $actor_user_id,
+                command_id    => $self->command_id_param,
                 reason        => $self->reason_param,
                 user_id       => $self->param('user_id'),
                 valid_to      => $self->optional_param('valid_to'),
@@ -44,6 +45,7 @@ sub revoke_suspension {
         $self->gp_moderation_workflow->revoke_suspension(
             {
                 actor_user_id => $actor_user_id,
+                command_id    => $self->command_id_param,
                 reason        => $self->reason_param,
                 suspension_id => $self->param('suspension_id'),
             }

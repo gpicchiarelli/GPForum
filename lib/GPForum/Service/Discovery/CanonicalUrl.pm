@@ -3,9 +3,16 @@ package GPForum::Service::Discovery::CanonicalUrl;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Mojo::Base -base;
 
 our $VERSION = '0.001';
+
+const my %LEGAL_PATH => (
+    cookies => '/legal/cookies',
+    privacy => '/legal/privacy',
+    terms   => '/legal/terms',
+);
 
 has base_url => 'https://gpforum.example';
 
@@ -28,6 +35,17 @@ sub thread_url {
         '/t/' . $thread->{thread_id} . q{/} . _slug( $thread->{slug} ) );
 }
 
+sub legal_url {
+    my ( $self, $page ) = @_;
+
+    my $path = _legal_path($page);
+    if ( !$path ) {
+        return;
+    }
+
+    return $self->_absolute($path);
+}
+
 sub legacy_redirect {
     my ( $self, $legacy_mapping ) = @_;
 
@@ -36,6 +54,19 @@ sub legacy_redirect {
         to     => $self->_absolute( $legacy_mapping->{native_path} ),
         status => 301,
     };
+}
+
+sub _legal_path {
+    my ($page) = @_;
+
+    if ( !defined $page ) {
+        return;
+    }
+    if ( !exists $LEGAL_PATH{$page} ) {
+        return;
+    }
+
+    return $LEGAL_PATH{$page};
 }
 
 sub _absolute {

@@ -26,6 +26,9 @@ has theme_updates    => sub { return []; };
 sub create_registration {
     my ( $self, $registration ) = @_;
 
+    push @{ $self->lifecycle_calls },
+      { input => { %{$registration} }, method => 'create_registration' };
+
     return {
         ok     => 0,
         errors => {
@@ -60,6 +63,12 @@ sub prepare {
 sub authenticate_login {
     my ( $self, $input ) = @_;
 
+    push @{ $self->lifecycle_calls },
+      {
+        input  => { identifier => $input->{identifier} },
+        method => 'authenticate_login'
+      };
+
     return { ok => 0, error => 'invalid_credentials' }
       if $self->invalid_login;
     return { ok => 0, error => 'unverified' }
@@ -83,6 +92,8 @@ sub update_preferred_locale {
     my ( $self, $input ) = @_;
 
     $self->preferred_locale( $input->{preferred_locale} );
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'update_preferred_locale' };
     push @{ $self->locale_updates }, { %{$input} };
 
     return {
@@ -104,6 +115,8 @@ sub update_preferred_theme {
     my ( $self, $input ) = @_;
 
     $self->preferred_theme( $input->{preferred_theme} );
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'update_preferred_theme' };
     push @{ $self->theme_updates }, { %{$input} };
 
     return {
@@ -124,6 +137,8 @@ sub preferred_theme_for_user {
 sub revoke_session {
     my ( $self, $input ) = @_;
 
+    push @{ $self->lifecycle_calls },
+      { input => { %{$input} }, method => 'revoke_session' };
     push @{ $self->revoked }, { %{$input} };
 
     return {

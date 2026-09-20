@@ -29,7 +29,26 @@ sub profile {
     }
 
     return $self->_render_profile(
-        $self->gp_identity_view_model->profile( $profile->{profile} ) );
+        $self->_profile_page( $profile->{profile} ) );
+}
+
+sub _profile_page {
+    my ( $self, $profile ) = @_;
+
+    $profile ||= {};
+    $profile->{report_command_id} = $self->_profile_report_command_id;
+
+    return $self->gp_identity_view_model->profile($profile);
+}
+
+sub _profile_report_command_id {
+    my ($self) = @_;
+
+    if ( !$self->session('user_id') ) {
+        return q{};
+    }
+
+    return $self->gp_id->uuid;
 }
 
 sub _render_profile {

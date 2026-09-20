@@ -13,6 +13,7 @@
     fields => $error_fields %>
   <form method="post" action="<%= url_for('register_submit') %>"<%== length $form_described_by ? ' aria-describedby="' . $form_described_by . '"' : q{} %>>
     <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= $command_id || q{} %>">
     % for my $field (@{$fields}) {
       <label for="<%= $field->{id} %>">
         <%= t($field->{label_key}) %>

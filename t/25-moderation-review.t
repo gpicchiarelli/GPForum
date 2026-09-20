@@ -76,6 +76,7 @@ $threads->create(
         thread_id        => 'thread-1',
         moderation_state => 'visible',
         locked_at        => undef,
+        hidden_at        => undef,
     }
 );
 $users->create(
@@ -314,8 +315,46 @@ my $same_lock = $action_store->lock_thread(
     }
 );
 ok( $same_lock->{ok}, 'same thread lock action succeeds' );
-is( $same_lock->{action}{metadata}{idempotent},
-    1, 'same thread lock action is marked idempotent' );
+ok( $same_lock->{skipped},
+    'same thread lock action is skipped when already locked' );
+ok( $same_lock->{idempotent}, 'same thread lock action is marked idempotent' );
+is(
+    $same_lock->{action}{moderation_action_id},
+    $locked->{action}{moderation_action_id},
+    'same thread lock returns the original action'
+);
+
+my $hidden_thread = $action_store->hide_thread(
+    {
+        actor_user_id => 'moderator-1',
+        thread_id     => 'thread-1',
+        reason        => 'off-topic',
+    }
+);
+ok( $hidden_thread->{ok}, 'thread hide action succeeds' );
+is( $hidden_thread->{action}{action_type},
+    'thread.hidden', 'hide thread action type stored' );
+is( $threads->find('thread-1')->get_column('moderation_state'),
+    'hidden', 'thread is hidden' );
+is( $threads->find('thread-1')->get_column('hidden_at'),
+    '2026-05-23T12:00:00Z', 'thread hidden timestamp is stored' );
+is( $threads->find('thread-1')->get_column('locked_at'),
+    '2026-05-23T12:00:00Z', 'thread hide keeps the lock timestamp' );
+
+my $restored_thread = $action_store->restore_thread(
+    {
+        actor_user_id => 'moderator-1',
+        thread_id     => 'thread-1',
+        reason        => 'cleared',
+    }
+);
+ok( $restored_thread->{ok}, 'thread restore action succeeds' );
+is( $restored_thread->{action}{action_type},
+    'thread.restored', 'restore thread action type stored' );
+is( $threads->find('thread-1')->get_column('moderation_state'),
+    'visible', 'thread is restored' );
+is( $threads->find('thread-1')->get_column('hidden_at'),
+    undef, 'thread hidden timestamp is cleared' );
 
 my $suspension_store = GPForum::Service::Moderation::SuspensionStore->new(
     schema     => $schema,
@@ -402,6 +441,7 @@ is(
     'revocation audit stores reason'
 );
 my $revocation_events = scalar @{ $event_log->created };
+$clock->iso8601('2026-05-23T13:00:00Z');
 my $same_revocation =
   $suspension_store->revoke_suspension( 'generated-1', 'moderator-2',
     'appeal accepted again' );
@@ -409,6 +449,33 @@ is( $same_revocation->{revoked_at},
     '2026-05-23T12:00:00Z', 'same revocation is idempotent' );
 is( scalar @{ $event_log->created },
     $revocation_events, 'same revocation does not emit duplicate event' );
+is( $users->find('user-2')->get_column('status'),
+    'active', 'already-revoked retry keeps an active user active' );
+is( $users->find('user-2')->get_column('updated_at'),
+    '2026-05-23T12:00:00Z',
+    'already-active user is not restamped on revoke retry' );
+
+$users->find('user-2')->update(
+    {
+        status     => 'suspended',
+        updated_at => '2026-05-23T11:00:00Z',
+    }
+);
+my $restore_retry =
+  $suspension_store->revoke_suspension( 'generated-1', 'moderator-2',
+    'appeal accepted again' );
+is( $restore_retry->{revoked_at},
+    '2026-05-23T12:00:00Z',
+    'incomplete restore retry keeps the original revoked timestamp' );
+is( $users->find('user-2')->get_column('status'),
+    'active', 'incomplete restore retry restores a still-suspended user' );
+is( $users->find('user-2')->get_column('updated_at'),
+    '2026-05-23T12:00:00Z',
+    'incomplete restore retry uses the original revoked timestamp' );
+is( scalar @{ $event_log->created },
+    $revocation_events,
+    'incomplete restore retry does not emit a second revoke event' );
+$clock->iso8601('2026-05-23T12:00:00Z');
 
 is(
     $suspension_store->create_suspension(
@@ -428,6 +495,54 @@ is(
     undef,
     'missing suspension cannot be revoked'
 );
+
+my $suspension_pk_users = GPForum::Test::ModerationResultSet->new;
+my $suspension_pk_rows =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+$suspension_pk_users->create(
+    {
+        id         => 'user-pk',
+        status     => 'active',
+        updated_at => '2026-05-23T11:00:00Z',
+    }
+);
+$suspension_pk_rows->create(
+    {
+        actor_user_id => 'moderator-1',
+        reason        => 'other',
+        suspension_id => 'generated-1',
+        user_id       => 'user-other',
+        valid_from    => '2026-05-23T12:00:00Z',
+    }
+);
+my $suspension_pk_store = GPForum::Service::Moderation::SuspensionStore->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog      => GPForum::Test::ModerationResultSet->new,
+            EventLog      => GPForum::Test::ModerationResultSet->new,
+            OutboxMessage => GPForum::Test::ModerationResultSet->new,
+            Suspension    => $suspension_pk_rows,
+            User          => $suspension_pk_users,
+        },
+    ),
+);
+my $suspension_pk = $suspension_pk_store->create_suspension(
+    {
+        actor_user_id => 'moderator-1',
+        reason        => 'pk remint',
+        user_id       => 'user-pk',
+    }
+);
+ok( $suspension_pk->{ok},
+    'unique suspension id collision remints and suspends' );
+is( $suspension_pk->{suspension}{suspension_id},
+    'generated-2', 'unique suspension id collision remints the id' );
+is( $suspension_pk->{suspension}{user_id},
+    'user-pk', 'unique suspension id collision keeps this user' );
+is( scalar @{ $suspension_pk_rows->created },
+    2, 'unique suspension id collision inserts this suspension' );
 
 $users->create(
     {

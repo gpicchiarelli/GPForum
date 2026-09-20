@@ -103,7 +103,7 @@ sub write_failure {
     my ( $self, $result ) = @_;
 
     if ( $self->moderation_access->is_failed($result) ) {
-        return $self->_system_failure;
+        return $self->_service_unavailable;
     }
 
     return $self->_mapped_failure($result);
@@ -116,11 +116,33 @@ sub _mapped_failure {
     if ( $status eq 'not_found' ) {
         return $self->_not_found( $result->{error} );
     }
+
+    return $self->_client_failure( $result, $status );
+}
+
+sub _client_failure {
+    my ( $self, $result, $status ) = @_;
+
     if ( $status eq 'invalid' ) {
         return $self->_bad_request( $result->{errors} );
     }
+    if ( $status eq 'conflict' ) {
+        return $self->_conflict( $result->{error} );
+    }
 
     return;
+}
+
+sub _conflict {
+    my ( $self, $error ) = @_;
+
+    return GPForum::Web::Guard->new->conflict(
+        $self,
+        {
+            error => $error || 'idempotency conflict',
+            title => 'Conflict',
+        }
+    );
 }
 
 sub moderation_action_response {
@@ -135,7 +157,7 @@ sub moderation_action_response {
         );
     }
 
-    return $self->redirect_to('moderation_reports');
+    return $self->_html_success( $status, 'moderation_reports' );
 }
 
 sub suspension_response {
@@ -150,7 +172,7 @@ sub suspension_response {
         );
     }
 
-    return $self->redirect_to('moderation_reports');
+    return $self->_html_success( $status, 'moderation_reports' );
 }
 
 sub action_response {
@@ -165,7 +187,7 @@ sub action_response {
         );
     }
 
-    return $self->redirect_to('moderation_reports');
+    return $self->_html_success( $status, 'moderation_reports' );
 }
 
 sub render_payload {
@@ -257,6 +279,27 @@ sub _current_user_id {
     return GPForum::Web::Access->new->user_id($self);
 }
 
+sub _html_success {
+    my ( $self, $status, $route ) = @_;
+
+    $self->_set_success_flash(
+        $self->moderation_access->write_flash_key($status) );
+
+    return $self->redirect_to($route);
+}
+
+sub _set_success_flash {
+    my ( $self, $flash_key ) = @_;
+
+    if ( !$flash_key ) {
+        return;
+    }
+
+    $self->flash( success => $self->t($flash_key) );
+
+    return;
+}
+
 sub _wants_json {
     my ($self) = @_;
 
@@ -341,10 +384,16 @@ sub _not_found {
     return GPForum::Web::Guard->new->not_found( $self, $error );
 }
 
-sub _system_failure {
+sub system_failure {
     my ($self) = @_;
 
     return GPForum::Web::Guard->new->system_failure($self);
+}
+
+sub _service_unavailable {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->service_unavailable($self);
 }
 
 sub _record_security_event {

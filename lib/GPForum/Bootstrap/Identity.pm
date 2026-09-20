@@ -25,14 +25,17 @@ sub register {
 
     my $application = $input{application};
 
-    _register_identity_helpers($application);
+    _register_identity_helpers( $application, $input{config} );
     _configure_session_guard($application);
 
     return;
 }
 
 sub _register_identity_helpers {
-    my ($application) = @_;
+    my ( $application, $config ) = @_;
+
+    my $touch_interval =
+      $config ? $config->session_touch_interval_seconds : undef;
 
     $application->helper(
         gp_password => sub { return GPForum::Service::Password->new; } );
@@ -52,7 +55,9 @@ sub _register_identity_helpers {
     $application->helper(
         gp_identity_store => sub {
             return GPForum::Service::Identity::Store->new(
-                schema => shift->gp_schema );
+                schema                         => shift->gp_schema,
+                session_touch_interval_seconds => $touch_interval,
+            );
         }
     );
     $application->helper(
@@ -68,10 +73,10 @@ sub _register_identity_helpers {
             my ($controller) = @_;
 
             return GPForum::Service::Identity::Workflow->new(
-                logger       => $controller->app->log,
-                mailer       => $controller->gp_identity_mailer,
-                registration => $controller->gp_registration,
-                store        => $controller->gp_identity_store,
+                command_idempotency => $controller->gp_command_idempotency,
+                logger              => $controller->app->log,
+                registration        => $controller->gp_registration,
+                store               => $controller->gp_identity_store,
             );
         }
     );

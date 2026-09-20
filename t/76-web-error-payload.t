@@ -110,6 +110,16 @@ is_deeply(
 );
 
 is_deeply(
+    $payload->unavailable,
+    {
+        error  => 'service unavailable',
+        status => 'unavailable',
+        title  => 'Service unavailable',
+    },
+    'unavailable payload is centralized'
+);
+
+is_deeply(
     $payload->conflict(
         error  => 'retention_hold_active',
         status => 'blocked',

@@ -42,6 +42,17 @@ sub completion_replay {
     };
 }
 
+sub hold_block_replay {
+    my ( undef, $erasure_job_id ) = @_;
+
+    return {
+        erasure_job_id => $erasure_job_id,
+        error          => 'retention_hold_active',
+        idempotent     => 1,
+        ok             => 0,
+    };
+}
+
 sub skipped {
     my ( undef, $reason ) = @_;
 
@@ -76,8 +87,8 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Owns job-done checks, idempotent approval/completion hashes, skip payloads,
-and the default legal-hold reason. It does not write rows.
+Owns job-done checks, idempotent approval/completion/hold-block hashes, skip
+payloads, and the default legal-hold reason. It does not write rows.
 L<GPForum::Service::Privacy::DeletionWorkflow> still locks requests and
 creates jobs. Event and audit hashes live in
 L<GPForum::Service::Privacy::Event>.
@@ -95,6 +106,11 @@ Returns the idempotent approved-job hash.
 =head2 completion_replay
 
 Returns the idempotent completed-job hash.
+
+=head2 hold_block_replay
+
+Returns the idempotent blocked-job hash when an active hold already stopped
+erasure. The job stays pending and retryable after the hold ends.
 
 =head2 skipped
 
@@ -122,7 +138,9 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Hold blocking and credential revocation stay on the workflow.
+Hold blocking and credential revocation stay on the workflow. A second
+C<complete_job> while the hold is still active replays without a second
+action or event.
 
 =head1 AUTHOR
 

@@ -20,20 +20,35 @@ has id_service => sub {
 has envelope => sub { return GPForum::Domain::EventEnvelope->new; };
 
 sub for_event {
-    my ( $self, $event ) = @_;
+    my ( $self, $event, $extras ) = @_;
 
-    return {
-        outbox_id       => $self->id_service->uuid,
-        event_id        => $event->{event_id},
-        queue           => $EVENT_QUEUE,
-        job_type        => $EVENT_JOB,
-        idempotency_key => _idempotency_key($event),
-        payload         => $self->envelope->transport_payload($event),
-        status          => 'pending',
-    };
+    return _with_payload_extras(
+        {
+            outbox_id       => $self->id_service->uuid,
+            event_id        => $event->{event_id},
+            queue           => $EVENT_QUEUE,
+            job_type        => $EVENT_JOB,
+            idempotency_key => idempotency_key_for($event),
+            payload         => $self->envelope->transport_payload($event),
+            status          => 'pending',
+        },
+        $extras
+    );
 }
 
-sub _idempotency_key {
+sub _with_payload_extras {
+    my ( $row, $extras ) = @_;
+
+    if ( !$extras ) {
+        return $row;
+    }
+
+    $row->{payload} = { %{ $row->{payload} }, %{$extras} };
+
+    return $row;
+}
+
+sub idempotency_key_for {
     my ($event) = @_;
 
     return join q{:}, 'outbox', $event->{event_type}, $event->{event_id};

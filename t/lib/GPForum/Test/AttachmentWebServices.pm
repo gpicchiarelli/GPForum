@@ -7,6 +7,7 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
+has delete_calls => sub { return []; };
 has upload_calls => sub { return []; };
 
 sub check {
@@ -72,6 +73,24 @@ sub download {
         media_type        => 'image/png',
         object_key        => 'attachments/user-1/attachment-1',
         original_filename => 'photo.png',
+    };
+}
+
+sub delete_linked {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->delete_calls }, $input;
+
+    if ( $input->{attachment_id} eq 'missing' ) {
+        return { error => 'not_found', ok => 0 };
+    }
+
+    return {
+        attachment => {
+            attachment_id => $input->{attachment_id},
+            state         => 'deleted',
+        },
+        ok => 1,
     };
 }
 

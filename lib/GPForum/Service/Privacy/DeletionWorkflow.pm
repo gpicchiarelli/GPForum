@@ -4,7 +4,9 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use GPForum::Infrastructure::EventRecorder;
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Privacy::Completion;
 use GPForum::Service::Privacy::Erasure;
@@ -14,13 +16,20 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $STATUS_PENDING   => 'pending';
-const my $STATUS_APPROVED  => 'approved';
-const my $STATUS_COMPLETED => 'completed';
-const my $STATUS_HELD      => 'held';
-const my $JOB_PENDING      => 'pending';
-const my $JOB_DONE         => 'done';
-const my $LEGAL_HOLD       => 'legal hold';
+const my $STATUS_PENDING         => 'pending';
+const my $STATUS_APPROVED        => 'approved';
+const my $STATUS_COMPLETED       => 'completed';
+const my $STATUS_HELD            => 'held';
+const my $JOB_PENDING            => 'pending';
+const my $JOB_DONE               => 'done';
+const my $LEGAL_HOLD             => 'legal hold';
+const my $DELETION_ID_CONSTRAINT => 'deletion_requests_pkey';
+const my $OPEN_DELETION_CONSTRAINT =>
+  'idx_deletion_requests_open_resource_unique';
+const my $ERASURE_ID_CONSTRAINT      => 'erasure_jobs_pkey';
+const my $ERASURE_REQUEST_CONSTRAINT => 'idx_erasure_jobs_request_unique';
+const my $ACTION_ID_CONSTRAINT       => 'deletion_actions_pkey';
+const my $ROW_LIMIT_ONE              => 1;
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub {
@@ -59,7 +68,7 @@ sub request_deletion {
 
     return $self->schema->txn_do(
         sub {
-            return $self->_create_deletion_request($input);
+            return $self->_create_or_reuse_deletion($input);
         }
     );
 }
@@ -112,6 +121,107 @@ sub hold_request {
     );
 }
 
+sub _create_or_reuse_deletion {
+    my ( $self, $input ) = @_;
+
+    $self->_lock_open_deletion($input);
+    my $existing = $self->_open_deletion_hash($input);
+    if ($existing) {
+        return $self->_finish_leftover_deletion($existing);
+    }
+
+    return $self->_insert_or_reuse_deletion($input);
+}
+
+sub _insert_or_reuse_deletion {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_create_deletion_request($input); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_reuse_after_conflict( $input, $EVAL_ERROR );
+}
+
+sub _reuse_after_conflict {
+    my ( $self, $input, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_deletion_after_unique( $input, $error );
+}
+
+sub _deletion_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _deletion_id_conflict($error) ) {
+        return $self->_deletion_after_id_conflict($input);
+    }
+    if ( _open_deletion_conflict($error) ) {
+        return $self->_reuse_deletion_row( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _deletion_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_open_deletion_hash($input);
+    if ($existing) {
+        return $self->_finish_leftover_deletion($existing);
+    }
+
+    return $self->_retry_deletion_id($input);
+}
+
+sub _retry_deletion_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_create_deletion_request($input); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_deletion_row {
+    my ( $self, $input, $error ) = @_;
+
+    my $existing = $self->_open_deletion_hash($input);
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_finish_leftover_deletion($existing);
+}
+
+sub _deletion_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $DELETION_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _open_deletion_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $OPEN_DELETION_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
 sub _create_deletion_request {
     my ( $self, $input ) = @_;
 
@@ -139,6 +249,50 @@ sub _create_deletion_request {
     return $request;
 }
 
+sub _finish_leftover_deletion {
+    my ( $self, $existing ) = @_;
+
+    $self->_ensure_deletion_write($existing);
+
+    return $existing;
+}
+
+sub _ensure_deletion_write {
+    my ( $self, $existing ) = @_;
+
+    if ( $self->_deletion_event_exists($existing) ) {
+        return;
+    }
+
+    return $self->_record_privacy_event_and_audit(
+        $self->events->requested(
+            {
+                actor_id => $existing->{requester_user_id},
+                request  => $existing,
+            }
+        )
+    );
+}
+
+sub _deletion_event_exists {
+    my ( $self, $existing ) = @_;
+
+    my $search = $self->schema->resultset('EventLog')->search(
+        {
+            idempotency_key => join( q{:},
+                'privacy.deletion_requested',
+                $existing->{deletion_request_id} ),
+        },
+        { rows => $ROW_LIMIT_ONE },
+    );
+
+    if ( $search->can('single') ) {
+        return $search->single;
+    }
+
+    return;
+}
+
 sub _approve_in_txn {
     my ( $self, $input ) = @_;
 
@@ -159,8 +313,7 @@ sub _approved_or_held {
 
     my $existing = $self->_existing_job_for( $input->{request_id} );
     if ($existing) {
-        return $self->completion->approval_replay( $input->{request_id},
-            $existing );
+        return $self->_finish_leftover_approval( $input, $existing );
     }
 
     return $self->_hold_or_create($input);
@@ -188,9 +341,43 @@ sub _hold_or_create {
 sub _create_approval {
     my ( $self, $input ) = @_;
 
-    $input->{request}->update( { status => $STATUS_APPROVED } );
+    $self->_set_request_status( $input->{request}, $STATUS_APPROVED );
+    my $inserted = $self->_insert_or_reuse_job($input);
+    if ( $inserted->{reused} ) {
+        return $self->_finish_leftover_approval( $input, $inserted->{job} );
+    }
+
+    return $self->_emit_approval( $input, $inserted->{job} );
+}
+
+sub _finish_leftover_approval {
+    my ( $self, $input, $job ) = @_;
+
+    if ( $self->_existing_approval_action( $input->{request_id} ) ) {
+        return $self->completion->approval_replay( $input->{request_id}, $job );
+    }
+
+    $self->_set_request_status( $input->{request}, $STATUS_APPROVED );
+    return $self->_emit_approval( $input, $job );
+}
+
+sub _existing_approval_action {
+    my ( $self, $request_id ) = @_;
+
+    return $self->_latest_row(
+        'DeletionAction',
+        {
+            action_type         => 'released',
+            deletion_request_id => $request_id,
+        },
+        'created_at',
+    );
+}
+
+sub _emit_approval {
+    my ( $self, $input, $job ) = @_;
+
     my $action = $self->_approval_action($input);
-    my $job    = $self->_create_erasure_job($input);
     $self->_record_privacy_event_and_audit(
         $self->events->approved(
             {
@@ -203,7 +390,7 @@ sub _create_approval {
 
     return {
         action     => $action,
-        job        => $job,
+        job        => $self->record->job_hash($job),
         ok         => 1,
         request_id => $input->{request_id},
     };
@@ -242,6 +429,95 @@ sub _create_erasure_job {
     return $job;
 }
 
+sub _insert_or_reuse_job {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_create_erasure_job($input); };
+    if ($created) {
+        return { job => $created, reused => 0 };
+    }
+
+    return $self->_job_after_conflict( $input, $EVAL_ERROR );
+}
+
+sub _job_after_conflict {
+    my ( $self, $input, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_job_after_unique( $input, $error );
+}
+
+sub _job_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _erasure_id_conflict($error) ) {
+        return $self->_job_after_id_conflict($input);
+    }
+    if ( _erasure_request_conflict($error) ) {
+        return $self->_reuse_erasure_job( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _job_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_existing_job_for( $input->{request_id} );
+    if ($existing) {
+        return { job => $existing, reused => 1 };
+    }
+
+    return $self->_retry_erasure_id($input);
+}
+
+sub _retry_erasure_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_create_erasure_job($input); };
+    if ($created) {
+        return { job => $created, reused => 0 };
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_erasure_job {
+    my ( $self, $input, $error ) = @_;
+
+    my $existing = $self->_existing_job_for( $input->{request_id} );
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return { job => $existing, reused => 1 };
+}
+
+sub _erasure_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ERASURE_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _erasure_request_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ERASURE_REQUEST_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
 sub _complete_in_txn {
     my ( $self, $input ) = @_;
 
@@ -251,10 +527,44 @@ sub _complete_in_txn {
         return;
     }
     if ( $self->completion->job_done($job) ) {
-        return $self->completion->completion_replay( $input->{erasure_job_id} );
+        return $self->_already_completed( $input, $job );
     }
 
     return $self->_complete_with_request( $input, $job );
+}
+
+sub _already_completed {
+    my ( $self, $input, $job ) = @_;
+
+    $self->_finish_completed_request($job);
+
+    return $self->completion->completion_replay( $input->{erasure_job_id} );
+}
+
+sub _finish_completed_request {
+    my ( $self, $job ) = @_;
+
+    my $request_id = $self->record->column( $job, 'deletion_request_id' );
+    my $request =
+      $self->schema->resultset('DeletionRequest')->find($request_id);
+    if ( !$request ) {
+        return;
+    }
+
+    $self->_complete_request_row( $request, $self->_job_completed_at($job) );
+
+    return;
+}
+
+sub _job_completed_at {
+    my ( $self, $job ) = @_;
+
+    my $completed_at = $self->record->column( $job, 'completed_at' );
+    if ( defined $completed_at && length $completed_at ) {
+        return $completed_at;
+    }
+
+    return $self->clock->now_iso8601;
 }
 
 sub _complete_with_request {
@@ -279,20 +589,58 @@ sub _erase_or_block {
     my $hold = $self->_active_hold_for_request( $input->{request} );
     if ($hold) {
         $input->{hold} = $hold;
-        return $self->_block_erasure($input);
+        return $self->_block_or_replay($input);
     }
 
     return $self->_finish_erasure($input);
 }
 
+sub _block_or_replay {
+    my ( $self, $input ) = @_;
+
+    if ( $self->_already_blocked($input) ) {
+        return $self->completion->hold_block_replay( $input->{erasure_job_id} );
+    }
+
+    return $self->_block_erasure($input);
+}
+
+sub _already_blocked {
+    my ( $self, $input ) = @_;
+
+    if ( !$self->_already_held( $input->{request} ) ) {
+        return;
+    }
+
+    return $self->_job_has_block_error( $input->{job} );
+}
+
 sub _block_erasure {
     my ( $self, $input ) = @_;
 
-    $input->{request}->update( { status => $STATUS_HELD } );
-    $input->{job}->update( { last_error => $self->events->block_error } );
+    my $held    = $self->_already_held( $input->{request} );
+    my $blocked = $self->_job_has_block_error( $input->{job} );
+    $self->_set_request_status( $input->{request}, $STATUS_HELD );
+    $self->_set_block_error( $input->{job} );
+    if ( $held || $blocked ) {
+        return $self->_blocked_result($input);
+    }
+
+    return $self->_emit_block($input);
+}
+
+sub _emit_block {
+    my ( $self, $input ) = @_;
+
     my $action = $self->_block_action($input);
     $self->_record_privacy_event_and_audit(
         $self->events->blocked( { %{$input}, action => $action } ) );
+
+    return $self->_blocked_result( $input, $action );
+}
+
+sub _blocked_result {
+    my ( $self, $input, $action ) = @_;
 
     return {
         action         => $action,
@@ -332,12 +680,7 @@ sub _finish_erasure {
             status       => $JOB_DONE,
         }
     );
-    $input->{request}->update(
-        {
-            completed_at => $input->{timestamp},
-            status       => $STATUS_COMPLETED,
-        }
-    );
+    $self->_complete_request_row( $input->{request}, $input->{timestamp} );
 
     return $self->_completed_result( $input, $anonymized );
 }
@@ -419,7 +762,67 @@ sub _lock_deletion_request_for_approval {
     return;
 }
 
+sub _lock_open_deletion {
+    my ( $self, $input ) = @_;
+
+    my $dbh = $self->_schema_dbh;
+    if ( !$dbh ) {
+        return;
+    }
+
+    $dbh->selectrow_array(
+'SELECT deletion_request_id FROM deletion_requests WHERE resource_type = ? AND resource_id = ? AND request_type = ? AND status IN (?, ?, ?) FOR UPDATE',
+        undef,
+        $input->{resource_type},
+        $input->{resource_id},
+        $input->{request_type},
+        $STATUS_PENDING,
+        $STATUS_APPROVED,
+        $STATUS_HELD,
+    );
+
+    return;
+}
+
+sub _open_deletion_hash {
+    my ( $self, $input ) = @_;
+
+    my $row = $self->_latest_row( 'DeletionRequest',
+        $self->_open_deletion_query($input), 'created_at', );
+    if ( !$row ) {
+        return;
+    }
+
+    return $self->record->request_hash($row);
+}
+
+sub _open_deletion_query {
+    my ( undef, $input ) = @_;
+
+    return {
+        request_type  => $input->{request_type},
+        resource_id   => $input->{resource_id},
+        resource_type => $input->{resource_type},
+        status        => {
+            -in => [ $STATUS_PENDING, $STATUS_APPROVED, $STATUS_HELD ],
+        },
+    };
+}
+
 sub _record_action {
+    my ( $self, $request_id, $input ) = @_;
+
+    my $created =
+      eval { return $self->_insert_deletion_action( $request_id, $input ); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_deletion_action_after_conflict( $request_id, $input,
+        $EVAL_ERROR );
+}
+
+sub _insert_deletion_action {
     my ( $self, $request_id, $input ) = @_;
 
     my $action = {
@@ -435,12 +838,141 @@ sub _record_action {
     return $action;
 }
 
+sub _deletion_action_after_conflict {
+    my ( $self, $request_id, $input, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+    if ( !_deletion_action_id_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_retry_deletion_action_id( $request_id, $input );
+}
+
+sub _retry_deletion_action_id {
+    my ( $self, $request_id, $input ) = @_;
+
+    my $created =
+      eval { return $self->_insert_deletion_action( $request_id, $input ); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _deletion_action_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ACTION_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
 sub _hold_request {
+    my ( $self, $input ) = @_;
+
+    if ( $self->_already_held( $input->{request} ) ) {
+        return $self->_held_snapshot($input);
+    }
+
+    return $self->_apply_hold($input);
+}
+
+sub _already_held {
+    my ( $self, $request ) = @_;
+
+    return $self->_same_request_status( $request, $STATUS_HELD );
+}
+
+sub _same_request_status {
+    my ( $self, $request, $status ) = @_;
+
+    my $held = $self->record->column( $request, 'status' ) || q{};
+    if ( $held eq $status ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub _set_request_status {
+    my ( $self, $request, $status ) = @_;
+
+    if ( $self->_same_request_status( $request, $status ) ) {
+        return;
+    }
+
+    $request->update( { status => $status } );
+
+    return;
+}
+
+sub _job_has_block_error {
+    my ( $self, $job ) = @_;
+
+    my $error = $self->record->column( $job, 'last_error' ) || q{};
+    if ( $error eq $self->events->block_error ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub _set_block_error {
+    my ( $self, $job ) = @_;
+
+    if ( $self->_job_has_block_error($job) ) {
+        return;
+    }
+
+    $job->update( { last_error => $self->events->block_error } );
+
+    return;
+}
+
+sub _complete_request_row {
+    my ( $self, $request, $timestamp ) = @_;
+
+    if ( $self->_same_request_status( $request, $STATUS_COMPLETED ) ) {
+        return;
+    }
+
+    $request->update(
+        {
+            completed_at => $timestamp,
+            status       => $STATUS_COMPLETED,
+        }
+    );
+
+    return;
+}
+
+sub _held_snapshot {
+    my ( $self, $input ) = @_;
+
+    my $request_id =
+      $self->record->column( $input->{request}, 'deletion_request_id' );
+
+    return {
+        action     => undef,
+        error      => 'retention_hold_active',
+        ok         => 0,
+        request_id => $request_id,
+    };
+}
+
+sub _apply_hold {
     my ( $self, $input ) = @_;
 
     my $request    = $input->{request};
     my $request_id = $self->record->column( $request, 'deletion_request_id' );
-    $request->update( { status => $STATUS_HELD } );
+    $self->_set_request_status( $request, $STATUS_HELD );
     my $action = $self->_hold_action( $input, $request_id );
     $self->_record_privacy_event_and_audit( $self->events->held($input) );
 

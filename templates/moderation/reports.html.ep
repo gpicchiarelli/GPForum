@@ -48,17 +48,25 @@
               </form>
             % }
             % if ($report->{target_type} eq 'thread') {
-              <form method="post" action="<%= url_for('moderation_thread_lock', thread_id => $report->{target_id}) %>">
+              <form method="post" action="<%= url_for('moderation_thread_hide', thread_id => $report->{target_id}) %>">
                 <%= csrf_field %>
                 <input type="hidden" name="command_id" value="<%= $report->{command_id} || q{} %>">
                 <label for="<%= $report->{ui}{thread_reason_id} %>"><%= t('common.reason') %></label>
                 <input id="<%= $report->{ui}{thread_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
+                <button type="submit"><%= t('moderation.hide_thread') %></button>
+              </form>
+              <form method="post" action="<%= url_for('moderation_thread_lock', thread_id => $report->{target_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $report->{command_id} || q{} %>">
+                <label for="<%= $report->{ui}{thread_lock_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $report->{ui}{thread_lock_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
                 <button type="submit"><%= t('moderation.lock_thread') %></button>
               </form>
             % }
             % if ($report->{target_type} eq 'user') {
               <form method="post" action="<%= url_for('moderation_user_suspend', user_id => $report->{target_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $report->{suspend_command_id} || q{} %>">
                 <label for="<%= $report->{ui}{user_reason_id} %>"><%= t('common.reason') %></label>
                 <input id="<%= $report->{ui}{user_reason_id} %>" name="reason" value="<%= $report->{reason} %>" required>
                 <label for="<%= $report->{ui}{valid_to_id} %>"><%= t('moderation.valid_to') %></label>
@@ -68,16 +76,19 @@
             % }
             <form method="post" action="<%= url_for('moderation_report_assign', report_id => $report->{report_id}) %>">
               <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $report->{assign_command_id} || q{} %>">
               <button type="submit"><%= t('moderation.assign_to_me') %></button>
             </form>
             % if ($report->{assigned_moderator_user_id}) {
               <form method="post" action="<%= url_for('moderation_report_release', report_id => $report->{report_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $report->{release_command_id} || q{} %>">
                 <button type="submit"><%= t('moderation.release_claim') %></button>
               </form>
             % }
             <form method="post" action="<%= url_for('moderation_report_resolve', report_id => $report->{report_id}) %>">
               <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $report->{resolve_command_id} || q{} %>">
               <label for="<%= $report->{ui}{resolution_id} %>"><%= t('moderation.resolution') %></label>
               <select id="<%= $report->{ui}{resolution_id} %>" name="resolution" required>
                 <option value="no_action"><%= ui_label('moderation.resolution', 'no_action') %></option>

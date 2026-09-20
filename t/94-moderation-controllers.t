@@ -32,6 +32,8 @@ ok( $GPForum::Controller::Moderation::Queue::{assign_report},
     'queue controller owns report assignment' );
 ok( $GPForum::Controller::Moderation::Actions::{hide_post},
     'action controller owns post hiding' );
+ok( $GPForum::Controller::Moderation::Actions::{hide_thread},
+    'action controller owns thread hiding' );
 ok( $GPForum::Controller::Moderation::Suspensions::{suspend_user},
     'suspension controller owns user suspension' );
 isa_ok(
@@ -64,6 +66,10 @@ _assert_route( $app, 'moderation_post_hide',
     'Moderation::Actions', 'hide_post' );
 _assert_route( $app, 'moderation_thread_lock',
     'Moderation::Actions', 'lock_thread' );
+_assert_route( $app, 'moderation_thread_hide',
+    'Moderation::Actions', 'hide_thread' );
+_assert_route( $app, 'moderation_thread_restore',
+    'Moderation::Actions', 'restore_thread' );
 _assert_route( $app, 'moderation_action_reverse',
     'Moderation::Actions', 'reverse_action' );
 _assert_route( $app, 'moderation_user_suspend',

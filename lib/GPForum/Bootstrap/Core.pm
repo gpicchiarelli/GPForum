@@ -20,7 +20,7 @@ sub register {
     my $application = $input{application};
     my $config      = $input{config};
 
-    $application->secrets( [ $config->session_secret ] );
+    $application->secrets( $config->signing_secrets );
     $application->mode( $config->environment );
     _configure_static_assets($application);
 

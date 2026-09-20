@@ -32,9 +32,13 @@ Browser-facing responses set security headers through
 - locked-down `Permissions-Policy`;
 - CSP with explicit `default-src`, `script-src`, `style-src`, `img-src`,
   `font-src`, `connect-src`, `base-uri`, `form-action`, `frame-ancestors`, and
-  `object-src`.
+  `object-src`;
+- `Strict-Transport-Security` with a one-year `includeSubDomains` max-age on
+  staging and production profiles.
 
-Sessions use SameSite Lax and are Secure in production.
+Sessions use SameSite Lax. Staging and production cookies are Secure.
+`GPFORUM_SESSION_SECRETS` keeps previous Mojolicious secrets valid while
+the current `GPFORUM_SESSION_SECRET` signs new cookies.
 
 ## SSR rendering baseline
 

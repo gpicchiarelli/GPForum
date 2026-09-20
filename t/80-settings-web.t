@@ -10,6 +10,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::IdentitySecurityAudit;
 use GPForum::Test::IdentityStore;
 use GPForum::Test::NotificationPreferenceStore;
@@ -44,7 +45,12 @@ subtest 'settings persist locale theme and notification preferences' => sub {
     $test->status_is($HTTP_OK);
     $test->text_is( 'h1' => 'Settings' );
     $test->element_exists('form[action="/settings"]');
+    $test->element_exists('form[action="/settings"] input[name="command_id"]');
     $test->element_exists('form.identity-form a[href="/settings"]');
+    $test->element_exists(
+        'form[action="/settings/password"] input[name="command_id"]');
+    $test->element_exists(
+        'form[action="/settings/email"] input[name="command_id"]');
     $test->element_exists('select[name="locale"] option[value="it"]');
     $test->element_exists('select[name="theme"] option[value="high_contrast"]');
     $test->element_exists('input[name="notification_in_app_enabled"][checked]');
@@ -53,8 +59,10 @@ subtest 'settings persist locale theme and notification preferences' => sub {
         'input[name="notification_digest_enabled"][checked]');
 
     my $csrf_token = _csrf_token($test);
+    my $command_id = _command_id_in_form( $test, '/settings' );
     $test->post_ok(
         '/settings' => form => {
+            command_id                           => $command_id,
             csrf_token                           => $csrf_token,
             locale                               => 'it',
             notification_digest_digest_frequency => 'weekly',
@@ -108,6 +116,11 @@ sub _authenticated_settings_app {
     my $test             = Test::Mojo->new('GPForum');
     $test->app->helper( gp_identity_store => sub { return $identity_store; } );
     $test->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
+    $test->app->helper(
         gp_identity_security_audit => sub {
             return GPForum::Test::IdentitySecurityAudit->new;
         }
@@ -119,9 +132,11 @@ sub _authenticated_settings_app {
     );
 
     $test->get_ok('/login');
-    my $login_token = _csrf_token($test);
+    my $login_token      = _csrf_token($test);
+    my $login_command_id = _command_id($test);
     $test->post_ok(
         '/login' => form => {
+            command_id => $login_command_id,
             csrf_token => $login_token,
             identifier => 'giacomo_forum',
             password   => 'correct horse battery staple',
@@ -139,6 +154,31 @@ sub _csrf_token {
     my ($token) = $body =~ /name="csrf_token" [^>]+ value="([^"]+)"/msx;
 
     return $token;
+}
+
+sub _command_id {
+    my ($test_object) = @_;
+
+    my $body = $test_object->tx->res->body;
+    my ($command_id) = $body =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
+}
+
+sub _command_id_in_form {
+    my ( $test_object, $form_action ) = @_;
+
+    const my $FORM_SNIPPET => 800;
+    my $body  = $test_object->tx->res->body;
+    my $start = index $body, qq{action="$form_action"};
+    if ( $start < 0 ) {
+        return;
+    }
+
+    my $snippet      = substr $body, $start, $FORM_SNIPPET;
+    my ($command_id) = $snippet =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
 }
 
 1;

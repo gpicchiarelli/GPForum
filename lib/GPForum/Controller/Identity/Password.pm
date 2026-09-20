@@ -15,7 +15,8 @@ sub password_reset_request_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/password_reset_request',
+        template   => 'identity/password_reset_request',
+        command_id => $self->gp_id->uuid,
         %{ $self->gp_identity_view_model->password_reset_request_form },
     );
 }
@@ -35,7 +36,8 @@ sub password_reset_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/password_reset_form',
+        template   => 'identity/password_reset_form',
+        command_id => $self->gp_id->uuid,
         %{
             $self->gp_identity_view_model->password_reset_form(
                 values => { token => $self->param('token') || q{} },
@@ -71,6 +73,7 @@ sub _submit_password_reset_request {
 
     my $result = $self->gp_identity_workflow->request_password_reset(
         {
+            command_id      => $self->command_id_param,
             identifier      => $self->param('identifier'),
             request_address => $self->request_address,
         }
@@ -79,7 +82,7 @@ sub _submit_password_reset_request {
         return $self->_password_reset_request_form_error( $result->{errors} );
     }
     if ( !$result->{ok} ) {
-        return $self->identity_system_failure;
+        return $self->identity_write_failure($result);
     }
 
     return $self->render(
@@ -93,8 +96,9 @@ sub _submit_password_reset {
 
     my $result = $self->gp_identity_workflow->reset_password(
         {
-            password => $self->param('password'),
-            token    => $self->param('token'),
+            command_id => $self->command_id_param,
+            password   => $self->param('password'),
+            token      => $self->param('token'),
         }
     );
     if ( $result->{status} eq 'invalid' ) {
@@ -102,7 +106,7 @@ sub _submit_password_reset {
             $self->_reset_form_errors($result) );
     }
     if ( !$result->{ok} ) {
-        return $self->identity_system_failure;
+        return $self->identity_write_failure($result);
     }
 
     return $self->render(
@@ -121,16 +125,14 @@ sub _submit_password_change {
 
     my $result = $self->gp_identity_workflow->change_password(
         {
+            command_id       => $self->command_id_param,
             current_password => $self->param('current_password'),
             new_password     => $self->param('new_password'),
             user_id          => $user_id,
         }
     );
-    if ( $result->{status} eq 'failed' ) {
-        return $self->identity_system_failure;
-    }
     if ( !$result->{ok} ) {
-        return $self->identity_bad_request;
+        return $self->identity_write_failure($result);
     }
 
     $self->flash( success => $self->t('settings.password_changed') );
@@ -151,8 +153,9 @@ sub _password_reset_request_form_error {
     my ( $self, $errors ) = @_;
 
     return $self->render(
-        template => 'identity/password_reset_request',
-        status   => $HTTP_BAD_REQUEST,
+        template   => 'identity/password_reset_request',
+        command_id => $self->gp_id->uuid,
+        status     => $HTTP_BAD_REQUEST,
         %{
             $self->gp_identity_view_model->password_reset_request_form(
                 errors => $errors,
@@ -166,8 +169,9 @@ sub _render_password_reset_error {
     my ( $self, $errors ) = @_;
 
     return $self->render(
-        template => 'identity/password_reset_form',
-        status   => $HTTP_BAD_REQUEST,
+        template   => 'identity/password_reset_form',
+        command_id => $self->gp_id->uuid,
+        status     => $HTTP_BAD_REQUEST,
         %{
             $self->gp_identity_view_model->password_reset_form(
                 errors => $errors,

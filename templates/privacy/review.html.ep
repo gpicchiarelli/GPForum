@@ -25,6 +25,7 @@
 
               <form method="post" action="<%= url_for('privacy_deletion_approve', request_id => $request->{deletion_request_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $request->{approve_command_id} || q{} %>">
                 <label for="approve-reason-<%= $request->{deletion_request_id} %>"><%= t('privacy.approval_reason') %></label>
                 <input id="approve-reason-<%= $request->{deletion_request_id} %>" name="reason" required>
                 <button type="submit"><%= t('privacy.approve_erasure') %></button>
@@ -32,6 +33,7 @@
 
               <form method="post" action="<%= url_for('privacy_deletion_hold', request_id => $request->{deletion_request_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $request->{hold_command_id} || q{} %>">
                 <label for="hold-reason-<%= $request->{deletion_request_id} %>"><%= t('privacy.hold_reason') %></label>
                 <input id="hold-reason-<%= $request->{deletion_request_id} %>" name="reason" required>
                 <button type="submit"><%= t('privacy.apply_hold') %></button>
@@ -66,6 +68,7 @@
               % }
               <form method="post" action="<%= url_for('privacy_erasure_run', job_id => $job->{erasure_job_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $job->{command_id} || q{} %>">
                 <button type="submit"><%= t('privacy.run_erasure') %></button>
               </form>
             </article>

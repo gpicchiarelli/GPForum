@@ -53,10 +53,11 @@ sub register {
             my ($controller) = @_;
 
             return GPForum::Service::Moderation::Workflow->new(
-                action_store     => $controller->gp_moderation_action_store,
-                logger           => $controller->app->log,
-                report_store     => $controller->gp_report_store,
-                suspension_store => $controller->gp_suspension_store,
+                action_store        => $controller->gp_moderation_action_store,
+                command_idempotency => $controller->gp_command_idempotency,
+                logger              => $controller->app->log,
+                report_store        => $controller->gp_report_store,
+                suspension_store    => $controller->gp_suspension_store,
             );
         }
     );

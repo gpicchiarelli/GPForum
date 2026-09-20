@@ -13,10 +13,11 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $HTTP_UNAUTHORIZED => 401;
-const my $HTTP_FORBIDDEN    => 403;
-const my $HTTP_CONFLICT     => 409;
-const my $HTTP_TOO_MANY     => 429;
+const my $HTTP_UNAUTHORIZED        => 401;
+const my $HTTP_FORBIDDEN           => 403;
+const my $HTTP_CONFLICT            => 409;
+const my $HTTP_TOO_MANY            => 429;
+const my $HTTP_SERVICE_UNAVAILABLE => 503;
 
 my $controller =
   GPForum::Test::ResponderController->new( accept_header => 'application/json',
@@ -62,6 +63,15 @@ $guard->conflict(
 );
 is( $controller->last_render->{status},
     $HTTP_CONFLICT, 'conflict uses HTTP 409' );
+
+$guard->service_unavailable($controller);
+is( $controller->last_render->{status},
+    $HTTP_SERVICE_UNAVAILABLE, 'service_unavailable uses HTTP 503' );
+is(
+    $controller->last_render->{json}{error},
+    'service unavailable',
+    'service_unavailable uses the shared payload'
+);
 
 done_testing();
 

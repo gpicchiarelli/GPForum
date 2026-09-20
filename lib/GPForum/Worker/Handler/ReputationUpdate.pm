@@ -8,19 +8,23 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $THREAD_CREATED => 'thread.created';
-const my $POST_CREATED   => 'post.created';
-const my $POST_HIDDEN    => 'post.hidden';
-const my $POST_RESTORED  => 'post.restored';
-const my $USER_SUSPENDED => 'user.suspended';
-const my $USER_REVOKED   => 'user.suspension_revoked';
+const my $THREAD_CREATED  => 'thread.created';
+const my $POST_CREATED    => 'post.created';
+const my $POST_HIDDEN     => 'post.hidden';
+const my $POST_RESTORED   => 'post.restored';
+const my $THREAD_HIDDEN   => 'thread.hidden';
+const my $THREAD_RESTORED => 'thread.restored';
+const my $USER_SUSPENDED  => 'user.suspended';
+const my $USER_REVOKED    => 'user.suspension_revoked';
 
-const my $THREAD_CREATED_DELTA => 2;
-const my $POST_CREATED_DELTA   => 1;
-const my $POST_HIDDEN_DELTA    => -10;
-const my $POST_RESTORED_DELTA  => 10;
-const my $SUSPENDED_DELTA      => -50;
-const my $REVOKED_DELTA        => 50;
+const my $THREAD_CREATED_DELTA  => 2;
+const my $POST_CREATED_DELTA    => 1;
+const my $POST_HIDDEN_DELTA     => -10;
+const my $POST_RESTORED_DELTA   => 10;
+const my $THREAD_HIDDEN_DELTA   => -10;
+const my $THREAD_RESTORED_DELTA => 10;
+const my $SUSPENDED_DELTA       => -50;
+const my $REVOKED_DELTA         => 50;
 
 const my %POLICY => (
     $THREAD_CREATED =>
@@ -29,6 +33,10 @@ const my %POLICY => (
     $POST_HIDDEN  => { delta => $POST_HIDDEN_DELTA,  reason => 'post_hidden' },
     $POST_RESTORED =>
       { delta => $POST_RESTORED_DELTA, reason => 'post_restored' },
+    $THREAD_HIDDEN =>
+      { delta => $THREAD_HIDDEN_DELTA, reason => 'thread_hidden' },
+    $THREAD_RESTORED =>
+      { delta => $THREAD_RESTORED_DELTA, reason => 'thread_restored' },
     $USER_SUSPENDED =>
       { delta => $SUSPENDED_DELTA, reason => 'user_suspended' },
     $USER_REVOKED =>
@@ -70,7 +78,7 @@ sub _record {
             actor_id    => $event->{actor_id},
             delta       => $policy->{delta},
             reason      => $policy->{reason},
-            source_id   => $event->{aggregate_id},
+            source_id   => _source_id($event),
             source_type => $event->{aggregate_type},
             user_id     => $user_id,
         }
@@ -173,6 +181,19 @@ sub _event_value {
     return $payload->{$name};
 }
 
+sub _source_id {
+    my ($event) = @_;
+
+    if ( _has_text( $event->{aggregate_id} ) ) {
+        return $event->{aggregate_id};
+    }
+    if ( _has_text( $event->{event_id} ) ) {
+        return $event->{event_id};
+    }
+
+    return;
+}
+
 sub _has_text {
     my ($value) = @_;
 
@@ -214,12 +235,15 @@ True when the event type has an explicit reputation policy.
 =head2 handle
 
 Records one ledger event for the subject user, or skips when no subject can be
-resolved.
+resolved. C<source_id> is the aggregate id, or the event id when the aggregate
+id is absent. The ledger skips a record that still has no source.
 
 =head1 DIAGNOSTICS
 
 Returns C<skipped> with C<missing_subject> when the author cannot be resolved.
-Ledger errors propagate to the outbox dispatcher.
+The ledger returns C<skipped> with C<missing_source> when source type or id is
+absent, without applying a delta. Ledger errors propagate to the outbox
+dispatcher.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

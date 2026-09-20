@@ -47,5 +47,8 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key('generation_id');
+__PACKAGE__->add_unique_constraint(
+    idx_projection_generations_source_unique =>
+      [qw(projection_name built_from_event_id)] );
 
 1;

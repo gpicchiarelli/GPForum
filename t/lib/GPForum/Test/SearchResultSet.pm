@@ -5,15 +5,18 @@ use warnings;
 
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
+use GPForum::Test::SearchRow;
 use GPForum::Test::SearchSearch;
 
 our $VERSION = '0.001';
 
-has created    => sub { return []; };
-has deleted    => sub { return []; };
-has last_attrs => undef;
-has last_query => undef;
-has rows       => sub { return []; };
+has created     => sub { return []; };
+has deleted     => sub { return []; };
+has last_attrs  => undef;
+has last_query  => undef;
+has rows        => sub { return []; };
+has skip_search => 0;
 
 sub find {
     my ( $self, $id ) = @_;
@@ -30,6 +33,12 @@ sub search {
 
     $self->last_query($query);
     $self->last_attrs($attrs);
+
+    my $skipped = $self->_skipped_search;
+    if ($skipped) {
+        return $skipped;
+    }
+
     my @rows = grep { _matches_query( $_, $query ) } @{ $self->rows };
 
     return GPForum::Test::SearchSearch->new(
@@ -47,10 +56,42 @@ sub update_or_create {
         return $existing;
     }
 
+    return $self->create($row);
+}
+
+sub create {
+    my ( $self, $row ) = @_;
+
+    $self->_assert_document_unique($row);
     push @{ $self->rows },    GPForum::Test::SearchRow->new( data => $row );
     push @{ $self->created }, $row;
 
     return $row;
+}
+
+sub _skipped_search {
+    my ($self) = @_;
+
+    if ( !$self->skip_search ) {
+        return;
+    }
+
+    $self->skip_search( $self->skip_search - 1 );
+
+    return GPForum::Test::SearchSearch->new( rows => [] );
+}
+
+sub _assert_document_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !$self->_find_existing_document($row) ) {
+        return;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->throw(
+        'search_documents_entity_key');
+
+    return;
 }
 
 sub _find_existing_document {
@@ -67,12 +108,25 @@ sub _find_existing_document {
 sub _matches_id {
     my ( $row, $id ) = @_;
 
-    return $row->get_column('thread_id') eq $id
-      if defined $row->get_column('thread_id');
-    return $row->get_column('post_id') eq $id
-      if defined $row->get_column('post_id');
+    if ( _id_column_matches( $row, 'thread_id', $id ) ) {
+        return 1;
+    }
+    if ( _id_column_matches( $row, 'post_id', $id ) ) {
+        return 1;
+    }
 
     return;
+}
+
+sub _id_column_matches {
+    my ( $row, $name, $id ) = @_;
+
+    my $value = $row->get_column($name);
+    if ( !defined $value ) {
+        return;
+    }
+
+    return $value eq $id ? 1 : 0;
 }
 
 sub _same_document {

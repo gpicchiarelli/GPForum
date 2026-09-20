@@ -10,6 +10,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::IdentitySecurityAudit;
 use GPForum::Test::IdentityStore;
 
@@ -25,6 +26,7 @@ subtest 'guest theme selector persists in a cookie' => sub {
     $test->get_ok('/login');
     $test->status_is($HTTP_OK);
     $test->element_exists('form.theme-form[action="/theme"]');
+    $test->element_exists_not('form.theme-form input[name="command_id"]');
     $test->element_exists('select[name="theme"] option[value="dark"]');
     $test->element_exists(
         'select[name="theme"] option[value="default"][selected]');
@@ -44,6 +46,7 @@ subtest 'guest theme selector persists in a cookie' => sub {
     $test->get_ok('/login');
     $test->status_is($HTTP_OK);
     $test->element_exists('html[data-theme="dark"][data-color-scheme="dark"]');
+    $test->text_is( 'p.flash--success[role="status"]' => 'Theme updated' );
     $test->element_exists(
         'select[name="theme"] option[value="dark"][selected]');
 };
@@ -77,15 +80,22 @@ subtest 'authenticated theme persists on profile and survives logout' => sub {
     _install_session_state_route($test);
     $test->app->helper( gp_identity_store => sub { return $store; } );
     $test->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
+    $test->app->helper(
         gp_identity_security_audit => sub {
             return GPForum::Test::IdentitySecurityAudit->new;
         }
     );
 
     $test->get_ok('/login');
-    my $login_token = _csrf_token($test);
+    my $login_token      = _csrf_token($test);
+    my $login_command_id = _command_id($test);
     $test->post_ok(
         '/login' => form => {
+            command_id => $login_command_id,
             csrf_token => $login_token,
             identifier => 'giacomo_forum',
             password   => 'correct horse battery staple',
@@ -94,9 +104,12 @@ subtest 'authenticated theme persists on profile and survives logout' => sub {
     $test->status_is($HTTP_ACCEPTED);
 
     $test->get_ok('/login');
-    my $theme_token = _csrf_token($test);
+    $test->element_exists('form.theme-form input[name="command_id"]');
+    my $theme_token      = _csrf_token($test);
+    my $theme_command_id = _command_id( $test, '/theme' );
     $test->post_ok(
         '/theme' => form => {
+            command_id => $theme_command_id,
             csrf_token => $theme_token,
             return_to  => '/login',
             theme      => 'high_contrast',
@@ -117,7 +130,12 @@ subtest 'authenticated theme persists on profile and survives logout' => sub {
         'html[data-theme="high_contrast"][data-color-scheme="light"]');
 
     my $logout_token = _csrf_token($test);
-    $test->post_ok( '/logout' => form => { csrf_token => $logout_token } );
+    $test->post_ok(
+        '/logout' => form => {
+            command_id => _command_id($test),
+            csrf_token => $logout_token,
+        }
+    );
     $test->status_is($HTTP_ACCEPTED);
 
     $test->get_ok('/login');
@@ -125,9 +143,11 @@ subtest 'authenticated theme persists on profile and survives logout' => sub {
     $test->element_exists(
         'html[data-theme="high_contrast"][data-color-scheme="light"]');
 
-    my $second_login_token = _csrf_token($test);
+    my $second_login_token      = _csrf_token($test);
+    my $second_login_command_id = _command_id($test);
     $test->post_ok(
         '/login' => form => {
+            command_id => $second_login_command_id,
             csrf_token => $second_login_token,
             identifier => 'giacomo_forum',
             password   => 'correct horse battery staple',
@@ -147,6 +167,36 @@ sub _csrf_token {
     my ($token) = $body =~ /name="csrf_token" [^>]+ value="([^"]+)"/msx;
 
     return $token;
+}
+
+sub _command_id {
+    my ( $test_object, $form_action ) = @_;
+
+    my $body = $test_object->tx->res->body;
+    if ($form_action) {
+        return _command_id_in_form( $body, $form_action );
+    }
+
+    my ($command_id) = $body =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
+}
+
+sub _command_id_in_form {
+    my ( $body, $form_action ) = @_;
+
+    const my $FORM_SNIPPET => 800;
+    my $quote  = q{"};
+    my $marker = 'action=' . $quote . $form_action . $quote;
+    my $start  = index $body, $marker;
+    if ( $start < 0 ) {
+        return;
+    }
+
+    my $chunk        = substr $body, $start, $FORM_SNIPPET;
+    my ($command_id) = $chunk =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
 }
 
 sub _install_session_state_route {

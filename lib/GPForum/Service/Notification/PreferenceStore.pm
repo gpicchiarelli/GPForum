@@ -4,8 +4,10 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
@@ -33,16 +35,141 @@ has schema => undef;
 sub set_preference {
     my ( $self, $input ) = @_;
 
-    my $channel          = _safe_channel( $input->{channel} );
-    my $digest_frequency = _safe_digest_frequency( $input->{digest_frequency} );
-    my $row              = {
-        user_id          => $input->{user_id},
-        channel          => $channel,
-        enabled          => $input->{enabled} ? 1 : 0,
-        digest_frequency => $digest_frequency,
-        updated_at       => $self->clock->now_iso8601,
-    };
+    my $normalized = _normalized_preference($input);
+    my $existing   = $self->_existing_preference($normalized);
+    if ( _same_stored_preference( $existing, $normalized ) ) {
+        return _skipped_preference($existing);
+    }
+    if ($existing) {
+        return $self->_persist_preference($normalized);
+    }
 
+    return $self->_insert_or_reuse_preference($normalized);
+}
+
+sub _insert_or_reuse_preference {
+    my ( $self, $normalized ) = @_;
+
+    my $created = eval { return $self->_insert_preference($normalized); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_preference_after_conflict( $normalized, $EVAL_ERROR );
+}
+
+sub _preference_after_conflict {
+    my ( $self, $normalized, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    my $existing = $self->_existing_preference($normalized);
+    if ( !_same_stored_preference( $existing, $normalized ) ) {
+        return $self->_write_after_conflict( $existing, $normalized, $error );
+    }
+
+    return _skipped_preference($existing);
+}
+
+sub _write_after_conflict {
+    my ( $self, $existing, $normalized, $error ) = @_;
+
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_persist_preference($normalized);
+}
+
+sub _insert_preference {
+    my ( $self, $normalized ) = @_;
+
+    my $row = { %{$normalized}, updated_at => $self->clock->now_iso8601, };
+    $self->schema->resultset('NotificationPreference')->create($row);
+
+    return $row;
+}
+
+sub _normalized_preference {
+    my ($input) = @_;
+
+    return {
+        channel          => _safe_channel( $input->{channel} ),
+        digest_frequency =>
+          _safe_digest_frequency( $input->{digest_frequency} ),
+        enabled => $input->{enabled} ? 1 : 0,
+        user_id => $input->{user_id},
+    };
+}
+
+sub _existing_preference {
+    my ( $self, $normalized ) = @_;
+
+    return $self->schema->resultset('NotificationPreference')->find(
+        {
+            channel => $normalized->{channel},
+            user_id => $normalized->{user_id},
+        }
+    );
+}
+
+sub _same_stored_preference {
+    my ( $existing, $normalized ) = @_;
+
+    if ( !$existing ) {
+        return 0;
+    }
+    if ( !_enabled_matches( $existing, $normalized->{enabled} ) ) {
+        return 0;
+    }
+    if ( !_digest_matches( $existing, $normalized->{digest_frequency} ) ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _enabled_matches {
+    my ( $existing, $enabled ) = @_;
+
+    my $held = _column( $existing, 'enabled' ) ? 1 : 0;
+    return $held eq $enabled ? 1 : 0;
+}
+
+sub _digest_matches {
+    my ( $existing, $digest ) = @_;
+
+    my $held = _column( $existing, 'digest_frequency' ) || q{};
+    return $held eq $digest ? 1 : 0;
+}
+
+sub _skipped_preference {
+    my ($existing) = @_;
+
+    my $payload = _preference_payload($existing);
+    $payload->{skipped} = 1;
+
+    return $payload;
+}
+
+sub _preference_payload {
+    my ($existing) = @_;
+
+    return {
+        channel          => _column( $existing, 'channel' ),
+        digest_frequency => _column( $existing, 'digest_frequency' ),
+        enabled          => _column( $existing, 'enabled' ) ? 1 : 0,
+        updated_at       => _column( $existing, 'updated_at' ),
+        user_id          => _column( $existing, 'user_id' ),
+    };
+}
+
+sub _persist_preference {
+    my ( $self, $normalized ) = @_;
+
+    my $row = { %{$normalized}, updated_at => $self->clock->now_iso8601, };
     $self->schema->resultset('NotificationPreference')->update_or_create($row);
 
     return $row;

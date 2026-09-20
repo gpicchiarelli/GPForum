@@ -14,7 +14,11 @@ use GPForum::Runtime;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS             => 89;
+my $session_secret_prefix =
+  qr/GPFORUM_SESSION_SECRETS [ ] must [ ] not [ ] include/msx;
+my $session_secret_suffix = qr/the [ ] development [ ] default/msx;
+
+const my $EXPECTED_TESTS             => 103;
 const my $DEFAULT_LOG_LEVEL          => 'info';
 const my $DEFAULT_RUNTIME_LISTEN     => 'http://127.0.0.1:8080';
 const my $DEFAULT_RUNTIME_BACKLOG    => 256;
@@ -30,6 +34,8 @@ const my $DEFAULT_CACHE_MAX_ENTRIES  => 2_048;
 const my $DEFAULT_CATEGORY_CACHE_TTL => 60;
 const my $CUSTOM_WEB_PROCESSES       => 8;
 const my $CUSTOM_WORKER_PROCESSES    => 3;
+const my $CUSTOM_MAX_WEB_PER_CPU     => 3;
+const my $CONNECT_ATTR_INDEX         => 3;
 const my $CUSTOM_REALTIME_PROCESSES  => 2;
 const my $CUSTOM_RUNTIME_BACKLOG     => 256;
 const my $CUSTOM_RUNTIME_CLIENTS     => 80;
@@ -46,6 +52,10 @@ const my $CUSTOM_MINION_PG_URL       => 'postgresql://gpforum@/gpforum_minion';
 const my $CUSTOM_METRICS_TOKEN       => 'metrics-secret';
 const my $CUSTOM_GLIFISTORE_URL      => 'tcp://127.0.0.1:7379';
 const my $TOO_MANY_PROCESSES         => 513;
+const my $DEFAULT_STATEMENT_TIMEOUT_MS => 15_000;
+const my $DEFAULT_IDLE_IN_TXN_MS       => 10_000;
+const my $DEFAULT_LOCK_TIMEOUT_MS      => 3_000;
+const my $CUSTOM_STATEMENT_TIMEOUT_MS  => 7_000;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -64,7 +74,7 @@ my %environment = (
     GPFORUM_REALTIME_PROCESSES           => $CUSTOM_REALTIME_PROCESSES,
     GPFORUM_RUNTIME_LISTEN               => 'http://127.0.0.1:9000',
     GPFORUM_RUNTIME_WORKER_POLICY        => 'configured',
-    GPFORUM_RUNTIME_MAX_WEB_PER_CPU      => 3,
+    GPFORUM_RUNTIME_MAX_WEB_PER_CPU      => $CUSTOM_MAX_WEB_PER_CPU,
     GPFORUM_RUNTIME_BACKLOG              => $CUSTOM_RUNTIME_BACKLOG,
     GPFORUM_RUNTIME_CLIENTS              => $CUSTOM_RUNTIME_CLIENTS,
     GPFORUM_RUNTIME_REQUESTS             => $CUSTOM_RUNTIME_REQUESTS,
@@ -110,6 +120,16 @@ is( $config->default_locale, 'it',   'default locale loads from env' );
 is( $config->default_theme,  'dark', 'default theme loads from env' );
 is( $config->public_base_url, 'http://example.test',
     'public base url loads from env' );
+is( $config->session_secret, 'test-secret', 'session secret loads from env' );
+is_deeply( $config->signing_secrets,
+    ['test-secret'], 'signing secrets default to the current session secret' );
+is_deeply( $config->previous_session_secrets,
+    [], 'previous session secrets default empty' );
+is_deeply( $config->previous_metrics_tokens,
+    [], 'previous metrics tokens default empty' );
+is_deeply( $config->accepted_metrics_tokens,
+    [$CUSTOM_METRICS_TOKEN],
+    'accepted metrics tokens include the current token' );
 is( $config->database_dsn, 'dbi:Pg:dbname=gpforum_test',
     'database dsn loads from env' );
 is( $config->database_user, 'gpforum_test', 'database user loads from env' );
@@ -128,7 +148,7 @@ is_deeply( $config->runtime_listen_locations,
 is( $config->runtime_worker_policy,
     'configured', 'runtime worker policy loads from env' );
 is( $config->runtime_max_web_per_cpu,
-    3, 'runtime max web per CPU loads from env' );
+    $CUSTOM_MAX_WEB_PER_CPU, 'runtime max web per CPU loads from env' );
 is( $config->runtime_backlog,
     $CUSTOM_RUNTIME_BACKLOG, 'runtime backlog loads from env' );
 is( $config->runtime_clients,
@@ -198,6 +218,19 @@ ok(
 );
 ok( GPForum::Config->environment_requires_glifistore('staging'),
     'staging requires GlifiStore' );
+ok(
+    $default_config->requires_secure_transport == 0,
+    'development does not require secure transport'
+);
+ok(
+    GPForum::Config->new( environment => 'staging' )->requires_secure_transport,
+    'staging requires secure transport'
+);
+ok(
+    GPForum::Config->new( environment => 'production-small' )
+      ->requires_secure_transport,
+    'production-small requires secure transport'
+);
 is_deeply( $default_config->runtime_listen_locations,
     [$DEFAULT_RUNTIME_LISTEN],
     'runtime listen default binds to local reverse-proxy backend' );
@@ -240,6 +273,33 @@ is( $runtime->as_hash->{os_preflight_settings}{min_recommended_workers},
 my @connect_info = $config->database_connect_info;
 is( $connect_info[0], $config->database_dsn,
     'connect info includes database dsn' );
+is_deeply(
+    $connect_info[$CONNECT_ATTR_INDEX]{on_connect_do},
+    [
+        'SET statement_timeout = ' . $DEFAULT_STATEMENT_TIMEOUT_MS,
+        'SET idle_in_transaction_session_timeout = ' . $DEFAULT_IDLE_IN_TXN_MS,
+        'SET lock_timeout = ' . $DEFAULT_LOCK_TIMEOUT_MS,
+        q{SET application_name = 'gpforum'},
+    ],
+    'connect info sets PostgreSQL session timeouts on connect'
+);
+
+my $timeout_config = GPForum::Config->from_environment(
+    {
+        %environment,
+        GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS => $CUSTOM_STATEMENT_TIMEOUT_MS,
+    }
+);
+is( $timeout_config->database_statement_timeout_ms,
+    $CUSTOM_STATEMENT_TIMEOUT_MS, 'statement timeout loads from env' );
+
+throws_ok(
+    sub {
+        GPForum::Config->new( database_statement_timeout_ms => -1 )->validate;
+    },
+    qr/\A database_statement_timeout_ms [ ] must [ ] be [ ] >= [ ] 0/msx,
+    'negative statement timeout fails validation',
+);
 
 throws_ok(
     sub {
@@ -443,6 +503,41 @@ is(
     )->mail_transport,
     'sendmail',
     'production defaults to sendmail transport'
+);
+
+my $rotated = GPForum::Config->from_environment(
+    {
+        GPFORUM_ENV             => 'test',
+        GPFORUM_METRICS_TOKEN   => 'now-token',
+        GPFORUM_METRICS_TOKENS  => ' old-token , now-token, older-token, ',
+        GPFORUM_SESSION_SECRET  => 'current-secret',
+        GPFORUM_SESSION_SECRETS =>
+          ' previous-one , current-secret, previous-two, ',
+    }
+);
+is_deeply(
+    $rotated->signing_secrets,
+    [ 'current-secret', 'previous-one', 'previous-two' ],
+    'signing secrets keep the current secret first and drop duplicates'
+);
+is_deeply(
+    $rotated->accepted_metrics_tokens,
+    [ 'now-token', 'old-token', 'older-token' ],
+    'accepted metrics tokens keep the current token first and drop duplicates'
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new(
+            environment              => 'production',
+            glifistore_url           => $CUSTOM_GLIFISTORE_URL,
+            previous_session_secrets =>
+              ['gpforum-development-secret-change-me'],
+            session_secret => 'rotated-production-secret',
+        )->validate;
+    },
+    qr/\A $session_secret_prefix [ ] $session_secret_suffix/msx,
+    'production previous session secrets reject the development default',
 );
 
 1;

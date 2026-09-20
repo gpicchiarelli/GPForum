@@ -1,5 +1,8 @@
 <form class="locale-form" method="post" action="<%= url_for('locale_update') %>" aria-label="<%= t('locale.selector_label') %>">
   <%= csrf_field %>
+  % if (session('user_id')) {
+    <input type="hidden" name="command_id" value="<%= ui_command_id %>">
+  % }
   <input type="hidden" name="return_to" value="<%= ui_return_to %>">
   <label for="locale-selector">
     <span><%= t('locale.choose') %></span>

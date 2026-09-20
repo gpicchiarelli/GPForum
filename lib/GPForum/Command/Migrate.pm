@@ -49,6 +49,7 @@ sub _apply {
 
     my $config = GPForum::Config->from_environment;
     my $schema = GPForum::Schema->connect_from_config($config);
+    $self->_allow_long_migration_statements($schema);
     my $runner = GPForum::Migration::Runner->new( schema => $schema );
     my $result = $runner->apply_pending;
 
@@ -59,6 +60,30 @@ sub _apply {
     }
 
     return 0;
+}
+
+sub _allow_long_migration_statements {
+    my ( $self, $schema ) = @_;
+
+    my $dbh = $self->_schema_dbh($schema);
+    if ( !$dbh ) {
+        return;
+    }
+
+    $dbh->do('SET statement_timeout = 0');
+
+    return;
+}
+
+sub _schema_dbh {
+    my ( $self, $schema ) = @_;
+
+    my $storage = eval { return $schema->storage; };
+    if ( !$storage || !$storage->can('dbh') ) {
+        return;
+    }
+
+    return eval { return $storage->dbh; };
 }
 
 1;
@@ -94,7 +119,10 @@ Throws exceptions for unsupported command arguments and write failures.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-C<--apply> reads C<GPFORUM_*> database settings through L<GPForum::Config>.
+C<--apply> reads C<GPFORUM_*> database settings through L<GPForum::Config>
+and then sets C<statement_timeout = 0> so migration DDL is not capped at the
+web session budget. C<idle_in_transaction_session_timeout> and
+C<lock_timeout> stay on the session.
 
 =head1 DEPENDENCIES
 

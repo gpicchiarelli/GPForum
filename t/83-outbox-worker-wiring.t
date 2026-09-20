@@ -3,6 +3,7 @@ package main;
 use strict;
 use warnings;
 
+use Carp qw(croak);
 use Test::Exception;
 use Test::More;
 
@@ -14,40 +15,18 @@ use GPForum::Command::OutboxDispatch;
 use GPForum::Config;
 use GPForum::Service::Outbox::Dispatcher;
 use GPForum::Service::Outbox::DomainEventTransport;
+use GPForum::Test::OutboxCommandDispatcher;
+use GPForum::Test::UnreachableMinion;
+use GPForum::Worker::MinionGuard;
 use GPForum::Worker::MinionRegistrar;
 use Mojolicious;
 
 our $VERSION = '0.001';
 
-{
-
-    package GPForum::Test::OutboxCommandDispatcher;
-
-    sub new {
-        my ($class) = @_;
-
-        return bless { calls => [] }, $class;
-    }
-
-    sub calls {
-        my ($self) = @_;
-
-        return $self->{calls};
-    }
-
-    sub dispatch_pending {
-        my ( $self, $limit ) = @_;
-
-        push @{ $self->{calls} }, $limit;
-
-        return {
-            selected      => $limit,
-            dispatched    => $limit,
-            failed        => 0,
-            dead_lettered => 0,
-        };
-    }
-}
+my $minion_unavailable =
+  qr{Minion [ ] PostgreSQL [ ] backend [ ] is [ ] unavailable:}msx;
+my $minion_connection = qr{connection [ ] refused}msx;
+my $minion_ping       = qr{Minion [ ] PostgreSQL [ ] ping [ ] failed}msx;
 
 my $application = Mojolicious->new;
 $application->secrets( ['workers-bootstrap-test'] );
@@ -123,6 +102,52 @@ throws_ok(
     'outbox dispatch command rejects unknown options'
 );
 
+ok(
+    GPForum::Worker::MinionGuard->requested(
+        _enabled_minion_config(), 'hypnotoad'
+    ),
+    'web process requests Minion when it is enabled'
+);
+ok(
+    !GPForum::Worker::MinionGuard->requested(
+        _enabled_minion_config(), '/opt/gpforum/bin/gpforum-outbox-dispatch'
+    ),
+    'direct outbox process skips Minion when it is enabled'
+);
+ok(
+    !GPForum::Worker::MinionGuard->requested(
+        GPForum::Config->new, 'hypnotoad'
+    ),
+    'web process skips Minion when it is disabled'
+);
+
+throws_ok(
+    sub {
+        GPForum::Worker::MinionGuard->wrap(
+            sub { croak "connection refused\n"; } );
+    },
+    qr{\A $minion_unavailable [ ] $minion_connection}msx,
+    'Minion enablement fails closed when the backend is absent'
+);
+
+my $unreachable = GPForum::Test::UnreachableMinion->new;
+ok(
+    !GPForum::Worker::MinionGuard->reachable($unreachable),
+    'Minion guard treats a failed ping as unreachable'
+);
+throws_ok(
+    sub {
+        GPForum::Worker::MinionGuard->wrap(
+            sub {
+                GPForum::Worker::MinionGuard->assert_reachable($unreachable);
+                return;
+            }
+        );
+    },
+    qr{\A $minion_unavailable [ ] $minion_ping}msx,
+    'Minion enablement fails closed when the backend ping fails'
+);
+
 done_testing();
 
 sub _install_worker_helper_dependencies {
@@ -136,8 +161,16 @@ sub _install_worker_helper_dependencies {
     $application->helper( gp_attachment_store        => sub { return {}; } );
     $application->helper( gp_media_processor         => sub { return {}; } );
     $application->helper( gp_subscription_store      => sub { return {}; } );
+    $application->helper( gp_identity_mailer         => sub { return {}; } );
 
     return;
+}
+
+sub _enabled_minion_config {
+    return GPForum::Config->new(
+        minion_enabled => 1,
+        minion_pg_url  => 'postgresql://gpforum@/gpforum_minion',
+    );
 }
 
 1;

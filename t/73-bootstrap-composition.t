@@ -59,6 +59,16 @@ $test->get_ok('/__composition/security')
   ->header_is( 'X-Frame-Options'        => 'DENY' )
   ->header_like( 'Content-Security-Policy' => qr/default-src 'self'/ms )
   ->content_is('ok');
+my $security_headers = $test->tx->res->headers;
+ok(
+    !defined $security_headers->header('Strict-Transport-Security'),
+    'composition app omits HSTS outside staging/production'
+);
+is_deeply(
+    $app->secrets,
+    $app->gp_config->signing_secrets,
+    'bootstrap installs the Mojolicious signing secret chain'
+);
 
 done_testing();
 
@@ -89,6 +99,9 @@ sub _route_names {
       health_live
       health_ready
       home
+      legal_cookies
+      legal_privacy
+      legal_terms
       locale_update
       login
       login_submit
@@ -104,19 +117,27 @@ sub _route_names {
       moderation_reports
       moderation_suspension_revoke
       moderation_suspensions
+      moderation_thread_hide
       moderation_thread_lock
+      moderation_thread_restore
       moderation_thread_unlock
       moderation_user_suspend
       new_thread
       notification_read
       notifications
+      notifications_read_all
+      post_attachment_delete
       post_attachment_upload
+      post_delete
+      post_edit
+      post_restore
       post_report
       privacy_dashboard
       privacy_deletion_approve
       privacy_deletion_hold
       privacy_deletion_request
       privacy_erasure_run
+      privacy_export_download
       privacy_export_request
       privacy_review
       profile
@@ -136,8 +157,12 @@ sub _route_names {
       thread_bookmark_remove
       thread_canonical
       thread_create
+      thread_delete
+      thread_edit
       thread_mark_read
+      thread_move
       thread_report
+      thread_restore
       thread_subscribe
       thread_subscription_mute
       thread_unsubscribe
@@ -159,6 +184,7 @@ sub _helper_names {
       gp_attachment_workflow
       gp_bookmark_store
       gp_community_view_model
+      gp_community_workflow
       gp_canonical_url
       gp_category_reader
       gp_category_store
@@ -234,6 +260,7 @@ sub _helper_names {
       gp_thread_composer
       gp_thread_detail_reader
       gp_thread_read_state
+      gp_thread_read_workflow
       gp_thread_reader
       gp_thread_store
       gp_worker_registrar
@@ -247,6 +274,7 @@ sub _helper_names {
       ui_attr
       ui_badge
       ui_breadcrumbs
+      ui_command_id
       ui_date
       ui_datetime
       ui_direction

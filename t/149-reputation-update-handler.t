@@ -19,10 +19,13 @@ use GPForum::Worker::Handler::ReputationUpdate;
 
 our $VERSION = '0.001';
 
-const my $POST_CREATED_DELTA   => 1;
-const my $POST_HIDDEN_DELTA    => -10;
-const my $SUSPENDED_DELTA      => -50;
-const my $THREAD_CREATED_DELTA => 2;
+const my $POST_CREATED_DELTA        => 1;
+const my $POST_HIDDEN_DELTA         => -10;
+const my $SUSPENDED_DELTA           => -50;
+const my $THREAD_CREATED_DELTA      => 2;
+const my $THREAD_HIDDEN_DELTA       => -10;
+const my $LEDGER_CALLS_AFTER_ORPHAN => 3;
+const my $HIDDEN_THREAD_CALL_INDEX  => 3;
 
 my $ledger = GPForum::Test::ReputationLedger->new;
 my $sink   = GPForum::Test::WorkerSink->new;
@@ -34,9 +37,18 @@ $posts->create(
         post_id        => 'post-hidden',
     }
 );
+my $threads = GPForum::Test::CommunityResultSet->new;
+$threads->create(
+    {
+        author_user_id => 'user-author',
+        id             => 'thread-1',
+        thread_id      => 'thread-1',
+    }
+);
 my $schema = GPForum::Test::CommunitySchema->new(
     resultsets => {
-        Post => $posts,
+        Post   => $posts,
+        Thread => $threads,
     },
 );
 
@@ -66,8 +78,24 @@ ok( $handler->supports( { event_type => 'user.suspended' } ),
     'reputation handler supports suspensions' );
 ok( $handler->supports( { event_type => 'user.suspension_revoked' } ),
     'reputation handler supports revocation' );
+ok(
+    $handler->supports( { event_type => 'thread.hidden' } ),
+    'reputation handler supports hidden threads'
+);
+ok(
+    $handler->supports( { event_type => 'thread.restored' } ),
+    'reputation handler supports restored threads'
+);
 ok( !$handler->supports( { event_type => 'thread.locked' } ),
     'reputation handler ignores lock events' );
+ok(
+    !$handler->supports( { event_type => 'post.undeleted' } ),
+    'reputation handler ignores author undelete events'
+);
+ok(
+    !$handler->supports( { event_type => 'thread.undeleted' } ),
+    'reputation handler ignores author thread undelete events'
+);
 
 my $created = $handler->handle(
     {
@@ -142,7 +170,26 @@ is( $orphaned->{recorded}{skipped},
 is( $orphaned->{recorded}{reason},
     'missing_subject', 'skip reason is missing_subject' );
 is( scalar @{ $ledger->calls },
-    3, 'skipped hidden post does not call the ledger' );
+    $LEDGER_CALLS_AFTER_ORPHAN,
+    'skipped hidden post does not call the ledger' );
+
+my $hidden_thread = $handler->handle(
+    {
+        actor_id       => 'moderator-1',
+        aggregate_id   => 'thread-1',
+        aggregate_type => 'thread',
+        event_id       => 'event-thread-hidden-1',
+        event_type     => 'thread.hidden',
+    }
+);
+
+is( $hidden_thread->{delta},
+    $THREAD_HIDDEN_DELTA, 'hidden thread uses the moderation penalty' );
+is( $hidden_thread->{reason},
+    'thread_hidden', 'hidden thread uses the hidden reason' );
+is( $ledger->calls->[$HIDDEN_THREAD_CALL_INDEX]{user_id},
+    'user-author',
+    'hidden thread credits the stored author, not the moderator' );
 
 my $transport =
   GPForum::Service::Outbox::DomainEventTransport->new( handlers => [$handler],
@@ -169,6 +216,20 @@ is( $ledger->calls->[-1]{reason},
 is( $ledger->calls->[-1]{delta},
     $THREAD_CREATED_DELTA,
     'created thread uses the thread participation delta' );
+
+my $fallback = $handler->handle(
+    {
+        actor_id       => 'user-author',
+        aggregate_type => 'post',
+        event_id       => 'event-orphan-1',
+        event_type     => 'post.created',
+    }
+);
+is( $fallback->{action}, 'reputation.record',
+    'created post without aggregate_id still records reputation' );
+is( $ledger->calls->[-1]{source_id},
+    'event-orphan-1',
+    'created post without aggregate_id uses the event id as source' );
 
 done_testing();
 

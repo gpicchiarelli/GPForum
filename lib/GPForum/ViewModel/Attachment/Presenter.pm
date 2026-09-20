@@ -39,4 +39,13 @@ sub upload_response {
     };
 }
 
+sub delete_response {
+    my ( $self, $result ) = @_;
+
+    return {
+        attachment => $self->attachment( $result->{attachment} ),
+        status     => 'deleted',
+    };
+}
+
 1;

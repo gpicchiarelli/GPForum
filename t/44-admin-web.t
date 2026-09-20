@@ -13,12 +13,14 @@ use lib 't/lib';
 use GPForum::Test::AdminWebServices;
 use GPForum::Test::AllowLimiter;
 use GPForum::Test::AllowPermissionGate;
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::DenyLimiter;
 use GPForum::Test::DenyPermissionGate;
 
 our $VERSION = '0.001';
 
 const my $HTTP_OK           => 200;
+const my $HTTP_FOUND        => 302;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
@@ -101,12 +103,17 @@ $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Admin role list"]});
 $test->element_exists(q{ol[aria-label="Admin permission list"]});
 $test->element_exists(q{form[action="/admin/roles"]});
+$test->element_exists('form[action="/admin/roles"] input[name="command_id"]');
 
 $test->get_ok('/admin/categories');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Admin category list"]});
 $test->element_exists(q{form[action="/admin/categories"]});
+$test->element_exists(
+    'form[action="/admin/categories"] input[name="command_id"]');
 $test->element_exists(q{form[action="/admin/categories/category-1"]});
+$test->element_exists(
+    'form[action="/admin/categories/category-1"] input[name="command_id"]');
 
 _get_json_ok( $test, '/admin/categories' );
 $test->status_is($HTTP_OK);
@@ -119,6 +126,7 @@ $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
     '/admin/roles' => { Accept => 'application/json' } => form => {
+        command_id => 'role-invalid-1',
         csrf_token => $csrf_token,
         name       => q{},
     }
@@ -128,6 +136,7 @@ $test->json_is( '/errors/name' => 'name is required' );
 
 $test->post_ok(
     '/admin/roles' => { Accept => 'application/json' } => form => {
+        command_id  => 'role-create-1',
         csrf_token  => $csrf_token,
         description => 'Scoped admin',
         name        => 'space_admin',
@@ -138,8 +147,23 @@ $test->json_is( '/status'    => 'role_created' );
 $test->json_is( '/role/name' => 'space_admin' );
 
 $test->post_ok(
+    '/admin/roles' => form => {
+        command_id  => 'role-create-html',
+        csrf_token  => $csrf_token,
+        description => 'Scoped admin',
+        name        => 'space_admin',
+    }
+);
+$test->status_is($HTTP_FOUND);
+$test->header_like( Location => qr{/admin/roles\z}msx );
+$test->get_ok('/admin/roles');
+$test->status_is($HTTP_OK);
+$test->text_is( 'p.flash--success[role="status"]' => 'Role created' );
+
+$test->post_ok(
     '/admin/permissions' => { Accept => 'application/json' } => form => {
         action        => 'view',
+        command_id    => 'permission-create-1',
         csrf_token    => $csrf_token,
         name          => 'admin_console.view',
         resource_type => 'admin_console',
@@ -152,6 +176,7 @@ $test->json_is( '/permission/resource_type' => 'admin_console' );
 $test->post_ok(
     '/admin/roles/role-1/permissions' => { Accept => 'application/json' } =>
       form => {
+        command_id    => 'attach-invalid-1',
         csrf_token    => $csrf_token,
         permission_id => q{},
         role_id       => 'role-1',
@@ -163,6 +188,7 @@ $test->json_is( '/errors/permission_id' => 'permission_id is required' );
 $test->post_ok(
     '/admin/roles/role-1/permissions' => { Accept => 'application/json' } =>
       form => {
+        command_id    => 'attach-1',
         csrf_token    => $csrf_token,
         permission_id => 'permission-1',
         role_id       => 'role-1',
@@ -180,9 +206,13 @@ $test->get_ok('/admin/users/user-2/roles');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="User role bindings"]});
 $test->element_exists(q{form[action="/admin/role-bindings/binding-1/revoke"]});
+$test->element_exists(
+'form[action="/admin/role-bindings/binding-1/revoke"] input[name="command_id"]'
+);
 
 $test->post_ok(
     '/admin/users/user-2/roles' => { Accept => 'application/json' } => form => {
+        command_id    => 'bind-invalid-1',
         csrf_token    => $csrf_token,
         resource_type => 'global',
         role_id       => q{},
@@ -193,6 +223,7 @@ $test->json_is( '/errors/role_id' => 'role_id is required' );
 
 $test->post_ok(
     '/admin/users/user-2/roles' => { Accept => 'application/json' } => form => {
+        command_id    => 'bind-1',
         csrf_token    => $csrf_token,
         resource_type => 'global',
         role_id       => 'role-1',
@@ -205,6 +236,7 @@ $test->json_is( '/binding/role_id' => 'role-1' );
 $test->post_ok(
     '/admin/role-bindings/binding-1/revoke' =>
       { Accept => 'application/json' } => form => {
+        command_id => 'revoke-1',
         csrf_token => $csrf_token,
       }
 );
@@ -217,6 +249,7 @@ $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
     '/admin/categories' => { Accept => 'application/json' } => form => {
+        command_id => 'category-invalid-1',
         csrf_token => $csrf_token,
         title      => q{},
     }
@@ -226,6 +259,7 @@ $test->json_is( '/errors/title' => 'title is required' );
 
 $test->post_ok(
     '/admin/categories' => { Accept => 'application/json' } => form => {
+        command_id => 'category-create-1',
         csrf_token => $csrf_token,
         title      => 'General',
     }
@@ -235,8 +269,22 @@ $test->json_is( '/status'         => 'category_created' );
 $test->json_is( '/category/title' => 'General' );
 
 $test->post_ok(
+    '/admin/categories' => form => {
+        command_id => 'category-create-html',
+        csrf_token => $csrf_token,
+        title      => 'General',
+    }
+);
+$test->status_is($HTTP_FOUND);
+$test->header_like( Location => qr{/admin/categories\z}msx );
+$test->get_ok('/admin/categories');
+$test->status_is($HTTP_OK);
+$test->text_is( 'p.flash--success[role="status"]' => 'Category created' );
+
+$test->post_ok(
     '/admin/categories/category-1' => { Accept => 'application/json' } =>
       form => {
+        command_id => 'category-update-1',
         csrf_token => $csrf_token,
         title      => 'Updated',
       }
@@ -247,6 +295,7 @@ $test->json_is( '/category/title' => 'Updated' );
 
 $test->post_ok(
     '/admin/categories/missing' => { Accept => 'application/json' } => form => {
+        command_id => 'category-update-missing',
         csrf_token => $csrf_token,
         title      => 'Missing',
     }
@@ -309,6 +358,11 @@ sub _install_admin_fakes {
     );
     $test_object->app->helper(
         gp_rate_limiter => sub { return GPForum::Test::AllowLimiter->new; } );
+    $test_object->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
 
     return;
 }

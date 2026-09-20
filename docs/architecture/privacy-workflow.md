@@ -9,6 +9,12 @@ Responsibilities:
 - request and complete member export bundles;
 - create member deletion requests;
 - approve deletion requests, create legal holds, and complete erasure jobs;
+- complete an incomplete legal-hold block without a second event, and skip
+  request status and job `last_error` writes when they already match;
+- complete the deletion request on an already-done erasure retry without a
+  second action, and skip the request restamp when already completed;
+- create the erasure job before the approval action and reuse it on unique
+  conflict without a second action or event;
 - leave transaction, event, audit, and outbox ownership inside existing
   deletion, export, and hold stores;
 - leave deletion-request/job accessors on `Privacy::Record`, anonymized

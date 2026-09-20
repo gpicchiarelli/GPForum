@@ -219,6 +219,97 @@ my $pending_race_result = $pending_race_service->run(
 ok( $pending_race_result->{in_progress},
     'unique conflict on an unfinished command is in progress' );
 
+my $id_schema = GPForum::Test::Schema->new(
+    command_logs => [
+        {
+            command_id      => 'generated-1',
+            idempotency_key => 'other-command',
+            payload         => {
+                request_hash => 'other-hash',
+                response     => { post_id => 'other-post' },
+            },
+            status => 'handled',
+        }
+    ]
+);
+my $id_calls   = 0;
+my $id_service = GPForum::Service::Operations::CommandIdempotency->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => $id_schema,
+);
+my $id_result = $id_service->run(
+    _command_request( body_hash => 'hash-1' ),
+    sub {
+        $id_calls++;
+        return {
+            ok     => 1,
+            status => 'ok',
+            stored => { post => { post_id => 'post-1' } },
+        };
+    },
+    sub {
+        my ($result) = @_;
+
+        return {
+            ok      => $result->{ok},
+            post_id => $result->{stored}{post}{post_id},
+            status  => $result->{status},
+        };
+    }
+);
+ok( $id_result->{recorded}, 'unique command id collision remints and records' );
+is( $id_calls, 1, 'unique command id collision still executes callback' );
+is( $id_schema->created_for('CommandLog')->[0]{command_id},
+    'generated-3', 'unique command id collision remints the id' );
+is( $id_schema->created_for('CommandLog')->[0]{idempotency_key},
+    'reply-command-1',
+    'unique command id collision does not replay another command' );
+
+my $leftover_schema = GPForum::Test::Schema->new;
+$leftover_schema->resultset('CommandLog')->create(
+    {
+        command_id      => 'generated-1',
+        idempotency_key => 'reply-command-1',
+        payload         => { request_hash => 'pending-hash' },
+        status          => 'accepted',
+    }
+);
+$leftover_schema->skip_search_count(1);
+my $leftover_calls   = 0;
+my $leftover_service = GPForum::Service::Operations::CommandIdempotency->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => $leftover_schema,
+);
+my $leftover_result = $leftover_service->run(
+    _command_request( body_hash => 'hash-1' ),
+    sub {
+        $leftover_calls++;
+        return {
+            ok     => 1,
+            status => 'ok',
+            stored => { post => { post_id => 'post-1' } },
+        };
+    },
+    sub {
+        my ($result) = @_;
+
+        return {
+            ok      => $result->{ok},
+            post_id => $result->{stored}{post}{post_id},
+            status  => $result->{status},
+        };
+    }
+);
+ok( $leftover_result->{recorded},
+    'leftover command id race finishes this command' );
+is( $leftover_calls, 1, 'leftover command id race still executes callback' );
+is( $leftover_schema->created_for('CommandLog')->[0]{command_id},
+    'generated-1', 'leftover command id race keeps this command' );
+is( scalar @{ $leftover_schema->created_for('CommandLog') },
+    1, 'leftover command id race does not insert a second command' );
+
 done_testing();
 
 sub _command_request {

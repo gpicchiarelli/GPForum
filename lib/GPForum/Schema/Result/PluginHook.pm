@@ -22,6 +22,8 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key('hook_id');
+__PACKAGE__->add_unique_constraint(
+    idx_plugin_hooks_plugin_name_unique => [qw(plugin_id hook_name)] );
 __PACKAGE__->belongs_to(
     plugin => 'GPForum::Schema::Result::Plugin',
     'plugin_id'

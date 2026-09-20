@@ -14,7 +14,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 14;
+const my $EXPECTED_TESTS => 17;
 const my $HTTP_OK        => 200;
 const my $ROOT_PATH      => q{/};
 
@@ -36,6 +36,9 @@ $test->element_exists(q{a[href="/c/category-1"]});
 $test->element_exists(q{a[href="/t/thread-1"]});
 $test->element_exists(q{nav[aria-label="Latest discussion pagination"]});
 $test->content_like(qr/Web [ ] processes/msx);
+$test->element_exists('footer a[href="/legal/terms"]');
+$test->element_exists('footer a[href="/legal/privacy"]');
+$test->element_exists('footer a[href="/legal/cookies"]');
 
 $test->get_ok('/?format=json');
 $test->status_is($HTTP_OK);

@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use List::Util qw(all);
+use List::Util qw(all any);
 use Test::More;
 
 use lib 'lib';
@@ -25,10 +25,12 @@ use GPForum::Worker::Handler::SearchIndexing;
 
 our $VERSION = '0.001';
 
-const my $SEARCH_LIMIT        => 5;
-const my $SEARCH_DEFAULT      => 20;
-const my $SEARCH_MAX          => 50;
-const my $POST_SOURCE_VERSION => 3;
+const my $SEARCH_LIMIT          => 5;
+const my $SEARCH_DEFAULT        => 20;
+const my $SEARCH_MAX            => 50;
+const my $POST_SOURCE_VERSION   => 3;
+const my $BUMPED_SOURCE_VERSION => 4;
+const my $REVERSAL_CALL_INDEX   => 4;
 
 my $category = GPForum::Test::SearchRow->new(
     data => {
@@ -71,6 +73,7 @@ my $post = GPForum::Test::SearchRow->new(
         version            => 3,
         created_at         => '2026-05-23T12:00:00Z',
         deleted_at         => undef,
+        thread_id          => 'thread-1',
     },
 );
 
@@ -163,9 +166,10 @@ my $schema            = GPForum::Test::SearchSchema->new(
         SearchDocument => $indexed_documents,
     },
 );
+my $clock   = GPForum::Test::FixedClock->new;
 my $indexer = GPForum::Service::Search::Indexer->new(
     schema     => $schema,
-    clock      => GPForum::Test::FixedClock->new,
+    clock      => $clock,
     id_service => GPForum::Test::Id->new,
 );
 
@@ -183,6 +187,39 @@ like( ${ $indexed_thread->{search_vector} }->[0],
     qr/to_tsvector/msx, 'thread index creates PostgreSQL vector expression' );
 is( scalar @{ $indexed_documents->created },
     1, 'thread index upserts search document' );
+$clock->iso8601('2026-05-23T13:00:00Z');
+my $same_thread = $indexer->index_thread('thread-1');
+ok( $same_thread->{skipped}, 'thread reindex skips an unchanged document' );
+is( $same_thread->{indexed_at},
+    '2026-05-23T12:00:00Z',
+    'unchanged thread document keeps the original indexed_at' );
+is( scalar @{ $indexed_documents->created },
+    1, 'unchanged thread document does not insert another row' );
+is( $indexed_documents->rows->[0]->get_column('indexed_at'),
+    '2026-05-23T12:00:00Z',
+    'unchanged thread document does not restamp the stored row' );
+
+$indexed_documents->skip_search(1);
+my $raced_thread = $indexer->index_thread('thread-1');
+ok( $raced_thread->{skipped},
+    'unique search document race skips the existing row' );
+is( $raced_thread->{indexed_at},
+    '2026-05-23T12:00:00Z',
+    'unique search document race keeps the original indexed_at' );
+is( scalar @{ $indexed_documents->created },
+    1, 'unique search document race does not insert another row' );
+is( $indexed_documents->rows->[0]->get_column('indexed_at'),
+    '2026-05-23T12:00:00Z',
+    'unique search document race does not restamp the stored row' );
+
+$thread->update( { version => $BUMPED_SOURCE_VERSION } );
+my $bumped_thread = $indexer->index_thread('thread-1');
+ok( !$bumped_thread->{skipped},
+    'thread reindex writes after a source version bump' );
+is( $bumped_thread->{indexed_at},
+    '2026-05-23T13:00:00Z', 'version bump restamps indexed_at' );
+$thread->update( { version => 2 } );
+$clock->iso8601('2026-05-23T12:00:00Z');
 
 my $indexed_post = $indexer->index_post('post-1');
 like(
@@ -213,6 +250,27 @@ is( $threads->last_query->{moderation_state},
     'visible', 'thread rebuild filters visible rows' );
 is( $posts->last_query->{deleted_at},
     undef, 'post rebuild filters deleted rows' );
+
+my $removed_thread = $indexer->remove_thread('thread-1');
+ok( $removed_thread->{ok}, 'thread removal succeeds' );
+is( $removed_thread->{posts_removed},
+    1, 'thread removal also removes post documents' );
+ok(
+    _deleted_entity( $indexed_documents->deleted, 'post', 'post-1' ),
+    'thread removal deletes post search documents in the thread'
+);
+ok( _deleted_entity( $indexed_documents->deleted, 'thread', 'thread-1' ),
+    'thread removal still deletes the thread document' );
+
+my $reindexed_posts = $indexer->index_thread_posts('thread-1');
+is( scalar @{$reindexed_posts},
+    1, 'thread post reindex indexes posts in the thread' );
+is( $reindexed_posts->[0]{entity_type},
+    'post', 'thread post reindex persists post documents' );
+ok(
+    _deleted_entity( $indexed_documents->created, 'post', 'post-1' ),
+    'thread post reindex recreates post search documents'
+);
 
 my $search_documents = GPForum::Test::SearchResultSet->new(
     rows => [
@@ -280,10 +338,7 @@ is( $search_documents->last_query->{-and}[0]{'me.category_id'},
 is( $search_documents->last_query->{-and}[0]{'me.author_user_id'},
     'user-1', 'search applies author filter' );
 ok(
-    (
-        all { /\A (?:-|me[.]) /msx }
-          keys %{ $search_documents->last_query->{-and}[0] }
-    ),
+    _author_qualified( [ keys %{ $search_documents->last_query->{-and}[0] } ] ),
     'search qualifies every column against the joined author'
 );
 is( $search_documents->last_query->{-and}[1]{'me.source_created_at'}{'>='},
@@ -380,6 +435,17 @@ my $restore_task = $handler->handle(
 is( $restore_task->{action},      'search.index', 'restore event reindexes' );
 is( $fake_indexer->calls->[2][0], 'post', 'restore event calls index_post' );
 
+my $undelete_task = $handler->handle(
+    {
+        event_id       => 'event-3b',
+        event_type     => 'post.undeleted',
+        aggregate_type => 'post',
+        aggregate_id   => 'post-1',
+    }
+);
+is( $undelete_task->{action},     'search.index', 'undelete event reindexes' );
+is( $fake_indexer->calls->[3][0], 'post', 'undelete event calls index_post' );
+
 my $reversal_task = $handler->handle(
     {
         event_id       => 'event-4',
@@ -393,9 +459,121 @@ my $reversal_task = $handler->handle(
     }
 );
 ok( $reversal_task->{indexed}{ok}, 'reversal event re-evaluates target index' );
-is( $fake_indexer->calls->[3][0],
+is( $fake_indexer->calls->[$REVERSAL_CALL_INDEX][0],
     'post', 'reversal event indexes target post' );
 
+my $thread_delete_task = $handler->handle(
+    {
+        event_id       => 'event-5',
+        event_type     => 'thread.deleted',
+        aggregate_type => 'thread',
+        aggregate_id   => 'thread-1',
+    }
+);
+is( $thread_delete_task->{action},
+    'search.remove', 'thread delete event removes document' );
+ok( _indexer_called( $fake_indexer->calls, 'remove_thread', 'thread-1' ),
+    'thread delete event calls remove_thread' );
+
+my $thread_hide_task = $handler->handle(
+    {
+        event_id       => 'event-6',
+        event_type     => 'thread.hidden',
+        aggregate_type => 'thread',
+        aggregate_id   => 'thread-1',
+    }
+);
+is( $thread_hide_task->{action},
+    'search.remove', 'thread hide event removes document' );
+ok( _indexer_called( $fake_indexer->calls, 'remove_thread', 'thread-1' ),
+    'thread hide event calls remove_thread' );
+
+my $thread_restore_task = $handler->handle(
+    {
+        event_id       => 'event-7',
+        event_type     => 'thread.restored',
+        aggregate_type => 'thread',
+        aggregate_id   => 'thread-1',
+    }
+);
+is( $thread_restore_task->{action},
+    'search.index', 'thread restore event reindexes' );
+ok( _indexer_called( $fake_indexer->calls, 'thread', 'thread-1' ),
+    'thread restore event calls index_thread' );
+ok( _indexer_called( $fake_indexer->calls, 'thread_posts', 'thread-1' ),
+    'thread restore event reindexes posts in the thread' );
+
+my $thread_undelete_task = $handler->handle(
+    {
+        event_id       => 'event-7b',
+        event_type     => 'thread.undeleted',
+        aggregate_type => 'thread',
+        aggregate_id   => 'thread-1',
+    }
+);
+is( $thread_undelete_task->{action},
+    'search.index', 'thread undelete event reindexes' );
+ok( _indexer_called( $fake_indexer->calls, 'thread', 'thread-1' ),
+    'thread undelete event calls index_thread' );
+ok(
+    _indexer_called( $fake_indexer->calls, 'thread_posts', 'thread-1' ),
+    'thread undelete event reindexes posts in the thread'
+);
+
 done_testing();
+
+sub _deleted_entity {
+    my ( $rows, $type, $id ) = @_;
+
+    return any { _entity_is( $_, $type, $id ) } @{$rows};
+}
+
+sub _entity_is {
+    my ( $row, $type, $id ) = @_;
+
+    if ( $row->{entity_type} ne $type ) {
+        return 0;
+    }
+    if ( $row->{entity_id} ne $id ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _indexer_called {
+    my ( $calls, $name, $id ) = @_;
+
+    return grep { _call_is( $_, $name, $id ) } @{$calls};
+}
+
+sub _call_is {
+    my ( $call, $name, $id ) = @_;
+
+    if ( $call->[0] ne $name ) {
+        return 0;
+    }
+    if ( $call->[1] ne $id ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _author_qualified {
+    my ($keys) = @_;
+
+    return all { _is_qualified_column($_) } @{$keys};
+}
+
+sub _is_qualified_column {
+    my ($name) = @_;
+
+    if ( $name =~ /\A (?:-|me[.]) /msx ) {
+        return 1;
+    }
+
+    return 0;
+}
 
 1;

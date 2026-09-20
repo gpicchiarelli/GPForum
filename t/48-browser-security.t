@@ -11,8 +11,9 @@ use lib 'lib';
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 27;
+const my $EXPECTED_TESTS => 33;
 const my $HTTP_OK        => 200;
+const my $HSTS_MAX_AGE   => 31_536_000;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -38,6 +39,9 @@ $test->header_like(
     'Content-Security-Policy' => qr/form-action [ ] 'self'/msx );
 $test->header_like(
     'Content-Security-Policy' => qr/frame-ancestors [ ] 'none'/msx );
+my $dev_headers = $test->tx->res->headers;
+ok( !defined $dev_headers->header('Strict-Transport-Security'),
+    'development omits HSTS' );
 
 $test->get_ok( '/health/live' => { 'X-Request-ID' => 'request-test-1' } );
 $test->header_is( 'X-Request-ID' => 'request-test-1' );
@@ -77,6 +81,30 @@ unlike(
         'production session cookie is HttpOnly' );
     like( $production_cookie, qr/SameSite=Lax/msx,
         'production session cookie carries SameSite=Lax' );
+    $production->header_is(
+        'Strict-Transport-Security' => _hsts_header(),
+        'production sends HSTS'
+    );
+}
+
+{
+    local $ENV{GPFORUM_ENV}            = 'staging';
+    local $ENV{GPFORUM_SESSION_SECRET} = 'staging-test-secret';
+    local $ENV{GPFORUM_GLIFISTORE_URL} = 'tcp://127.0.0.1:7379';
+
+    my $staging = Test::Mojo->new('GPForum');
+    ok( $staging->app->sessions->secure,
+        'staging sessions require secure transport' );
+    $staging->get_ok('/health/live');
+    $staging->status_is($HTTP_OK);
+    $staging->header_is(
+        'Strict-Transport-Security' => _hsts_header(),
+        'staging sends HSTS'
+    );
+}
+
+sub _hsts_header {
+    return 'max-age=' . $HSTS_MAX_AGE . '; includeSubDomains';
 }
 
 sub _install_cookie_route {

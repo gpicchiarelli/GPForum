@@ -11,7 +11,7 @@ new authentication architecture.
 | Area | Status after this commit |
 | --- | --- |
 | CSRF | Every current server-rendered POST form includes `csrf_field`; every current POST route is covered by functional missing-token tests. |
-| Session cookies | Development cookies are `HttpOnly` and `SameSite=Lax`; production cookies are additionally `Secure`. |
+| Session cookies | Development cookies are `HttpOnly` and `SameSite=Lax`; staging and production cookies are additionally `Secure`. Staging and production send HSTS. Mojolicious signs with the current session secret and still validates previous secrets from `GPFORUM_SESSION_SECRETS`. |
 | Login/register/logout | CSRF protected, rate limited, generic rate-limit errors, non-enumerative duplicate-registration response, login/logout audit hooks. |
 | Session rotation | Existing cookie-session payload is changed on accepted login through a rotation marker; stale session markers are expired before dispatch. |
 | Rate limiting | PostgreSQL-backed bucket store with explicit local degraded fallback. |

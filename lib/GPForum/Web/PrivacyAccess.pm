@@ -8,24 +8,34 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_LIMIT            => 25;
-const my $WRITE_RATE_LIMIT         => 20;
-const my $REQUEST_RATE_LIMIT       => 5;
-const my $WRITE_RATE_WINDOW        => 60;
-const my $WRITE_ACTION             => 'privacy.write';
-const my $REQUEST_ACTION           => 'privacy.request';
-const my $REVIEW_ACTION            => 'privacy.review';
-const my $PRIVACY_RESOURCE         => 'privacy_rights';
-const my $ACTION_MANAGE            => 'manage';
-const my $ACTION_VIEW              => 'view';
-const my $STATUS_DELETION_APPROVED => 'deletion_approved';
-const my $STATUS_DELETION_HELD     => 'deletion_held';
-const my $DEFAULT_REDIRECT         => 'privacy_dashboard';
-const my $STATUS_FAILED            => 'failed';
-const my $STATUS_NOT_FOUND         => 'not_found';
-const my $STATUS_INVALID           => 'invalid';
-const my $STATUS_CONFLICT          => 'conflict';
-const my $CONFLICT_STATUS          => 'blocked';
+const my $DEFAULT_LIMIT             => 25;
+const my $WRITE_RATE_LIMIT          => 20;
+const my $REQUEST_RATE_LIMIT        => 5;
+const my $WRITE_RATE_WINDOW         => 60;
+const my $WRITE_ACTION              => 'privacy.write';
+const my $REQUEST_ACTION            => 'privacy.request';
+const my $REVIEW_ACTION             => 'privacy.review';
+const my $PRIVACY_RESOURCE          => 'privacy_rights';
+const my $ACTION_MANAGE             => 'manage';
+const my $ACTION_VIEW               => 'view';
+const my $STATUS_DELETION_APPROVED  => 'deletion_approved';
+const my $STATUS_DELETION_HELD      => 'deletion_held';
+const my $STATUS_DELETION_REQUESTED => 'deletion_requested';
+const my $STATUS_ERASURE_COMPLETED  => 'erasure_completed';
+const my $STATUS_EXPORT_REQUESTED   => 'export_requested';
+const my $DEFAULT_REDIRECT          => 'privacy_dashboard';
+const my $STATUS_FAILED             => 'failed';
+const my $STATUS_NOT_FOUND          => 'not_found';
+const my $STATUS_INVALID            => 'invalid';
+const my $STATUS_CONFLICT           => 'conflict';
+const my $CONFLICT_STATUS           => 'blocked';
+const my %WRITE_FLASH => (
+    $STATUS_DELETION_APPROVED  => 'privacy.deletion_approved',
+    $STATUS_DELETION_HELD      => 'privacy.deletion_held',
+    $STATUS_DELETION_REQUESTED => 'privacy.deletion_requested',
+    $STATUS_ERASURE_COMPLETED  => 'privacy.erasure_completed',
+    $STATUS_EXPORT_REQUESTED   => 'privacy.export_requested',
+);
 
 sub page_limit {
     my ( undef, $requested ) = @_;
@@ -81,6 +91,36 @@ sub deletion_approved_status {
 
 sub deletion_held_status {
     return $STATUS_DELETION_HELD;
+}
+
+sub write_flash_key {
+    my ( undef, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
+    if ( exists $WRITE_FLASH{$status} ) {
+        return $WRITE_FLASH{$status};
+    }
+
+    return;
+}
+
+sub export_download_filename {
+    my ( undef, $export_request_id ) = @_;
+
+    my $id = $export_request_id || 'bundle';
+    $id =~ s/[^[:alnum:]._-]+/_/gmsx;
+
+    return 'gpforum-export-' . $id . '.json';
+}
+
+sub export_download_disposition {
+    my ( $self, $export_request_id ) = @_;
+
+    return
+      'attachment; filename="'
+      . $self->export_download_filename($export_request_id) . q{"};
 }
 
 sub permission_target {
@@ -213,6 +253,19 @@ Returns C<deletion_approved>.
 =head2 deletion_held_status
 
 Returns C<deletion_held>.
+
+=head2 write_flash_key
+
+Returns the i18n catalog key for a successful HTML write, or undef when the
+status has no flash copy.
+
+=head2 export_download_filename
+
+Returns a safe JSON attachment filename for a completed export.
+
+=head2 export_download_disposition
+
+Returns the Content-Disposition header value for that download.
 
 =head2 permission_target
 

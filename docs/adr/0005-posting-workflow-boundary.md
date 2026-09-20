@@ -16,7 +16,8 @@ to isolate.
 ## Decision
 
 Introduce `GPForum::Service::Forum::PostingWorkflow` as the application boundary
-for `create_thread` and `create_reply`.
+for `create_thread`, `create_reply`, `edit_post`, `delete_post`, `restore_post`,
+`edit_thread`, `delete_thread`, `restore_thread`, and `move_thread`.
 
 The workflow validates category/thread preconditions, delegates command
 preparation to composers, delegates persistence to stores, records mentions

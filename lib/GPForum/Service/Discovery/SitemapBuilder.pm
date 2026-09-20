@@ -13,6 +13,13 @@ has canonical_url => undef;
 has visibility_policy =>
   sub { return GPForum::Service::Discovery::VisibilityPolicy->new; };
 
+sub legal_entries {
+    my ($self) = @_;
+
+    return [ map { { loc => $self->canonical_url->legal_url($_) } }
+          qw(cookies privacy terms) ];
+}
+
 sub category_entries {
     my ( $self, $categories ) = @_;
 

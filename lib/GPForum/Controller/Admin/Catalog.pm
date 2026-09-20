@@ -19,6 +19,7 @@ sub create_role {
         $self->gp_admin_workflow->create_role(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 description   => $self->param('description'),
                 name          => $self->param('name'),
             }
@@ -40,6 +41,7 @@ sub create_permission {
             {
                 action        => $self->param('action'),
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 name          => $self->param('name'),
                 resource_type => $self->param('resource_type'),
             }
@@ -60,6 +62,7 @@ sub attach_permission {
         $self->gp_admin_workflow->attach_permission(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 permission_id => $self->param('permission_id'),
                 role_id       => $self->param('role_id'),
             }

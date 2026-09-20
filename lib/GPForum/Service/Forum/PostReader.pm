@@ -18,12 +18,12 @@ sub list_thread_posts {
     my $plan  = $self->page_window->plan($request);
     my $query = {
         'me.thread_id'        => $request->{thread_id},
-        'me.deleted_at'       => undef,
         'me.moderation_state' => 'visible',
         'me.visibility'       => 'public',
     };
+    _apply_deleted_filter( $query, $request );
     if ( $plan->{after} ) {
-        $query->{-or} = _post_cursor_clause( $plan->{after} );
+        _apply_cursor( $query, $plan->{after} );
     }
 
     my $search = $self->schema->resultset('Post')->search(
@@ -32,7 +32,7 @@ sub list_thread_posts {
             columns => [
                 qw(
                   post_id thread_id author_user_id current_body_id position
-                  visibility moderation_state
+                  visibility moderation_state deleted_at
                 )
             ],
             join      => [ 'current_body', 'author' ],
@@ -69,6 +69,52 @@ sub find_visible_post {
     );
 
     return $search->single;
+}
+
+sub _apply_deleted_filter {
+    my ( $query, $request ) = @_;
+
+    my $viewer = $request->{viewer_user_id};
+    if ( defined $viewer && length $viewer ) {
+        $query->{-or} = _viewer_deleted_clause($viewer);
+        return;
+    }
+
+    $query->{'me.deleted_at'} = undef;
+
+    return;
+}
+
+sub _viewer_deleted_clause {
+    my ($viewer) = @_;
+
+    return [ { 'me.deleted_at' => undef },
+        { 'me.author_user_id' => $viewer }, ];
+}
+
+sub _apply_cursor {
+    my ( $query, $after ) = @_;
+
+    my $cursor = _post_cursor_clause($after);
+    if ( exists $query->{-or} ) {
+        $query->{-and} =
+          [ { -or => delete $query->{-or} }, { -or => $cursor } ];
+        return;
+    }
+
+    $query->{-or} = $cursor;
+
+    return;
+}
+
+sub find_post {
+    my ( $self, $post_id ) = @_;
+
+    if ( !defined $post_id || !length $post_id ) {
+        return;
+    }
+
+    return $self->schema->resultset('Post')->find( { post_id => $post_id } );
 }
 
 sub _post_cursor_clause {

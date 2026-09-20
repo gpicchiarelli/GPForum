@@ -4,18 +4,24 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
 
 use GPForum::Infrastructure::EventRecorder;
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Admin::Event;
 use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_SPACE_SLUG  => 'general';
-const my $DEFAULT_SPACE_TITLE => 'General';
-const my $ROW_LIMIT_ONE       => 1;
-const my $SCHEMA_VERSION      => 1;
+const my $DEFAULT_SPACE_SLUG       => 'general';
+const my $DEFAULT_SPACE_TITLE      => 'General';
+const my $ROW_LIMIT_ONE            => 1;
+const my $SCHEMA_VERSION           => 1;
+const my $CATEGORY_ID_CONSTRAINT   => 'categories_pkey';
+const my $CATEGORY_SLUG_CONSTRAINT => 'categories_space_slug_key';
+const my $SPACE_ID_CONSTRAINT      => 'spaces_pkey';
+const my $SPACE_SLUG_CONSTRAINT    => 'spaces_slug_key';
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub {
@@ -92,8 +98,103 @@ sub _insert_or_reuse {
 
     my $existing = $self->_existing_category($input);
     if ($existing) {
-        return { %{$existing}, idempotent => 1 };
+        return $self->_finish_leftover_category( $existing, $input );
     }
+
+    return $self->_insert_or_reuse_category($input);
+}
+
+sub _insert_or_reuse_category {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_create_category_row($input); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_category_after_conflict( $input, $EVAL_ERROR );
+}
+
+sub _category_after_conflict {
+    my ( $self, $input, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_category_after_unique( $input, $error );
+}
+
+sub _category_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _category_id_conflict($error) ) {
+        return $self->_category_after_id_conflict($input);
+    }
+    if ( _category_slug_conflict($error) ) {
+        return $self->_reuse_category_row( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _category_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_existing_category($input);
+    if ($existing) {
+        return $self->_finish_leftover_category( $existing, $input );
+    }
+
+    return $self->_retry_category_id($input);
+}
+
+sub _retry_category_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_create_category_row($input); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_category_row {
+    my ( $self, $input, $error ) = @_;
+
+    my $existing = $self->_existing_category($input);
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_finish_leftover_category( $existing, $input );
+}
+
+sub _category_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $CATEGORY_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _category_slug_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $CATEGORY_SLUG_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _create_category_row {
+    my ( $self, $input ) = @_;
 
     my $category = $self->_new_category($input);
     $self->schema->resultset('Category')->create($category);
@@ -117,6 +218,10 @@ sub _update_once {
     }
 
     my $updates = $self->_update_fields( $input, $row );
+    if ( _unchanged_category( $row, $updates ) ) {
+        return _skipped_category($row);
+    }
+
     $row->update($updates);
     my $category = { %{ _row_hash( $row, _category_columns() ) }, %{$updates} };
     $self->_record_write(
@@ -128,6 +233,52 @@ sub _update_once {
     );
 
     return $category;
+}
+
+sub _unchanged_category {
+    my ( $row, $updates ) = @_;
+
+    if ( !_same_copy( $row, $updates ) ) {
+        return 0;
+    }
+
+    return _same_position( _column( $row, 'position' ), $updates->{position} );
+}
+
+sub _same_copy {
+    my ( $row, $updates ) = @_;
+
+    for my $name (qw(description slug title visibility)) {
+        if ( !_same_text( _column( $row, $name ), $updates->{$name} ) ) {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+sub _same_text {
+    my ( $held, $incoming ) = @_;
+
+    $held     = defined $held     ? $held     : q{};
+    $incoming = defined $incoming ? $incoming : q{};
+
+    return $held eq $incoming ? 1 : 0;
+}
+
+sub _same_position {
+    my ( $held, $incoming ) = @_;
+
+    $held     = defined $held     ? $held     : 0;
+    $incoming = defined $incoming ? $incoming : 0;
+
+    return $held == $incoming ? 1 : 0;
+}
+
+sub _skipped_category {
+    my ($row) = @_;
+
+    return { %{ _row_hash( $row, _category_columns() ) }, skipped => 1, };
 }
 
 sub _ensure_space {
@@ -143,7 +294,7 @@ sub _ensure_space {
         return $first;
     }
 
-    return $self->_create_default_space;
+    return $self->_default_space;
 }
 
 sub _space_by_id {
@@ -167,7 +318,107 @@ sub _first_space {
     return _row_hash( _single($search), _space_columns() );
 }
 
-sub _create_default_space {
+sub _default_space {
+    my ($self) = @_;
+
+    my $existing = $self->_space_by_slug;
+    if ($existing) {
+        return $existing;
+    }
+
+    return $self->_insert_or_reuse_space;
+}
+
+sub _insert_or_reuse_space {
+    my ($self) = @_;
+
+    my $created = eval { return $self->_insert_default_space; };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_space_after_conflict($EVAL_ERROR);
+}
+
+sub _space_after_conflict {
+    my ( $self, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_space_after_unique($error);
+}
+
+sub _space_after_unique {
+    my ( $self, $error ) = @_;
+
+    if ( _space_id_conflict($error) ) {
+        return $self->_space_after_id_conflict;
+    }
+    if ( _space_slug_conflict($error) ) {
+        return $self->_reuse_space_row($error);
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _space_after_id_conflict {
+    my ($self) = @_;
+
+    my $existing = $self->_space_by_slug;
+    if ($existing) {
+        return $existing;
+    }
+
+    return $self->_retry_space_id;
+}
+
+sub _retry_space_id {
+    my ($self) = @_;
+
+    my $created = eval { return $self->_insert_default_space; };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_space_row {
+    my ( $self, $error ) = @_;
+
+    my $existing = $self->_space_by_slug;
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $existing;
+}
+
+sub _space_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $SPACE_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _space_slug_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $SPACE_SLUG_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _insert_default_space {
     my ($self) = @_;
 
     my $now   = $self->clock->now_iso8601;
@@ -187,6 +438,15 @@ sub _create_default_space {
     $self->schema->resultset('Space')->create($space);
 
     return $space;
+}
+
+sub _space_by_slug {
+    my ($self) = @_;
+
+    my $search = $self->schema->resultset('Space')
+      ->search( { slug => $DEFAULT_SPACE_SLUG }, { rows => $ROW_LIMIT_ONE } );
+
+    return _row_hash( _single($search), _space_columns() );
 }
 
 sub _existing_category {
@@ -255,6 +515,44 @@ sub _update_fields {
             $input->{visibility}, _column( $row, 'visibility' )
         ),
     };
+}
+
+sub _finish_leftover_category {
+    my ( $self, $existing, $input ) = @_;
+
+    $self->_ensure_category_write( $existing, $input );
+
+    return { %{$existing}, idempotent => 1 };
+}
+
+sub _ensure_category_write {
+    my ( $self, $existing, $input ) = @_;
+
+    if ( $self->_category_event_exists($existing) ) {
+        return;
+    }
+
+    return $self->_record_write(
+        {
+            action        => 'category.created',
+            actor_user_id => $input->{actor_user_id},
+            category      => $existing,
+        }
+    );
+}
+
+sub _category_event_exists {
+    my ( $self, $existing ) = @_;
+
+    my $search = $self->schema->resultset('EventLog')->search(
+        {
+            idempotency_key =>
+              join( q{:}, 'category.created', $existing->{category_id} ),
+        },
+        { rows => $ROW_LIMIT_ONE },
+    );
+
+    return _single($search);
 }
 
 sub _record_write {
@@ -464,10 +762,15 @@ using L<GPForum::Service::Admin::Event> hashes.
 =head2 create_category
 
 Creates a category, or returns the existing space/slug row idempotently.
+A unique race on the default C<general> space slug reuses the existing
+space instead of inserting a second row.
 
 =head2 update_category
 
 Updates a visible category. Returns undef when the category is missing.
+A second write of the same title, slug, description, visibility, and
+position returns C<skipped> and does not bump version, restamp
+C<updated_at>, or emit another event, audit, or outbox row.
 
 =head2 list_categories
 
@@ -485,7 +788,8 @@ Uses the schema, clock, and id service supplied by the composition root.
 =head1 DEPENDENCIES
 
 Uses L<Const::Fast>, L<Mojo::Base>, L<GPForum::Infrastructure::EventRecorder>,
-L<GPForum::Service::Admin::Event>, and L<GPForum::Service::Clock>.
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Admin::Event>,
+and L<GPForum::Service::Clock>.
 
 =head1 INCOMPATIBILITIES
 

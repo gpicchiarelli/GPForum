@@ -20,7 +20,8 @@ sub register_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/register',
+        template   => 'identity/register',
+        command_id => $self->gp_id->uuid,
         %{ $self->gp_identity_view_model->register_form },
     );
 }
@@ -40,7 +41,8 @@ sub login_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/login',
+        template   => 'identity/login',
+        command_id => $self->gp_id->uuid,
         %{ $self->gp_identity_view_model->login_form },
     );
 }
@@ -72,6 +74,7 @@ sub _complete_registration {
 
     my $result = $self->gp_identity_workflow->register(
         {
+            command_id   => $self->command_id_param,
             display_name => $self->param('display_name'),
             email        => $self->param('email'),
             password     => $self->param('password'),
@@ -83,7 +86,7 @@ sub _complete_registration {
             $result->{stored}{values} );
     }
     if ( !$result->{ok} ) {
-        return $self->identity_system_failure;
+        return $self->identity_write_failure($result);
     }
 
     return $self->render(
@@ -97,8 +100,9 @@ sub _register_form_error {
     my ( $self, $errors, $values ) = @_;
 
     return $self->render(
-        template => 'identity/register',
-        status   => $HTTP_BAD_REQUEST,
+        template   => 'identity/register',
+        command_id => $self->gp_id->uuid,
+        status     => $HTTP_BAD_REQUEST,
         %{
             $self->gp_identity_view_model->register_form(
                 errors => $errors,
@@ -113,6 +117,7 @@ sub _complete_login {
 
     my $result = $self->gp_identity_workflow->login(
         {
+            command_id      => $self->command_id_param,
             identifier      => $self->param('identifier'),
             password        => $self->param('password'),
             request_address => $self->request_address,
@@ -125,11 +130,21 @@ sub _complete_login {
     if ( $self->_unverified_login_result($result) ) {
         return $self->_unverified_login;
     }
-    if ( !$result->{ok} ) {
-        return $self->_invalid_login;
+
+    return $self->_finish_login($result);
+}
+
+sub _finish_login {
+    my ( $self, $result ) = @_;
+
+    if ( $result->{ok} ) {
+        return $self->_accept_login( $result->{stored} );
+    }
+    if ( ( $result->{status} || q{} ) eq 'failed' ) {
+        return $self->identity_unavailable;
     }
 
-    return $self->_accept_login( $result->{stored} );
+    return $self->_invalid_login;
 }
 
 sub _accept_login {
@@ -155,33 +170,39 @@ sub _accept_login {
 sub _login_form_error {
     my ( $self, $errors ) = @_;
 
-    return $self->render(
-        template => 'identity/login',
-        status   => $HTTP_BAD_REQUEST,
-        %{
-            $self->gp_identity_view_model->login_form(
-                errors => $errors,
-                values => { identifier => $self->param('identifier') || q{} },
-            )
-        },
-    );
+    return $self->_render_login_form( $HTTP_BAD_REQUEST, $errors );
 }
 
 sub _complete_logout {
     my ($self) = @_;
 
-    my $session_id = $self->session('session_id');
-    my $user_id    = $self->current_user_id;
-    $self->gp_identity_workflow->logout(
+    my $result = $self->_logout_result;
+    if ( !$result->{ok} ) {
+        return $self->identity_write_failure($result);
+    }
+
+    return $self->_accept_logout;
+}
+
+sub _logout_result {
+    my ($self) = @_;
+
+    return $self->gp_identity_workflow->logout(
         {
-            session_id => $session_id,
-            user_id    => $user_id,
+            command_id => $self->command_id_param,
+            session_id => $self->session('session_id'),
+            user_id    => $self->current_user_id,
         }
     );
+}
+
+sub _accept_logout {
+    my ($self) = @_;
+
     $self->_record_identity_audit(
         'record_logout_request',
         {
-            actor_id        => $user_id,
+            actor_id        => $self->current_user_id,
             request_address => $self->request_address,
         }
     );
@@ -264,12 +285,21 @@ sub _unverified_login_result {
 sub _unverified_login {
     my ($self) = @_;
 
+    return $self->_render_login_form( $HTTP_UNAUTHORIZED,
+        { login => $self->t('auth.login_unverified') },
+    );
+}
+
+sub _render_login_form {
+    my ( $self, $status, $errors ) = @_;
+
     return $self->render(
-        template => 'identity/login',
-        status   => $HTTP_UNAUTHORIZED,
+        template   => 'identity/login',
+        command_id => $self->gp_id->uuid,
+        status     => $status,
         %{
             $self->gp_identity_view_model->login_form(
-                errors => { login => $self->t('auth.login_unverified'), },
+                errors => $errors,
                 values => {
                     identifier => $self->param('identifier') || q{},
                 },
@@ -296,17 +326,8 @@ sub _invalid_login {
         );
     }
 
-    return $self->render(
-        template => 'identity/login',
-        status   => $HTTP_UNAUTHORIZED,
-        %{
-            $self->gp_identity_view_model->login_form(
-                errors => { login => 'login request could not be accepted', },
-                values => {
-                    identifier => $self->param('identifier') || q{},
-                },
-            )
-        },
+    return $self->_render_login_form( $HTTP_UNAUTHORIZED,
+        { login => 'login request could not be accepted' },
     );
 }
 
@@ -352,7 +373,7 @@ Authenticates a member and establishes a server session.
 
 =head2 logout
 
-Revokes the current session.
+Revokes the current session. Requires C<command_id>.
 
 =head1 DIAGNOSTICS
 

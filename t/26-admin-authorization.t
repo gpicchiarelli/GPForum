@@ -31,16 +31,17 @@ const my $CATALOG_AUDIT_ROWS  => 3;
 const my $BINDING_AUDIT_ROWS  => 4;
 const my $REVOKE_AUDIT_ROWS   => 5;
 
-my $roles            = GPForum::Test::ModerationResultSet->new;
-my $permissions      = GPForum::Test::ModerationResultSet->new;
-my $role_permissions = GPForum::Test::ModerationResultSet->new;
-my $role_bindings    = GPForum::Test::ModerationResultSet->new;
-my $audit_log        = GPForum::Test::ModerationResultSet->new;
-my $users            = GPForum::Test::ModerationResultSet->new;
-my $reports          = GPForum::Test::ModerationResultSet->new;
-my $outbox           = GPForum::Test::ModerationResultSet->new;
-my $dead_letters     = GPForum::Test::ModerationResultSet->new;
-my $schema           = GPForum::Test::ModerationSchema->new(
+my $roles       = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $permissions = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $role_permissions =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $role_bindings = GPForum::Test::ModerationResultSet->new;
+my $audit_log     = GPForum::Test::ModerationResultSet->new;
+my $users         = GPForum::Test::ModerationResultSet->new;
+my $reports       = GPForum::Test::ModerationResultSet->new;
+my $outbox        = GPForum::Test::ModerationResultSet->new;
+my $dead_letters  = GPForum::Test::ModerationResultSet->new;
+my $schema        = GPForum::Test::ModerationSchema->new(
     resultsets => {
         DeadLetter     => $dead_letters,
         OutboxMessage  => $outbox,
@@ -150,6 +151,242 @@ is( scalar @{ $role_permissions->created },
 is( scalar @{ $audit_log->created },
     $CATALOG_AUDIT_ROWS, 'idempotent catalog mutations avoid duplicate audit' );
 
+$roles->skip_search(1);
+ok(
+    $catalog->create_role(
+        {
+            name        => 'space_moderator',
+            description => 'concurrent role after lookup miss',
+        }
+    )->{idempotent},
+    'unique role race reuses the existing name'
+);
+is( scalar @{ $roles->created },
+    $CREATED_ROLES, 'unique role race does not insert a second role' );
+is( scalar @{ $audit_log->created },
+    $CATALOG_AUDIT_ROWS, 'unique role race does not write a second audit' );
+
+$permissions->skip_search(1);
+ok(
+    $catalog->create_permission(
+        {
+            action        => 'view_queue',
+            name          => 'report.view_queue',
+            resource_type => 'report',
+        }
+    )->{idempotent},
+    'unique permission race reuses the existing resource action'
+);
+is( scalar @{ $permissions->created },
+    $CREATED_PERMISSIONS,
+    'unique permission race does not insert a second permission' );
+is( scalar @{ $audit_log->created },
+    $CATALOG_AUDIT_ROWS,
+    'unique permission race does not write a second audit' );
+
+$role_permissions->skip_search(1);
+ok(
+    $catalog->attach_permission(
+        {
+            permission_id => 'generated-4',
+            role_id       => 'generated-1',
+        }
+    )->{idempotent},
+    'unique attach race reuses the existing grant'
+);
+is( scalar @{ $role_permissions->created },
+    $CREATED_ROLE_PERMS, 'unique attach race does not insert a second grant' );
+is( scalar @{ $audit_log->created },
+    $CATALOG_AUDIT_ROWS, 'unique attach race does not write a second audit' );
+
+my $role_pk_roles =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $role_pk_audit = GPForum::Test::ModerationResultSet->new;
+$role_pk_roles->create(
+    {
+        name    => 'other-role',
+        role_id => 'generated-1',
+    }
+);
+my $role_pk_catalog = GPForum::Service::Admin::RoleCatalog->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog => $role_pk_audit,
+            Role     => $role_pk_roles,
+        },
+    ),
+);
+my $role_pk = $role_pk_catalog->create_role(
+    {
+        description => 'Scoped moderation authority',
+        name        => 'space_moderator',
+    }
+);
+ok( !$role_pk->{idempotent}, 'unique role id collision remints and creates' );
+is( $role_pk->{role_id}, 'generated-2',
+    'unique role id collision remints the id' );
+is( $role_pk->{name}, 'space_moderator',
+    'unique role id collision keeps this role name' );
+is(
+    $role_pk->{description},
+    'Scoped moderation authority',
+    'unique role id collision keeps this role description'
+);
+
+my $role_leftover_roles =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $role_leftover_audit = GPForum::Test::ModerationResultSet->new;
+$role_leftover_roles->create(
+    {
+        description => 'Scoped moderation authority',
+        name        => 'space_moderator',
+        role_id     => 'generated-1',
+    }
+);
+$role_leftover_roles->skip_search(1);
+my $role_leftover_catalog = GPForum::Service::Admin::RoleCatalog->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog => $role_leftover_audit,
+            Role     => $role_leftover_roles,
+        },
+    ),
+);
+my $role_leftover = $role_leftover_catalog->create_role(
+    {
+        description => 'Scoped moderation authority',
+        name        => 'space_moderator',
+    }
+);
+ok( $role_leftover->{idempotent}, 'leftover role id race reuses this role' );
+is( $role_leftover->{role_id},
+    'generated-1', 'leftover role id race keeps this role' );
+is( $role_leftover->{name},
+    'space_moderator', 'leftover role id race keeps this role name' );
+is( scalar @{ $role_leftover_roles->created },
+    1, 'leftover role id race does not insert a second role' );
+is( scalar @{ $role_leftover_audit->created },
+    1, 'leftover role id race inserts the missing audit' );
+
+my $permission_pk_permissions =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $permission_pk_audit = GPForum::Test::ModerationResultSet->new;
+$permission_pk_permissions->create(
+    {
+        action        => 'other_action',
+        name          => 'other.permission',
+        permission_id => 'generated-1',
+        resource_type => 'other',
+    }
+);
+my $permission_pk_catalog = GPForum::Service::Admin::RoleCatalog->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog   => $permission_pk_audit,
+            Permission => $permission_pk_permissions,
+        },
+    ),
+);
+my $permission_pk = $permission_pk_catalog->create_permission(
+    {
+        action        => 'view_queue',
+        name          => 'report.view_queue',
+        resource_type => 'report',
+    }
+);
+ok( !$permission_pk->{idempotent},
+    'unique permission id collision remints and creates' );
+is( $permission_pk->{permission_id},
+    'generated-2', 'unique permission id collision remints the id' );
+is( $permission_pk->{name},
+    'report.view_queue',
+    'unique permission id collision keeps this permission name' );
+is( $permission_pk->{resource_type},
+    'report', 'unique permission id collision keeps this resource type' );
+
+my $permission_leftover_permissions =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $permission_leftover_audit = GPForum::Test::ModerationResultSet->new;
+$permission_leftover_permissions->create(
+    {
+        action        => 'view_queue',
+        name          => 'report.view_queue',
+        permission_id => 'generated-1',
+        resource_type => 'report',
+    }
+);
+$permission_leftover_permissions->skip_search(1);
+my $permission_leftover_catalog = GPForum::Service::Admin::RoleCatalog->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog   => $permission_leftover_audit,
+            Permission => $permission_leftover_permissions,
+        },
+    ),
+);
+my $permission_leftover = $permission_leftover_catalog->create_permission(
+    {
+        action        => 'view_queue',
+        name          => 'report.view_queue',
+        resource_type => 'report',
+    }
+);
+ok( $permission_leftover->{idempotent},
+    'leftover permission id race reuses this permission' );
+is( $permission_leftover->{permission_id},
+    'generated-1', 'leftover permission id race keeps this permission' );
+is( $permission_leftover->{name},
+    'report.view_queue',
+    'leftover permission id race keeps this permission name' );
+is( scalar @{ $permission_leftover_permissions->created },
+    1, 'leftover permission id race does not insert a second permission' );
+is( scalar @{ $permission_leftover_audit->created },
+    1, 'leftover permission id race inserts the missing audit' );
+
+my $attach_leftover_grants =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $attach_leftover_audit = GPForum::Test::ModerationResultSet->new;
+$attach_leftover_grants->create(
+    {
+        permission_id => 'generated-4',
+        role_id       => 'generated-1',
+    }
+);
+$attach_leftover_grants->skip_search(1);
+my $attach_leftover_catalog = GPForum::Service::Admin::RoleCatalog->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog       => $attach_leftover_audit,
+            RolePermission => $attach_leftover_grants,
+        },
+    ),
+);
+my $attach_leftover = $attach_leftover_catalog->attach_permission(
+    {
+        permission_id => 'generated-4',
+        role_id       => 'generated-1',
+    }
+);
+ok( $attach_leftover->{idempotent}, 'leftover attach race reuses this grant' );
+is( $attach_leftover->{role_id},
+    'generated-1', 'leftover attach race keeps this role' );
+is( $attach_leftover->{permission_id},
+    'generated-4', 'leftover attach race keeps this permission' );
+is( scalar @{ $attach_leftover_grants->created },
+    1, 'leftover attach race does not insert a second grant' );
+is( scalar @{ $attach_leftover_audit->created },
+    1, 'leftover attach race inserts the missing audit' );
+
 my $listed_roles = $catalog->list_roles( { limit => $ROLE_LIMIT } );
 is( scalar @{$listed_roles},    $CREATED_ROLES, 'roles can be listed' );
 is( $roles->last_attrs->{rows}, $ROLE_LIMIT,    'role listing applies limit' );
@@ -210,6 +447,114 @@ is( scalar @{ $role_bindings->created },
     $CREATED_BINDINGS, 'duplicate binding avoids duplicate rows' );
 is( scalar @{ $audit_log->created },
     $BINDING_AUDIT_ROWS, 'duplicate binding avoids duplicate audit' );
+
+$role_bindings->skip_search(1);
+my $raced_bound = $binding_store->bind_role(
+    {
+        actor_user_id => 'admin-1',
+        user_id       => 'moderator-1',
+        role_id       => 'generated-1',
+        resource_type => 'space',
+        resource_id   => 'space-1',
+        space_id      => 'space-1',
+    }
+);
+ok( $raced_bound->{idempotent},
+    'unique role binding race reuses the active row' );
+is( $raced_bound->{binding}{binding_id},
+    'generated-1', 'unique role binding race keeps the original binding id' );
+is( scalar @{ $role_bindings->created },
+    $CREATED_BINDINGS,
+    'unique role binding race does not insert a second row' );
+is( scalar @{ $audit_log->created },
+    $BINDING_AUDIT_ROWS,
+    'unique role binding race does not write a second audit' );
+
+my $binding_pk_bindings =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $binding_pk_audit = GPForum::Test::ModerationResultSet->new;
+$binding_pk_bindings->create(
+    {
+        binding_id    => 'generated-1',
+        resource_id   => 'other-space',
+        resource_type => 'space',
+        role_id       => 'other-role',
+        space_id      => 'other-space',
+        user_id       => 'other-user',
+    }
+);
+my $binding_pk_store = GPForum::Service::Admin::RoleBindingStore->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog    => $binding_pk_audit,
+            RoleBinding => $binding_pk_bindings,
+        },
+    ),
+);
+my $binding_pk = $binding_pk_store->bind_role(
+    {
+        actor_user_id => 'admin-1',
+        resource_id   => 'space-1',
+        resource_type => 'space',
+        role_id       => 'generated-1',
+        space_id      => 'space-1',
+        user_id       => 'moderator-1',
+    }
+);
+ok( $binding_pk->{ok}, 'unique binding id collision remints and binds' );
+ok( !$binding_pk->{idempotent},
+    'unique binding id collision does not reuse another binding' );
+is( $binding_pk->{binding}{binding_id},
+    'generated-2', 'unique binding id collision remints the id' );
+is( $binding_pk->{binding}{user_id},
+    'moderator-1', 'unique binding id collision keeps this user' );
+
+my $binding_leftover_bindings =
+  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
+my $binding_leftover_audit = GPForum::Test::ModerationResultSet->new;
+$binding_leftover_bindings->create(
+    {
+        binding_id    => 'generated-1',
+        resource_id   => 'space-1',
+        resource_type => 'space',
+        role_id       => 'generated-1',
+        space_id      => 'space-1',
+        user_id       => 'moderator-1',
+    }
+);
+$binding_leftover_bindings->skip_search(1);
+my $binding_leftover_store = GPForum::Service::Admin::RoleBindingStore->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::ModerationSchema->new(
+        resultsets => {
+            AuditLog    => $binding_leftover_audit,
+            RoleBinding => $binding_leftover_bindings,
+        },
+    ),
+);
+my $binding_leftover = $binding_leftover_store->bind_role(
+    {
+        actor_user_id => 'admin-1',
+        resource_id   => 'space-1',
+        resource_type => 'space',
+        role_id       => 'generated-1',
+        space_id      => 'space-1',
+        user_id       => 'moderator-1',
+    }
+);
+ok( $binding_leftover->{idempotent},
+    'leftover binding id race reuses this binding' );
+is( $binding_leftover->{binding}{binding_id},
+    'generated-1', 'leftover binding id race keeps this binding' );
+is( $binding_leftover->{binding}{user_id},
+    'moderator-1', 'leftover binding id race keeps this user' );
+is( scalar @{ $binding_leftover_bindings->created },
+    1, 'leftover binding id race does not insert a second binding' );
+is( scalar @{ $binding_leftover_audit->created },
+    1, 'leftover binding id race inserts the missing audit' );
 
 my $revoked = $binding_store->revoke_binding( 'generated-1', 'admin-2' );
 is( $revoked->{binding_id}, 'generated-1', 'revoke returns binding id' );

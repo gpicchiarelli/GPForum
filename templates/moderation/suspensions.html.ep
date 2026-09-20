@@ -51,6 +51,7 @@
             % if (!$suspension->{revoked_at}) {
               <form method="post" action="<%= url_for('moderation_suspension_revoke', suspension_id => $suspension->{suspension_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $suspension->{revoke_command_id} || q{} %>">
                 <label for="<%= $suspension->{ui}{revoke_reason_id} %>"><%= t('common.reason') %></label>
                 <input id="<%= $suspension->{ui}{revoke_reason_id} %>" name="reason" required>
                 <button type="submit"><%= t('moderation.revoke_suspension') %></button>

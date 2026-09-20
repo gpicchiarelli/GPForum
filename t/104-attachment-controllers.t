@@ -27,6 +27,10 @@ ok(
     $GPForum::Controller::Attachments::Upload::{upload_post},
     'upload controller owns post attachment writes'
 );
+ok(
+    $GPForum::Controller::Attachments::Upload::{delete_post},
+    'upload controller owns post attachment deletes'
+);
 isa_ok(
     'GPForum::Controller::Attachments',
     'GPForum::Controller::Attachments::Base'
@@ -41,6 +45,8 @@ GPForum::Bootstrap::Routes->register( application => $app );
 _assert_route( $app, 'attachment_download', 'Attachments', 'download' );
 _assert_route( $app, 'post_attachment_upload',
     'Attachments::Upload', 'upload_post' );
+_assert_route( $app, 'post_attachment_delete',
+    'Attachments::Upload', 'delete_post' );
 
 done_testing();
 

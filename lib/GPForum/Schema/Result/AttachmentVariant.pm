@@ -43,6 +43,8 @@ __PACKAGE__->add_columns(
 __PACKAGE__->set_primary_key('attachment_variant_id');
 __PACKAGE__->add_unique_constraint(
     attachment_variants_variant_key => [ 'attachment_id', 'variant_type' ] );
+__PACKAGE__->add_unique_constraint(
+    attachment_variants_object_key_key => ['object_key'] );
 __PACKAGE__->belongs_to(
     attachment => 'GPForum::Schema::Result::Attachment',
     'attachment_id'

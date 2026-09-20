@@ -16,6 +16,11 @@ The catalog includes budgets for:
 Additional admin, moderation, posting, reporting and autocomplete endpoints are
 also cataloged so benchmark evidence can compare route behavior consistently.
 
+`script/query-budget --sync` writes a catalog row only when max queries,
+transactions, or notes differ from the stored budget. An already-aligned
+catalog is a no-op. A unique race on `endpoint_name` reuses the existing
+row and does not rewrite the catalog when those values match.
+
 ## Observations
 
 The DBIx::Class statistics observer records per request:

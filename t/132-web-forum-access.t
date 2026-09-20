@@ -91,6 +91,34 @@ ok(
     'requires_participation includes reply create'
 );
 ok(
+    $access->requires_participation('post.edit'),
+    'requires_participation includes post edit'
+);
+ok(
+    $access->requires_participation('post.delete'),
+    'requires_participation includes post delete'
+);
+ok(
+    $access->requires_participation('post.restore'),
+    'requires_participation includes post restore'
+);
+ok(
+    $access->requires_participation('thread.edit'),
+    'requires_participation includes thread edit'
+);
+ok(
+    $access->requires_participation('thread.delete'),
+    'requires_participation includes thread delete'
+);
+ok(
+    $access->requires_participation('thread.move'),
+    'requires_participation includes thread move'
+);
+ok(
+    $access->requires_participation('thread.restore'),
+    'requires_participation includes thread restore'
+);
+ok(
     !$access->requires_participation('thread.read'),
     'requires_participation ignores read markers'
 );
@@ -279,6 +307,39 @@ is( $access->search_more_limit( 1, $SEARCH_DEFAULT ),
     $SEARCH_DOUBLE, 'search_more_limit doubles the current page' );
 is( $access->search_more_limit( 1, $SEARCH_DOUBLE ),
     $SEARCH_MAX, 'search_more_limit caps the doubled page' );
+
+ok(
+    $access->is_unavailable( { status => 'failed' } ),
+    'is_unavailable accepts a failed store write'
+);
+ok(
+    $access->is_unavailable( { system_error => 1 } ),
+    'is_unavailable accepts a report system error'
+);
+ok(
+    !$access->is_unavailable( { status => 'invalid' } ),
+    'is_unavailable ignores a client validation error'
+);
+is( $access->write_flash_key('thread_created'),
+    'forum.thread_created',
+    'write_flash_key maps thread create to the flash key' );
+is( $access->write_flash_key('post_restored'),
+    'forum.post_restored',
+    'write_flash_key maps post restore to the flash key' );
+is( $access->write_flash_key('thread_restored'),
+    'forum.thread_restored',
+    'write_flash_key maps thread restore to the flash key' );
+is( $access->write_flash_key('bookmarked'),
+    'forum.bookmarked', 'write_flash_key maps bookmark to the flash key' );
+is( $access->write_flash_key('read_marked'),
+    'forum.posts_marked_read',
+    'write_flash_key maps read marker to the flash key' );
+is( $access->read_marked_status,
+    'read_marked', 'read_marked_status returns read_marked' );
+ok(
+    !defined $access->write_flash_key('unknown'),
+    'write_flash_key ignores an unmapped status'
+);
 
 done_testing();
 

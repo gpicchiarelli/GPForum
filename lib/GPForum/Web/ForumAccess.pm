@@ -31,6 +31,46 @@ const my $STATUS_BOOKMARK_REMOVED   => 'bookmark_removed';
 const my $STATUS_SUBSCRIBED         => 'subscribed';
 const my $STATUS_SUBSCRIPTION_MUTED => 'subscription_muted';
 const my $STATUS_UNSUBSCRIBED       => 'unsubscribed';
+const my $STATUS_THREAD_CREATED     => 'thread_created';
+const my $STATUS_THREAD_UPDATED     => 'thread_updated';
+const my $STATUS_THREAD_MOVED       => 'thread_moved';
+const my $STATUS_THREAD_DELETED     => 'thread_deleted';
+const my $STATUS_THREAD_RESTORED    => 'thread_restored';
+const my $STATUS_POST_CREATED       => 'post_created';
+const my $STATUS_POST_UPDATED       => 'post_updated';
+const my $STATUS_POST_DELETED       => 'post_deleted';
+const my $STATUS_POST_RESTORED      => 'post_restored';
+const my $STATUS_READ_MARKED        => 'read_marked';
+const my $STATUS_REPORTED           => 'reported';
+const my %WRITE_FLASH => (
+    $STATUS_BOOKMARKED         => 'forum.bookmarked',
+    $STATUS_BOOKMARK_REMOVED   => 'forum.bookmark_removed',
+    $STATUS_POST_CREATED       => 'forum.reply_posted',
+    $STATUS_POST_DELETED       => 'forum.post_deleted',
+    $STATUS_POST_RESTORED      => 'forum.post_restored',
+    $STATUS_POST_UPDATED       => 'forum.post_updated',
+    $STATUS_READ_MARKED        => 'forum.posts_marked_read',
+    $STATUS_REPORTED           => 'forum.reported',
+    $STATUS_SUBSCRIBED         => 'forum.subscribed',
+    $STATUS_SUBSCRIPTION_MUTED => 'forum.subscription_muted',
+    $STATUS_THREAD_CREATED     => 'forum.thread_created',
+    $STATUS_THREAD_DELETED     => 'forum.thread_deleted',
+    $STATUS_THREAD_MOVED       => 'forum.thread_moved',
+    $STATUS_THREAD_RESTORED    => 'forum.thread_restored',
+    $STATUS_THREAD_UPDATED     => 'forum.thread_updated',
+    $STATUS_UNSUBSCRIBED       => 'forum.unsubscribed',
+);
+const my %PARTICIPATION_ACTIONS => (
+    'post.delete'    => 1,
+    'post.edit'      => 1,
+    'post.restore'   => 1,
+    'reply.create'   => 1,
+    'thread.create'  => 1,
+    'thread.delete'  => 1,
+    'thread.edit'    => 1,
+    'thread.move'    => 1,
+    'thread.restore' => 1,
+);
 
 sub read_rate_input {
     my ( undef, $input ) = @_;
@@ -72,10 +112,10 @@ sub write_limit_for {
 sub requires_participation {
     my ( undef, $action ) = @_;
 
-    if ( $action eq 'thread.create' ) {
-        return 1;
+    if ( !defined $action ) {
+        return 0;
     }
-    if ( $action eq 'reply.create' ) {
+    if ( exists $PARTICIPATION_ACTIONS{$action} ) {
         return 1;
     }
 
@@ -108,6 +148,20 @@ sub report_reason_error {
     }
 
     return;
+}
+
+sub is_unavailable {
+    my ( undef, $result ) = @_;
+
+    my $payload = $result || {};
+    if ( $payload->{system_error} ) {
+        return 1;
+    }
+    if ( ( $payload->{status} || q{} ) eq 'failed' ) {
+        return 1;
+    }
+
+    return 0;
 }
 
 sub is_non_negative_integer {
@@ -173,6 +227,63 @@ sub subscription_muted_status {
 
 sub unsubscribed_status {
     return $STATUS_UNSUBSCRIBED;
+}
+
+sub thread_created_status {
+    return $STATUS_THREAD_CREATED;
+}
+
+sub thread_updated_status {
+    return $STATUS_THREAD_UPDATED;
+}
+
+sub thread_moved_status {
+    return $STATUS_THREAD_MOVED;
+}
+
+sub thread_deleted_status {
+    return $STATUS_THREAD_DELETED;
+}
+
+sub thread_restored_status {
+    return $STATUS_THREAD_RESTORED;
+}
+
+sub post_created_status {
+    return $STATUS_POST_CREATED;
+}
+
+sub post_updated_status {
+    return $STATUS_POST_UPDATED;
+}
+
+sub post_deleted_status {
+    return $STATUS_POST_DELETED;
+}
+
+sub post_restored_status {
+    return $STATUS_POST_RESTORED;
+}
+
+sub read_marked_status {
+    return $STATUS_READ_MARKED;
+}
+
+sub reported_status {
+    return $STATUS_REPORTED;
+}
+
+sub write_flash_key {
+    my ( undef, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
+    if ( exists $WRITE_FLASH{$status} ) {
+        return $WRITE_FLASH{$status};
+    }
+
+    return;
 }
 
 sub search_page_limit {
@@ -284,8 +395,9 @@ Version 0.001.
 Owns forum read/write rate-limit hashes, participation actions, report field
 errors, search page and autocomplete limits, list page defaults, community
 target types, community write-success statuses, search filter names, public SSR
-cache keys, and non-negative integer limits. It does not render HTTP
-responses or call rate-limiter services.
+cache keys, non-negative integer limits, and store-failure classification
+for HTTP 503. It does not render HTTP responses or call rate-limiter
+services.
 L<GPForum::Controller::Forum::Base> still checks CSRF, sessions, suspensions,
 and Guard errors.
 
@@ -305,7 +417,8 @@ Returns 5 for reports, 10 for bookmark/subscription churn, otherwise 20.
 
 =head2 requires_participation
 
-True for C<thread.create> and C<reply.create>.
+True for C<thread.create>, C<reply.create>, C<post.edit>, C<post.delete>,
+C<thread.edit>, C<thread.delete>, and C<thread.move>.
 
 =head2 report_field_errors
 
@@ -314,6 +427,11 @@ Returns reason/details validation errors.
 =head2 report_reason_error
 
 Returns a reason error or undef.
+
+=head2 is_unavailable
+
+True when a write result is a store failure (C<failed>) or a report
+C<system_error>. Controllers map that to HTTP 503 without the exception text.
 
 =head2 is_non_negative_integer
 
@@ -363,6 +481,51 @@ Returns C<subscription_muted>.
 =head2 unsubscribed_status
 
 Returns C<unsubscribed>.
+
+=head2 thread_created_status
+
+Returns C<thread_created>.
+
+=head2 thread_updated_status
+
+Returns C<thread_updated>.
+
+=head2 thread_moved_status
+
+Returns C<thread_moved>.
+
+=head2 thread_deleted_status
+
+Returns C<thread_deleted>.
+
+=head2 thread_restored_status
+
+Returns C<thread_restored>.
+
+=head2 post_created_status
+
+Returns C<post_created>.
+
+=head2 post_updated_status
+
+Returns C<post_updated>.
+
+=head2 post_deleted_status
+
+Returns C<post_deleted>.
+
+=head2 read_marked_status
+
+Returns C<read_marked>.
+
+=head2 reported_status
+
+Returns C<reported>.
+
+=head2 write_flash_key
+
+Returns the i18n catalog key for a successful HTML write, or undef when the
+status has no flash copy.
 
 =head2 search_page_limit
 

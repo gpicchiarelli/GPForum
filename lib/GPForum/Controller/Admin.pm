@@ -23,7 +23,7 @@ sub dashboard {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin dashboard failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -47,7 +47,7 @@ sub roles {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin roles failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -71,7 +71,7 @@ sub categories {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin categories failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -113,7 +113,7 @@ sub audit {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin audit failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -149,7 +149,7 @@ sub users {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin users failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -184,7 +184,7 @@ sub jobs {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin jobs failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -212,7 +212,7 @@ sub status {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin status failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -245,24 +245,31 @@ sub _dashboard_payload {
 sub _roles_payload {
     my ($self) = @_;
 
+    my $limit = $self->limit_param;
+    my $roles = $self->gp_role_catalog->list_roles( { limit => $limit } );
+
     return $self->gp_admin_view_model->roles_page(
-        csrf_token  => $self->csrf_token,
-        permissions => $self->gp_role_catalog->list_permissions(
-            { limit => $self->limit_param }
-        ),
-        roles =>
-          $self->gp_role_catalog->list_roles( { limit => $self->limit_param } ),
+        attach_command_ids    => $self->_ids_for( $roles, 'role_id' ),
+        csrf_token            => $self->csrf_token,
+        permission_command_id => $self->_new_command_id,
+        permissions           =>
+          $self->gp_role_catalog->list_permissions( { limit => $limit } ),
+        role_command_id => $self->_new_command_id,
+        roles           => $roles,
     );
 }
 
 sub _categories_payload {
     my ($self) = @_;
 
+    my $categories = $self->gp_category_store->list_categories(
+        { limit => $self->limit_param } );
+
     return $self->gp_admin_view_model->categories_page(
-        categories => $self->gp_category_store->list_categories(
-            { limit => $self->limit_param }
-        ),
-        csrf_token => $self->csrf_token,
+        categories         => $categories,
+        create_command_id  => $self->_new_command_id,
+        csrf_token         => $self->csrf_token,
+        update_command_ids => $self->_ids_for( $categories, 'category_id' ),
     );
 }
 
@@ -277,20 +284,43 @@ sub _render_user_roles {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("admin user roles failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
         {
             payload => $self->gp_admin_view_model->user_roles_page(
-                bindings   => $bindings,
-                csrf_token => $self->csrf_token,
-                user_id    => $target_user_id,
+                bindings           => $bindings,
+                bind_command_id    => $self->_new_command_id,
+                csrf_token         => $self->csrf_token,
+                revoke_command_ids =>
+                  $self->_ids_for( $bindings, 'binding_id' ),
+                user_id => $target_user_id,
             ),
             status   => $HTTP_OK,
             template => 'admin/user_roles',
         }
     );
+}
+
+sub _ids_for {
+    my ( $self, $rows, $key ) = @_;
+
+    my %ids;
+    for my $row ( @{$rows} ) {
+        my $id = $row->{$key};
+        if ($id) {
+            $ids{$id} = $self->_new_command_id;
+        }
+    }
+
+    return \%ids;
+}
+
+sub _new_command_id {
+    my ($self) = @_;
+
+    return $self->gp_id->uuid;
 }
 
 sub _audit_rows {

@@ -44,6 +44,15 @@ sub record_action {
     return;
 }
 
+sub record_mail {
+    my ( $self, $input ) = @_;
+
+    $self->recorder->record_event( %{ $self->events->mail_envelope($input) },
+        outbox_payload => $self->events->mail_outbox_payload($input), );
+
+    return;
+}
+
 1;
 
 __END__
@@ -63,9 +72,9 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Records registration events/audits and typed identity audit actions through
-the shared event recorder. Event and audit hashes live in
-L<GPForum::Service::Identity::Event>.
+Records registration events/audits, typed identity audit actions, and
+identity mail outbox jobs through the shared event recorder. Event and
+audit hashes live in L<GPForum::Service::Identity::Event>.
 
 =head1 SUBROUTINES/METHODS
 
@@ -76,6 +85,12 @@ Writes the C<user.registered> event and audit pair.
 =head2 record_action
 
 Writes a generic identity audit row.
+
+=head2 record_mail
+
+Writes C<identity.mail.requested> to EventLog and an outbox row whose
+payload includes the raw token under C<mail>. EventLog payload is
+C<kind> and C<token_id> only.
 
 =head1 DIAGNOSTICS
 

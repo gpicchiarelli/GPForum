@@ -82,6 +82,14 @@ sub system_failure {
     };
 }
 
+sub unavailable {
+    return {
+        error  => 'service unavailable',
+        status => 'unavailable',
+        title  => 'Service unavailable',
+    };
+}
+
 sub conflict {
     my ( $self, %input ) = @_;
 

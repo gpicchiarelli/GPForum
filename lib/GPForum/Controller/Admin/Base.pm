@@ -124,7 +124,7 @@ sub write_failure {
     my ( $self, $result ) = @_;
 
     if ( $self->admin_access->is_failed($result) ) {
-        return $self->_system_failure;
+        return $self->_service_unavailable;
     }
 
     return $self->_mapped_failure($result);
@@ -133,12 +133,24 @@ sub write_failure {
 sub _mapped_failure {
     my ( $self, $result ) = @_;
 
-    my $status = $self->admin_access->failure_status($result) || q{};
+    return $self->_status_failure( $result,
+        $self->admin_access->failure_status($result) );
+}
+
+sub _status_failure {
+    my ( $self, $result, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
     if ( $status eq 'not_found' ) {
         return $self->_not_found( $result->{error} );
     }
     if ( $status eq 'invalid' ) {
         return $self->_bad_request( $result->{errors} );
+    }
+    if ( $status eq 'conflict' ) {
+        return $self->_conflict( $result->{error} );
     }
 
     return;
@@ -155,7 +167,8 @@ sub role_response {
         );
     }
 
-    return $self->redirect_to( $self->admin_access->default_redirect );
+    return $self->_html_success( $status,
+        $self->admin_access->default_redirect );
 }
 
 sub permission_response {
@@ -170,7 +183,8 @@ sub permission_response {
         );
     }
 
-    return $self->redirect_to( $self->admin_access->default_redirect );
+    return $self->_html_success( $status,
+        $self->admin_access->default_redirect );
 }
 
 sub role_permission_response {
@@ -185,7 +199,8 @@ sub role_permission_response {
         );
     }
 
-    return $self->redirect_to( $self->admin_access->default_redirect );
+    return $self->_html_success( $status,
+        $self->admin_access->default_redirect );
 }
 
 sub binding_response {
@@ -200,7 +215,8 @@ sub binding_response {
         );
     }
 
-    return $self->redirect_to( $self->admin_access->default_redirect );
+    return $self->_html_success( $status,
+        $self->admin_access->default_redirect );
 }
 
 sub category_response {
@@ -215,7 +231,8 @@ sub category_response {
         );
     }
 
-    return $self->redirect_to( $self->admin_access->categories_redirect );
+    return $self->_html_success( $status,
+        $self->admin_access->categories_redirect );
 }
 
 sub render_payload {
@@ -271,10 +288,41 @@ sub _current_user_id {
     return GPForum::Web::Access->new->user_id($self);
 }
 
+sub _html_success {
+    my ( $self, $status, $route ) = @_;
+
+    $self->_set_success_flash( $self->admin_access->write_flash_key($status) );
+
+    return $self->redirect_to($route);
+}
+
+sub _set_success_flash {
+    my ( $self, $flash_key ) = @_;
+
+    if ( !$flash_key ) {
+        return;
+    }
+
+    $self->flash( success => $self->t($flash_key) );
+
+    return;
+}
+
 sub _wants_json {
     my ($self) = @_;
 
     return GPForum::Web::Access->new->wants_json($self);
+}
+
+sub command_id_param {
+    my ($self) = @_;
+
+    my $command_id = $self->_trim( $self->param('command_id') );
+    if ( length $command_id ) {
+        return $command_id;
+    }
+
+    return $self->_trim( $self->param('idempotency_key') );
 }
 
 sub _trim {
@@ -355,10 +403,28 @@ sub _not_found {
     return GPForum::Web::Guard->new->not_found( $self, $error );
 }
 
-sub _system_failure {
+sub _conflict {
+    my ( $self, $error ) = @_;
+
+    return GPForum::Web::Guard->new->conflict(
+        $self,
+        {
+            error => $error || 'idempotency conflict',
+            title => 'Conflict',
+        }
+    );
+}
+
+sub system_failure {
     my ($self) = @_;
 
     return GPForum::Web::Guard->new->system_failure($self);
+}
+
+sub _service_unavailable {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->service_unavailable($self);
 }
 
 sub _record_security_event {

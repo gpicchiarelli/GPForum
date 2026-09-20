@@ -10,16 +10,18 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-const my $STATE_AVAILABLE   => 'available';
-const my $STATE_DELETED     => 'deleted';
-const my $STATE_INTENT      => 'intent';
-const my $STATE_QUARANTINED => 'quarantined';
-const my $SCAN_CLEAN        => 'clean';
-const my $ORPHAN_LIMIT      => 100;
-const my $ORPHAN_REASON     => 'orphan cleanup';
-const my $LINKS_PER_POST    => 10;
-const my $LINK_LOOKUP_ROWS  => 10;
-const my $TARGET_POST       => 'post';
+const my $STATE_AVAILABLE      => 'available';
+const my $STATE_DELETED        => 'deleted';
+const my $STATE_INTENT         => 'intent';
+const my $STATE_QUARANTINED    => 'quarantined';
+const my $SCAN_CLEAN           => 'clean';
+const my $SCAN_INFECTED        => 'infected';
+const my $ORPHAN_LIMIT         => 100;
+const my $ORPHAN_REASON        => 'orphan cleanup';
+const my $AUTHOR_DELETE_REASON => 'author delete';
+const my $LINKS_PER_POST       => 10;
+const my $LINK_LOOKUP_ROWS     => 10;
+const my $TARGET_POST          => 'post';
 
 has clock  => sub { return GPForum::Service::Clock->new; };
 has record => sub { return GPForum::Service::Attachment::Record->new; };
@@ -52,6 +54,26 @@ sub scan_state {
     return $STATE_QUARANTINED;
 }
 
+sub already_scanned {
+    my ( $self, $attachment ) = @_;
+
+    return _terminal_scan(
+        $self->record->column( $attachment, 'scan_status' ),
+        $self->record->column( $attachment, 'state' ),
+    );
+}
+
+sub scanned_replay {
+    my ( $self, $attachment ) = @_;
+
+    return {
+        attachment_id => $self->record->column( $attachment, 'attachment_id' ),
+        idempotent    => 1,
+        scan_status   => $self->record->column( $attachment, 'scan_status' ),
+        state         => $self->record->column( $attachment, 'state' ),
+    };
+}
+
 sub replayed_scan {
     my ( $self, $existing, $input ) = @_;
 
@@ -65,6 +87,59 @@ sub replayed_scan {
         scan_status   => $self->record->column( $existing, 'scan_status' ),
         state         => $self->record->column( $existing, 'state' ),
     };
+}
+
+sub _terminal_scan {
+    my ( $scan, $state ) = @_;
+
+    if ( _clean_available( $scan, $state ) ) {
+        return 1;
+    }
+    if ( _infected_quarantined( $scan, $state ) ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub _clean_available {
+    my ( $scan, $state ) = @_;
+
+    if ( !_same_text( $scan, $SCAN_CLEAN ) ) {
+        return 0;
+    }
+
+    return _same_text( $state, $STATE_AVAILABLE );
+}
+
+sub _infected_quarantined {
+    my ( $scan, $state ) = @_;
+
+    if ( !_same_text( $scan, $SCAN_INFECTED ) ) {
+        return 0;
+    }
+
+    return _same_text( $state, $STATE_QUARANTINED );
+}
+
+sub _same_text {
+    my ( $held, $incoming ) = @_;
+
+    if ( _text($held) eq $incoming ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub _text {
+    my ($value) = @_;
+
+    if ( defined $value ) {
+        return $value;
+    }
+
+    return q{};
 }
 
 sub scan_matches {
@@ -133,6 +208,19 @@ sub orphan_reason {
     }
 
     return $ORPHAN_REASON;
+}
+
+sub author_delete_reason {
+    my ( undef, $input ) = @_;
+
+    if (   exists $input->{reason}
+        && defined $input->{reason}
+        && length $input->{reason} )
+    {
+        return $input->{reason};
+    }
+
+    return $AUTHOR_DELETE_REASON;
 }
 
 sub orphan_actor {
@@ -226,6 +314,15 @@ Returns the idempotent upload hash.
 
 Returns C<available> for a clean scan, otherwise C<quarantined>.
 
+=head2 already_scanned
+
+True when the attachment is already clean and available, or infected and
+quarantined. A failed scan is not terminal and may be retried.
+
+=head2 scanned_replay
+
+Returns the idempotent scan hash from the stored row.
+
 =head2 replayed_scan
 
 Returns the idempotent scan hash when status and state already match.
@@ -253,6 +350,10 @@ Returns the candidate row cap, defaulting to 100.
 =head2 orphan_reason
 
 Returns the delete reason, defaulting to C<orphan cleanup>.
+
+=head2 author_delete_reason
+
+Returns the delete reason, defaulting to C<author delete>.
 
 =head2 orphan_actor
 

@@ -13,7 +13,8 @@ Recommended baseline:
 nginx or Caddy
 -> Hypnotoad / Mojolicious
 -> PostgreSQL
--> Minion workers
+-> gpforum-outbox-dispatch (required worker)
+-> optional Minion workers
 ```
 
 The reverse proxy should handle TLS, compression, static files, large
@@ -103,11 +104,15 @@ Recommended operator actions:
 - install Carton for the same Perl that will run the app, then install
   dependencies with `make install-deps-postgres` (`script/bootstrap-deps --postgres`);
 - set `GPFORUM_SESSION_SECRET`;
+- set `GPFORUM_SESSION_SECRETS` to comma-separated previous secrets when
+  rotating, so existing cookies still validate;
 - set database credentials with environment or an environment file;
 - install `/etc/gpforum/gpforum.env` with `GPFORUM_SESSION_SECRET`,
+  optional `GPFORUM_SESSION_SECRETS`,
   `GPFORUM_DATABASE_DSN`, `GPFORUM_DATABASE_USER`,
   `GPFORUM_DATABASE_PASSWORD`, `GPFORUM_PUBLIC_BASE_URL`,
-  `GPFORUM_METRICS_TOKEN`, and `GPFORUM_GLIFISTORE_URL`;
+  `GPFORUM_METRICS_TOKEN`, optional `GPFORUM_METRICS_TOKENS`, and
+  `GPFORUM_GLIFISTORE_URL`;
 - set `GPFORUM_CARTON` when Carton is not on the service `PATH`;
 - set `LimitNOFILE=65536`;
 - run migrations before first start;
@@ -256,10 +261,14 @@ Minimum recommended posture:
 
 - application role is not PostgreSQL superuser;
 - migrations use a separate role;
-- `statement_timeout` is set per role or deployment;
-- `idle_in_transaction_session_timeout` is enabled;
-- `lock_timeout` is used for migrations;
-- `application_name=gpforum` is configured where possible;
+- `statement_timeout` defaults to 15s on app connect
+  (`GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`; `gpforum-migrate --apply`
+  clears it);
+- `idle_in_transaction_session_timeout` defaults to 10s on app connect
+  (`GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`);
+- `lock_timeout` defaults to 3s on app connect
+  (`GPFORUM_DATABASE_LOCK_TIMEOUT_MS`);
+- `application_name=gpforum` is set on connect;
 - backups and restore tests exist before production launch.
 
 ## Tuning By OS

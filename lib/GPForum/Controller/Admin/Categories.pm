@@ -47,6 +47,7 @@ sub _category_params {
 
     return {
         actor_user_id => $user_id,
+        command_id    => $self->command_id_param,
         description   => $self->param('description'),
         position      => $self->param('position'),
         slug          => $self->param('slug'),

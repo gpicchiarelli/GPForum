@@ -25,6 +25,23 @@ sub mark_read {
     );
 }
 
+sub mark_all_read {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id('notification.read');
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->mark_all_read_response(
+        $self->gp_notification_workflow->mark_all_read(
+            {
+                user_id => $user_id,
+            }
+        ),
+    );
+}
+
 1;
 
 __END__
@@ -41,16 +58,22 @@ Version 0.001.
 
     $routes->post('/notifications/:notification_id/read')
       ->to('Notifications::Read#mark_read');
+    $routes->post('/notifications/read-all')
+      ->to('Notifications::Read#mark_all_read');
 
 =head1 DESCRIPTION
 
-Marks a recipient inbox row read through the notification workflow.
+Marks recipient inbox rows read through the notification workflow.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 mark_read
 
 Marks one notification read for the authenticated member.
+
+=head2 mark_all_read
+
+Marks every unread inbox row for the authenticated member.
 
 =head1 DIAGNOSTICS
 

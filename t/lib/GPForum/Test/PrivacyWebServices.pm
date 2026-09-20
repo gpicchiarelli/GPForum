@@ -49,6 +49,67 @@ sub export_requests_for_user {
     ];
 }
 
+sub completed_export_for_user {
+    my ( $self, $user_id, $export_request_id ) = @_;
+
+    my $match = $self->_export_row( $user_id, $export_request_id );
+    if ( !$match ) {
+        return;
+    }
+    if ( !_completed_export($match) ) {
+        return;
+    }
+
+    return $match;
+}
+
+sub _export_row {
+    my ( $self, $user_id, $export_request_id ) = @_;
+
+    if ( !_has_export_id($export_request_id) ) {
+        return;
+    }
+
+    my ($match) =
+      grep { $_->{export_request_id} eq $export_request_id }
+      @{ $self->export_requests_for_user($user_id) };
+
+    return $match;
+}
+
+sub _has_export_id {
+    my ($export_request_id) = @_;
+
+    if ( !$export_request_id ) {
+        return 0;
+    }
+    if ( $export_request_id eq 'missing' ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _completed_export {
+    my ($match) = @_;
+
+    if ( _export_status($match) eq 'completed' ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+sub _export_status {
+    my ($match) = @_;
+
+    if ( defined $match->{status} ) {
+        return $match->{status};
+    }
+
+    return q{};
+}
+
 sub active_holds_for_user {
     my ( $self, $user_id ) = @_;
 
@@ -284,8 +345,10 @@ sub _manifest {
             preferences   => 1,
             subscriptions => 1,
         },
-        format          => 'json',
-        generated_at    => '2026-05-23T12:00:00Z',
+        format       => 'json',
+        generated_at => '2026-05-23T12:00:00Z',
+        posts        => [ { body_source => 'Hello', post_id => 'post-1' } ],
+        profile => { email => 'giacomo@example.test', username => 'giacomo' },
         subject_user_id => 'user-1',
     };
 }

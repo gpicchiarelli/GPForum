@@ -62,11 +62,12 @@ sub register {
             my ($controller) = @_;
 
             return GPForum::Service::Privacy::Workflow->new(
-                deletion_workflow => $controller->gp_deletion_workflow,
-                export_builder    => $controller->gp_export_bundle_builder,
-                hold_store        => $controller->gp_retention_hold_store,
-                logger            => $controller->app->log,
-                reviewer          => $controller->gp_data_rights_review,
+                command_idempotency => $controller->gp_command_idempotency,
+                deletion_workflow   => $controller->gp_deletion_workflow,
+                export_builder      => $controller->gp_export_bundle_builder,
+                hold_store          => $controller->gp_retention_hold_store,
+                logger              => $controller->app->log,
+                reviewer            => $controller->gp_data_rights_review,
             );
         }
     );

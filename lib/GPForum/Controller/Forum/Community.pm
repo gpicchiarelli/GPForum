@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use English qw(-no_match_vars);
 use Mojo::Base 'GPForum::Controller::Forum::Base';
 
 our $VERSION = '0.001';
@@ -86,23 +85,19 @@ sub create_thread_bookmark {
 sub _save_thread_bookmark {
     my ( $self, $user_id ) = @_;
 
-    my $bookmark = eval {
-        return $self->gp_bookmark_store->save_bookmark(
+    return $self->_community_write_response(
+        'bookmark',
+        $self->forum_access->bookmarked_status,
+        $self->gp_community_workflow->save_bookmark(
             {
-                user_id     => $user_id,
-                target_type => $self->forum_access->thread_target,
-                target_id   => $self->param('thread_id'),
+                command_id  => $self->command_id_param,
                 note        => $self->param('note'),
+                target_id   => $self->param('thread_id'),
+                target_type => $self->forum_access->thread_target,
+                user_id     => $user_id,
             }
-        );
-    };
-
-    if ($EVAL_ERROR) {
-        return $self->_system_failure;
-    }
-
-    return $self->bookmark_action_response(
-        $self->forum_access->bookmarked_status, $bookmark );
+        ),
+    );
 }
 
 sub remove_thread_bookmark {
@@ -122,25 +117,18 @@ sub remove_thread_bookmark {
 sub _delete_thread_bookmark {
     my ( $self, $user_id ) = @_;
 
-    my $removed = eval {
-        return $self->gp_bookmark_store->remove_for_user_target(
+    return $self->_community_write_response(
+        'bookmark',
+        $self->forum_access->bookmark_removed_status,
+        $self->gp_community_workflow->remove_bookmark(
             {
-                user_id     => $user_id,
-                target_type => $self->forum_access->thread_target,
+                command_id  => $self->command_id_param,
                 target_id   => $self->param('thread_id'),
+                target_type => $self->forum_access->thread_target,
+                user_id     => $user_id,
             }
-        );
-    };
-
-    if ($EVAL_ERROR) {
-        return $self->_system_failure;
-    }
-    if ( !$removed->{ok} ) {
-        return $self->_not_found('bookmark not found');
-    }
-
-    return $self->bookmark_action_response(
-        $self->forum_access->bookmark_removed_status, $removed );
+        ),
+    );
 }
 
 sub subscribe_thread {
@@ -160,24 +148,19 @@ sub subscribe_thread {
 sub _save_thread_subscription {
     my ( $self, $user_id ) = @_;
 
-    my $subscription = eval {
-        return $self->gp_subscription_store->save_subscription(
-            {
-                user_id     => $user_id,
-                target_type => $self->forum_access->thread_target,
-                target_id   => $self->param('thread_id'),
-                preference  => $self->param('preference') || 'all',
-            }
-        );
-    };
-
-    if ($EVAL_ERROR) {
-        return $self->_system_failure;
-    }
-
-    return $self->subscription_action_response(
+    return $self->_community_write_response(
+        'subscription',
         $self->forum_access->subscribed_status,
-        $subscription );
+        $self->gp_community_workflow->save_subscription(
+            {
+                command_id  => $self->command_id_param,
+                preference  => $self->param('preference') || 'all',
+                target_id   => $self->param('thread_id'),
+                target_type => $self->forum_access->thread_target,
+                user_id     => $user_id,
+            }
+        ),
+    );
 }
 
 sub mute_thread_subscription {
@@ -197,25 +180,18 @@ sub mute_thread_subscription {
 sub _mute_visible_subscription {
     my ( $self, $user_id ) = @_;
 
-    my $muted = eval {
-        return $self->gp_subscription_store->mute_for_user_target(
+    return $self->_community_write_response(
+        'subscription',
+        $self->forum_access->subscription_muted_status,
+        $self->gp_community_workflow->mute_subscription(
             {
-                user_id     => $user_id,
-                target_type => $self->forum_access->thread_target,
+                command_id  => $self->command_id_param,
                 target_id   => $self->param('thread_id'),
+                target_type => $self->forum_access->thread_target,
+                user_id     => $user_id,
             }
-        );
-    };
-
-    if ($EVAL_ERROR) {
-        return $self->_system_failure;
-    }
-    if ( !$muted->{ok} ) {
-        return $self->_not_found('subscription not found');
-    }
-
-    return $self->subscription_action_response(
-        $self->forum_access->subscription_muted_status, $muted );
+        ),
+    );
 }
 
 sub unsubscribe_thread {
@@ -235,25 +211,77 @@ sub unsubscribe_thread {
 sub _revoke_visible_subscription {
     my ( $self, $user_id ) = @_;
 
-    my $revoked = eval {
-        return $self->gp_subscription_store->revoke_for_user_target(
+    return $self->_community_write_response(
+        'subscription',
+        $self->forum_access->unsubscribed_status,
+        $self->gp_community_workflow->revoke_subscription(
             {
-                user_id     => $user_id,
-                target_type => $self->forum_access->thread_target,
+                command_id  => $self->command_id_param,
                 target_id   => $self->param('thread_id'),
+                target_type => $self->forum_access->thread_target,
+                user_id     => $user_id,
             }
-        );
-    };
+        ),
+    );
+}
 
-    if ($EVAL_ERROR) {
-        return $self->_system_failure;
-    }
-    if ( !$revoked->{ok} ) {
-        return $self->_not_found('subscription not found');
+sub _community_write_response {
+    my ( $self, $kind, $status, $result ) = @_;
+
+    my $failure = $self->_community_write_failure($result);
+    if ($failure) {
+        return $failure;
     }
 
-    return $self->subscription_action_response(
-        $self->forum_access->unsubscribed_status, $revoked );
+    return $self->_community_write_success( $kind, $status, $result );
+}
+
+sub _community_write_failure {
+    my ( $self, $result ) = @_;
+
+    return $self->_community_status_failure( $result, $result->{status} );
+}
+
+sub _community_status_failure {
+    my ( $self, $result, $mapped ) = @_;
+
+    if ( !defined $mapped ) {
+        return;
+    }
+    if ( $mapped eq 'ok' ) {
+        return;
+    }
+
+    return $self->_community_error_response( $result, $mapped );
+}
+
+sub _community_error_response {
+    my ( $self, $result, $mapped ) = @_;
+
+    if ( $mapped eq 'failed' ) {
+        return $self->_service_unavailable;
+    }
+    if ( $mapped eq 'not_found' ) {
+        return $self->_not_found( $result->{error} );
+    }
+    if ( $mapped eq 'invalid' ) {
+        return $self->_bad_request( $result->{errors} );
+    }
+    if ( $mapped eq 'conflict' ) {
+        return $self->_conflict( $result->{error} );
+    }
+
+    return;
+}
+
+sub _community_write_success {
+    my ( $self, $kind, $status, $result ) = @_;
+
+    if ( $kind eq 'bookmark' ) {
+        return $self->bookmark_action_response( $status, $result->{stored} );
+    }
+
+    return $self->subscription_action_response( $status, $result->{stored} );
 }
 
 sub report_thread {
@@ -385,6 +413,8 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Handles authenticated community surfaces around visible threads and profiles.
+Bookmark and subscription writes go through
+L<GPForum::Service::Community::Workflow> and require HTTP C<command_id>.
 Bookmark and report target types and write-success statuses live on
 L<GPForum::Web::ForumAccess>.
 
@@ -436,7 +466,7 @@ Missing threads, bookmarks, and subscriptions render as not found.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Uses community stores configured during application startup.
+Uses the community workflow and stores configured during application startup.
 
 =head1 DEPENDENCIES
 

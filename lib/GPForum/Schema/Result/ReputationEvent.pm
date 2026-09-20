@@ -14,13 +14,15 @@ __PACKAGE__->add_columns(
     user_id             => { data_type => 'uuid',    is_nullable => 0 },
     actor_id            => { data_type => 'uuid',    is_nullable => 1 },
     source_type         => { data_type => 'text',    is_nullable => 0 },
-    source_id           => { data_type => 'uuid',    is_nullable => 1 },
+    source_id           => { data_type => 'uuid',    is_nullable => 0 },
     delta               => { data_type => 'integer', is_nullable => 0 },
     reason              => { data_type => 'text',    is_nullable => 0 },
     created_at => { data_type => 'timestamp with time zone', is_nullable => 0 },
 );
 
 __PACKAGE__->set_primary_key('reputation_event_id');
+__PACKAGE__->add_unique_constraint(
+    reputation_events_source_key => [ 'user_id', 'source_type', 'source_id' ] );
 __PACKAGE__->belongs_to( user => 'GPForum::Schema::Result::User', 'user_id' );
 __PACKAGE__->belongs_to(
     actor => 'GPForum::Schema::Result::User',

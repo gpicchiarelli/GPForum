@@ -41,17 +41,22 @@ sub category {
         return $self->_not_found('category not found');
     }
 
+    my $user_id = $self->_current_user_id;
     my $threads = $self->gp_thread_reader->list_category_threads(
         {
-            category_id => $category_id,
-            limit       => $self->list_page_limit,
-            after       => $self->param('after'),
+            category_id    => $category_id,
+            limit          => $self->list_page_limit,
+            after          => $self->param('after'),
+            viewer_user_id => $user_id,
         }
     );
 
     my $payload = $self->gp_forum_view_model->category_page(
-        category     => $category,
-        threads_page => $threads,
+        category                   => $category,
+        threads_page               => $threads,
+        restore_thread_command_ids =>
+          $self->_restore_thread_command_ids( $threads, $user_id ),
+        viewer_user_id => $user_id,
     );
 
     return $self->render_payload(
@@ -74,9 +79,10 @@ sub thread {
     my $user_id = $self->_current_user_id;
     my $page    = $self->gp_thread_detail_reader->thread_page(
         {
-            thread_id => $self->param('thread_id'),
-            limit     => $self->list_page_limit,
-            after     => $self->param('after'),
+            thread_id      => $self->param('thread_id'),
+            limit          => $self->list_page_limit,
+            after          => $self->param('after'),
+            viewer_user_id => $user_id,
         }
     );
 
@@ -84,24 +90,46 @@ sub thread {
         return $self->_not_found('thread not found');
     }
 
+    my $posts       = $page->{posts}{items};
+    my $attachments = $self->attachments_for_posts($posts);
+
     my $payload = $self->gp_forum_view_model->thread_page(
-        attachments_by_post =>
-          $self->attachments_for_posts( $page->{posts}{items} ),
-        engagement => $self->gp_forum_view_model->engagement_summary(
+        attachment_delete_command_ids =>
+          $self->_attachment_delete_command_ids( $attachments, $user_id ),
+        attachment_upload_command_ids =>
+          $self->_edit_command_ids( $page, $user_id ),
+        attachments_by_post => $attachments,
+        engagement          => $self->gp_forum_view_model->engagement_summary(
+            %{ $self->_community_command_ids($user_id) },
             bookmark_store     => $self->gp_bookmark_store,
             logger             => $self->app->log,
             subscription_store => $self->gp_subscription_store,
             thread             => $page->{thread},
             user_id            => $user_id,
         ),
-        metadata_builder => $self->gp_metadata_builder,
-        page             => $page,
-        reply_command_id => $user_id ? $self->_new_command_id : q{},
-        reading          => $self->gp_forum_view_model->reading_summary(
-            posts      => $page->{posts}{items},
-            read_state => $self->gp_thread_read_state,
-            thread_id  => $self->param('thread_id'),
-            user_id    => $user_id,
+        metadata_builder       => $self->gp_metadata_builder,
+        page                   => $page,
+        reply_command_id       => $user_id ? $self->_new_command_id : q{},
+        edit_command_ids       => $self->_edit_command_ids( $page, $user_id ),
+        delete_command_ids     => $self->_edit_command_ids( $page, $user_id ),
+        report_command_ids     => $self->_edit_command_ids( $page, $user_id ),
+        restore_command_ids    => $self->_edit_command_ids( $page, $user_id ),
+        edit_thread_command_id =>
+          $self->_thread_edit_command_id( $page, $user_id ),
+        delete_thread_command_id =>
+          $self->_thread_edit_command_id( $page, $user_id ),
+        restore_thread_command_id =>
+          $self->_thread_edit_command_id( $page, $user_id ),
+        move_thread_command_id =>
+          $self->_thread_edit_command_id( $page, $user_id ),
+        categories     => $self->gp_category_reader->list_categories( {} ),
+        viewer_user_id => $user_id,
+        reading        => $self->gp_forum_view_model->reading_summary(
+            posts           => $page->{posts}{items},
+            read_command_id => $user_id ? $self->_new_command_id : q{},
+            read_state      => $self->gp_thread_read_state,
+            thread_id       => $self->param('thread_id'),
+            user_id         => $user_id,
         ),
     );
 
@@ -140,6 +168,155 @@ sub new_thread_form {
             template   => 'forum/new_thread',
         }
     );
+}
+
+sub _edit_command_ids {
+    my ( $self, $page, $user_id ) = @_;
+
+    if ( !$user_id ) {
+        return {};
+    }
+
+    my $items = $page->{posts}{items} || [];
+    my %ids;
+    for my $row ( @{$items} ) {
+        $self->_store_edit_command_id( \%ids, $row, $user_id );
+    }
+
+    return \%ids;
+}
+
+sub _restore_thread_command_ids {
+    my ( $self, $threads, $user_id ) = @_;
+
+    if ( !$user_id ) {
+        return {};
+    }
+
+    my $items = $threads->{items} || [];
+    my %ids;
+    for my $row ( @{$items} ) {
+        $self->_store_restore_thread_id( \%ids, $row, $user_id );
+    }
+
+    return \%ids;
+}
+
+sub _store_restore_thread_id {
+    my ( $self, $ids, $row, $user_id ) = @_;
+
+    if ( !$self->_column( $row, 'deleted_at' ) ) {
+        return;
+    }
+
+    my $author = $self->_column( $row, 'author_user_id' ) || q{};
+    if ( $author ne $user_id ) {
+        return;
+    }
+
+    my $thread_id = $self->_column( $row, 'thread_id' );
+    if ( !$thread_id ) {
+        return;
+    }
+
+    $ids->{$thread_id} = $self->_new_command_id;
+
+    return;
+}
+
+sub _store_edit_command_id {
+    my ( $self, $ids, $row, $user_id ) = @_;
+
+    my $author = $self->_column( $row, 'author_user_id' );
+    if ( !$author || $author ne $user_id ) {
+        return;
+    }
+
+    my $post_id = $self->_column( $row, 'post_id' );
+    if ( !$post_id ) {
+        return;
+    }
+
+    $ids->{$post_id} = $self->_new_command_id;
+
+    return;
+}
+
+sub _attachment_delete_command_ids {
+    my ( $self, $by_post, $user_id ) = @_;
+
+    if ( !$user_id ) {
+        return {};
+    }
+
+    my %ids;
+    for my $list ( values %{ $by_post || {} } ) {
+        $self->_store_attachment_delete_ids( \%ids, $list );
+    }
+
+    return \%ids;
+}
+
+sub _store_attachment_delete_ids {
+    my ( $self, $ids, $list ) = @_;
+
+    for my $row ( @{ $list || [] } ) {
+        $self->_store_one_attachment_delete_id( $ids, $row );
+    }
+
+    return;
+}
+
+sub _store_one_attachment_delete_id {
+    my ( $self, $ids, $row ) = @_;
+
+    my $attachment_id = $self->_column( $row, 'attachment_id' );
+    if ( !$attachment_id ) {
+        return;
+    }
+
+    $ids->{$attachment_id} = $self->_new_command_id;
+
+    return;
+}
+
+sub _thread_edit_command_id {
+    my ( $self, $page, $user_id ) = @_;
+
+    if ( !$user_id ) {
+        return q{};
+    }
+
+    my $author = $self->_column( $page->{thread}, 'author_user_id' );
+    if ( !$author || $author ne $user_id ) {
+        return q{};
+    }
+
+    return $self->_new_command_id;
+}
+
+sub _community_command_ids {
+    my ( $self, $user_id ) = @_;
+
+    if ( !$user_id ) {
+        return {
+            bookmark_command_id        => q{},
+            bookmark_remove_command_id => q{},
+            mute_command_id            => q{},
+            subscribe_command_id       => q{},
+            thread_report_command_id   => q{},
+            unsubscribe_command_id     => q{},
+        };
+    }
+
+    return {
+        bookmark_command_id        => $self->_new_command_id,
+        bookmark_remove_command_id => $self->_new_command_id,
+        mute_command_id            => $self->_new_command_id,
+        subscribe_command_id       => $self->_new_command_id,
+        thread_report_command_id   => $self->_new_command_id,
+        unsubscribe_command_id     => $self->_new_command_id,
+    };
 }
 
 1;

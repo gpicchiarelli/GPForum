@@ -62,6 +62,12 @@ my $issued = $store->request_password_reset(
 ok( $issued->{ok}, 'request_password_reset succeeds for a known identifier' );
 is( $issued->{token}{raw_token},
     'raw-1', 'request_password_reset returns the issued token' );
+is( $services->mail_jobs->[0]{kind},
+    'password_reset', 'request_password_reset queues reset mail' );
+is( $services->mail_jobs->[0]{to},
+    'giacomo@example.test', 'reset mail uses the member address' );
+is( $services->mail_jobs->[0]{token},
+    'raw-1', 'queued reset mail keeps the raw token' );
 is( $services->created_tokens->[0]{token_type},
     'password_reset',
     'request_password_reset asks for a password-reset token' );
@@ -78,6 +84,8 @@ ok( $missing->{ok},
     'request_password_reset succeeds for an unknown identifier' );
 is( $missing->{token},
     undef, 'request_password_reset hides unknown identifiers' );
+is( scalar @{ $services->mail_jobs },
+    1, 'unknown identifier does not queue another mail job' );
 is( $services->actions->[1]{metadata}{outcome},
     'not_found', 'request_password_reset audits unknown identifiers' );
 
@@ -134,6 +142,42 @@ is( $schema->transaction_count,
     $PASSWORD_RESET_TRANSACTIONS,
     'password reset commands run inside transactions' );
 
+my $rotation_count = scalar @{ $services->rotations };
+my $revoke_count   = scalar @{ $services->revokes };
+my $reset_audits   = scalar @{ $services->actions };
+my $secret_hash    = $schema->users->[0]{password_hash};
+my $reset_updated  = $schema->users->[0]{updated_at};
+$clock->iso8601('2026-05-23T12:30:00Z');
+my $same_reset = $store->reset_password(
+    {
+        password => 'new correct horse battery',
+        token    => 'raw-1',
+    }
+);
+ok( $same_reset->{ok}, 'reset_password succeeds when the secret is unchanged' );
+ok( $same_reset->{skipped},
+    'reset_password skips rotation of an unchanged secret' );
+is( scalar @{ $services->rotations },
+    $rotation_count, 'unchanged reset secret does not rotate the credential' );
+is( $schema->users->[0]{password_hash},
+    $secret_hash, 'unchanged reset secret keeps the password hash' );
+is( $schema->users->[0]{updated_at},
+    $reset_updated, 'unchanged reset secret does not restamp updated_at' );
+is(
+    scalar @{ $services->revokes },
+    $revoke_count + 1,
+    'unchanged reset secret still revokes sessions'
+);
+is( $services->revokes->[-1]{now},
+    '2026-05-23T12:30:00Z',
+    'unchanged reset secret revokes sessions at the current time' );
+is(
+    scalar @{ $services->actions },
+    $reset_audits + 1,
+    'unchanged reset secret still writes completion audit'
+);
+$clock->iso8601('2026-05-23T12:00:00Z');
+
 my $wrong = $store->change_password(
     {
         current_password => 'wrong password',
@@ -168,6 +212,22 @@ is(
     'hashed:even newer horse battery',
     'change_password rotates the stored credential'
 );
+my $password_rotations = scalar @{ $services->rotations };
+my $password_audits    = scalar @{ $services->actions };
+my $same_secret        = $store->change_password(
+    {
+        current_password => 'even newer horse battery',
+        new_password     => 'even newer horse battery',
+        user_id          => 'user-1',
+    }
+);
+ok( $same_secret->{ok},
+    'change_password succeeds when the secret is unchanged' );
+ok( $same_secret->{skipped}, 'change_password skips an unchanged secret' );
+is( scalar @{ $services->rotations },
+    $password_rotations, 'unchanged secret does not rotate the credential' );
+is( scalar @{ $services->actions },
+    $password_audits, 'unchanged secret does not write another audit' );
 
 my $email_required =
   $store->request_email_change( { email => q{}, user_id => 'user-1' } );
@@ -228,6 +288,64 @@ is(
     'identity.email_change.confirmed',
     'confirm_email_change audits confirmation'
 );
+my $verified_at  = $schema->users->[0]{email_verified_at};
+my $updated_at   = $schema->users->[0]{updated_at};
+my $action_count = scalar @{ $services->actions };
+$clock->iso8601('2026-05-23T13:00:00Z');
+my $same_email = $store->confirm_email_change( { token => 'same-email' } );
+ok( $same_email->{ok},
+    'confirm_email_change succeeds for the already-confirmed address' );
+ok( $same_email->{skipped}, 'already-confirmed email change is skipped' );
+is( $schema->users->[0]{email_normalized},
+    'new@example.test', 'already-confirmed email keeps the address' );
+is( $schema->users->[0]{email_verified_at},
+    $verified_at, 'already-confirmed email keeps the original timestamp' );
+is( $schema->users->[0]{updated_at},
+    $updated_at, 'already-confirmed email does not restamp updated_at' );
+is( scalar @{ $services->actions },
+    $action_count, 'already-confirmed email does not write another audit' );
+$schema->find_misses(1);
+my $raced_email = $store->confirm_email_change( { token => 'taken-email' } );
+is( $raced_email->{error}, 'email_already_registered',
+    'unique email-change race rejects a taken address' );
+ok( !$raced_email->{ok}, 'unique email-change race does not confirm' );
+is( $schema->users->[0]{email_normalized},
+    'new@example.test', 'unique email-change race keeps the stored address' );
+is( scalar @{ $services->actions },
+    $action_count, 'unique email-change race does not write another audit' );
+my $verified_again =
+  $store->confirm_email_verification( { token => 'already-verified' } );
+ok( $verified_again->{ok},
+    'confirm_email_verification succeeds for an already-verified user' );
+ok( $verified_again->{skipped},
+    'already-verified email confirmation is skipped' );
+is( $schema->users->[0]{email_verified_at},
+    $verified_at, 'already-verified email keeps the original timestamp' );
+is( $schema->users->[0]{updated_at},
+    $updated_at, 'already-verified email does not restamp updated_at' );
+is( scalar @{ $services->actions },
+    $action_count, 'already-verified email does not write another audit' );
+my $token_count  = scalar @{ $services->created_tokens };
+my $mail_count   = scalar @{ $services->mail_jobs };
+my $same_request = $store->request_email_change(
+    {
+        email           => 'NEW@example.test',
+        request_address => '198.51.100.1',
+        user_id         => 'user-1',
+    }
+);
+ok( $same_request->{ok},
+    'request_email_change succeeds for the current verified address' );
+ok( $same_request->{skipped},
+    'request_email_change skips the current verified address' );
+is( $same_request->{token},
+    undef, 'request_email_change does not issue another token' );
+is( scalar @{ $services->created_tokens },
+    $token_count, 'current verified address does not create another token' );
+is( scalar @{ $services->mail_jobs },
+    $mail_count, 'current verified address does not queue another mail job' );
+is( scalar @{ $services->actions },
+    $action_count, 'current verified address does not write another audit' );
 
 my $verify = $store->request_email_verification(
     {

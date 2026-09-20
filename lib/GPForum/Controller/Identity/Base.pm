@@ -48,6 +48,17 @@ sub request_address {
     return $self->tx->remote_address || 'unknown';
 }
 
+sub command_id_param {
+    my ($self) = @_;
+
+    my $command_id = $self->_trim( $self->param('command_id') );
+    if ( length $command_id ) {
+        return $command_id;
+    }
+
+    return $self->_trim( $self->param('idempotency_key') );
+}
+
 sub requested_locale {
     my ($self) = @_;
 
@@ -75,8 +86,7 @@ sub persist_locale_preference {
     }
 
     $self->session( preferred_locale => $locale );
-    $self->_store_preferred_locale( $user_id, $locale );
-    return;
+    return $self->_store_preferred_locale( $user_id, $locale );
 }
 
 sub persist_theme_preference {
@@ -88,8 +98,7 @@ sub persist_theme_preference {
     }
 
     $self->session( preferred_theme => $theme );
-    $self->_store_preferred_theme( $user_id, $theme );
-    return;
+    return $self->_store_preferred_theme( $user_id, $theme );
 }
 
 sub login_preferred_locale {
@@ -219,6 +228,22 @@ sub identity_system_failure {
     return $self->settings_system_failure;
 }
 
+sub identity_write_failure {
+    my ( $self, $result ) = @_;
+
+    if ( ( $result->{status} || q{} ) eq 'failed' ) {
+        return $self->identity_unavailable;
+    }
+
+    return $self->identity_bad_request;
+}
+
+sub identity_unavailable {
+    my ($self) = @_;
+
+    return $self->identity_access->service_unavailable($self);
+}
+
 sub _identity_allowed {
     my ( $self, $action ) = @_;
 
@@ -277,16 +302,17 @@ sub _store_preferred_locale {
 
     my $result = $self->gp_identity_workflow->update_preferred_locale(
         {
+            command_id       => $self->_preference_command_id,
             preferred_locale => $locale,
             user_id          => $user_id,
         }
     );
     if ( $result->{ok} ) {
-        return;
+        return $result;
     }
 
     $self->app->log->warn('locale preference update degraded');
-    return;
+    return $result;
 }
 
 sub _store_preferred_theme {
@@ -294,16 +320,32 @@ sub _store_preferred_theme {
 
     my $result = $self->gp_identity_workflow->update_preferred_theme(
         {
+            command_id      => $self->_preference_command_id,
             preferred_theme => $theme,
             user_id         => $user_id,
         }
     );
     if ( $result->{ok} ) {
-        return;
+        return $result;
     }
 
     $self->app->log->warn('theme preference update degraded');
-    return;
+    return $result;
+}
+
+sub _preference_command_id {
+    my ($self) = @_;
+
+    if ( $self->stash('mint_preference_command') ) {
+        return $self->gp_id->uuid;
+    }
+
+    my $command_id = $self->command_id_param;
+    if ( length $command_id ) {
+        return $command_id;
+    }
+
+    return $self->gp_id->uuid;
 }
 
 sub _user_preference_text {
@@ -397,6 +439,18 @@ sub _current_route_name {
     return 'unknown';
 }
 
+sub _trim {
+    my ( undef, $value ) = @_;
+
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}
+
 1;
 
 __END__
@@ -425,6 +479,15 @@ live in L<GPForum::Web::IdentityAccess>. Cookie writes stay here.
 =head2 identity_post_guard
 
 Rejects invalid CSRF tokens and rate-limited identity writes.
+
+=head2 command_id_param
+
+Reads a posted C<command_id>, falling back to C<idempotency_key>.
+
+=head2 identity_write_failure
+
+Maps a failed identity store write to HTTP 503 and other non-ok results to
+HTTP 400.
 
 =head2 persist_locale_preference
 

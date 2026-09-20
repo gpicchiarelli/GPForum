@@ -19,9 +19,9 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS               => 433;
-const my $EXPECTED_MIGRATIONS          => 26;
-const my $EXPECTED_RUNNER_EXECUTIONS   => 75;
+const my $EXPECTED_TESTS               => 478;
+const my $EXPECTED_MIGRATIONS          => 36;
+const my $EXPECTED_RUNNER_EXECUTIONS   => 105;
 const my $FORUM_MIGRATION_INDEX        => 2;
 const my $GOVERNANCE_MIGRATION_INDEX   => 3;
 const my $NOTIFICATION_MIGRATION_INDEX => 4;
@@ -42,12 +42,23 @@ const my $OUTBOX_RELIABILITY_INDEX     => 20;
 const my $PRIVACY_IDEMPOTENCY_INDEX    => 23;
 const my $IDENTITY_LIFECYCLE_INDEX     => 24;
 const my $CONCURRENCY_UNIQUENESS_INDEX => 25;
+const my $PRIVACY_RESOURCE_INDEX       => 26;
+const my $REPUTATION_SOURCE_INDEX      => 27;
+const my $REPUTATION_REQUIRED_INDEX    => 28;
+const my $IDENTITY_OPEN_TOKEN_INDEX    => 29;
+const my $ROLE_BINDING_UNIQUE_INDEX    => 30;
+const my $PLUGIN_HOOK_UNIQUE_INDEX     => 31;
+const my $DEAD_LETTER_UNIQUE_INDEX     => 32;
+const my $IMPORT_FAILURE_UNIQUE_INDEX  => 33;
+const my $GENERATION_SOURCE_INDEX      => 34;
+const my $CREDENTIAL_UNIQUE_INDEX      => 35;
 
 plan tests => $EXPECTED_TESTS;
 
 my $schema                         = GPForum::Schema->clone;
 my $source                         = $schema->source('SchemaVersion');
 my $event_source                   = $schema->source('EventLog');
+my $event_idempotency_source       = $schema->source('EventIdempotencyKey');
 my $audit_source                   = $schema->source('AuditLog');
 my $outbox_source                  = $schema->source('OutboxMessage');
 my $dead_letter_source             = $schema->source('DeadLetter');
@@ -124,6 +135,15 @@ ok(
 );
 ok( $event_source->has_column('payload'), 'event log stores payload' );
 
+is( $event_idempotency_source->from,
+    'event_idempotency_keys', 'event idempotency source maps keys table' );
+is_deeply( [ $event_idempotency_source->primary_columns ],
+    ['idempotency_key'], 'event idempotency primary key is the worker key' );
+ok(
+    $event_idempotency_source->has_column('event_id'),
+    'event idempotency stores the source event id'
+);
+
 is( $audit_source->from, 'audit_log', 'audit source maps audit log table' );
 is_deeply(
     [ $audit_source->primary_columns ],
@@ -171,6 +191,14 @@ ok( $dead_letter_source->has_column('source_table'),
     'dead letter stores source table' );
 ok( $dead_letter_source->has_column('source_id'),
     'dead letter stores source id' );
+is_deeply(
+    [
+        $dead_letter_source->unique_constraint_columns(
+            'idx_dead_letters_source_unique')
+    ],
+    [qw(source_table source_id)],
+    'dead letter is unique per source table and source id'
+);
 ok( $dead_letter_source->has_column('error_class'),
     'dead letter stores error class' );
 ok( $dead_letter_source->has_column('retry_count'),
@@ -274,6 +302,14 @@ ok( $attachment_source->has_column('owner_user_id'),
     'attachment stores owner' );
 ok( $attachment_source->has_column('object_key'),
     'attachment stores object key' );
+is_deeply(
+    [
+        $attachment_source->unique_constraint_columns(
+            'attachments_object_key_key')
+    ],
+    ['object_key'],
+    'attachment object key is unique'
+);
 ok(
     $attachment_source->has_column('state'),
     'attachment stores lifecycle state'
@@ -296,6 +332,14 @@ ok( $attachment_variant_source->has_column('variant_type'),
     'attachment variant stores variant type' );
 ok( $attachment_variant_source->has_column('object_key'),
     'attachment variant stores object key' );
+is_deeply(
+    [
+        $attachment_variant_source->unique_constraint_columns(
+            'attachment_variants_object_key_key')
+    ],
+    ['object_key'],
+    'attachment variant object key is unique'
+);
 
 is( $deletion_request_source->from,
     'deletion_requests', 'deletion request source maps table' );
@@ -364,6 +408,14 @@ is_deeply( [ $reputation_event_source->primary_columns ],
     ['reputation_event_id'], 'reputation event primary key is explicit' );
 ok( $reputation_event_source->has_column('delta'),
     'reputation event stores delta' );
+is_deeply(
+    [
+        $reputation_event_source->unique_constraint_columns(
+            'reputation_events_source_key')
+    ],
+    [ 'user_id', 'source_type', 'source_id' ],
+    'reputation event is unique per user source'
+);
 ok( $reputation_event_source->has_relationship('user'),
     'reputation event belongs to user' );
 
@@ -468,6 +520,14 @@ ok( $role_binding_source->has_relationship('user'),
     'role binding belongs to user' );
 ok( $role_binding_source->has_relationship('role'),
     'role binding belongs to role' );
+is_deeply(
+    [
+        $role_binding_source->unique_constraint_columns(
+            'idx_role_bindings_active_unique')
+    ],
+    [qw(user_id role_id resource_type resource_id space_id)],
+    'role binding is unique per active user role scope'
+);
 
 is( $resource_acl_source->from,
     'resource_acl', 'resource acl source maps table' );
@@ -499,6 +559,14 @@ ok(
     $projection_generation_source->has_column('is_active'),
     'projection generation stores active marker'
 );
+is_deeply(
+    [
+        $projection_generation_source->unique_constraint_columns(
+            'idx_projection_generations_source_unique')
+    ],
+    [qw(projection_name built_from_event_id)],
+    'projection generation is unique per projection and source event'
+);
 
 is( $import_job_source->from, 'import_jobs', 'import job source maps table' );
 is_deeply( [ $import_job_source->primary_columns ],
@@ -522,6 +590,14 @@ ok( $import_failure_source->has_column('error_code'),
     'import failure stores error code' );
 ok( $import_failure_source->has_relationship('import_job'),
     'import failure belongs to import job' );
+is_deeply(
+    [
+        $import_failure_source->unique_constraint_columns(
+            'idx_import_failures_source_unique')
+    ],
+    [qw(import_job_id source_record_type source_record_id)],
+    'import failure is unique per job and source record'
+);
 
 is( $legacy_id_map_source->from,
     'legacy_id_map', 'legacy id map source maps table' );
@@ -559,6 +635,14 @@ ok( $plugin_hook_source->has_column('side_effect_policy'),
     'plugin hook stores side-effect policy' );
 ok( $plugin_hook_source->has_relationship('plugin'),
     'plugin hook belongs to plugin' );
+is_deeply(
+    [
+        $plugin_hook_source->unique_constraint_columns(
+            'idx_plugin_hooks_plugin_name_unique')
+    ],
+    [qw(plugin_id hook_name)],
+    'plugin hook is unique per plugin and hook name'
+);
 
 is( $plugin_failure_source->from,
     'plugin_failures', 'plugin failure source maps table' );
@@ -646,6 +730,14 @@ ok(
 );
 ok( $credential_source->has_relationship('user'),
     'credential belongs to user' );
+is_deeply(
+    [
+        $credential_source->unique_constraint_columns(
+            'idx_credentials_active_password_unique')
+    ],
+    ['user_id'],
+    'active password credential is unique per user'
+);
 
 is( $identity_token_source->from,
     'identity_tokens', 'identity token source maps identity_tokens table' );
@@ -678,6 +770,11 @@ is( $session_source->from, 'sessions', 'session source maps sessions table' );
 is_deeply( [ $session_source->primary_columns ],
     ['session_id'], 'session primary key is explicit' );
 ok( $session_source->has_column('session_hash'), 'session stores token hash' );
+is_deeply(
+    [ $session_source->unique_constraint_columns('sessions_session_hash_key') ],
+    ['session_hash'],
+    'session hash is unique'
+);
 ok( $session_source->has_column('revoked_at'), 'session supports revocation' );
 ok( $session_source->has_relationship('user'), 'session belongs to user' );
 
@@ -762,10 +859,13 @@ ok(
     $post_source->has_column('current_revision_id'),
     'post stores current revision pointer'
 );
-ok( $post_source->has_column('position'),     'post stores thread position' );
-ok( $post_source->has_relationship('thread'), 'post belongs to thread' );
-ok( $post_source->has_relationship('author'), 'post belongs to author' );
-ok( $post_source->has_relationship('bodies'), 'post has bodies' );
+ok( $post_source->has_column('position'), 'post stores thread position' );
+is_deeply(
+    [ $post_source->unique_constraint_columns('posts_thread_position_key') ],
+    [qw(thread_id position)], 'post is unique per thread position' );
+ok( $post_source->has_relationship('thread'),    'post belongs to thread' );
+ok( $post_source->has_relationship('author'),    'post belongs to author' );
+ok( $post_source->has_relationship('bodies'),    'post has bodies' );
 ok( $post_source->has_relationship('revisions'), 'post has revisions' );
 ok(
     $post_source->has_relationship('current_body'),
@@ -789,6 +889,14 @@ is_deeply( [ $revision_source->primary_columns ],
     ['revision_id'], 'post revision primary key is explicit' );
 ok( $revision_source->has_relationship('post'),
     'post revision belongs to post' );
+is_deeply(
+    [
+        $revision_source->unique_constraint_columns(
+            'post_revisions_post_revision_number_key')
+    ],
+    [qw(post_id revision_number)],
+    'post revision is unique per post and revision number'
+);
 ok( $revision_source->has_relationship('body'),
     'post revision belongs to body' );
 ok( $revision_source->has_relationship('editor'),
@@ -1554,6 +1662,191 @@ like(
     $concurrency_sql,
     qr/idx_moderation_actions_command_id/msx,
     'concurrency migration enforces unique moderation command ids'
+);
+
+my $privacy_resource_sql =
+  path( $summary->[$PRIVACY_RESOURCE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$PRIVACY_RESOURCE_INDEX]->{description},
+    'privacy resource uniqueness',
+    'privacy resource uniqueness migration description is parsed'
+);
+like(
+    $privacy_resource_sql,
+    qr/idx_deletion_requests_open_resource_unique/msx,
+    'privacy uniqueness migration enforces one open deletion per resource'
+);
+like(
+    $privacy_resource_sql,
+    qr/idx_export_requests_pending_unique/msx,
+    'privacy uniqueness migration enforces one pending export per subject'
+);
+like(
+    $privacy_resource_sql,
+    qr/idx_retention_holds_active_resource_unique/msx,
+    'privacy uniqueness migration enforces one active hold per resource'
+);
+
+my $reputation_source_sql =
+  path( $summary->[$REPUTATION_SOURCE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$REPUTATION_SOURCE_INDEX]->{description},
+    'reputation source uniqueness',
+    'reputation source uniqueness migration description is parsed'
+);
+like(
+    $reputation_source_sql,
+    qr/idx_reputation_events_source_unique/msx,
+    'reputation uniqueness migration enforces one event per user source'
+);
+
+my $reputation_required_sql =
+  path( $summary->[$REPUTATION_REQUIRED_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$REPUTATION_REQUIRED_INDEX]->{description},
+    'reputation source required',
+    'reputation source required migration description is parsed'
+);
+like(
+    $reputation_required_sql,
+    qr/ALTER [ ] COLUMN [ ] source_id [ ] SET [ ] NOT [ ] NULL/msx,
+    'reputation source required migration rejects null source_id'
+);
+like(
+    $reputation_required_sql,
+    qr/idx_reputation_events_source_unique/msx,
+    'reputation source required migration keeps the unique source index'
+);
+
+my $identity_open_token_sql =
+  path( $summary->[$IDENTITY_OPEN_TOKEN_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$IDENTITY_OPEN_TOKEN_INDEX]->{description},
+    'identity open token uniqueness',
+    'identity open token uniqueness migration description is parsed'
+);
+like(
+    $identity_open_token_sql,
+    qr/idx_identity_tokens_open_user_type/msx,
+    'identity open token migration enforces one unused token per user type'
+);
+like( $identity_open_token_sql, qr/email_verification/msx,
+    'identity open token migration allows email verification tokens' );
+
+my $role_binding_unique_sql =
+  path( $summary->[$ROLE_BINDING_UNIQUE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$ROLE_BINDING_UNIQUE_INDEX]->{description},
+    'role binding active uniqueness',
+    'role binding uniqueness migration description is parsed'
+);
+like(
+    $role_binding_unique_sql,
+    qr/idx_role_bindings_active_unique/msx,
+    'role binding uniqueness migration enforces one active binding per scope'
+);
+like(
+    $role_binding_unique_sql,
+    qr/NULLS [ ] NOT [ ] DISTINCT/msx,
+    'role binding uniqueness migration treats null resource and space as equal'
+);
+
+my $plugin_hook_unique_sql =
+  path( $summary->[$PLUGIN_HOOK_UNIQUE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$PLUGIN_HOOK_UNIQUE_INDEX]->{description},
+    'plugin hook uniqueness',
+    'plugin hook uniqueness migration description is parsed'
+);
+like(
+    $plugin_hook_unique_sql,
+    qr/idx_plugin_hooks_plugin_name_unique/msx,
+    'plugin hook uniqueness migration enforces one hook name per plugin'
+);
+like(
+    $plugin_hook_unique_sql,
+    qr/plugin_id, [ ] hook_name/msx,
+    'plugin hook uniqueness migration covers plugin and hook name'
+);
+
+my $dead_letter_unique_sql =
+  path( $summary->[$DEAD_LETTER_UNIQUE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$DEAD_LETTER_UNIQUE_INDEX]->{description},
+    'dead letter source uniqueness',
+    'dead letter uniqueness migration description is parsed'
+);
+like(
+    $dead_letter_unique_sql,
+    qr/idx_dead_letters_source_unique/msx,
+    'dead letter uniqueness migration enforces one review row per source'
+);
+like(
+    $dead_letter_unique_sql,
+    qr/source_table, [ ] source_id/msx,
+    'dead letter uniqueness migration covers source table and source id'
+);
+
+my $import_failure_unique_sql =
+  path( $summary->[$IMPORT_FAILURE_UNIQUE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$IMPORT_FAILURE_UNIQUE_INDEX]->{description},
+    'import failure source uniqueness',
+    'import failure uniqueness migration description is parsed'
+);
+like(
+    $import_failure_unique_sql,
+    qr/idx_import_failures_source_unique/msx,
+    'import failure uniqueness migration enforces one review row per source'
+);
+like(
+    $import_failure_unique_sql,
+    qr/import_job_id, [ ] source_record_type, [ ] source_record_id/msx,
+    'import failure uniqueness migration covers job and source record'
+);
+
+my $generation_source_sql =
+  path( $summary->[$GENERATION_SOURCE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$GENERATION_SOURCE_INDEX]->{description},
+    'projection generation source uniqueness',
+    'projection generation uniqueness migration description is parsed'
+);
+like( $generation_source_sql, qr/idx_projection_generations_source_unique/msx,
+    'projection generation uniqueness migration enforces one rebuild per event'
+);
+like(
+    $generation_source_sql,
+    qr/projection_name, [ ] built_from_event_id/msx,
+    'projection generation uniqueness migration covers projection and event'
+);
+
+my $credential_unique_sql =
+  path( $summary->[$CREDENTIAL_UNIQUE_INDEX]->{file} )->slurp;
+
+is(
+    $summary->[$CREDENTIAL_UNIQUE_INDEX]->{description},
+    'credential active password uniqueness',
+    'credential uniqueness migration description is parsed'
+);
+like(
+    $credential_unique_sql,
+    qr/idx_credentials_active_password_unique/msx,
+    'credential uniqueness migration enforces one active password'
+);
+like(
+    $credential_unique_sql,
+    qr/revoked_at [ ] IS [ ] NULL [ ] AND [ ] type [ ] = [ ] 'password'/msx,
+    'credential uniqueness migration covers active password rows'
 );
 
 my $migration_schema = GPForum::Test::MigrationSchema->new;

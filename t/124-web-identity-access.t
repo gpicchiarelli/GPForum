@@ -13,21 +13,22 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $HTTP_BAD_REQUEST  => 400;
-const my $HTTP_FORBIDDEN    => 403;
-const my $HTTP_SERVER_ERROR => 500;
-const my $HTTP_TOO_MANY     => 429;
-const my $LOGIN_LIMIT       => 10;
-const my $LOGOUT_LIMIT      => 20;
-const my $PASSWORD_LIMIT    => 5;
-const my $REGISTER_LIMIT    => 5;
-const my $SETTINGS_LIMIT    => 60;
-const my $SHORT_WINDOW      => 60;
-const my $LONG_WINDOW       => 300;
-const my $PROFILE_THREADS   => 10;
-const my $PROFILE_REQUESTED => 5;
-const my $COOKIE_NOW        => 1_700_000_000;
-const my $COOKIE_AGE        => 31_536_000;
+const my $HTTP_BAD_REQUEST         => 400;
+const my $HTTP_FORBIDDEN           => 403;
+const my $HTTP_SERVER_ERROR        => 500;
+const my $HTTP_SERVICE_UNAVAILABLE => 503;
+const my $HTTP_TOO_MANY            => 429;
+const my $LOGIN_LIMIT              => 10;
+const my $LOGOUT_LIMIT             => 20;
+const my $PASSWORD_LIMIT           => 5;
+const my $REGISTER_LIMIT           => 5;
+const my $SETTINGS_LIMIT           => 60;
+const my $SHORT_WINDOW             => 60;
+const my $LONG_WINDOW              => 300;
+const my $PROFILE_THREADS          => 10;
+const my $PROFILE_REQUESTED        => 5;
+const my $COOKIE_NOW               => 1_700_000_000;
+const my $COOKIE_AGE               => 31_536_000;
 
 my $access = GPForum::Web::IdentityAccess->new;
 my $html   = GPForum::Test::ResponderController->new;
@@ -80,6 +81,21 @@ is(
 $access->system_failure($json);
 is( $json->last_render->{json}{status},
     'error', 'JSON system_failure uses the shared payload' );
+
+$access->service_unavailable($html);
+is( $html->last_render->{status},
+    $HTTP_SERVICE_UNAVAILABLE, 'service_unavailable uses HTTP 503' );
+is(
+    $html->last_render->{text},
+    'service unavailable',
+    'service_unavailable keeps plaintext unavailable copy'
+);
+
+$access->service_unavailable($json);
+is( $json->last_render->{status},
+    $HTTP_SERVICE_UNAVAILABLE, 'JSON service_unavailable uses HTTP 503' );
+is( $json->last_render->{json}{status},
+    'unavailable', 'JSON service_unavailable uses the shared payload' );
 
 $access->bad_request($html);
 is( $html->last_render->{status},

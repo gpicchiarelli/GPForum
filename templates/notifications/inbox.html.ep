@@ -4,6 +4,12 @@
 <section aria-labelledby="notifications-heading">
   <%= include 'components/page_header', heading_id => 'notifications-heading', component_title => t('nav.notifications') %>
   <p><%= tc('notifications.unread_count', $unread_count || 0) %></p>
+  % if ($unread_count) {
+    <form method="post" action="<%= url_for('notifications_read_all') %>">
+      <%= csrf_field %>
+      <button type="submit"><%= t('notifications.mark_all_read') %></button>
+    </form>
+  % }
   % if (@{$notifications}) {
     <ol class="ui-card-list" aria-label="<%= t('notifications.inbox_label') %>">
       % for my $notification (@{$notifications}) {

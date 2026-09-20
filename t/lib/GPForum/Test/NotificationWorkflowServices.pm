@@ -30,6 +30,22 @@ sub mark_read {
     };
 }
 
+sub mark_all_read {
+    my ( undef, $user_id ) = @_;
+
+    if ( $user_id eq 'boom' ) {
+        croak 'dispatcher down';
+    }
+
+    return {
+        duplicate         => 0,
+        marked_count      => 2,
+        ok                => 1,
+        recipient_user_id => $user_id,
+        unread_count      => 0,
+    };
+}
+
 sub set_preferences {
     my ( $self, $input ) = @_;
 
@@ -84,6 +100,10 @@ success, missing row, empty result, and store exceptions.
 =head2 mark_read
 
 Returns a dispatcher-shaped hash, an empty result, or throws.
+
+=head2 mark_all_read
+
+Marks the inbox read or throws for C<boom>.
 
 =head2 set_preferences
 

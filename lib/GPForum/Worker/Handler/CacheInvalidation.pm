@@ -9,7 +9,16 @@ use Mojo::Base -base;
 our $VERSION = '0.001';
 
 const my $THREAD_CREATED   => 'thread.created';
+const my $THREAD_UPDATED   => 'thread.updated';
+const my $THREAD_DELETED   => 'thread.deleted';
+const my $THREAD_MOVED     => 'thread.moved';
+const my $THREAD_HIDDEN    => 'thread.hidden';
+const my $THREAD_RESTORED  => 'thread.restored';
+const my $THREAD_UNDELETED => 'thread.undeleted';
 const my $POST_CREATED     => 'post.created';
+const my $POST_UPDATED     => 'post.updated';
+const my $POST_DELETED     => 'post.deleted';
+const my $POST_UNDELETED   => 'post.undeleted';
 const my $CATEGORY_CREATED => 'category.created';
 const my $CATEGORY_UPDATED => 'category.updated';
 
@@ -17,7 +26,33 @@ const my %SUPPORTED => (
     $CATEGORY_CREATED => 1,
     $CATEGORY_UPDATED => 1,
     $POST_CREATED     => 1,
+    $POST_DELETED     => 1,
+    $POST_UNDELETED   => 1,
+    $POST_UPDATED     => 1,
     $THREAD_CREATED   => 1,
+    $THREAD_DELETED   => 1,
+    $THREAD_HIDDEN    => 1,
+    $THREAD_MOVED     => 1,
+    $THREAD_RESTORED  => 1,
+    $THREAD_UNDELETED => 1,
+    $THREAD_UPDATED   => 1,
+);
+
+const my %THREAD_CONTENT => (
+    $THREAD_CREATED   => 1,
+    $THREAD_DELETED   => 1,
+    $THREAD_HIDDEN    => 1,
+    $THREAD_MOVED     => 1,
+    $THREAD_RESTORED  => 1,
+    $THREAD_UNDELETED => 1,
+    $THREAD_UPDATED   => 1,
+);
+
+const my %POST_CONTENT => (
+    $POST_CREATED   => 1,
+    $POST_DELETED   => 1,
+    $POST_UNDELETED => 1,
+    $POST_UPDATED   => 1,
 );
 
 has sink  => undef;
@@ -65,10 +100,10 @@ sub _tags_for {
     my ($event) = @_;
 
     my $event_type = $event->{event_type};
-    if ( $event_type eq $THREAD_CREATED ) {
+    if ( _thread_content_event($event_type) ) {
         return _thread_tags($event);
     }
-    if ( $event_type eq $POST_CREATED ) {
+    if ( _post_content_event($event_type) ) {
         return _post_tags($event);
     }
     if ( _supported_event($event_type) ) {
@@ -76,6 +111,26 @@ sub _tags_for {
     }
 
     return [];
+}
+
+sub _thread_content_event {
+    my ($event_type) = @_;
+
+    if ( !defined $event_type ) {
+        return 0;
+    }
+
+    return exists $THREAD_CONTENT{$event_type} ? 1 : 0;
+}
+
+sub _post_content_event {
+    my ($event_type) = @_;
+
+    if ( !defined $event_type ) {
+        return 0;
+    }
+
+    return exists $POST_CONTENT{$event_type} ? 1 : 0;
 }
 
 sub _supported_event {
@@ -97,6 +152,7 @@ sub _thread_tags {
     my @tags = qw(threads forum-index);
     push @tags, join q{:}, 'thread', $event->{aggregate_id};
     push @tags, _named_tag( $event, 'category' );
+    push @tags, _previous_category_tag($event);
 
     return [ grep { defined } @tags ];
 }
@@ -134,6 +190,17 @@ sub _named_tag {
     }
 
     return join q{:}, $name, $value;
+}
+
+sub _previous_category_tag {
+    my ($event) = @_;
+
+    my $value = _event_value( $event, 'previous_category_id' );
+    if ( !defined $value ) {
+        return;
+    }
+
+    return join q{:}, 'category', $value;
 }
 
 sub _event_value {

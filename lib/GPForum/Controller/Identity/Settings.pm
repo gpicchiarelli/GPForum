@@ -19,13 +19,12 @@ sub set_locale {
         return $self->_csrf_failure;
     }
 
-    my $locale = $self->requested_locale;
-    $self->persist_locale_preference($locale);
-    $self->set_locale_cookie($locale);
-    $self->stash( ui_locale => $locale );
+    my $blocked = $self->_require_preference_command;
+    if ($blocked) {
+        return $blocked;
+    }
 
-    return $self->redirect_to(
-        $self->safe_return_to( $self->param('return_to') ) );
+    return $self->_commit_locale;
 }
 
 sub set_theme {
@@ -35,10 +34,68 @@ sub set_theme {
         return $self->_csrf_failure;
     }
 
-    my $theme = $self->requested_theme;
-    $self->persist_theme_preference($theme);
+    my $blocked = $self->_require_preference_command;
+    if ($blocked) {
+        return $blocked;
+    }
+
+    return $self->_commit_theme;
+}
+
+sub _require_preference_command {
+    my ($self) = @_;
+
+    if ( !$self->current_user_id ) {
+        return;
+    }
+    if ( length $self->command_id_param ) {
+        return;
+    }
+
+    return $self->identity_bad_request;
+}
+
+sub _commit_locale {
+    my ($self) = @_;
+
+    my $locale = $self->requested_locale;
+    my $result = $self->persist_locale_preference($locale);
+    if ( $result && !$result->{ok} ) {
+        return $self->identity_write_failure($result);
+    }
+
+    return $self->_locale_accepted($locale);
+}
+
+sub _commit_theme {
+    my ($self) = @_;
+
+    my $theme  = $self->requested_theme;
+    my $result = $self->persist_theme_preference($theme);
+    if ( $result && !$result->{ok} ) {
+        return $self->identity_write_failure($result);
+    }
+
+    return $self->_theme_accepted($theme);
+}
+
+sub _locale_accepted {
+    my ( $self, $locale ) = @_;
+
+    $self->set_locale_cookie($locale);
+    $self->stash( ui_locale => $locale );
+    $self->flash( success => $self->t('locale.updated') );
+
+    return $self->redirect_to(
+        $self->safe_return_to( $self->param('return_to') ) );
+}
+
+sub _theme_accepted {
+    my ( $self, $theme ) = @_;
+
     $self->set_theme_cookie($theme);
     $self->stash( ui_theme => $theme );
+    $self->flash( success => $self->t('theme.updated') );
 
     return $self->redirect_to(
         $self->safe_return_to( $self->param('return_to') ) );
@@ -75,7 +132,10 @@ sub _render_settings {
     }
 
     return $self->render(
-        template => 'identity/settings',
+        template            => 'identity/settings',
+        email_command_id    => $self->gp_id->uuid,
+        password_command_id => $self->gp_id->uuid,
+        settings_command_id => $self->gp_id->uuid,
         %{$payload},
         status => $HTTP_OK,
     );
@@ -102,22 +162,56 @@ sub _settings_write_guard {
 sub _save_settings {
     my ($self) = @_;
 
-    my $user_id = $self->current_user_id;
-    my $locale  = $self->requested_locale;
-    my $theme   = $self->requested_theme;
+    my $failed = $self->_persist_settings;
+    if ($failed) {
+        return $failed;
+    }
 
-    if ( !$self->_persist_notification_preferences($user_id) ) {
+    $self->flash( success => $self->t('settings.saved') );
+    return $self->redirect_to('settings');
+}
+
+sub _persist_settings {
+    my ($self) = @_;
+
+    my $result = $self->_notification_preference_result;
+    if ( !$result->{ok} ) {
+        return $self->_settings_write_failure($result);
+    }
+
+    $self->_apply_preference_update( $self->requested_locale,
+        $self->requested_theme );
+    return;
+}
+
+sub _notification_preference_result {
+    my ($self) = @_;
+
+    my $store = $self->gp_notification_preference_store;
+    return $self->gp_notification_workflow->set_preferences(
+        {
+            command_id  => $self->command_id_param,
+            preferences => $self->_notification_preference_input($store),
+            user_id     => $self->current_user_id,
+        }
+    );
+}
+
+sub _settings_write_failure {
+    my ( $self, $result ) = @_;
+
+    if ( ( $result->{status} || q{} ) eq 'not_found' ) {
+        $self->app->log->warn('notification preference update degraded');
         return $self->settings_system_failure;
     }
 
-    $self->_apply_preference_update( $locale, $theme );
-    $self->flash( success => $self->t('settings.saved') );
-    return $self->redirect_to('settings');
+    return $self->identity_write_failure($result);
 }
 
 sub _apply_preference_update {
     my ( $self, $locale, $theme ) = @_;
 
+    $self->stash( mint_preference_command => 1 );
     $self->persist_locale_preference($locale);
     $self->persist_theme_preference($theme);
     $self->set_locale_cookie($locale);
@@ -141,24 +235,6 @@ sub _settings_payload {
         notification_preferences => $preferences,
         theme_options            => $self->ui_theme_options,
     );
-}
-
-sub _persist_notification_preferences {
-    my ( $self, $user_id ) = @_;
-
-    my $store  = $self->gp_notification_preference_store;
-    my $result = $self->gp_notification_workflow->set_preferences(
-        {
-            preferences => $self->_notification_preference_input($store),
-            user_id     => $user_id,
-        }
-    );
-    if ( $result->{ok} ) {
-        return 1;
-    }
-
-    $self->app->log->warn('notification preference update degraded');
-    return 0;
 }
 
 sub _notification_preference_input {
@@ -209,11 +285,13 @@ Handles locale/theme cookies and the authenticated settings page.
 
 =head2 set_locale
 
-Updates the UI locale cookie and optional stored preference.
+Updates the UI locale cookie and optional stored preference. Authenticated
+writes require C<command_id>. HTML writes set a success flash.
 
 =head2 set_theme
 
-Updates the UI theme cookie and optional stored preference.
+Updates the UI theme cookie and optional stored preference. Authenticated
+writes require C<command_id>. HTML writes set a success flash.
 
 =head2 settings
 
@@ -221,7 +299,9 @@ Renders the signed-in settings page.
 
 =head2 update_settings
 
-Persists notification, locale, and theme preferences.
+Persists notification, locale, and theme preferences. Notification
+writes require C<command_id>. Locale and theme on this POST mint their
+own keys.
 
 =head1 DIAGNOSTICS
 

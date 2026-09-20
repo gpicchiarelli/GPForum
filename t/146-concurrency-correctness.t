@@ -41,7 +41,11 @@ ok( !GPForum::Infrastructure::UniqueConflict->is_conflict('connection reset'),
 _assert_bookmark_unique_replay();
 _assert_subscription_unique_replay();
 _assert_report_unique_replay();
+_assert_report_id_remint();
+_assert_report_id_leftover();
 _assert_action_command_replay();
+_assert_action_id_remint();
+_assert_action_id_leftover();
 _assert_action_row_lock();
 _assert_audit_chain_lock();
 _assert_audit_lookup_errors_propagate();
@@ -160,6 +164,118 @@ sub _assert_report_unique_replay {
     return;
 }
 
+sub _assert_report_id_remint {
+    my $reports = GPForum::Test::ModerationResultSet->new;
+    my $events  = GPForum::Test::ModerationResultSet->new;
+    my $outbox  = GPForum::Test::ModerationResultSet->new;
+    my $audits  = GPForum::Test::ModerationResultSet->new;
+    $reports->filter_search(1);
+    $reports->create(
+        {
+            details          => 'altro',
+            reason           => 'spam',
+            report_id        => 'generated-1',
+            reporter_user_id => 'other-user',
+            status           => 'open',
+            target_id        => 'other-post',
+            target_type      => 'post',
+        }
+    );
+    my $store = GPForum::Service::Moderation::ReportStore->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => GPForum::Test::ModerationSchema->new(
+            resultsets => {
+                AuditLog      => $audits,
+                EventLog      => $events,
+                OutboxMessage => $outbox,
+                Report        => $reports,
+            },
+        ),
+    );
+    my $created = $store->create_report(
+        {
+            details          => 'link ripetuti',
+            reason           => 'spam',
+            reporter_user_id => 'user-1',
+            target_id        => 'post-1',
+            target_type      => 'post',
+        }
+    );
+
+    is( _row_column( $created, 'report_id' ),
+        'generated-2', 'unique report id collision remints the id' );
+    is( _row_column( $created, 'reporter_user_id' ),
+        'user-1', 'unique report id collision keeps this reporter' );
+    is( _row_column( $created, 'target_id' ),
+        'post-1', 'unique report id collision keeps this target' );
+    is( scalar @{ $reports->created },
+        2, 'unique report id collision inserts this report' );
+    is( scalar @{ $events->created },
+        1, 'unique report id collision records this created event' );
+    is( $audits->created->[-1]{action},
+        'report.created',
+        'unique report id collision does not treat this as a duplicate' );
+
+    return;
+}
+
+sub _assert_report_id_leftover {
+    my $reports = GPForum::Test::ModerationResultSet->new;
+    my $events  = GPForum::Test::ModerationResultSet->new;
+    my $outbox  = GPForum::Test::ModerationResultSet->new;
+    my $audits  = GPForum::Test::ModerationResultSet->new;
+    $reports->filter_search(1);
+    $reports->create(
+        {
+            details          => 'link ripetuti',
+            reason           => 'spam',
+            report_id        => 'generated-1',
+            reporter_user_id => 'user-1',
+            status           => 'open',
+            target_id        => 'post-1',
+            target_type      => 'post',
+        }
+    );
+    $reports->skip_search(1);
+    my $store = GPForum::Service::Moderation::ReportStore->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => GPForum::Test::ModerationSchema->new(
+            resultsets => {
+                AuditLog      => $audits,
+                EventLog      => $events,
+                OutboxMessage => $outbox,
+                Report        => $reports,
+            },
+        ),
+    );
+    my $leftover = $store->create_report(
+        {
+            details          => 'link ripetuti',
+            reason           => 'spam',
+            reporter_user_id => 'user-1',
+            target_id        => 'post-1',
+            target_type      => 'post',
+        }
+    );
+
+    is( _row_column( $leftover, 'report_id' ),
+        'generated-1', 'leftover report id race keeps this report' );
+    is( _row_column( $leftover, 'reporter_user_id' ),
+        'user-1', 'leftover report id race keeps this reporter' );
+    is( scalar @{ $reports->created },
+        1, 'leftover report id race does not insert a second report' );
+    is( scalar @{ $events->created },
+        1, 'leftover report id race inserts the missing event' );
+    is( scalar @{ $outbox->created },
+        1, 'leftover report id race inserts the missing outbox' );
+    is( $audits->created->[-1]{action},
+        'report.created', 'leftover report id race inserts the missing audit' );
+
+    return;
+}
+
 sub _assert_action_command_replay {
     my $posts   = GPForum::Test::ModerationResultSet->new;
     my $actions = GPForum::Test::ModerationResultSet->new;
@@ -212,6 +328,155 @@ sub _assert_action_command_replay {
         1, 'retry hide does not emit a second outbox row' );
     is( scalar @{ $audits->created },
         1, 'retry hide does not emit a second audit row' );
+
+    my $other = $store->hide_post(
+        {
+            actor_user_id => 'moderator-1',
+            command_id    => 'hide-command-2',
+            post_id       => 'post-1',
+            reason        => 'still spam',
+        }
+    );
+    ok( $other->{ok}, 'hide with a new command id still succeeds' );
+    ok( $other->{skipped},
+        'hide with a new command id is skipped when already hidden' );
+    is(
+        $first->{action}{moderation_action_id},
+        $other->{action}{moderation_action_id},
+        'hide with a new command id returns the original action'
+    );
+    is( scalar @{ $actions->created },
+        1, 'hide with a new command id does not insert a second action' );
+    is( scalar @{ $events->created },
+        1, 'hide with a new command id does not emit a second event' );
+
+    return;
+}
+
+sub _assert_action_id_remint {
+    my $posts   = GPForum::Test::ModerationResultSet->new;
+    my $actions = GPForum::Test::ModerationResultSet->new;
+    my $events  = GPForum::Test::ModerationResultSet->new;
+    my $outbox  = GPForum::Test::ModerationResultSet->new;
+    my $audits  = GPForum::Test::ModerationResultSet->new;
+    $posts->create(
+        {
+            hidden_at        => undef,
+            moderation_state => 'visible',
+            post_id          => 'post-1',
+        }
+    );
+    $actions->create(
+        {
+            action_type          => 'post.hidden',
+            actor_user_id        => 'other-moderator',
+            command_id           => 'other-command',
+            moderation_action_id => 'generated-1',
+            reason               => 'other',
+            target_id            => 'other-post',
+            target_type          => 'post',
+        }
+    );
+    my $store = GPForum::Service::Moderation::ActionStore->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => GPForum::Test::ModerationSchema->new(
+            resultsets => {
+                AuditLog         => $audits,
+                EventLog         => $events,
+                ModerationAction => $actions,
+                OutboxMessage    => $outbox,
+                Post             => $posts,
+            },
+        ),
+    );
+    my $hidden = $store->hide_post(
+        {
+            actor_user_id => 'moderator-1',
+            command_id    => 'hide-command-pk',
+            post_id       => 'post-1',
+            reason        => 'spam',
+        }
+    );
+
+    ok( $hidden->{ok}, 'unique action id collision remints and hides' );
+    ok( !$hidden->{replayed},
+        'unique action id collision does not replay another action' );
+    is( $hidden->{action}{moderation_action_id},
+        'generated-2', 'unique action id collision remints the id' );
+    is( $hidden->{action}{target_id},
+        'post-1', 'unique action id collision keeps this target' );
+    is( scalar @{ $actions->created },
+        2, 'unique action id collision inserts this action' );
+    is( scalar @{ $events->created },
+        1, 'unique action id collision records this event' );
+
+    return;
+}
+
+sub _assert_action_id_leftover {
+    my $posts   = GPForum::Test::ModerationResultSet->new;
+    my $actions = GPForum::Test::ModerationResultSet->new;
+    my $events  = GPForum::Test::ModerationResultSet->new;
+    my $outbox  = GPForum::Test::ModerationResultSet->new;
+    my $audits  = GPForum::Test::ModerationResultSet->new;
+    $posts->create(
+        {
+            hidden_at        => undef,
+            moderation_state => 'visible',
+            post_id          => 'post-1',
+        }
+    );
+    $actions->filter_search(1);
+    $actions->create(
+        {
+            action_type          => 'post.hidden',
+            actor_user_id        => 'moderator-1',
+            command_id           => 'hide-command-leftover',
+            moderation_action_id => 'generated-1',
+            reason               => 'spam',
+            target_id            => 'post-1',
+            target_type          => 'post',
+        }
+    );
+    $actions->skip_search(1);
+    my $store = GPForum::Service::Moderation::ActionStore->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => GPForum::Test::ModerationSchema->new(
+            resultsets => {
+                AuditLog         => $audits,
+                EventLog         => $events,
+                ModerationAction => $actions,
+                OutboxMessage    => $outbox,
+                Post             => $posts,
+            },
+        ),
+    );
+    my $leftover = $store->hide_post(
+        {
+            actor_user_id => 'moderator-1',
+            command_id    => 'hide-command-leftover',
+            post_id       => 'post-1',
+            reason        => 'spam',
+        }
+    );
+
+    ok( $leftover->{ok}, 'leftover action id race reuses this action' );
+    ok( $leftover->{replayed},
+        'leftover action id race does not remint this action' );
+    is( $leftover->{action}{moderation_action_id},
+        'generated-1', 'leftover action id race keeps this action' );
+    is( $leftover->{action}{target_id},
+        'post-1', 'leftover action id race keeps this target' );
+    is( scalar @{ $actions->created },
+        1, 'leftover action id race does not insert a second action' );
+    is( scalar @{ $events->created },
+        1, 'leftover action id race inserts the missing event' );
+    is( scalar @{ $outbox->created },
+        1, 'leftover action id race inserts the missing outbox row' );
+    is( scalar @{ $audits->created },
+        1, 'leftover action id race inserts the missing audit row' );
 
     return;
 }

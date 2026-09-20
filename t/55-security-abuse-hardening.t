@@ -157,9 +157,9 @@ subtest 'duplicate reports are blocked without duplicate domain events' => sub {
     is( $report->{report_id},
         'report-existing', 'duplicate report returns existing open report' );
     is( scalar @{ $schema->created_for('EventLog') },
-        0, 'duplicate report does not create duplicate domain event' );
+        1, 'duplicate report inserts the missing created event' );
     is( $schema->created_for('AuditLog')->[0]{action},
-        'report.duplicate_blocked', 'duplicate report writes audit record' );
+        'report.created', 'duplicate report writes leftover created audit' );
 };
 
 subtest 'authorization denial matrix returns explicit statuses' => sub {

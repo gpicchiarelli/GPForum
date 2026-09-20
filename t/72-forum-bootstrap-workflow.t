@@ -11,21 +11,26 @@ use lib 't/lib';
 
 use GPForum::Bootstrap::Forum;
 use GPForum::Config;
+use GPForum::Service::Clock;
 use GPForum::Service::Forum::PostingWorkflow;
 use GPForum::Test::CommandIdempotency;
+use GPForum::Test::PostReader;
 use Mojolicious;
 
 our $VERSION = '0.001';
 
 can_ok( 'GPForum::Bootstrap::Forum', 'register' );
 can_ok( 'GPForum::Service::Forum::PostingWorkflow',
-    qw(create_reply create_thread) );
+    qw(create_reply create_thread delete_post delete_thread edit_post edit_thread move_thread restore_post restore_thread)
+);
 
 my $application = Mojolicious->new();
 $application->secrets( ['bootstrap-forum-test'] );
 $application->helper(
     gp_schema => sub { return GPForum::Test::Schema->new(); } );
 $application->helper( gp_id => sub { return GPForum::Test::Id->new(); } );
+$application->helper(
+    gp_clock => sub { return GPForum::Service::Clock->new(); } );
 $application->helper(
     gp_local_cache => sub { return GPForum::Test::Cache->new(); } );
 $application->helper(
@@ -68,6 +73,10 @@ isa_ok( $controller->gp_post_position,
     'GPForum::Service::Forum::PostPosition' );
 isa_ok( $controller->gp_thread_read_state,
     'GPForum::Service::Forum::ReadState' );
+isa_ok(
+    $controller->gp_thread_read_workflow,
+    'GPForum::Service::Forum::ReadWorkflow'
+);
 isa_ok( $controller->gp_posting_workflow,
     'GPForum::Service::Forum::PostingWorkflow' );
 
@@ -431,6 +440,920 @@ ok( $mention_degraded_result->{ok},
     'posting workflow keeps persisted reply successful when mentions degrade' );
 is( $logger->warnings, 1, 'posting workflow logs degraded mention recording' );
 
+my $missing_edit =
+  _workflow( post_reader => GPForum::Test::PostReader->new( post => undef ) );
+is(
+    $missing_edit->edit_post(
+        {
+            author_user_id => 'user-1',
+            body_source    => 'edited',
+            command_id     => 'edit-missing-command',
+            post_id        => 'missing',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects edits to missing posts'
+);
+
+my $foreign_edit = _workflow();
+is(
+    $foreign_edit->edit_post(
+        {
+            author_user_id => 'user-2',
+            body_source    => 'edited',
+            command_id     => 'edit-foreign-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects edits by non-authors'
+);
+
+my $hidden_edit = _workflow(
+    post_reader => GPForum::Test::PostReader->new(
+        post => {
+            author_user_id   => 'user-1',
+            hidden_at        => 'now',
+            moderation_state => 'hidden',
+            post_id          => 'post-1',
+            thread_id        => 'thread-1',
+        }
+    )
+);
+is(
+    $hidden_edit->edit_post(
+        {
+            author_user_id => 'user-1',
+            body_source    => 'edited',
+            command_id     => 'edit-hidden-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects edits to hidden posts'
+);
+
+my $locked_edit = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => { locked_at => 'now', thread_id => 'thread-1' }
+    )
+);
+is(
+    $locked_edit->edit_post(
+        {
+            author_user_id => 'user-1',
+            body_source    => 'edited',
+            command_id     => 'edit-locked-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects edits on locked threads'
+);
+is( $locked_edit->post_store->calls,
+    0, 'locked edit is rejected before storage' );
+
+my $edited = _workflow()->edit_post(
+    {
+        author_user_id => 'user-1',
+        body_source    => ' edited body ',
+        command_id     => 'edit-command-1',
+        post_id        => 'post-1',
+    }
+);
+ok( $edited->{ok}, 'posting workflow edits an author post' );
+is( $edited->{status}, 'ok', 'posting workflow normalizes successful edit' );
+is( $edited->{stored}{post}{post_id},
+    'post-1', 'posting workflow returns the edited post id' );
+
+my $replayed_edit = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            post_id   => 'post-original',
+            status    => 'ok',
+            thread_id => 'thread-original',
+        }
+    )
+);
+my $replayed_edit_result = $replayed_edit->edit_post(
+    {
+        author_user_id => 'user-1',
+        body_source    => 'edited',
+        command_id     => 'edit-replay-command',
+        post_id        => 'post-1',
+    }
+);
+ok( $replayed_edit_result->{ok}, 'posting workflow replays completed edits' );
+is( $replayed_edit_result->{stored}{post}{post_id},
+    'post-original', 'replayed edit returns the original post id' );
+is( $replayed_edit->post_store->calls,
+    0, 'replayed edit does not persist again' );
+
+my $edit_store_failure =
+  _workflow( post_store => GPForum::Test::PostStore->new( fail => 1 ) );
+is(
+    $edit_store_failure->edit_post(
+        {
+            author_user_id => 'user-1',
+            body_source    => 'edited',
+            command_id     => 'edit-fail-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes post edit store failures'
+);
+
+my $missing_delete =
+  _workflow( post_reader => GPForum::Test::PostReader->new( post => undef ) );
+is(
+    $missing_delete->delete_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'delete-missing-command',
+            post_id        => 'missing',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects deletes of missing posts'
+);
+
+my $foreign_delete = _workflow();
+is(
+    $foreign_delete->delete_post(
+        {
+            author_user_id => 'user-2',
+            command_id     => 'delete-foreign-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects deletes by non-authors'
+);
+
+my $hidden_delete = _workflow(
+    post_reader => GPForum::Test::PostReader->new(
+        post => {
+            author_user_id   => 'user-1',
+            hidden_at        => 'now',
+            moderation_state => 'hidden',
+            post_id          => 'post-1',
+            thread_id        => 'thread-1',
+        }
+    )
+);
+is(
+    $hidden_delete->delete_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'delete-hidden-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects deletes of hidden posts'
+);
+
+my $locked_delete = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => { locked_at => 'now', thread_id => 'thread-1' }
+    )
+);
+is(
+    $locked_delete->delete_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'delete-locked-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects deletes on locked threads'
+);
+is( $locked_delete->post_store->calls,
+    0, 'locked delete is rejected before storage' );
+
+my $deleted = _workflow()->delete_post(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'delete-command-1',
+        post_id        => 'post-1',
+    }
+);
+ok( $deleted->{ok}, 'posting workflow deletes an author post' );
+is( $deleted->{status}, 'ok', 'posting workflow normalizes successful delete' );
+is( $deleted->{stored}{post}{post_id},
+    'post-1', 'posting workflow returns the deleted post id' );
+
+my $replayed_delete = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            post_id   => 'post-original',
+            status    => 'ok',
+            thread_id => 'thread-original',
+        }
+    )
+);
+my $replayed_delete_result = $replayed_delete->delete_post(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'delete-replay-command',
+        post_id        => 'post-1',
+    }
+);
+ok( $replayed_delete_result->{ok},
+    'posting workflow replays completed deletes' );
+is( $replayed_delete_result->{stored}{post}{post_id},
+    'post-original', 'replayed delete returns the original post id' );
+is( $replayed_delete->post_store->calls,
+    0, 'replayed delete does not persist again' );
+
+my $delete_store_failure =
+  _workflow( post_store => GPForum::Test::PostStore->new( fail => 1 ) );
+is(
+    $delete_store_failure->delete_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'delete-fail-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes post delete store failures'
+);
+
+my $live_restore = _workflow();
+is(
+    $live_restore->restore_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'restore-live-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects restore of a live post'
+);
+
+my $missing_restore =
+  _workflow( post_reader => GPForum::Test::PostReader->new( post => undef ) );
+is(
+    $missing_restore->restore_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'restore-missing-command',
+            post_id        => 'missing',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects restore of a missing post'
+);
+
+my $foreign_restore = _workflow(
+    post_reader => GPForum::Test::PostReader->new( post => _deleted_post() ) );
+is(
+    $foreign_restore->restore_post(
+        {
+            author_user_id => 'user-2',
+            command_id     => 'restore-foreign-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects restore by non-authors'
+);
+
+my $hidden_restore = _workflow(
+    post_reader => GPForum::Test::PostReader->new(
+        post => {
+            %{ _deleted_post() },
+            hidden_at        => 'now',
+            moderation_state => 'hidden',
+        }
+    )
+);
+is(
+    $hidden_restore->restore_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'restore-hidden-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects restore of a hidden post'
+);
+
+my $locked_restore = _workflow(
+    post_reader => GPForum::Test::PostReader->new( post => _deleted_post() ),
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => { locked_at => 'now', thread_id => 'thread-1' }
+    )
+);
+is(
+    $locked_restore->restore_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'restore-locked-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects restore on a locked thread'
+);
+is( $locked_restore->post_store->calls,
+    0, 'locked restore is rejected before storage' );
+
+my $restored = _workflow(
+    post_reader => GPForum::Test::PostReader->new( post => _deleted_post() ) )
+  ->restore_post(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'restore-command-1',
+        post_id        => 'post-1',
+    }
+  );
+ok( $restored->{ok}, 'posting workflow restores an author post' );
+is( $restored->{status}, 'ok',
+    'posting workflow normalizes successful restore' );
+is( $restored->{stored}{post}{post_id},
+    'post-1', 'posting workflow returns the restored post id' );
+
+my $replayed_restore = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            post_id   => 'post-original',
+            status    => 'ok',
+            thread_id => 'thread-original',
+        }
+    ),
+    post_reader => GPForum::Test::PostReader->new( post => _deleted_post() ),
+);
+my $replayed_restore_result = $replayed_restore->restore_post(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'restore-replay-command',
+        post_id        => 'post-1',
+    }
+);
+ok( $replayed_restore_result->{ok},
+    'posting workflow replays completed restores' );
+is( $replayed_restore_result->{stored}{post}{post_id},
+    'post-original', 'replayed restore returns the original post id' );
+is( $replayed_restore->post_store->calls,
+    0, 'replayed restore does not persist again' );
+
+my $restore_store_failure = _workflow(
+    post_reader => GPForum::Test::PostReader->new( post => _deleted_post() ),
+    post_store  => GPForum::Test::PostStore->new( fail => 1 ),
+);
+is(
+    $restore_store_failure->restore_post(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'restore-fail-command',
+            post_id        => 'post-1',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes post restore store failures'
+);
+
+my $missing_title_edit = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => undef
+    )
+);
+is(
+    $missing_title_edit->edit_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-edit-missing-command',
+            thread_id      => 'missing',
+            title          => 'Edited',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects title edits to missing threads'
+);
+
+my $foreign_title_edit = _workflow();
+is(
+    $foreign_title_edit->edit_thread(
+        {
+            author_user_id => 'user-2',
+            command_id     => 'thread-edit-foreign-command',
+            thread_id      => 'thread-1',
+            title          => 'Edited',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects title edits by non-authors'
+);
+
+my $hidden_title_edit = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            author_user_id   => 'user-1',
+            moderation_state => 'hidden',
+            thread_id        => 'thread-1',
+        }
+    )
+);
+is(
+    $hidden_title_edit->edit_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-edit-hidden-command',
+            thread_id      => 'thread-1',
+            title          => 'Edited',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects title edits to hidden threads'
+);
+
+my $locked_title_edit = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            author_user_id => 'user-1',
+            locked_at      => 'now',
+            thread_id      => 'thread-1',
+        }
+    )
+);
+is(
+    $locked_title_edit->edit_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-edit-locked-command',
+            thread_id      => 'thread-1',
+            title          => 'Edited',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects title edits on locked threads'
+);
+is( $locked_title_edit->thread_store->calls,
+    0, 'locked title edit is rejected before storage' );
+
+my $edited_thread = _workflow()->edit_thread(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'thread-edit-command-1',
+        thread_id      => 'thread-1',
+        title          => 'Edited Welcome',
+    }
+);
+ok( $edited_thread->{ok}, 'posting workflow edits an author thread title' );
+is( $edited_thread->{status},
+    'ok', 'posting workflow normalizes successful thread edit' );
+is( $edited_thread->{stored}{thread}{thread_id},
+    'thread-1', 'posting workflow returns the edited thread id' );
+
+my $replayed_title = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            slug      => 'original-slug',
+            status    => 'ok',
+            thread_id => 'thread-original',
+            title     => 'Original title',
+        }
+    )
+);
+my $replayed_title_result = $replayed_title->edit_thread(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'thread-edit-replay-command',
+        thread_id      => 'thread-1',
+        title          => 'Edited',
+    }
+);
+ok( $replayed_title_result->{ok},
+    'posting workflow replays completed thread edits' );
+is( $replayed_title_result->{stored}{thread}{thread_id},
+    'thread-original', 'replayed thread edit returns the original thread id' );
+is( $replayed_title->thread_store->calls,
+    0, 'replayed thread edit does not persist again' );
+
+my $title_store_failure =
+  _workflow( thread_store => GPForum::Test::ThreadStore->new( fail => 1 ) );
+is(
+    $title_store_failure->edit_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-edit-fail-command',
+            thread_id      => 'thread-1',
+            title          => 'Edited',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes thread edit store failures'
+);
+
+my $missing_thread_delete = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => undef
+    )
+);
+is(
+    $missing_thread_delete->delete_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-delete-missing-command',
+            thread_id      => 'missing',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects deletes of missing threads'
+);
+
+my $foreign_thread_delete = _workflow();
+is(
+    $foreign_thread_delete->delete_thread(
+        {
+            author_user_id => 'user-2',
+            command_id     => 'thread-delete-foreign-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects thread deletes by non-authors'
+);
+
+my $hidden_thread_delete = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            author_user_id   => 'user-1',
+            moderation_state => 'hidden',
+            thread_id        => 'thread-1',
+        }
+    )
+);
+is(
+    $hidden_thread_delete->delete_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-delete-hidden-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects deletes of hidden threads'
+);
+
+my $locked_thread_delete = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            author_user_id => 'user-1',
+            locked_at      => 'now',
+            thread_id      => 'thread-1',
+        }
+    )
+);
+is(
+    $locked_thread_delete->delete_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-delete-locked-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects thread deletes on locked threads'
+);
+is( $locked_thread_delete->thread_store->calls,
+    0, 'locked thread delete is rejected before storage' );
+
+my $deleted_thread = _workflow()->delete_thread(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'thread-delete-command-1',
+        thread_id      => 'thread-1',
+    }
+);
+ok( $deleted_thread->{ok}, 'posting workflow deletes an author thread' );
+is( $deleted_thread->{status},
+    'ok', 'posting workflow normalizes successful thread delete' );
+is( $deleted_thread->{stored}{thread}{thread_id},
+    'thread-1', 'posting workflow returns the deleted thread id' );
+
+my $replayed_thread_delete = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            status    => 'ok',
+            thread_id => 'thread-original',
+        }
+    )
+);
+my $replayed_thread_delete_result = $replayed_thread_delete->delete_thread(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'thread-delete-replay-command',
+        thread_id      => 'thread-1',
+    }
+);
+ok( $replayed_thread_delete_result->{ok},
+    'posting workflow replays completed thread deletes' );
+is( $replayed_thread_delete_result->{stored}{thread}{thread_id},
+    'thread-original',
+    'replayed thread delete returns the original thread id' );
+is( $replayed_thread_delete->thread_store->calls,
+    0, 'replayed thread delete does not persist again' );
+
+my $thread_delete_store_failure =
+  _workflow( thread_store => GPForum::Test::ThreadStore->new( fail => 1 ) );
+is(
+    $thread_delete_store_failure->delete_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-delete-fail-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes thread delete store failures'
+);
+
+my $live_thread_restore = _workflow();
+is(
+    $live_thread_restore->restore_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-restore-live-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects restore of a live thread'
+);
+
+my $missing_thread_restore = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => undef
+    )
+);
+is(
+    $missing_thread_restore->restore_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-restore-missing-command',
+            thread_id      => 'missing',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects restore of a missing thread'
+);
+
+my $foreign_thread_restore = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => _deleted_thread()
+    )
+);
+is(
+    $foreign_thread_restore->restore_thread(
+        {
+            author_user_id => 'user-2',
+            command_id     => 'thread-restore-foreign-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects thread restore by non-authors'
+);
+
+my $hidden_thread_restore = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            %{ _deleted_thread() }, moderation_state => 'hidden',
+        }
+    )
+);
+is(
+    $hidden_thread_restore->restore_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-restore-hidden-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects restore of a hidden thread'
+);
+
+my $locked_thread_restore = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            %{ _deleted_thread() }, locked_at => 'now',
+        }
+    )
+);
+is(
+    $locked_thread_restore->restore_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-restore-locked-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects thread restore on a locked thread'
+);
+is( $locked_thread_restore->thread_store->calls,
+    0, 'locked thread restore is rejected before storage' );
+
+my $restored_thread = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => _deleted_thread()
+    )
+)->restore_thread(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'thread-restore-command-1',
+        thread_id      => 'thread-1',
+    }
+);
+ok( $restored_thread->{ok}, 'posting workflow restores an author thread' );
+is( $restored_thread->{status},
+    'ok', 'posting workflow normalizes successful thread restore' );
+is( $restored_thread->{stored}{thread}{thread_id},
+    'thread-1', 'posting workflow returns the restored thread id' );
+
+my $replayed_thread_restore = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            ok        => 1,
+            status    => 'ok',
+            thread_id => 'thread-original',
+        }
+    ),
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => _deleted_thread()
+    ),
+);
+my $replayed_thread_restore_result = $replayed_thread_restore->restore_thread(
+    {
+        author_user_id => 'user-1',
+        command_id     => 'thread-restore-replay-command',
+        thread_id      => 'thread-1',
+    }
+);
+ok( $replayed_thread_restore_result->{ok},
+    'posting workflow replays completed thread restores' );
+is( $replayed_thread_restore_result->{stored}{thread}{thread_id},
+    'thread-original',
+    'replayed thread restore returns the original thread id' );
+is( $replayed_thread_restore->thread_store->calls,
+    0, 'replayed thread restore does not persist again' );
+
+my $thread_restore_store_failure = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => _deleted_thread()
+    ),
+    thread_store => GPForum::Test::ThreadStore->new( fail => 1 ),
+);
+is(
+    $thread_restore_store_failure->restore_thread(
+        {
+            author_user_id => 'user-1',
+            command_id     => 'thread-restore-fail-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes thread restore store failures'
+);
+
+my $missing_thread_move = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => undef
+    )
+);
+is(
+    $missing_thread_move->move_thread(
+        {
+            author_user_id => 'user-1',
+            category_id    => 'category-2',
+            command_id     => 'thread-move-missing-command',
+            thread_id      => 'missing',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects moves of missing threads'
+);
+
+my $foreign_thread_move = _workflow();
+is(
+    $foreign_thread_move->move_thread(
+        {
+            author_user_id => 'user-2',
+            category_id    => 'category-2',
+            command_id     => 'thread-move-foreign-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects thread moves by non-authors'
+);
+
+my $missing_move_category = _workflow(
+    category_reader => GPForum::Test::CategoryReader->new( found => 0 ) );
+is(
+    $missing_move_category->move_thread(
+        {
+            author_user_id => 'user-1',
+            category_id    => 'category-missing',
+            command_id     => 'thread-move-category-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'not_found',
+    'posting workflow rejects moves to missing categories'
+);
+
+my $locked_thread_move = _workflow(
+    thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+        thread => {
+            author_user_id => 'user-1',
+            locked_at      => 'now',
+            thread_id      => 'thread-1',
+        }
+    )
+);
+is(
+    $locked_thread_move->move_thread(
+        {
+            author_user_id => 'user-1',
+            category_id    => 'category-2',
+            command_id     => 'thread-move-locked-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'forbidden',
+    'posting workflow rejects thread moves on locked threads'
+);
+is( $locked_thread_move->thread_store->calls,
+    0, 'locked thread move is rejected before storage' );
+
+my $moved_thread = _workflow()->move_thread(
+    {
+        author_user_id => 'user-1',
+        category_id    => 'category-2',
+        command_id     => 'thread-move-command-1',
+        thread_id      => 'thread-1',
+    }
+);
+ok( $moved_thread->{ok}, 'posting workflow moves an author thread' );
+is( $moved_thread->{status},
+    'ok', 'posting workflow normalizes successful thread move' );
+is( $moved_thread->{stored}{thread}{category_id},
+    'category-2', 'posting workflow returns the destination category' );
+
+my $replayed_thread_move = _workflow(
+    command_idempotency => GPForum::Test::CommandIdempotency->new(
+        replay_response => {
+            category_id => 'category-original',
+            ok          => 1,
+            status      => 'ok',
+            thread_id   => 'thread-original',
+        }
+    )
+);
+my $replayed_thread_move_result = $replayed_thread_move->move_thread(
+    {
+        author_user_id => 'user-1',
+        category_id    => 'category-2',
+        command_id     => 'thread-move-replay-command',
+        thread_id      => 'thread-1',
+    }
+);
+ok( $replayed_thread_move_result->{ok},
+    'posting workflow replays completed thread moves' );
+is( $replayed_thread_move_result->{stored}{thread}{thread_id},
+    'thread-original', 'replayed thread move returns the original thread id' );
+is( $replayed_thread_move->thread_store->calls,
+    0, 'replayed thread move does not persist again' );
+
+my $thread_move_store_failure =
+  _workflow( thread_store => GPForum::Test::ThreadStore->new( fail => 1 ) );
+is(
+    $thread_move_store_failure->move_thread(
+        {
+            author_user_id => 'user-1',
+            category_id    => 'category-2',
+            command_id     => 'thread-move-fail-command',
+            thread_id      => 'thread-1',
+        }
+    )->{status},
+    'failed',
+    'posting workflow normalizes thread move store failures'
+);
+
 done_testing();
 
 sub _workflow {
@@ -454,12 +1377,28 @@ sub _workflow {
             \%override, 'post_composer',
             sub { return GPForum::Test::PostComposer->new(); }
         ),
+        post_reader => _workflow_component(
+            \%override,
+            'post_reader',
+            sub {
+                return GPForum::Test::PostReader->new(
+                    post => {
+                        author_user_id   => 'user-1',
+                        moderation_state => 'visible',
+                        post_id          => 'post-1',
+                        thread_id        => 'thread-1',
+                    }
+                );
+            }
+        ),
         post_store => _workflow_component(
-            \%override, 'post_store',
+            \%override,
+            'post_store',
             sub { return GPForum::Test::PostStore->new(); }
         ),
         thread_composer => _workflow_component(
-            \%override, 'thread_composer',
+            \%override,
+            'thread_composer',
             sub { return GPForum::Test::ThreadComposer->new(); }
         ),
         thread_detail_reader => _workflow_component(
@@ -468,8 +1407,9 @@ sub _workflow {
             sub {
                 return GPForum::Test::ThreadDetailReader->new(
                     thread => {
-                        thread_id  => 'thread-1',
-                        visibility => 'public',
+                        author_user_id => 'user-1',
+                        thread_id      => 'thread-1',
+                        visibility     => 'public',
                     },
                 );
             }
@@ -488,6 +1428,27 @@ sub _workflow_component {
     return $override->{$name} if exists $override->{$name};
 
     return $builder->();
+}
+
+sub _deleted_post {
+    return {
+        author_user_id   => 'user-1',
+        deleted_at       => 'now',
+        moderation_state => 'visible',
+        post_id          => 'post-1',
+        thread_id        => 'thread-1',
+    };
+}
+
+sub _deleted_thread {
+    return {
+        author_user_id   => 'user-1',
+        category_id      => 'category-1',
+        deleted_at       => 'now',
+        moderation_state => 'visible',
+        thread_id        => 'thread-1',
+        visibility       => 'public',
+    };
 }
 
 package GPForum::Test::CategoryReader;
@@ -541,6 +1502,47 @@ sub prepare {
     };
 }
 
+sub prepare_title {
+    my ( $self, $input ) = @_;
+
+    $self->last_input($input);
+    if ( $self->{result} ) {
+        return $self->{result};
+    }
+
+    return {
+        ok      => 1,
+        command => {
+            thread => {
+                editor_user_id => $input->{editor_user_id},
+                slug           => 'edited-welcome',
+                thread_id      => $input->{thread_id},
+                title          => $input->{title},
+            },
+        },
+    };
+}
+
+sub prepare_move {
+    my ( $self, $input ) = @_;
+
+    $self->last_input($input);
+    if ( $self->{result} ) {
+        return $self->{result};
+    }
+
+    return {
+        ok      => 1,
+        command => {
+            thread => {
+                category_id    => $input->{category_id},
+                editor_user_id => $input->{editor_user_id},
+                thread_id      => $input->{thread_id},
+            },
+        },
+    };
+}
+
 package GPForum::Test::ThreadStore;
 
 sub new {
@@ -570,6 +1572,75 @@ sub create_thread {
     };
 }
 
+sub edit_thread {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    if ( $self->{fail} ) {
+        die "thread store failed\n";
+    }
+
+    return {
+        ok     => 1,
+        thread => {
+            slug      => $command->{thread}{slug},
+            thread_id => $command->{thread}{thread_id},
+            title     => $command->{thread}{title},
+        },
+    };
+}
+
+sub delete_thread {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    if ( $self->{fail} ) {
+        die "thread store failed\n";
+    }
+
+    return {
+        ok     => 1,
+        thread => {
+            category_id => $command->{thread}{category_id},
+            thread_id   => $command->{thread}{thread_id},
+        },
+    };
+}
+
+sub restore_thread {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    if ( $self->{fail} ) {
+        die "thread store failed\n";
+    }
+
+    return {
+        ok     => 1,
+        thread => {
+            category_id => $command->{thread}{category_id},
+            thread_id   => $command->{thread}{thread_id},
+        },
+    };
+}
+
+sub move_thread {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    if ( $self->{fail} ) {
+        die "thread store failed\n";
+    }
+
+    return {
+        ok     => 1,
+        thread => {
+            category_id => $command->{thread}{category_id},
+            thread_id   => $command->{thread}{thread_id},
+        },
+    };
+}
+
 package GPForum::Test::ThreadDetailReader;
 
 sub new {
@@ -585,6 +1656,12 @@ sub thread {
 }
 
 sub find_thread {
+    my ($self) = @_;
+
+    return $self->thread;
+}
+
+sub find_thread_row {
     my ($self) = @_;
 
     return $self->thread;
@@ -625,6 +1702,25 @@ sub prepare {
     };
 }
 
+sub prepare_revision {
+    my ( $self, $input ) = @_;
+
+    $self->last_input($input);
+    return $self->{result} if $self->{result};
+
+    return {
+        ok      => 1,
+        command => {
+            body => { body_source => $input->{body_source} },
+            post => {
+                editor_user_id => $input->{editor_user_id},
+                post_id        => $input->{post_id},
+                thread_id      => $input->{thread_id},
+            },
+        },
+    };
+}
+
 package GPForum::Test::PostStore;
 
 sub new {
@@ -651,6 +1747,58 @@ sub create_post {
         ok   => 1,
         post => {
             author_user_id => $command->{post}{author_user_id},
+            post_id        => $command->{post}{post_id},
+            thread_id      => $command->{post}{thread_id},
+        },
+    };
+}
+
+sub edit_post {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    die "post store failed\n" if $self->{fail};
+
+    return {
+        ok   => 1,
+        post => {
+            author_user_id => $command->{post}{editor_user_id},
+            post_id        => $command->{post}{post_id},
+            thread_id      => $command->{post}{thread_id},
+        },
+    };
+}
+
+sub delete_post {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    if ( $self->{fail} ) {
+        die "post store failed\n";
+    }
+
+    return {
+        ok   => 1,
+        post => {
+            author_user_id => $command->{post}{deleted_by},
+            post_id        => $command->{post}{post_id},
+            thread_id      => $command->{post}{thread_id},
+        },
+    };
+}
+
+sub restore_post {
+    my ( $self, $command ) = @_;
+
+    $self->calls( $self->calls + 1 );
+    if ( $self->{fail} ) {
+        die "post store failed\n";
+    }
+
+    return {
+        ok   => 1,
+        post => {
+            author_user_id => $command->{post}{restored_by},
             post_id        => $command->{post}{post_id},
             thread_id      => $command->{post}{thread_id},
         },

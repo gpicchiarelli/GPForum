@@ -160,6 +160,46 @@ is(
 ok( !exists $logout->{metadata}{identifier_hash},
     'logout_request_audit does not include an identifier hash' );
 
+my $mail = $events->mail_envelope(
+    {
+        kind     => 'password_reset',
+        token_id => 'tok-1',
+        user_id  => 'user-1',
+    }
+);
+is( $mail->{event_type}, 'identity.mail.requested',
+    'mail_envelope uses the identity mail event type' );
+is( $mail->{aggregate_type}, 'user', 'mail_envelope uses the user aggregate' );
+is(
+    $mail->{idempotency_key},
+    'identity.mail.requested:tok-1',
+    'mail_envelope keys idempotency on the token id'
+);
+is_deeply(
+    $mail->{payload},
+    { kind => 'password_reset', token_id => 'tok-1' },
+    'mail_envelope payload keeps kind and token id only'
+);
+ok( !exists $mail->{payload}{token},
+    'mail_envelope payload does not include the raw token' );
+is_deeply(
+    $events->mail_outbox_payload(
+        {
+            kind  => 'password_reset',
+            to    => 'member@example.test',
+            token => 'raw-token',
+        }
+    ),
+    {
+        mail => {
+            kind  => 'password_reset',
+            to    => 'member@example.test',
+            token => 'raw-token',
+        },
+    },
+    'mail_outbox_payload keeps the recipient and raw token'
+);
+
 done_testing();
 
 1;

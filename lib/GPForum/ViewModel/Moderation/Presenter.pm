@@ -80,10 +80,12 @@ sub suspension {
     my $suspension = $self->unwrap( $result, 'suspension' );
 
     return {
-        actor_user_id => $self->column( $suspension, 'actor_user_id' ),
-        metadata      => $self->column( $suspension, 'metadata' ),
-        reason        => $self->column( $suspension, 'reason' ),
-        revoked_at    => $self->column( $suspension, 'revoked_at' ),
+        actor_user_id     => $self->column( $suspension, 'actor_user_id' ),
+        metadata          => $self->column( $suspension, 'metadata' ),
+        reason            => $self->column( $suspension, 'reason' ),
+        revoked_at        => $self->column( $suspension, 'revoked_at' ),
+        revoke_command_id => $self->column( $suspension, 'revoke_command_id' )
+          || q{},
         suspension_id => $self->column( $suspension, 'suspension_id' ),
         ui            => {
             heading_id => $self->stable_id(
@@ -115,6 +117,7 @@ sub moderation_action {
         moderation_action_id =>
           $self->column( $action, 'moderation_action_id' ),
         reason              => $self->column( $action, 'reason' ),
+        reverse_command_id  => $self->column( $action, 'reverse_command_id' ),
         reversed_at         => $self->column( $action, 'reversed_at' ),
         reversed_by_user_id => $self->column( $action, 'reversed_by_user_id' ),
         target_id           => $self->column( $action, 'target_id' ),
@@ -153,23 +156,29 @@ sub report {
     return {
         assigned_moderator_user_id =>
           $self->column( $row, 'assigned_moderator_user_id' ),
-        command_id       => $self->column( $row, 'command_id' ),
-        created_at       => $self->column( $row, 'created_at' ),
-        details          => $self->column( $row, 'details' ),
-        reason           => $self->column( $row, 'reason' ),
-        report_id        => $report_id,
-        reporter_user_id => $self->column( $row, 'reporter_user_id' ),
-        resolution       => $self->column( $row, 'resolution' ),
-        resolved_at      => $self->column( $row, 'resolved_at' ),
-        status           => $self->column( $row, 'status' ),
-        target_id        => $self->column( $row, 'target_id' ),
-        target_type      => $self->column( $row, 'target_type' ),
-        ui               => {
+        assign_command_id  => $self->column( $row, 'assign_command_id' ),
+        command_id         => $self->column( $row, 'command_id' ),
+        created_at         => $self->column( $row, 'created_at' ),
+        details            => $self->column( $row, 'details' ),
+        reason             => $self->column( $row, 'reason' ),
+        report_id          => $report_id,
+        release_command_id => $self->column( $row, 'release_command_id' ),
+        reporter_user_id   => $self->column( $row, 'reporter_user_id' ),
+        resolution         => $self->column( $row, 'resolution' ),
+        resolve_command_id => $self->column( $row, 'resolve_command_id' ),
+        resolved_at        => $self->column( $row, 'resolved_at' ),
+        status             => $self->column( $row, 'status' ),
+        suspend_command_id => $self->column( $row, 'suspend_command_id' ),
+        target_id          => $self->column( $row, 'target_id' ),
+        target_type        => $self->column( $row, 'target_type' ),
+        ui                 => {
             heading_id => $self->stable_id( 'report', $report_id, 'heading' ),
             post_reason_id =>
               $self->stable_id( 'report', $report_id, 'post-reason' ),
             resolution_id =>
               $self->stable_id( 'report', $report_id, 'resolution' ),
+            thread_lock_reason_id =>
+              $self->stable_id( 'report', $report_id, 'thread-lock-reason' ),
             thread_reason_id =>
               $self->stable_id( 'report', $report_id, 'thread-reason' ),
             user_reason_id =>

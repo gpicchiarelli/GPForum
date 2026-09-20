@@ -24,10 +24,12 @@ sub roles_page {
     my ( $self, %input ) = @_;
 
     return {
-        csrf_token  => $input{csrf_token},
-        permissions =>
+        csrf_token            => $input{csrf_token},
+        permission_command_id => $self->string( $input{permission_command_id} ),
+        permissions           =>
           [ map { $self->permission($_) } @{ $input{permissions} || [] } ],
-        roles => [ map { $self->role($_) } @{ $input{roles} || [] } ],
+        role_command_id => $self->string( $input{role_command_id} ),
+        roles           => $self->_roles_with_attach( \%input ),
     };
 }
 
@@ -35,9 +37,9 @@ sub categories_page {
     my ( $self, %input ) = @_;
 
     return {
-        categories =>
-          [ map { $self->category($_) } @{ $input{categories} || [] } ],
-        csrf_token => $input{csrf_token},
+        categories        => $self->_categories_with_update( \%input ),
+        create_command_id => $self->string( $input{create_command_id} ),
+        csrf_token        => $input{csrf_token},
     };
 }
 
@@ -45,10 +47,10 @@ sub user_roles_page {
     my ( $self, %input ) = @_;
 
     return {
-        bindings =>
-          [ map { $self->role_binding($_) } @{ $input{bindings} || [] } ],
-        csrf_token => $input{csrf_token},
-        user_id    => $input{user_id},
+        bind_command_id => $self->string( $input{bind_command_id} ),
+        bindings        => $self->_bindings_with_revoke( \%input ),
+        csrf_token      => $input{csrf_token},
+        user_id         => $input{user_id},
     };
 }
 
@@ -160,6 +162,72 @@ sub category_response {
         category => $self->category($category),
         status   => $status,
     };
+}
+
+sub _roles_with_attach {
+    my ( $self, $input ) = @_;
+
+    my $ids = $input->{attach_command_ids};
+    if ( ref $ids ne 'HASH' ) {
+        $ids = {};
+    }
+
+    return [ map { $self->_role_with_command( $_, $ids ) }
+          @{ $input->{roles} || [] } ];
+}
+
+sub _role_with_command {
+    my ( $self, $row, $ids ) = @_;
+
+    my $role    = $self->role($row);
+    my $role_id = $role->{role_id} || q{};
+    $role->{attach_command_id} = $self->string( $ids->{$role_id} );
+
+    return $role;
+}
+
+sub _categories_with_update {
+    my ( $self, $input ) = @_;
+
+    my $ids = $input->{update_command_ids};
+    if ( ref $ids ne 'HASH' ) {
+        $ids = {};
+    }
+
+    return [ map { $self->_category_with_command( $_, $ids ) }
+          @{ $input->{categories} || [] } ];
+}
+
+sub _category_with_command {
+    my ( $self, $row, $ids ) = @_;
+
+    my $category    = $self->category($row);
+    my $category_id = $category->{category_id} || q{};
+    $category->{update_command_id} = $self->string( $ids->{$category_id} );
+
+    return $category;
+}
+
+sub _bindings_with_revoke {
+    my ( $self, $input ) = @_;
+
+    my $ids = $input->{revoke_command_ids};
+    if ( ref $ids ne 'HASH' ) {
+        $ids = {};
+    }
+
+    return [ map { $self->_binding_with_command( $_, $ids ) }
+          @{ $input->{bindings} || [] } ];
+}
+
+sub _binding_with_command {
+    my ( $self, $row, $ids ) = @_;
+
+    my $binding    = $self->role_binding($row);
+    my $binding_id = $binding->{binding_id} || q{};
+    $binding->{revoke_command_id} = $self->string( $ids->{$binding_id} );
+
+    return $binding;
 }
 
 sub user {

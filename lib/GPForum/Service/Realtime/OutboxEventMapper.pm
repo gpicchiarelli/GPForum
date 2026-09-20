@@ -13,10 +13,36 @@ use GPForum::Service::Realtime::NotificationBadgeReader;
 our $VERSION = '0.001';
 
 const my $THREAD_CREATED              => 'thread.created';
+const my $THREAD_UPDATED              => 'thread.updated';
+const my $THREAD_DELETED              => 'thread.deleted';
+const my $THREAD_MOVED                => 'thread.moved';
+const my $THREAD_HIDDEN               => 'thread.hidden';
+const my $THREAD_RESTORED             => 'thread.restored';
+const my $THREAD_UNDELETED            => 'thread.undeleted';
 const my $POST_CREATED                => 'post.created';
+const my $POST_UPDATED                => 'post.updated';
+const my $POST_DELETED                => 'post.deleted';
+const my $POST_UNDELETED              => 'post.undeleted';
 const my $THREAD_UPDATE               => 'thread.update';
 const my $NOTIFICATION_BADGE          => 'notification.badge';
 const my $MODERATION_QUEUE_INVALIDATE => 'moderation.queue.invalidate';
+
+const my %THREAD_CONTENT => (
+    $THREAD_CREATED   => 1,
+    $THREAD_DELETED   => 1,
+    $THREAD_HIDDEN    => 1,
+    $THREAD_MOVED     => 1,
+    $THREAD_RESTORED  => 1,
+    $THREAD_UNDELETED => 1,
+    $THREAD_UPDATED   => 1,
+);
+
+const my %POST_CONTENT => (
+    $POST_CREATED   => 1,
+    $POST_DELETED   => 1,
+    $POST_UNDELETED => 1,
+    $POST_UPDATED   => 1,
+);
 
 has payload_contract => sub { return GPForum::Jobs::EventPayload->new; };
 has schema           => undef;
@@ -44,13 +70,34 @@ sub _domain_realtime_event_for {
     my ( $self, $payload ) = @_;
 
     my $event_type = $payload->{event_type} || q{};
-    return $self->_post_created_event($payload) if $event_type eq $POST_CREATED;
+    return $self->_post_created_event($payload)
+      if _post_content_event($event_type);
     return $self->_thread_created_event($payload)
-      if $event_type eq $THREAD_CREATED;
+      if _thread_content_event($event_type);
     return $self->_moderation_event($payload)
       if $event_type =~ /\A moderation[.] | \A report[.] /msx;
 
     return;
+}
+
+sub _post_content_event {
+    my ($event_type) = @_;
+
+    if ( !defined $event_type ) {
+        return 0;
+    }
+
+    return exists $POST_CONTENT{$event_type} ? 1 : 0;
+}
+
+sub _thread_content_event {
+    my ($event_type) = @_;
+
+    if ( !defined $event_type ) {
+        return 0;
+    }
+
+    return exists $THREAD_CONTENT{$event_type} ? 1 : 0;
 }
 
 sub _post_created_event {

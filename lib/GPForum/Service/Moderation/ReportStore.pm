@@ -15,6 +15,9 @@ use GPForum::Service::Moderation::Event;
 our $VERSION = '0.001';
 
 const my $DEFAULT_QUEUE_LIMIT => 50;
+const my $ID_CONSTRAINT       => 'reports_pkey';
+const my $OPEN_CONSTRAINT     => 'idx_reports_reporter_target_open_unique';
+const my $ROW_LIMIT_ONE       => 1;
 const my $STATUS_OPEN         => 'open';
 const my $STATUS_RESOLVED     => 'resolved';
 const my $STATUS_TRIAGED      => 'triaged';
@@ -44,8 +47,7 @@ sub create_report {
         sub {
             my $duplicate = $self->_open_duplicate_report($input);
             if ($duplicate) {
-                $self->_record_duplicate_audit( $input, $duplicate );
-                return $duplicate;
+                return $self->_finish_leftover_report( $duplicate, $input );
             }
 
             return $self->_insert_or_reuse($input);
@@ -72,14 +74,75 @@ sub _duplicate_after_conflict {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
+    return $self->_report_after_unique( $input, $error );
+}
+
+sub _report_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _report_id_conflict($error) ) {
+        return $self->_report_after_id_conflict($input);
+    }
+    if ( _open_report_conflict($error) ) {
+        return $self->_reuse_report_row( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _report_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $duplicate = $self->_open_duplicate_report($input);
+    if ($duplicate) {
+        return $self->_finish_leftover_report( $duplicate, $input );
+    }
+
+    return $self->_retry_report_id($input);
+}
+
+sub _retry_report_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_insert_report($input); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_report_row {
+    my ( $self, $input, $error ) = @_;
+
     my $duplicate = $self->_open_duplicate_report($input);
     if ( !$duplicate ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
-    $self->_record_duplicate_audit( $input, $duplicate );
+    return $self->_finish_leftover_report( $duplicate, $input );
+}
 
-    return $duplicate;
+sub _report_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _open_report_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $OPEN_CONSTRAINT ) >= 0 ? 1 : 0;
 }
 
 sub _open_duplicate_report {
@@ -142,6 +205,37 @@ sub _insert_report {
     $self->_record_event_and_audit($report);
 
     return $report;
+}
+
+sub _finish_leftover_report {
+    my ( $self, $existing, $input ) = @_;
+
+    if ( $self->_report_event_exists($existing) ) {
+        $self->_record_duplicate_audit( $input, $existing );
+        return $existing;
+    }
+
+    $self->_record_event_and_audit($existing);
+
+    return $existing;
+}
+
+sub _report_event_exists {
+    my ( $self, $existing ) = @_;
+
+    my $search = $self->schema->resultset('EventLog')->search(
+        {
+            idempotency_key =>
+              join( q{:}, 'report.created', _column( $existing, 'report_id' ) ),
+        },
+        { rows => $ROW_LIMIT_ONE },
+    );
+
+    if ( $search->can('single') ) {
+        return $search->single;
+    }
+
+    return;
 }
 
 sub assign_report {

@@ -72,6 +72,17 @@ sub upload_write_response {
     return $self->upload_response( $result->{stored} );
 }
 
+sub delete_write_response {
+    my ( $self, $result ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->delete_response( $result->{stored} );
+}
+
 sub download_response {
     my ( $self, $result ) = @_;
 
@@ -87,7 +98,7 @@ sub write_failure {
     my ( $self, $result ) = @_;
 
     if ( $self->attachment_access->is_failed($result) ) {
-        return $self->_system_failure;
+        return $self->_unavailable;
     }
 
     return $self->_mapped_failure($result);
@@ -101,6 +112,16 @@ sub upload_response {
     }
 
     return $self->_upload_redirect($stored);
+}
+
+sub delete_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->wants_json ) {
+        return $self->_delete_json($stored);
+    }
+
+    return $self->_delete_redirect($stored);
 }
 
 sub render_download {
@@ -159,11 +180,57 @@ sub _upload_json {
 sub _upload_redirect {
     my ( $self, $stored ) = @_;
 
+    return $self->_post_redirect( $stored,
+        $self->attachment_access->uploaded_status );
+}
+
+sub _delete_json {
+    my ( $self, $stored ) = @_;
+
+    return $self->render(
+        json   => $self->gp_attachment_view_model->delete_response($stored),
+        status => $HTTP_OK,
+    );
+}
+
+sub _delete_redirect {
+    my ( $self, $stored ) = @_;
+
+    return $self->_post_redirect( $stored,
+        $self->attachment_access->deleted_status );
+}
+
+sub _post_redirect {
+    my ( $self, $stored, $status ) = @_;
+
     my $thread_id = $self->column( $stored->{post}, 'thread_id' );
 
-    return $self->redirect_to(
+    return $self->_html_success(
+        $status,
         $self->url_for( 'thread', thread_id => $thread_id )
-          ->fragment( 'post-' . $self->param('post_id') ) );
+          ->fragment( 'post-' . $self->param('post_id') ),
+    );
+}
+
+sub _html_success {
+    my ( $self, $status, $location ) = @_;
+
+    $self->_set_success_flash(
+        $self->attachment_access->write_flash_key($status) );
+
+    return $self->redirect_to($location);
+}
+
+sub _set_success_flash {
+    my ( $self, $flash_key ) = @_;
+
+    if ( !$flash_key ) {
+        return;
+    }
+
+    $self->flash( success => $self->t($flash_key) );
+
+    return;
 }
 
 sub _mapped_failure {
@@ -237,10 +304,23 @@ sub _rate_limited {
     );
 }
 
-sub _system_failure {
+sub command_id_param {
     my ($self) = @_;
 
-    return GPForum::Web::Guard->new->system_failure($self);
+    my $command_id = $self->param('command_id');
+    if ( !defined $command_id ) {
+        $command_id = q{};
+    }
+    $command_id =~ s/\A \s+//msx;
+    $command_id =~ s/\s+ \z//msx;
+
+    return $command_id;
+}
+
+sub _unavailable {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->service_unavailable($self);
 }
 
 1;
@@ -274,11 +354,16 @@ Rejects invalid CSRF tokens, anonymous uploads, and rate-limited actors.
 
 =head2 write_failure
 
-Maps workflow statuses to HTTP error responses.
+Maps workflow statuses to HTTP error responses. Store and command-log
+failures use HTTP 503.
 
 =head2 upload_write_response
 
 Renders a successful upload as JSON or a thread redirect.
+
+=head2 delete_write_response
+
+Renders a successful author delete as JSON or a thread redirect.
 
 =head2 download_response
 

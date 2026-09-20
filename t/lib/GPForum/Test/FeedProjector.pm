@@ -32,4 +32,17 @@ sub remove_item {
     return { ok => 1, removed => 1 };
 }
 
+sub remove_thread {
+    my ( $self, $thread_id ) = @_;
+
+    push @{ $self->removals },
+      {
+        cascade_posts => 1,
+        item_id       => $thread_id,
+        item_type     => 'thread',
+      };
+
+    return { ok => 1, posts_removed => 1, removed => 1 };
+}
+
 1;

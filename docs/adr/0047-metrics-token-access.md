@@ -18,7 +18,8 @@ Introduce `GPForum::Web::OperationsAccess` behind the existing operations
 controller. It owns:
 
 - whether a configured metrics token is required;
-- constant-time Bearer and metrics-header matching;
+- constant-time Bearer and metrics-header matching against the current
+  token and optional previous tokens;
 - the HTTP 401 `metrics token required` JSON payload;
 - the `X-GPForum-Metrics-Token` header name.
 

@@ -14,6 +14,7 @@ use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Community::FeedReader;
 use GPForum::Service::Community::MentionReader;
 use GPForum::Service::Community::MentionStore;
+use GPForum::Service::Community::Workflow;
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::HomePageReader;
 use GPForum::Service::Forum::PostComposer;
@@ -22,6 +23,7 @@ use GPForum::Service::Forum::PostReader;
 use GPForum::Service::Forum::PostStore;
 use GPForum::Service::Forum::PostingWorkflow;
 use GPForum::Service::Forum::ReadState;
+use GPForum::Service::Forum::ReadWorkflow;
 use GPForum::Service::Forum::ThreadComposer;
 use GPForum::Service::Forum::ThreadDetailReader;
 use GPForum::Service::Forum::ThreadReader;
@@ -125,6 +127,7 @@ sub _register_forum_helpers {
             my ($controller) = @_;
 
             return GPForum::Service::Forum::ThreadStore->new(
+                clock      => $controller->gp_clock,
                 schema     => $controller->gp_schema,
                 id_service => $controller->gp_id,
             );
@@ -143,6 +146,7 @@ sub _register_forum_helpers {
             my ($controller) = @_;
 
             return GPForum::Service::Forum::PostStore->new(
+                clock      => $controller->gp_clock,
                 schema     => $controller->gp_schema,
                 id_service => $controller->gp_id,
             );
@@ -161,7 +165,18 @@ sub _register_forum_helpers {
             my ($controller) = @_;
 
             return GPForum::Service::Forum::ReadState->new(
-                schema => $controller->gp_schema );
+                schema => $controller->gp_schema, );
+        }
+    );
+    $application->helper(
+        gp_thread_read_workflow => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Forum::ReadWorkflow->new(
+                command_idempotency => $controller->gp_command_idempotency,
+                logger              => $controller->app->log,
+                read_state          => $controller->gp_thread_read_state,
+            );
         }
     );
     $application->helper(
@@ -174,6 +189,7 @@ sub _register_forum_helpers {
                 logger               => $controller->app->log,
                 mention_store        => $controller->gp_mention_store,
                 post_composer        => $controller->gp_post_composer,
+                post_reader          => $controller->gp_post_reader,
                 post_store           => $controller->gp_post_store,
                 thread_composer      => $controller->gp_thread_composer,
                 thread_detail_reader => $controller->gp_thread_detail_reader,
@@ -238,10 +254,12 @@ sub _register_attachment_helpers {
             my ($controller) = @_;
 
             return GPForum::Service::Attachment::Workflow->new(
-                delivery    => $controller->gp_attachment_delivery,
-                logger      => $controller->app->log,
+                command_idempotency => $controller->gp_command_idempotency,
+                delivery            => $controller->gp_attachment_delivery,
+                logger              => $controller->app->log,
                 pipeline    => $controller->gp_attachment_upload_pipeline,
                 post_reader => $controller->gp_post_reader,
+                store       => $controller->gp_attachment_store,
             );
         }
     );
@@ -268,6 +286,19 @@ sub _register_community_helpers {
 
             return GPForum::Service::Community::BookmarkStore->new(
                 schema => $controller->gp_schema );
+        }
+    );
+    $application->helper(
+        gp_community_workflow => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Community::Workflow->new(
+                bookmark_store      => $controller->gp_bookmark_store,
+                command_idempotency => $controller->gp_command_idempotency,
+                logger              => $controller->app->log,
+                report_store        => $controller->gp_report_store,
+                subscription_store  => $controller->gp_subscription_store,
+            );
         }
     );
     $application->helper(
@@ -338,9 +369,10 @@ sub _register_notification_helpers {
             my ($controller) = @_;
 
             return GPForum::Service::Notification::Workflow->new(
-                dispatcher       => $controller->gp_notification_dispatcher,
-                logger           => $controller->app->log,
-                preference_store =>
+                command_idempotency => $controller->gp_command_idempotency,
+                dispatcher          => $controller->gp_notification_dispatcher,
+                logger              => $controller->app->log,
+                preference_store    =>
                   $controller->gp_notification_preference_store,
             );
         }

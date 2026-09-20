@@ -22,20 +22,21 @@ GPForum ha già una buona base:
 
 Il gap principale è la prova sistematica dei failure mode distruttivi o
 concorrenti su PostgreSQL reale. I test fake/unitari validano contratti e shape,
-ma non dimostrano lock scheduling, timeout, isolamento, errore dopo commit o
-crash worker.
+ma non dimostrano lock scheduling, isolamento concorrente o crash worker.
+Timeout in transazione e retry HTTP dopo una risposta persa sono coperti dai
+test fake.
 
 ## Registro failure mode
 
 | ID | Scenario | Stato attuale | Rischio | Severità | Test o patch richiesto |
 | --- | --- | --- | --- | --- | --- |
-| FM-001 | Database down su route write | readiness/realtime coperti in parte | errore HTTP non uniforme o leakage | high | test web per create_reply, report, moderation, privacy con DB indisponibile |
-| FM-002 | Database timeout durante transazione | non coperto end-to-end | transazione parziale o risposta 500 opaca | high | fake DBI timeout su insert event/outbox/audit e rollback verificato |
-| FM-003 | Errore prima del commit | forum outbox failure coperto | side effect parziali in altre aree | high | estendere rollback test a report, moderation action, privacy approval |
-| FM-004 | Errore dopo commit ma prima risposta HTTP | non coperto | retry client può duplicare se manca idempotenza | high | retry identico con `command_id` per write principali |
-| FM-005 | Worker crash dopo dispatch prima di mark done | outbox stale lock riclamabile | side effect duplicato se handler non idempotente | medium | test crash/reclaim e catalogo dedupe handler |
-| FM-006 | Minion non disponibile | configurazione incompleta fallisce | confusione deploy o worker assente | medium | test `GPFORUM_MINION_ENABLED=1` con backend assente e fallback direct outbox documentato |
-| FM-007 | Outbox retry esaurito | coperto da dispatcher/dead-letter | dead-letter non drenata in staging | medium | staging test con failure permanente e runbook dead-letter |
+| FM-001 | Database down su route write | 503 uniforme su create_reply, report, hide, export, password-reset, verification-resend e email-change | errore HTTP non uniforme o leakage | high | coperto da `t/152-write-unavailable.t` |
+| FM-002 | Database timeout durante transazione | timeout EventLog/outbox/audit con rollback | transazione parziale o risposta 500 opaca | high | coperto da `t/86-engineering-correctness.t` |
+| FM-003 | Errore prima del commit | report, hide, approval rollback su outbox fail | side effect parziali in altre aree | high | coperto da `t/86-engineering-correctness.t` |
+| FM-004 | Errore dopo commit ma prima risposta HTTP | retry HTTP con stesso `command_id` | retry client può duplicare se manca idempotenza | high | coperto da `t/153-lost-response-retry.t` |
+| FM-005 | Worker crash dopo dispatch prima di mark done | stale lock riclamabile; handler skip su replay | side effect duplicato se handler non idempotente | medium | coperto da `t/150-outbox-handler-idempotency.t` e reclaim in `t/84-outbox-concurrent-dispatcher.t` |
+| FM-006 | Minion non disponibile | fail-closed se abilitato; outbox-dispatch salta Minion | confusione deploy o worker assente | medium | coperto da `t/83-outbox-worker-wiring.t` |
+| FM-007 | Outbox retry esaurito | cancelled + dead-letter; permanent fail-fast; no re-claim | dead-letter non drenata in staging | medium | coperto da `t/13-outbox-dispatcher.t` e `docs/ops/dead-letters.md` |
 | FM-008 | Job duplicato privacy approval | mitigato da migration `024` e lock request | doppia erasure job | low residuo | test PostgreSQL concorrente con due connessioni reali |
 | FM-009 | Command log race | unique + catch replay/`in_progress` in `CommandIdempotency` | evidenza PG concorrente residua | low residuo | test PostgreSQL con due connessioni reali |
 | FM-010 | Audit hash-chain branching | `pg_advisory_xact_lock` prima del lookup; errori di chain non inghiottiti | evidenza PG concorrente residua | low residuo | test PostgreSQL con due append concorrenti |
@@ -44,12 +45,18 @@ crash worker.
 
 | Area | Evidenza |
 | --- | --- |
-| outbox retry/dead-letter | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t` |
+| outbox retry/dead-letter | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `docs/ops/dead-letters.md` |
 | worker wiring | `t/16-workers-phase.t`, `t/83-outbox-worker-wiring.t` |
-| forum rollback | `t/86-engineering-correctness.t` |
+| handler crash/replay | `t/150-outbox-handler-idempotency.t` |
+| claim crash before dispatch | `t/84-outbox-concurrent-dispatcher.t` |
+| forum rollback | `t/86-engineering-correctness.t` (thread, report, hide, approval) |
 | privacy erasure idempotente | `t/29-privacy-rights.t` |
 | realtime DB unavailable | `t/81-realtime-operational.t` |
 | readiness payload | `t/23-operations-hardening.t`, `t/77-web-technical-payloads.t` |
+| write DB unavailable | `t/152-write-unavailable.t` |
+| lost HTTP response retry | `t/153-lost-response-retry.t` |
+| Minion backend absent | `t/83-outbox-worker-wiring.t` |
+| erasure rollback after revoke | `t/86-engineering-correctness.t` |
 
 ## Patch applicata in questo incremento
 
@@ -67,8 +74,4 @@ crash worker.
 
 1. Evidenza PostgreSQL reale per `command_log`, report, bookmark, subscription
    e audit chain (già chiusi in codice/fake).
-2. Worker crash: dispatch riuscito, crash prima di mark done, reclaim dopo
-   `locked_until`, handler idempotente.
-3. Errore dopo commit HTTP: simulare risposta persa e retry client sulle write
-   principali.
-4. Privacy deletion/hold/export: unique o command replay come gli altri store.
+2. Staging: lock outbox `running` scaduto e reclaim su PostgreSQL reale.

@@ -99,6 +99,52 @@ sub unlock_thread {
     );
 }
 
+sub hide_thread {
+    my ($self) = @_;
+
+    my $access  = $self->moderation_access;
+    my $user_id = $self->authorized_write_user_id( $access->thread_resource,
+        $access->moderate_action );
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->moderation_write_response(
+        $self->gp_moderation_workflow->hide_thread(
+            {
+                actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
+                thread_id     => $self->param('thread_id'),
+                reason        => $self->reason_param,
+            }
+        ),
+        $access->thread_hidden_status,
+    );
+}
+
+sub restore_thread {
+    my ($self) = @_;
+
+    my $access  = $self->moderation_access;
+    my $user_id = $self->authorized_write_user_id( $access->thread_resource,
+        $access->moderate_action );
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->moderation_write_response(
+        $self->gp_moderation_workflow->restore_thread(
+            {
+                actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
+                thread_id     => $self->param('thread_id'),
+                reason        => $self->reason_param,
+            }
+        ),
+        $access->thread_restored_status,
+    );
+}
+
 sub reverse_action {
     my ($self) = @_;
 
@@ -114,6 +160,7 @@ sub reverse_action {
             {
                 action_id     => $self->param('action_id'),
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 reason        => $self->reason_param,
             }
         ),
@@ -161,6 +208,14 @@ Locks a thread.
 =head2 unlock_thread
 
 Unlocks a thread.
+
+=head2 hide_thread
+
+Hides a thread.
+
+=head2 restore_thread
+
+Restores a hidden thread.
 
 =head2 reverse_action
 

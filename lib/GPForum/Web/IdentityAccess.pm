@@ -14,6 +14,7 @@ our $VERSION = '0.001';
 const my $HTTP_BAD_REQUEST          => 400;
 const my $HTTP_FORBIDDEN            => 403;
 const my $HTTP_SERVER_ERROR         => 500;
+const my $HTTP_SERVICE_UNAVAILABLE  => 503;
 const my $HTTP_TOO_MANY             => 429;
 const my $IDENTITY_BAD_REQUEST_TEXT => 'identity request could not be accepted';
 const my $LOGIN_LIMIT               => 10;
@@ -132,6 +133,19 @@ sub system_failure {
     );
 }
 
+sub service_unavailable {
+    my ( $self, $controller ) = @_;
+
+    return $self->_json_or_text(
+        $controller,
+        {
+            json   => GPForum::Web::ErrorPayload->unavailable,
+            status => $HTTP_SERVICE_UNAVAILABLE,
+            text   => GPForum::Web::ErrorPayload->unavailable()->{error},
+        }
+    );
+}
+
 sub bad_request {
     my ( $self, $controller ) = @_;
 
@@ -186,11 +200,11 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Owns identity CSRF text, rate-limit hashes, public-profile thread limits,
-locale/theme preference-cookie names and options, system-failure, and
-bad-request rendering. CSRF stays plaintext even when the client asks for
-JSON. L<GPForum::Web::Guard> is not used. Controllers still record security
-telemetry, call the rate limiter, write cookies, and keep settings login
-redirects.
+locale/theme preference-cookie names and options, system-failure,
+service-unavailable, and bad-request rendering. CSRF stays plaintext even
+when the client asks for JSON. L<GPForum::Web::Guard> is not used.
+Controllers still record security telemetry, call the rate limiter, write
+cookies, and keep settings login redirects.
 
 =head1 SUBROUTINES/METHODS
 
@@ -235,6 +249,10 @@ Renders the identity rate-limit JSON payload or the shared rate-limit text.
 =head2 system_failure
 
 Renders the shared internal-error payload as JSON or plaintext.
+
+=head2 service_unavailable
+
+Renders the shared unavailable payload as JSON or plaintext HTTP 503.
 
 =head2 bad_request
 

@@ -56,6 +56,16 @@ sub mark_read_response {
     };
 }
 
+sub mark_all_read_response {
+    my ( $self, $read ) = @_;
+
+    return {
+        marked_count => $read->{marked_count} || 0,
+        status       => 'all_read',
+        unread_count => $read->{unread_count},
+    };
+}
+
 sub notification {
     my ( $self, $row, %input ) = @_;
 

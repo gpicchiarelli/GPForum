@@ -5,13 +5,17 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
 
-const my $INITIAL_POSITION => 0;
+const my $INITIAL_POSITION    => 0;
+const my $STATE_ID_CONSTRAINT => 'thread_read_state_pkey';
+const my $DELTA_ID_CONSTRAINT => 'user_read_marker_deltas_pkey';
 
 has clock  => sub { return GPForum::Service::Clock->new; };
 has schema => undef;
@@ -64,7 +68,13 @@ sub mark_thread_read {
     my ( $self, $input ) = @_;
 
     my $errors = _validate_mark_input($input);
-    return { ok => 0, errors => $errors } if keys %{$errors};
+    if ( keys %{$errors} ) {
+        return {
+            errors => $errors,
+            ok     => 0,
+            status => 'invalid',
+        };
+    }
 
     return $self->_with_transaction(
         sub {
@@ -80,23 +90,263 @@ sub _mark_thread_read {
       $self->state_for_thread( $input->{user_id}, $input->{thread_id}, );
     my $position = _max_position( $current->{last_read_position},
         $input->{last_read_position} );
-    my $read_at    = $self->clock->now_iso8601;
-    my $read_state = {
-        user_id            => $input->{user_id},
-        thread_id          => $input->{thread_id},
-        last_read_position => $position,
-        last_read_at       => $read_at,
-    };
+    if ( _already_marked( $current, $position ) ) {
+        return _skipped_marker($current);
+    }
 
+    return $self->_persist_marker(
+        {
+            current  => $current,
+            input    => $input,
+            position => $position,
+        }
+    );
+}
+
+sub _already_marked {
+    my ( $current, $position ) = @_;
+
+    if ( !defined $current->{last_read_at} ) {
+        return 0;
+    }
+    if ( $position > $current->{last_read_position} ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _skipped_marker {
+    my ($current) = @_;
+
+    return {
+        advanced   => 0,
+        ok         => 1,
+        read_state => {
+            last_read_at       => $current->{last_read_at},
+            last_read_position => $current->{last_read_position},
+            thread_id          => $current->{thread_id},
+            user_id            => $current->{user_id},
+        },
+        skipped => 1,
+    };
+}
+
+sub _persist_marker {
+    my ( $self, $job ) = @_;
+
+    if ( _has_marker( $job->{current} ) ) {
+        return $self->_write_marker($job);
+    }
+
+    return $self->_insert_or_reuse_marker($job);
+}
+
+sub _insert_or_reuse_marker {
+    my ( $self, $job ) = @_;
+
+    my $written = eval { return $self->_insert_marker($job); };
+    if ($written) {
+        return $written;
+    }
+
+    return $self->_marker_after_conflict( $job, $EVAL_ERROR );
+}
+
+sub _marker_after_conflict {
+    my ( $self, $job, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    my $current = $self->_reloaded_state($job);
+    if ( _already_marked( $current, $job->{position} ) ) {
+        return _skipped_marker($current);
+    }
+
+    return $self->_write_after_conflict( $current, $job, $error );
+}
+
+sub _write_after_conflict {
+    my ( $self, $current, $job, $error ) = @_;
+
+    if ( !_has_marker($current) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    $job->{current} = $current;
+    return $self->_write_marker($job);
+}
+
+sub _insert_marker {
+    my ( $self, $job ) = @_;
+
+    my $read_state = $self->_marker_row($job);
+    my $created    = eval { return $self->_create_state($read_state); };
+    if ($created) {
+        $self->_insert_or_reuse_delta($read_state);
+        return _marked_result( $job, $read_state );
+    }
+
+    return $self->_state_after_conflict( $job, $EVAL_ERROR );
+}
+
+sub _create_state {
+    my ( $self, $read_state ) = @_;
+
+    $self->schema->resultset('ThreadReadState')->create($read_state);
+
+    return $read_state;
+}
+
+sub _state_after_conflict {
+    my ( $self, $job, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+    if ( !_state_id_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_reuse_or_write_state( $job, $error );
+}
+
+sub _reuse_or_write_state {
+    my ( $self, $job, $error ) = @_;
+
+    my $current = $self->_reloaded_state($job);
+    if ( !_has_marker($current) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+    if ( !_already_marked( $current, $job->{position} ) ) {
+        $job->{current} = $current;
+        return $self->_write_marker($job);
+    }
+
+    $self->_insert_or_reuse_delta( _row_from_current($current) );
+    return _skipped_marker($current);
+}
+
+sub _insert_or_reuse_delta {
+    my ( $self, $read_state ) = @_;
+
+    my $created = eval { return $self->_create_delta($read_state); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_delta_after_conflict( $read_state, $EVAL_ERROR );
+}
+
+sub _create_delta {
+    my ( $self, $read_state ) = @_;
+
+    $self->schema->resultset('UserReadMarkerDelta')->create($read_state);
+
+    return $read_state;
+}
+
+sub _delta_after_conflict {
+    my ( $self, $read_state, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+    if ( !_delta_id_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $read_state;
+}
+
+sub _state_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $STATE_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _delta_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $DELTA_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _row_from_current {
+    my ($current) = @_;
+
+    return {
+        last_read_at       => $current->{last_read_at},
+        last_read_position => $current->{last_read_position},
+        thread_id          => $current->{thread_id},
+        user_id            => $current->{user_id},
+    };
+}
+
+sub _write_marker {
+    my ( $self, $job ) = @_;
+
+    my $read_state = $self->_marker_row($job);
     $self->schema->resultset('ThreadReadState')->update_or_create($read_state);
     $self->schema->resultset('UserReadMarkerDelta')
       ->update_or_create($read_state);
 
+    return _marked_result( $job, $read_state );
+}
+
+sub _reloaded_state {
+    my ( $self, $job ) = @_;
+
+    return $self->state_for_thread(
+        $job->{input}{user_id},
+        $job->{input}{thread_id},
+    );
+}
+
+sub _marker_row {
+    my ( $self, $job ) = @_;
+
     return {
+        last_read_at       => $self->clock->now_iso8601,
+        last_read_position => $job->{position},
+        thread_id          => $job->{input}{thread_id},
+        user_id            => $job->{input}{user_id},
+    };
+}
+
+sub _marked_result {
+    my ( $job, $read_state ) = @_;
+
+    return {
+        advanced   => _advanced( $job->{current}, $job->{position} ),
         ok         => 1,
-        advanced   => $position > $current->{last_read_position} ? 1 : 0,
         read_state => $read_state,
     };
+}
+
+sub _has_marker {
+    my ($current) = @_;
+
+    if ( !$current ) {
+        return 0;
+    }
+
+    return defined $current->{last_read_at} ? 1 : 0;
+}
+
+sub _advanced {
+    my ( $current, $position ) = @_;
+
+    return $position > $current->{last_read_position} ? 1 : 0;
 }
 
 sub _with_transaction {

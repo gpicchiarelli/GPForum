@@ -17,6 +17,7 @@ const my $ADMIN_RESOURCE              => 'admin_console';
 const my $ACTION_MANAGE               => 'manage';
 const my $ACTION_VIEW                 => 'view';
 const my $DEFAULT_REDIRECT            => 'admin_roles';
+const my $STATUS_CONFLICT             => 'conflict';
 const my $STATUS_FAILED               => 'failed';
 const my $STATUS_NOT_FOUND            => 'not_found';
 const my $STATUS_INVALID              => 'invalid';
@@ -28,6 +29,16 @@ const my $STATUS_ROLE_BINDING_REVOKED => 'role_binding_revoked';
 const my $STATUS_CATEGORY_CREATED     => 'category_created';
 const my $STATUS_CATEGORY_UPDATED     => 'category_updated';
 const my $CATEGORIES_REDIRECT         => 'admin_categories';
+
+const my %WRITE_FLASH => (
+    $STATUS_CATEGORY_CREATED     => 'admin.category_created',
+    $STATUS_CATEGORY_UPDATED     => 'admin.category_updated',
+    $STATUS_PERMISSION_CREATED   => 'admin.permission_created',
+    $STATUS_ROLE_BOUND           => 'admin.role_bound',
+    $STATUS_ROLE_BINDING_REVOKED => 'admin.role_binding_revoked',
+    $STATUS_ROLE_CREATED         => 'admin.role_created',
+    $STATUS_ROLE_PERM_ATTACHED   => 'admin.role_permission_attached',
+);
 
 sub page_limit {
     my ( undef, $requested ) = @_;
@@ -108,6 +119,19 @@ sub default_redirect {
     return $DEFAULT_REDIRECT;
 }
 
+sub write_flash_key {
+    my ( undef, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
+    if ( exists $WRITE_FLASH{$status} ) {
+        return $WRITE_FLASH{$status};
+    }
+
+    return;
+}
+
 sub is_failed {
     my ( $self, $result ) = @_;
 
@@ -122,6 +146,9 @@ sub failure_status {
         return $status;
     }
     if ( $status eq $STATUS_INVALID ) {
+        return $status;
+    }
+    if ( $status eq $STATUS_CONFLICT ) {
         return $status;
     }
 
@@ -237,13 +264,19 @@ Returns the C<admin_console> permission hash for an action.
 
 Returns the roles catalog route name.
 
+=head2 write_flash_key
+
+Returns the i18n catalog key for a successful HTML write, or undef when the
+status has no flash copy.
+
 =head2 is_failed
 
 True when the workflow status is C<failed>.
 
 =head2 failure_status
 
-Returns C<not_found> or C<invalid> when those statuses are present.
+Returns C<not_found>, C<invalid>, or C<conflict> when those statuses are
+present.
 
 =head2 invalid_request
 

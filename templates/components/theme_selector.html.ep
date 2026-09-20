@@ -1,5 +1,8 @@
 <form class="theme-form" method="post" action="<%= url_for('theme_update') %>" aria-label="<%= t('theme.selector_label') %>">
   <%= csrf_field %>
+  % if (session('user_id')) {
+    <input type="hidden" name="command_id" value="<%= ui_command_id %>">
+  % }
   <input type="hidden" name="return_to" value="<%= ui_return_to %>">
   <label for="theme-selector">
     <span><%= t('theme.choose') %></span>

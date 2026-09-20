@@ -15,12 +15,90 @@ const my %ALLOWED_VISIBILITY => (
     public  => 1,
 );
 
-has binding_store  => undef;
-has category_store => undef;
-has logger         => undef;
-has role_catalog   => undef;
+has binding_store       => undef;
+has category_store      => undef;
+has command_idempotency => undef;
+has logger              => undef;
+has role_catalog        => undef;
 
 sub create_role {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_create_named_role($input);
+}
+
+sub create_permission {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_create_named_permission($input);
+}
+
+sub attach_permission {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_attach_named_permission($input);
+}
+
+sub bind_role {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_bind_named_role($input);
+}
+
+sub revoke_binding {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_revoke_named_binding($input);
+}
+
+sub create_category {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_create_named_category($input);
+}
+
+sub update_category {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_update_named_category($input);
+}
+
+sub _create_named_role {
     my ( $self, $input ) = @_;
 
     my $command = {
@@ -33,13 +111,23 @@ sub create_role {
         return $invalid;
     }
 
-    return $self->_run_store(
-        'role not found',
-        sub { return $self->role_catalog->create_role($command); },
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.role_create',
+            not_found    => 'role not found',
+            request      => {
+                actor_user_id => $command->{actor_user_id},
+                description   => $command->{description},
+                name          => $command->{name},
+            },
+            run => sub { return $self->role_catalog->create_role($command); },
+        }
     );
 }
 
-sub create_permission {
+sub _create_named_permission {
     my ( $self, $input ) = @_;
 
     my $command = {
@@ -54,13 +142,25 @@ sub create_permission {
         return $invalid;
     }
 
-    return $self->_run_store(
-        'permission not found',
-        sub { return $self->role_catalog->create_permission($command); },
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.permission_create',
+            not_found    => 'permission not found',
+            request      => {
+                action        => $command->{action},
+                actor_user_id => $command->{actor_user_id},
+                name          => $command->{name},
+                resource_type => $command->{resource_type},
+            },
+            run =>
+              sub { return $self->role_catalog->create_permission($command); },
+        }
     );
 }
 
-sub attach_permission {
+sub _attach_named_permission {
     my ( $self, $input ) = @_;
 
     my $command = {
@@ -74,13 +174,24 @@ sub attach_permission {
         return $invalid;
     }
 
-    return $self->_run_store(
-        'role permission not found',
-        sub { return $self->role_catalog->attach_permission($command); },
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.permission_attach',
+            not_found    => 'role permission not found',
+            request      => {
+                actor_user_id => $command->{actor_user_id},
+                permission_id => $command->{permission_id},
+                role_id       => $command->{role_id},
+            },
+            run =>
+              sub { return $self->role_catalog->attach_permission($command); },
+        }
     );
 }
 
-sub bind_role {
+sub _bind_named_role {
     my ( $self, $input ) = @_;
 
     my $command = {
@@ -97,25 +208,47 @@ sub bind_role {
         return $invalid;
     }
 
-    return $self->_run_store(
-        'role binding not found',
-        sub { return $self->binding_store->bind_role($command); },
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.role_bind',
+            not_found    => 'role binding not found',
+            request      => {
+                actor_user_id => $command->{actor_user_id},
+                resource_id   => $command->{resource_id},
+                resource_type => $command->{resource_type},
+                role_id       => $command->{role_id},
+                space_id      => $command->{space_id},
+                user_id       => $command->{user_id},
+            },
+            run => sub { return $self->binding_store->bind_role($command); },
+        }
     );
 }
 
-sub revoke_binding {
+sub _revoke_named_binding {
     my ( $self, $input ) = @_;
 
-    return $self->_run_store(
-        'role binding not found',
-        sub {
-            return $self->binding_store->revoke_binding( $input->{binding_id},
-                $input->{actor_user_id} );
-        },
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.binding_revoke',
+            not_found    => 'role binding not found',
+            request      => {
+                actor_user_id => $input->{actor_user_id},
+                binding_id    => _trim( $input->{binding_id} ),
+            },
+            run => sub {
+                return $self->binding_store->revoke_binding(
+                    $input->{binding_id}, $input->{actor_user_id} );
+            },
+        }
     );
 }
 
-sub create_category {
+sub _create_named_category {
     my ( $self, $input ) = @_;
 
     my $command = $self->_category_command($input);
@@ -124,11 +257,20 @@ sub create_category {
         return $invalid;
     }
 
-    return $self->_category_store_result( $command, 'create_category',
-        'space not found' );
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.category_create',
+            not_found    => 'space not found',
+            request      => _category_request($command),
+            run          =>
+              sub { return $self->category_store->create_category($command); },
+        }
+    );
 }
 
-sub update_category {
+sub _update_named_category {
     my ( $self, $input ) = @_;
 
     my $command = $self->_category_command($input);
@@ -137,8 +279,32 @@ sub update_category {
         return $invalid;
     }
 
-    return $self->_category_store_result( $command, 'update_category',
-        'category not found' );
+    return $self->_commanded_store(
+        {
+            actor_id     => $input->{actor_user_id},
+            command_id   => $input->{command_id},
+            command_type => 'admin.category_update',
+            not_found    => 'category not found',
+            request      => _category_request($command),
+            run          =>
+              sub { return $self->category_store->update_category($command); },
+        }
+    );
+}
+
+sub _category_request {
+    my ($command) = @_;
+
+    return {
+        actor_user_id => $command->{actor_user_id},
+        category_id   => $command->{category_id},
+        description   => $command->{description},
+        position      => $command->{position},
+        slug          => $command->{slug},
+        space_id      => $command->{space_id},
+        title         => $command->{title},
+        visibility    => $command->{visibility},
+    };
 }
 
 sub _category_command {
@@ -195,11 +361,108 @@ sub _visibility_ok {
     return 0;
 }
 
-sub _category_store_result {
-    my ( $self, $command, $method, $not_found ) = @_;
+sub _commanded_store {
+    my ( $self, $job ) = @_;
 
-    return $self->_run_store( $not_found,
-        sub { return $self->category_store->$method($command); },
+    return $self->_commanded_write(
+        {
+            actor_id     => $job->{actor_id},
+            command_id   => $job->{command_id},
+            command_type => $job->{command_type},
+            request      => $job->{request} || {},
+            run          => sub {
+                return $self->_run_store( $job->{not_found}, $job->{run} );
+            },
+        }
+    );
+}
+
+sub _commanded_write {
+    my ( $self, $job ) = @_;
+
+    if ( !$self->command_idempotency ) {
+        return $job->{run}->();
+    }
+
+    return $self->_idempotent_write($job);
+}
+
+sub _idempotent_write {
+    my ( $self, $job ) = @_;
+
+    my $guarded = eval { return $self->_command_guard($job); };
+    if ($EVAL_ERROR) {
+        $self->_log_error("admin command log failed: $EVAL_ERROR");
+        return _failed_result();
+    }
+
+    return _guard_result($guarded);
+}
+
+sub _command_guard {
+    my ( $self, $job ) = @_;
+
+    return $self->command_idempotency->run(
+        {
+            actor_id     => $job->{actor_id},
+            command_id   => _trim( $job->{command_id} ),
+            command_type => $job->{command_type},
+            request      => $job->{request} || {},
+        },
+        sub { return $job->{run}->(); },
+        sub {
+            my ($result) = @_;
+            return $result;
+        },
+    );
+}
+
+sub _guard_result {
+    my ($guarded) = @_;
+
+    if ( $guarded->{replayed} ) {
+        return $guarded->{response};
+    }
+    if ( $guarded->{recorded} ) {
+        return $guarded->{result};
+    }
+
+    return _guard_failure($guarded);
+}
+
+sub _guard_failure {
+    my ($guarded) = @_;
+
+    if ( $guarded->{invalid} ) {
+        return _result(
+            errors => { command_id => 'command_id is required' },
+            status => 'invalid',
+        );
+    }
+
+    return _result(
+        error  => $guarded->{error},
+        status => 'conflict',
+    );
+}
+
+sub _missing_command_id {
+    my ( undef, $input ) = @_;
+
+    if ( length _trim( $input->{command_id} ) ) {
+        return;
+    }
+
+    return _result(
+        errors => { command_id => 'command_id is required' },
+        status => 'invalid',
+    );
+}
+
+sub _failed_result {
+    return _result(
+        error  => 'admin store failed',
+        status => 'failed',
     );
 }
 
@@ -227,10 +490,7 @@ sub _run_store {
 
     my $stored = $self->_eval_store($code);
     if ( $stored->{failed} ) {
-        return _result(
-            status => 'failed',
-            error  => 'admin store failed',
-        );
+        return _failed_result();
     }
     if ( !$stored->{value} ) {
         return _result(
@@ -317,6 +577,7 @@ Version 0.001.
     my $result = $workflow->create_role(
         {
             actor_user_id => $user_id,
+            command_id    => $command_id,
             name          => $name,
         }
     );
@@ -324,9 +585,11 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Application boundary for admin catalog, role-binding, and category writes.
-Validates required command fields, delegates persistence to C<RoleCatalog>,
-C<RoleBindingStore>, and C<CategoryStore>, and returns a normalized result
-hash. Stores keep transaction, event, audit, and outbox ownership.
+Validates required command fields, requires HTTP C<command_id>, delegates
+persistence to C<RoleCatalog>, C<RoleBindingStore>, and C<CategoryStore>,
+and returns a normalized result hash. Replays from C<command_log> when the
+helper is present. Command hashes include actor and target fields only.
+Stores keep transaction, event, audit, and outbox ownership.
 
 =head1 SUBROUTINES/METHODS
 
@@ -360,14 +623,14 @@ Updates a category when a category id is present.
 
 =head1 DIAGNOSTICS
 
-Returns C<invalid>, C<not_found>, or C<failed> statuses instead of throwing for
-expected write outcomes. Unexpected store exceptions are logged and mapped to
-C<failed>.
+Returns C<invalid>, C<not_found>, C<conflict>, or C<failed> statuses instead of
+throwing for expected write outcomes. Unexpected store exceptions are logged
+and mapped to C<failed>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Uses role catalog, binding, and category stores supplied by the composition
-root.
+Uses role catalog, binding, and category stores plus the command-idempotency
+helper supplied by the composition root.
 
 =head1 DEPENDENCIES
 
@@ -379,8 +642,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Command-id replay is not required; stores keep their existing name/scope
-idempotency.
+Stores keep name/scope uniqueness. HTTP retries with the same C<command_id>
+replay from C<command_log>.
 
 =head1 AUTHOR
 

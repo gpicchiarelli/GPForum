@@ -3,13 +3,20 @@ package GPForum::Service::Privacy::RetentionHoldStore;
 use strict;
 use warnings;
 
+use Const::Fast;
+use English qw(-no_match_vars);
 use GPForum::Infrastructure::EventRecorder;
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Privacy::Event;
 use GPForum::Service::Privacy::Record;
 use Mojo::Base -base;
 
 our $VERSION = '0.001';
+
+const my $ACTIVE_CONSTRAINT => 'idx_retention_holds_active_resource_unique';
+const my $ID_CONSTRAINT     => 'retention_holds_pkey';
+const my $ROW_LIMIT_ONE     => 1;
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub {
@@ -37,9 +44,137 @@ sub create_hold {
 
     return $self->schema->txn_do(
         sub {
-            return $self->_insert_hold($input);
+            return $self->_create_or_reuse_hold($input);
         }
     );
+}
+
+sub _create_or_reuse_hold {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_active_hold_hash($input);
+    if ($existing) {
+        return $self->_finish_leftover_hold( $existing, $input );
+    }
+
+    return $self->_insert_or_reuse_hold($input);
+}
+
+sub _insert_or_reuse_hold {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_insert_hold($input); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_reuse_after_conflict( $input, $EVAL_ERROR );
+}
+
+sub _reuse_after_conflict {
+    my ( $self, $input, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_hold_after_unique( $input, $error );
+}
+
+sub _hold_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _hold_id_conflict($error) ) {
+        return $self->_hold_after_id_conflict($input);
+    }
+    if ( _active_hold_conflict($error) ) {
+        return $self->_reuse_hold_row( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _hold_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_active_hold_hash($input);
+    if ($existing) {
+        return $self->_finish_leftover_hold( $existing, $input );
+    }
+
+    return $self->_retry_hold_id($input);
+}
+
+sub _retry_hold_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_insert_hold($input); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_hold_row {
+    my ( $self, $input, $error ) = @_;
+
+    my $existing = $self->_active_hold_hash($input);
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_finish_leftover_hold( $existing, $input );
+}
+
+sub _hold_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _active_hold_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ACTIVE_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _active_hold_hash {
+    my ( $self, $input ) = @_;
+
+    my $holds = $self->active_holds_for( $input->{resource_type},
+        $input->{resource_id}, 1 );
+    if ( !@{$holds} ) {
+        return;
+    }
+
+    return $self->_hold_hash( $holds->[0] );
+}
+
+sub _hold_hash {
+    my ( $self, $hold ) = @_;
+
+    return {
+        created_at        => $self->record->column( $hold, 'created_at' ),
+        created_by        => $self->record->column( $hold, 'created_by' ),
+        ends_at           => $self->record->column( $hold, 'ends_at' ),
+        reason            => $self->record->column( $hold, 'reason' ),
+        resource_id       => $self->record->column( $hold, 'resource_id' ),
+        resource_type     => $self->record->column( $hold, 'resource_type' ),
+        retention_hold_id =>
+          $self->record->column( $hold, 'retention_hold_id' ),
+        starts_at => $self->record->column( $hold, 'starts_at' ),
+    };
 }
 
 sub active_holds_for {
@@ -80,6 +215,43 @@ sub _insert_hold {
     return $hold;
 }
 
+sub _finish_leftover_hold {
+    my ( $self, $existing, $input ) = @_;
+
+    $self->_ensure_hold_write( $existing, $input );
+
+    return $existing;
+}
+
+sub _ensure_hold_write {
+    my ( $self, $existing, $input ) = @_;
+
+    if ( $self->_hold_event_exists($existing) ) {
+        return;
+    }
+
+    return $self->_record_event_and_audit( $existing, $input->{created_by} );
+}
+
+sub _hold_event_exists {
+    my ( $self, $existing ) = @_;
+
+    my $search = $self->schema->resultset('EventLog')->search(
+        {
+            idempotency_key => join( q{:},
+                'privacy.retention_hold_created',
+                $existing->{retention_hold_id} ),
+        },
+        { rows => $ROW_LIMIT_ONE },
+    );
+
+    if ( $search->can('single') ) {
+        return $search->single;
+    }
+
+    return;
+}
+
 sub _record_event_and_audit {
     my ( $self, $hold, $actor_id ) = @_;
 
@@ -115,7 +287,10 @@ Version 0.001.
 
 Creates retention holds and lists active holds for a resource. Event and
 audit hashes live in L<GPForum::Service::Privacy::Event>. This store still
-writes RetentionHold rows, EventLog, OutboxMessage, and AuditLog.
+writes RetentionHold rows, EventLog, OutboxMessage, and AuditLog. A unique
+partial index keeps one active hold per resource; a unique race on that
+index reloads the winning row. A unique race on C<retention_hold_id> remints
+the id once and does not return another hold.
 
 =head1 SUBROUTINES/METHODS
 
@@ -137,7 +312,8 @@ None.
 
 =head1 DEPENDENCIES
 
-Uses L<GPForum::Infrastructure::EventRecorder>, L<GPForum::Service::Clock>,
+Uses L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Clock>,
 L<GPForum::Service::Privacy::Event>, L<GPForum::Service::Privacy::Record>,
 and L<Mojo::Base>. C<GPForum::Service::Id> is required lazily unless an
 C<id_service> is injected.

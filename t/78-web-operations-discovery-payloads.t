@@ -92,6 +92,8 @@ like( $sitemap->{data}, qr{/c/general}msx,
     'sitemap payload includes public category' );
 like( $sitemap->{data}, qr{/t/thread-1/welcome}msx,
     'sitemap payload includes public thread' );
+like( $sitemap->{data}, qr{/legal/terms}msx,
+    'sitemap payload includes legal terms' );
 unlike(
     $sitemap->{data},
     qr/thread-hidden|hidden [ ] text/msx,

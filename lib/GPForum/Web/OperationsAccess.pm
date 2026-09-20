@@ -29,7 +29,7 @@ sub metrics_authorized {
         return 1;
     }
 
-    return $self->_token_matches($input);
+    return $self->_accepted_token_matches($input);
 }
 
 sub unauthorized_payload {
@@ -40,6 +40,41 @@ sub unauthorized_payload {
         },
         status => $HTTP_UNAUTHORIZED,
     };
+}
+
+sub _accepted_token_matches {
+    my ( $self, $input ) = @_;
+
+    for my $token ( @{ $self->_accepted_tokens($input) } ) {
+        if ( $self->_token_matches_value( $input, $token ) ) {
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+sub _accepted_tokens {
+    my ( undef, $input ) = @_;
+
+    my $tokens = $input->{accepted_tokens};
+    if ( $tokens && @{$tokens} ) {
+        return $tokens;
+    }
+
+    return [ $input->{configured_token} ];
+}
+
+sub _token_matches_value {
+    my ( $self, $input, $token ) = @_;
+
+    return $self->_token_matches(
+        {
+            authorization    => $input->{authorization},
+            configured_token => $token,
+            metrics_header   => $input->{metrics_header},
+        }
+    );
 }
 
 sub _token_matches {
@@ -144,7 +179,8 @@ Returns C<X-GPForum-Metrics-Token>.
 =head2 metrics_authorized
 
 True when no metrics token is configured, or when the Bearer or metrics
-header matches the configured token in constant time.
+header matches the current token or a previous token in C<accepted_tokens>
+in constant time.
 
 =head2 unauthorized_payload
 
@@ -156,8 +192,8 @@ None. HTTP rendering stays on the operations controller.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Callers supply the configured metrics token. Production still combines this
-app-level check with reverse-proxy allowlists.
+Callers supply the configured metrics token and optional previous tokens.
+Production still combines this app-level check with reverse-proxy allowlists.
 
 =head1 DEPENDENCIES
 

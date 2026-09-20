@@ -83,10 +83,11 @@ sub register {
             my ($controller) = @_;
 
             return GPForum::Service::Admin::Workflow->new(
-                binding_store  => $controller->gp_role_binding_store,
-                category_store => $controller->gp_category_store,
-                logger         => $controller->app->log,
-                role_catalog   => $controller->gp_role_catalog,
+                binding_store       => $controller->gp_role_binding_store,
+                category_store      => $controller->gp_category_store,
+                command_idempotency => $controller->gp_command_idempotency,
+                logger              => $controller->app->log,
+                role_catalog        => $controller->gp_role_catalog,
             );
         }
     );

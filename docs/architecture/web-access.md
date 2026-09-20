@@ -16,6 +16,8 @@ hashes, public-profile thread limits, locale/theme preference-cookie names
 and options, system-failure, and bad-request rendering.
 `GPForum::Web::DiscoveryAccess` owns sitemap/feed reader limits and crawler
 document content-type plus body rendering.
+`GPForum::Web::LegalAccess` owns the public terms/privacy/cookies page names,
+section catalog keys, indexable metadata, and `legal/page` template.
 `GPForum::Web::ForumAccess` owns forum read/write rate-limit hashes,
 participation actions, report field errors, search page and autocomplete
 limits, list page defaults, community target types, community write-success
@@ -60,5 +62,5 @@ invalid.
 Coverage lives in `t/108-web-access.t`, `t/113-web-realtime-access.t`,
 `t/114-web-cookie-session.t`, `t/115-web-public-cache-access.t`,
 `t/122-web-home-access.t`, `t/124-web-identity-access.t`,
-`t/126-web-discovery-access.t`, `t/132-web-forum-access.t`, `t/133-web-attachment-access.t`, `t/134-web-notification-access.t`, `t/135-web-moderation-access.t`, `t/136-web-privacy-access.t`, `t/137-web-admin-access.t`, and
-`t/138-web-operations-access.t`.
+`t/126-web-discovery-access.t`, `t/132-web-forum-access.t`, `t/133-web-attachment-access.t`, `t/134-web-notification-access.t`, `t/135-web-moderation-access.t`, `t/136-web-privacy-access.t`, `t/137-web-admin-access.t`,
+`t/138-web-operations-access.t`, and `t/155-legal-pages.t`.

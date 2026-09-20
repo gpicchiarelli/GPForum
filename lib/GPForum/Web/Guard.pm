@@ -11,13 +11,14 @@ use GPForum::Web::Responder;
 
 our $VERSION = '0.001';
 
-const my $HTTP_BAD_REQUEST  => 400;
-const my $HTTP_UNAUTHORIZED => 401;
-const my $HTTP_FORBIDDEN    => 403;
-const my $HTTP_NOT_FOUND    => 404;
-const my $HTTP_CONFLICT     => 409;
-const my $HTTP_TOO_MANY     => 429;
-const my $HTTP_SERVER_ERROR => 500;
+const my $HTTP_BAD_REQUEST         => 400;
+const my $HTTP_UNAUTHORIZED        => 401;
+const my $HTTP_FORBIDDEN           => 403;
+const my $HTTP_NOT_FOUND           => 404;
+const my $HTTP_CONFLICT            => 409;
+const my $HTTP_TOO_MANY            => 429;
+const my $HTTP_SERVER_ERROR        => 500;
+const my $HTTP_SERVICE_UNAVAILABLE => 503;
 
 sub csrf_failure {
     my ( $self, $controller ) = @_;
@@ -117,6 +118,18 @@ sub system_failure {
     );
 }
 
+sub service_unavailable {
+    my ( $self, $controller ) = @_;
+
+    return $self->_error(
+        $controller,
+        {
+            payload => GPForum::Web::ErrorPayload->unavailable,
+            status  => $HTTP_SERVICE_UNAVAILABLE,
+        }
+    );
+}
+
 sub _error {
     my ( undef, $controller, $input ) = @_;
 
@@ -186,6 +199,11 @@ Renders a blocked or conflicting write.
 =head2 system_failure
 
 Renders an internal error.
+
+=head2 service_unavailable
+
+Renders a generic service-unavailable error for store or database failures.
+The payload does not include the underlying exception.
 
 =head1 DIAGNOSTICS
 

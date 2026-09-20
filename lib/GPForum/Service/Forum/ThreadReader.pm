@@ -18,12 +18,12 @@ sub list_category_threads {
     my $plan  = $self->page_window->plan($request);
     my $query = {
         'me.category_id'      => $request->{category_id},
-        'me.deleted_at'       => undef,
         'me.moderation_state' => { -in => [ 'visible', 'locked' ] },
         'me.visibility'       => 'public',
     };
+    _apply_deleted_filter( $query, $request );
     if ( $plan->{after} ) {
-        $query->{-or} = _thread_cursor_clause( $plan->{after} );
+        _apply_cursor( $query, $plan->{after} );
     }
 
     my $search = $self->schema->resultset('Thread')->search(
@@ -92,6 +92,42 @@ sub list_public_threads {
         [ _rows($search) ],
         $plan->{limit}, [ 'last_activity_at', 'thread_id' ],
     );
+}
+
+sub _apply_deleted_filter {
+    my ( $query, $request ) = @_;
+
+    my $viewer = $request->{viewer_user_id};
+    if ( defined $viewer && length $viewer ) {
+        $query->{-or} = _viewer_deleted_clause($viewer);
+        return;
+    }
+
+    $query->{'me.deleted_at'} = undef;
+
+    return;
+}
+
+sub _viewer_deleted_clause {
+    my ($viewer) = @_;
+
+    return [ { 'me.deleted_at' => undef },
+        { 'me.author_user_id' => $viewer }, ];
+}
+
+sub _apply_cursor {
+    my ( $query, $after ) = @_;
+
+    my $cursor = _thread_cursor_clause($after);
+    if ( exists $query->{-or} ) {
+        $query->{-and} =
+          [ { -or => delete $query->{-or} }, { -or => $cursor } ];
+        return;
+    }
+
+    $query->{-or} = $cursor;
+
+    return;
 }
 
 sub _thread_cursor_clause {

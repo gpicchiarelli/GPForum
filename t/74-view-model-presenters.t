@@ -94,10 +94,204 @@ is_deeply(
     'forum presenter owns created-thread response shape'
 );
 is_deeply(
+    $forum->updated_thread_response(
+        {
+            thread => {
+                slug      => 'welcome',
+                thread_id => 'thread-1',
+                title     => 'Welcome',
+            }
+        }
+    ),
+    {
+        slug      => 'welcome',
+        status    => 'updated',
+        thread_id => 'thread-1',
+        title     => 'Welcome',
+    },
+    'forum presenter owns updated-thread response shape'
+);
+is_deeply(
+    $forum->deleted_thread_response(
+        { thread => { thread_id => 'thread-1' } }
+    ),
+    { status => 'deleted', thread_id => 'thread-1' },
+    'forum presenter owns deleted-thread response shape'
+);
+is_deeply(
+    $forum->restored_thread_response(
+        { thread => { thread_id => 'thread-1' } }
+    ),
+    { status => 'restored', thread_id => 'thread-1' },
+    'forum presenter owns restored-thread response shape'
+);
+is_deeply(
+    $forum->moved_thread_response(
+        {
+            thread => {
+                category_id => 'category-2',
+                thread_id   => 'thread-1',
+            }
+        }
+    ),
+    {
+        category_id => 'category-2',
+        status      => 'moved',
+        thread_id   => 'thread-1',
+    },
+    'forum presenter owns moved-thread response shape'
+);
+is_deeply(
     $forum->created_post_response( { post => { post_id => 'post-1' } } ),
     { post_id => 'post-1', status => 'created' },
     'forum presenter owns created-post response shape'
 );
+is_deeply(
+    $forum->updated_post_response(
+        { post => { post_id => 'post-1', thread_id => 'thread-1' } }
+    ),
+    { post_id => 'post-1', status => 'updated', thread_id => 'thread-1' },
+    'forum presenter owns updated-post response shape'
+);
+is_deeply(
+    $forum->deleted_post_response(
+        { post => { post_id => 'post-1', thread_id => 'thread-1' } }
+    ),
+    { post_id => 'post-1', status => 'deleted', thread_id => 'thread-1' },
+    'forum presenter owns deleted-post response shape'
+);
+is_deeply(
+    $forum->restored_post_response(
+        { post => { post_id => 'post-1', thread_id => 'thread-1' } }
+    ),
+    { post_id => 'post-1', status => 'restored', thread_id => 'thread-1' },
+    'forum presenter owns restored-post response shape'
+);
+
+my $editable_page = $forum->thread_page(
+    delete_command_ids       => { 'post-1' => 'delete-cmd-1' },
+    delete_thread_command_id => 'thread-delete-cmd-1',
+    edit_command_ids         => { 'post-1' => 'edit-cmd-1' },
+    edit_thread_command_id   => 'thread-edit-cmd-1',
+    move_thread_command_id   => 'thread-move-cmd-1',
+    categories               => [
+        {
+            category_id => 'category-1',
+            title       => 'General',
+        },
+        {
+            category_id => 'category-2',
+            title       => 'Off-topic',
+        },
+    ],
+    page => {
+        posts => {
+            items => [
+                {
+                    author_user_id => 'user-1',
+                    body_source    => 'Hello',
+                    position       => 1,
+                    post_id        => 'post-1',
+                    thread_id      => 'thread-1',
+                },
+            ],
+        },
+        thread => {
+            author_user_id => 'user-1',
+            category_id    => 'category-1',
+            thread_id      => 'thread-1',
+            title          => 'Welcome',
+        },
+    },
+    viewer_user_id => 'user-1',
+);
+is( $editable_page->{posts}[0]{can_edit},
+    1, 'thread page marks the viewer author post as editable' );
+is( $editable_page->{posts}[0]{can_delete},
+    1, 'thread page marks the viewer author post as deletable' );
+is( $editable_page->{posts}[0]{edit_command_id},
+    'edit-cmd-1', 'thread page assigns an edit command id' );
+is( $editable_page->{posts}[0]{delete_command_id},
+    'delete-cmd-1', 'thread page assigns a delete command id' );
+is( $editable_page->{posts}[0]{body_source},
+    'Hello', 'thread page exposes source for the edit form' );
+is( $editable_page->{thread}{can_edit_thread},
+    1, 'thread page marks the viewer author thread as editable' );
+is( $editable_page->{thread}{edit_thread_command_id},
+    'thread-edit-cmd-1', 'thread page assigns a thread edit command id' );
+is( $editable_page->{thread}{can_delete_thread},
+    1, 'thread page marks the viewer author thread as deletable' );
+is( $editable_page->{thread}{delete_thread_command_id},
+    'thread-delete-cmd-1', 'thread page assigns a thread delete command id' );
+is( $editable_page->{thread}{can_move_thread},
+    1, 'thread page marks the viewer author thread as movable' );
+is( $editable_page->{thread}{move_thread_command_id},
+    'thread-move-cmd-1', 'thread page assigns a thread move command id' );
+is( $editable_page->{thread}{move_categories}[1]{category_id},
+    'category-2', 'thread page exposes destination categories' );
+
+my $restorable_page = $forum->thread_page(
+    restore_command_ids => { 'post-deleted-1' => 'restore-cmd-1' },
+    page                => {
+        posts => {
+            items => [
+                {
+                    author_user_id => 'user-1',
+                    body           => 'Gone',
+                    deleted_at     => '2026-05-23T12:00:00Z',
+                    position       => 2,
+                    post_id        => 'post-deleted-1',
+                    thread_id      => 'thread-1',
+                },
+            ],
+        },
+        thread => {
+            author_user_id => 'user-1',
+            thread_id      => 'thread-1',
+            title          => 'Welcome',
+        },
+    },
+    viewer_user_id => 'user-1',
+);
+ok(
+    !$restorable_page->{posts}[0]{can_edit},
+    'thread page hides edit on a deleted author post'
+);
+ok(
+    !$restorable_page->{posts}[0]{can_delete},
+    'thread page hides delete on a deleted author post'
+);
+is( $restorable_page->{posts}[0]{can_restore},
+    1, 'thread page marks the viewer author deleted post as restorable' );
+is( $restorable_page->{posts}[0]{restore_command_id},
+    'restore-cmd-1', 'thread page assigns a restore command id' );
+
+my $restorable_thread_page = $forum->thread_page(
+    restore_thread_command_id => 'restore-thread-cmd-1',
+    page                      => {
+        posts  => { items => [] },
+        thread => {
+            author_user_id => 'user-1',
+            deleted_at     => '2026-05-23T12:00:00Z',
+            thread_id      => 'thread-deleted-1',
+            title          => 'Gone',
+        },
+    },
+    viewer_user_id => 'user-1',
+);
+ok(
+    !$restorable_thread_page->{thread}{can_edit_thread},
+    'thread page hides edit on a deleted author thread'
+);
+ok(
+    !$restorable_thread_page->{thread}{can_delete_thread},
+    'thread page hides delete on a deleted author thread'
+);
+is( $restorable_thread_page->{thread}{can_restore_thread},
+    1, 'thread page marks the viewer author deleted thread as restorable' );
+is( $restorable_thread_page->{thread}{restore_thread_command_id},
+    'restore-thread-cmd-1', 'thread page assigns a thread restore command id' );
+
 is_deeply(
     $forum->read_marker_response(
         {
@@ -375,6 +569,7 @@ is_deeply(
             metadata             => undef,
             moderation_action_id => 'action-1',
             reason               => undef,
+            reverse_command_id   => undef,
             reversed_at          => undef,
             reversed_by_user_id  => undef,
             target_id            => undef,
@@ -405,6 +600,14 @@ is( $report->{ui}{heading_id},
 is( $report->{ui}{post_reason_id},
     'report-report-1-post-reason',
     'moderation report exposes post reason control metadata' );
+is(
+    $report->{ui}{thread_lock_reason_id},
+    'report-report-1-thread-lock-reason',
+    'moderation report exposes thread lock reason control metadata'
+);
+is( $report->{assign_command_id},
+    undef,
+    'moderation report leaves assign command_id empty without listing mint' );
 is(
     $moderation->report_action_response( 'report_assigned', $report )
       ->{report}{ui}{heading_id},
@@ -504,6 +707,20 @@ is_deeply(
         unread_count => 2,
     },
     'notification presenter owns mark-read mutation response shape'
+);
+is_deeply(
+    $notifications->mark_all_read_response(
+        {
+            marked_count => 2,
+            unread_count => 0,
+        }
+    ),
+    {
+        marked_count => 2,
+        status       => 'all_read',
+        unread_count => 0,
+    },
+    'notification presenter owns mark-all-read mutation response shape'
 );
 is_deeply(
     $community->notification(
@@ -625,6 +842,9 @@ my $deletion = $privacy->deletion_request(
 is( $deletion->{ui}{heading_id},
     'deletion-delete-1-heading',
     'privacy deletion presenter normalizes heading metadata' );
+is( $deletion->{approve_command_id},
+    undef,
+    'privacy deletion leaves approve command_id empty without listing mint' );
 is(
     $privacy->export_request_response( 'export_requested', $export )
       ->{export_request}{ui}{heading_id},
@@ -706,6 +926,35 @@ is_deeply(
         status => 'uploaded',
     },
     'attachment presenter owns upload mutation response shape'
+);
+is_deeply(
+    $attachment_presenter->delete_response(
+        {
+            attachment => {
+                attachment_id     => 'attachment-1',
+                byte_size         => 512,
+                media_type        => 'text/plain',
+                original_filename => 'note.txt',
+                state             => 'deleted',
+            },
+        }
+    ),
+    {
+        attachment => {
+            attachment_id     => 'attachment-1',
+            byte_size         => 512,
+            download_url      => undef,
+            media_type        => 'text/plain',
+            original_filename => 'note.txt',
+            scan_status       => undef,
+            state             => 'deleted',
+            ui                => {
+                heading_id => 'attachment-attachment-1-heading',
+            },
+        },
+        status => 'deleted',
+    },
+    'attachment presenter owns delete mutation response shape'
 );
 
 my $resource = GPForum::ViewModel::Discovery::Presenter->new->resource(

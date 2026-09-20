@@ -37,6 +37,8 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key('id');
+__PACKAGE__->add_unique_constraint(
+    idx_credentials_active_password_unique => ['user_id'] );
 __PACKAGE__->belongs_to( user => 'GPForum::Schema::Result::User', 'user_id' );
 
 1;

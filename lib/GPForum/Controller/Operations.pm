@@ -33,6 +33,7 @@ sub _metrics_input {
     return {
         authorization    => $self->req->headers->header('Authorization') || q{},
         configured_token => $self->gp_config->metrics_token,
+        accepted_tokens  => $self->gp_config->accepted_metrics_tokens,
         metrics_header   => $self->req->headers->header(
             $self->operations_access->metrics_token_header
           )
@@ -87,7 +88,7 @@ C<metrics token required>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Reads C<metrics_token> from application config.
+Reads C<metrics_token> and previous metrics tokens from application config.
 
 =head1 DEPENDENCIES
 

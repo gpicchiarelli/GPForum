@@ -50,6 +50,16 @@ is_deeply(
     'completion_replay marks a done job as idempotent'
 );
 is_deeply(
+    $completion->hold_block_replay('job-1'),
+    {
+        erasure_job_id => 'job-1',
+        error          => 'retention_hold_active',
+        idempotent     => 1,
+        ok             => 0,
+    },
+    'hold_block_replay marks a blocked job as idempotent'
+);
+is_deeply(
     $completion->skipped('resource_not_user'),
     { skipped => 'resource_not_user' },
     'skipped keeps the named erasure skip reason'

@@ -16,6 +16,9 @@ sub register {
     $routes->get('/robots.txt')->to('Discovery#robots')->name('robots');
     $routes->get('/sitemap.xml')->to('Discovery#sitemap')->name('sitemap');
     $routes->get('/feed.atom')->to('Discovery#feed')->name('public_feed');
+    $routes->get('/legal/cookies')->to('Legal#cookies')->name('legal_cookies');
+    $routes->get('/legal/privacy')->to('Legal#privacy')->name('legal_privacy');
+    $routes->get('/legal/terms')->to('Legal#terms')->name('legal_terms');
     $routes->get('/health')->to('Health#summary')->name('health');
     $routes->get('/health/live')->to('Health#live')->name('health_live');
     $routes->get('/health/ready')->to('Health#ready')->name('health_ready');
@@ -77,9 +80,30 @@ sub register {
     $routes->post('/threads')
       ->to('Forum::Write#create_thread')
       ->name('thread_create');
+    $routes->post('/t/:thread_id/edit')
+      ->to('Forum::Write#edit_thread')
+      ->name('thread_edit');
+    $routes->post('/t/:thread_id/delete')
+      ->to('Forum::Write#delete_thread')
+      ->name('thread_delete');
+    $routes->post('/t/:thread_id/restore')
+      ->to('Forum::Write#restore_thread')
+      ->name('thread_restore');
+    $routes->post('/t/:thread_id/move')
+      ->to('Forum::Write#move_thread')
+      ->name('thread_move');
     $routes->post('/t/:thread_id/replies')
       ->to('Forum::Write#create_reply')
       ->name('reply_create');
+    $routes->post('/p/:post_id')
+      ->to('Forum::Write#edit_post')
+      ->name('post_edit');
+    $routes->post('/p/:post_id/delete')
+      ->to('Forum::Write#delete_post')
+      ->name('post_delete');
+    $routes->post('/p/:post_id/restore')
+      ->to('Forum::Write#restore_post')
+      ->name('post_restore');
     $routes->post('/t/:thread_id/read')
       ->to('Forum::Write#mark_thread_read')
       ->name('thread_mark_read');
@@ -111,6 +135,9 @@ sub register {
     $routes->post('/p/:post_id/attachments')
       ->to('Attachments::Upload#upload_post')
       ->name('post_attachment_upload');
+    $routes->post('/p/:post_id/attachments/:attachment_id/delete')
+      ->to('Attachments::Upload#delete_post')
+      ->name('post_attachment_delete');
     $routes->get('/attachments/:attachment_id/download')
       ->to('Attachments#download')
       ->name('attachment_download');
@@ -147,6 +174,12 @@ sub register {
     $routes->post('/moderation/threads/:thread_id/unlock')
       ->to('Moderation::Actions#unlock_thread')
       ->name('moderation_thread_unlock');
+    $routes->post('/moderation/threads/:thread_id/hide')
+      ->to('Moderation::Actions#hide_thread')
+      ->name('moderation_thread_hide');
+    $routes->post('/moderation/threads/:thread_id/restore')
+      ->to('Moderation::Actions#restore_thread')
+      ->name('moderation_thread_restore');
     $routes->post('/moderation/actions/:action_id/reverse')
       ->to('Moderation::Actions#reverse_action')
       ->name('moderation_action_reverse');
@@ -159,6 +192,9 @@ sub register {
     $routes->get('/notifications')
       ->to('Notifications#inbox')
       ->name('notifications');
+    $routes->post('/notifications/read-all')
+      ->to('Notifications::Read#mark_all_read')
+      ->name('notifications_read_all');
     $routes->post('/notifications/:notification_id/read')
       ->to('Notifications::Read#mark_read')
       ->name('notification_read');
@@ -233,6 +269,9 @@ sub register {
     $routes->post('/privacy/export')
       ->to('Privacy::Requests#request_export')
       ->name('privacy_export_request');
+    $routes->get('/privacy/export/:export_request_id')
+      ->to('Privacy#download_export')
+      ->name('privacy_export_download');
     $routes->post('/privacy/deletion')
       ->to('Privacy::Requests#request_deletion')
       ->name('privacy_deletion_request');

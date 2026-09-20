@@ -28,6 +28,7 @@
   % if (session('user_id')) {
     <form method="post" action="<%= url_for('profile_report', username => $profile->{user}{username}) %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $profile->{report_command_id} || q{} %>">
       <label for="profile-report-reason"><%= t('moderation.report_profile') %></label>
       <select id="profile-report-reason" name="reason" required>
         <option value="spam"><%= t('moderation.reason.spam') %></option>

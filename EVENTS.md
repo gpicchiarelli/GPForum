@@ -61,6 +61,13 @@ Adopted write paths:
 
 - forum thread creation;
 - forum post creation;
+- forum post revision (`post.updated`);
+- forum post author delete (`post.deleted`);
+- forum post author restore (`post.undeleted`);
+- forum thread title revision (`thread.updated`);
+- forum thread author delete (`thread.deleted`);
+- forum thread author restore (`thread.undeleted`);
+- forum thread category move (`thread.moved`);
 - moderation report lifecycle (`Moderation::Event` owns created, duplicate,
   and transition hashes; `ReportStore` persists them);
 - moderation action lifecycle (`Moderation::Event` owns created-action and
@@ -95,7 +102,16 @@ realtime events and publish them through PostgreSQL `NOTIFY`.
 Current mappings:
 
 - `post.created` -> `thread.update`;
+- `post.updated` -> `thread.update`;
+- `post.deleted` -> `thread.update`;
+- `post.undeleted` -> `thread.update`;
 - `thread.created` -> `thread.update`;
+- `thread.updated` -> `thread.update`;
+- `thread.deleted` -> `thread.update`;
+- `thread.undeleted` -> `thread.update`;
+- `thread.moved` -> `thread.update`;
+- `thread.hidden` -> `thread.update`;
+- `thread.restored` -> `thread.update`;
 - `moderation.*` -> `moderation.queue.invalidate`.
 
 Notification badge updates still use the notification dispatcher and local hub

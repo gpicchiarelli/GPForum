@@ -22,7 +22,7 @@ sub dashboard {
     my $payload = eval { return $self->_dashboard_payload($user_id); };
     if ($EVAL_ERROR) {
         $self->app->log->error("privacy dashboard failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -34,6 +34,31 @@ sub dashboard {
     );
 }
 
+sub download_export {
+    my ($self) = @_;
+
+    my $user_id = $self->member_user_id;
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->_download_completed_export($user_id);
+}
+
+sub _download_completed_export {
+    my ( $self, $user_id ) = @_;
+
+    my $row =
+      $self->gp_data_rights_review->completed_export_for_user( $user_id,
+        $self->param('export_request_id'),
+      );
+    if ( !$row ) {
+        return $self->_not_found('export request not found');
+    }
+
+    return $self->render_export_download($row);
+}
+
 sub _dashboard_payload {
     my ( $self, $user_id ) = @_;
 
@@ -43,12 +68,14 @@ sub _dashboard_payload {
         active_holds => $self->gp_data_rights_review->active_holds_for_user(
             $user_id, { limit => $limit },
         ),
-        csrf_token        => $self->csrf_token,
-        deletion_requests =>
+        csrf_token          => $self->csrf_token,
+        deletion_command_id => $self->gp_id->uuid,
+        deletion_requests   =>
           $self->gp_data_rights_review->deletion_requests_for_user(
             $user_id, { limit => $limit },
           ),
-        export_requests =>
+        export_command_id => $self->gp_id->uuid,
+        export_requests   =>
           $self->gp_data_rights_review->export_requests_for_user(
             $user_id, { limit => $limit },
           ),
@@ -81,6 +108,11 @@ live in C<Privacy::Requests>; staff review lives in C<Privacy::Review>.
 =head2 dashboard
 
 Renders the member export, deletion, and hold summary.
+
+=head2 download_export
+
+Sends the completed export bundle as a JSON attachment for the signed-in
+subject. Missing or foreign requests return 404.
 
 =head1 DIAGNOSTICS
 

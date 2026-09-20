@@ -22,6 +22,7 @@ const my $WORKER_BIND_INDEX => 9;
 const my $LOCK_SECONDS      => 60;
 const my $DEFAULT_MAX       => 5;
 const my $CUSTOM_MAX        => 2;
+const my $FIRST_ATTEMPT     => 1;
 const my $RETRY_ATTEMPT     => 3;
 const my $NEXT_ATTEMPT      => 4;
 const my $BACKOFF_SECONDS   => 180;
@@ -78,6 +79,11 @@ is(
 );
 is( $retry->status($RETRY_ATTEMPT),
     'failed', 'retry keeps status failed before the attempt ceiling' );
+is( $retry->status( $FIRST_ATTEMPT, 'permanent' ),
+    'cancelled',
+    'retry cancels a permanent failure before the attempt ceiling' );
+is( $retry->status( $FIRST_ATTEMPT, 'transient' ),
+    'failed', 'retry keeps a transient failure retryable before the ceiling' );
 is( $retry->status($DEFAULT_MAX),
     'cancelled', 'retry cancels when attempts reach the default ceiling' );
 is(

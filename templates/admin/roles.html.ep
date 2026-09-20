@@ -12,6 +12,7 @@
       component_title => t('admin.create_role') %>
     <form method="post" action="<%= url_for('admin_role_create') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $role_command_id || q{} %>">
       <label for="role-name"><%= t('admin.name') %></label>
       <input id="role-name" name="name" required>
       <label for="role-description"><%= t('admin.description') %></label>
@@ -26,6 +27,7 @@
       component_title => t('admin.create_permission') %>
     <form method="post" action="<%= url_for('admin_permission_create') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $permission_command_id || q{} %>">
       <label for="permission-name"><%= t('admin.name') %></label>
       <input id="permission-name" name="name" required>
       <label for="permission-resource"><%= t('admin.resource_type') %></label>
@@ -49,6 +51,7 @@
               <p><%= $role->{description} %></p>
               <form method="post" action="<%= url_for('admin_role_permission_attach', role_id => $role->{role_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $role->{attach_command_id} || q{} %>">
                 <input type="hidden" name="role_id" value="<%= $role->{role_id} %>">
                 <label for="role-<%= $role->{role_id} %>-permission"><%= t('admin.permissions') %></label>
                 <select id="role-<%= $role->{role_id} %>-permission" name="permission_id" required>

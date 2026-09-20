@@ -49,7 +49,10 @@ sub startup {
         runtime        => $runtime,
         runtime_policy => $runtime_policy,
     );
-    GPForum::Bootstrap::Identity->register( application => $self );
+    GPForum::Bootstrap::Identity->register(
+        application => $self,
+        config      => $config,
+    );
     GPForum::Bootstrap::Discovery->register(
         application => $self,
         config      => $config,

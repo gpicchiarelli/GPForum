@@ -78,6 +78,26 @@ is( $access->deletion_held_status,
     'deletion_held', 'deletion_held_status keeps the hold write status' );
 is( $access->default_redirect,
     'privacy_dashboard', 'default_redirect keeps the member dashboard' );
+is(
+    $access->write_flash_key('export_requested'),
+    'privacy.export_requested',
+    'write_flash_key maps export to the flash key'
+);
+is( $access->write_flash_key('deletion_approved'),
+    'privacy.deletion_approved',
+    'write_flash_key maps approval to the flash key' );
+ok(
+    !defined $access->write_flash_key('unknown'),
+    'write_flash_key ignores an unmapped status'
+);
+is(
+    $access->export_download_filename('export-own-1'),
+    'gpforum-export-export-own-1.json',
+    'export_download_filename uses the request id'
+);
+is( $access->export_download_filename('a"b'),
+    'gpforum-export-a_b.json',
+    'export_download_filename strips unsafe characters' );
 
 is_deeply(
     $access->permission_target('manage'),

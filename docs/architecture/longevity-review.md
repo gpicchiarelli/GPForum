@@ -166,7 +166,7 @@ prima che il volume lo imponga.
 
 - I controller delegano molto a service/view model.
 - Non ho trovato accesso diretto a resultset DBIC nei controller.
-- `Forum` usa `PostingWorkflow` per create_thread/create_reply invece di
+- `Forum` usa `PostingWorkflow` per create_thread/create_reply/edit_post/delete_post/restore_post/edit_thread/delete_thread/restore_thread/move_thread invece di
   inserire direttamente.
 
 ### Costo futuro

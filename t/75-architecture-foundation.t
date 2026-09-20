@@ -177,6 +177,243 @@ subtest
     );
   };
 
+subtest 'event recorder reuses unique outbox idempotency key' => sub {
+    my $schema   = GPForum::Test::Schema->new;
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my %input = (
+        actor_id       => 'user-1',
+        aggregate_id   => 'thread-1',
+        aggregate_type => 'thread',
+        correlation_id => 'correlation-1',
+        event_id       => 'event-reuse-1',
+        event_type     => 'thread.created',
+        payload        => { category_id => 'category-1' },
+        timestamp      => '2026-05-28T08:00:00Z',
+    );
+
+    my $event = $recorder->record_event(%input);
+    is( $event->{event_id}, 'event-reuse-1', 'recorder stores the event id' );
+    is( scalar @{ $schema->created_for('EventLog') },
+        1, 'recorder creates one event log row' );
+    is( scalar @{ $schema->created_for('OutboxMessage') },
+        1, 'recorder creates one outbox row' );
+
+    my $same_event = $recorder->record_event(%input);
+    ok( $same_event->{skipped},
+        'already-recorded event skip does not insert a second row' );
+    is( $same_event->{event_id},
+        'event-reuse-1', 'already-recorded event keeps the original event id' );
+    is( scalar @{ $schema->created_for('EventLog') },
+        1, 'already-recorded event does not insert a second event row' );
+    is( scalar @{ $schema->created_for('OutboxMessage') },
+        1, 'already-recorded event does not insert a second outbox row' );
+
+    $schema->skip_search_count(1);
+    my $raced_event = $recorder->record_event(%input);
+    ok( $raced_event->{skipped},
+        'unique outbox race reuses the event handoff' );
+    is( scalar @{ $schema->created_for('OutboxMessage') },
+        1, 'unique outbox race does not insert a second outbox row' );
+};
+
+subtest 'event recorder remints unique outbox id' => sub {
+    my $schema = GPForum::Test::Schema->new;
+    $schema->resultset('OutboxMessage')->create(
+        {
+            event_id        => 'other-event',
+            idempotency_key => 'outbox:other.created:other-event',
+            outbox_id       => 'generated-1',
+            payload         => {},
+            queue           => 'events',
+            status          => 'pending',
+        }
+    );
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $event = $recorder->record_event(
+        actor_id       => 'user-1',
+        aggregate_id   => 'thread-pk',
+        aggregate_type => 'thread',
+        correlation_id => 'correlation-pk',
+        event_id       => 'event-pk',
+        event_type     => 'thread.created',
+        payload        => { category_id => 'category-1' },
+        timestamp      => '2026-05-28T08:00:00Z',
+    );
+    my $rows = $schema->created_for('OutboxMessage');
+
+    ok( !$event->{skipped}, 'unique outbox id collision remints and records' );
+    is( $event->{event_id},
+        'event-pk', 'unique outbox id collision keeps this event' );
+    is( $rows->[-1]{outbox_id},
+        'generated-2', 'unique outbox id collision remints the id' );
+    is(
+        $rows->[-1]{idempotency_key},
+        'outbox:thread.created:event-pk',
+        'unique outbox id collision keeps this handoff key'
+    );
+};
+
+subtest 'event recorder reuses leftover unique outbox id' => sub {
+    my $schema = GPForum::Test::Schema->new;
+    $schema->resultset('OutboxMessage')->create(
+        {
+            event_id        => 'event-leftover',
+            idempotency_key => 'outbox:thread.created:event-leftover',
+            outbox_id       => 'generated-1',
+            payload         => {},
+            queue           => 'events',
+            status          => 'pending',
+        }
+    );
+    $schema->skip_search_count(1);
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $event = $recorder->record_event(
+        actor_id       => 'user-1',
+        aggregate_id   => 'thread-leftover',
+        aggregate_type => 'thread',
+        correlation_id => 'correlation-leftover',
+        event_id       => 'event-leftover',
+        event_type     => 'thread.created',
+        payload        => { category_id => 'category-1' },
+        timestamp      => '2026-05-28T08:00:00Z',
+    );
+    my $rows = $schema->created_for('OutboxMessage');
+
+    ok( !$event->{skipped}, 'leftover outbox id race keeps this event write' );
+    is( $rows->[0]{outbox_id},
+        'generated-1', 'leftover outbox id race keeps this handoff' );
+    is(
+        $rows->[0]{idempotency_key},
+        'outbox:thread.created:event-leftover',
+        'leftover outbox id race keeps this handoff key'
+    );
+    is( scalar @{$rows},
+        1, 'leftover outbox id race does not insert a second handoff' );
+};
+
+subtest 'event recorder remints unique audit id' => sub {
+    my $schema = GPForum::Test::Schema->new;
+    $schema->resultset('AuditLog')->create(
+        {
+            action         => 'other.action',
+            actor_id       => 'user-other',
+            audit_id       => 'generated-1',
+            correlation_id => 'correlation-other',
+            created_at     => '2026-05-28T08:00:00Z',
+            metadata       => {},
+            record_hash    => 'seed-hash',
+            schema_version => 1,
+            target_id      => 'other-1',
+            target_type    => 'thread',
+        }
+    );
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $audit = $recorder->record_audit(
+        action         => 'thread.created',
+        actor_id       => 'user-1',
+        correlation_id => 'correlation-pk',
+        created_at     => '2026-05-28T08:00:00Z',
+        metadata       => { title => 'Welcome' },
+        target_id      => 'thread-pk',
+        target_type    => 'thread',
+    );
+    my $rows = $schema->created_for('AuditLog');
+
+    ok(
+        $recorder->verify_audit_record($audit),
+        'unique audit id collision remints and records'
+    );
+    is( $audit->{audit_id},
+        'generated-2', 'unique audit id collision remints the id' );
+    is( $audit->{action},
+        'thread.created', 'unique audit id collision keeps this action' );
+    is( $rows->[-1]{target_id},
+        'thread-pk', 'unique audit id collision keeps this target' );
+};
+
+subtest 'event recorder remints unique event id' => sub {
+    my $schema = GPForum::Test::Schema->new;
+    $schema->resultset('EventLog')->create(
+        {
+            created_at      => '2026-05-28T08:00:00Z',
+            event_id        => 'generated-1',
+            event_type      => 'other.created',
+            idempotency_key => 'other.created:other-1',
+        }
+    );
+    $schema->find_misses(1);
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $event = $recorder->record_event(
+        actor_id       => 'user-1',
+        aggregate_id   => 'thread-pk',
+        aggregate_type => 'thread',
+        correlation_id => 'correlation-event-pk',
+        event_type     => 'thread.created',
+        payload        => { category_id => 'category-1' },
+        timestamp      => '2026-05-28T08:00:00Z',
+    );
+    my $rows = $schema->created_for('EventLog');
+
+    ok( !$event->{skipped}, 'unique event id collision remints and records' );
+    is( $event->{event_id},
+        'generated-2', 'unique event id collision remints the id' );
+    is( $event->{event_type},
+        'thread.created', 'unique event id collision keeps this event type' );
+    is( $rows->[-1]{aggregate_id},
+        'thread-pk', 'unique event id collision keeps this aggregate' );
+};
+
+subtest 'event recorder reuses this write unique event id' => sub {
+    my $schema = GPForum::Test::Schema->new;
+    $schema->resultset('EventLog')->create(
+        {
+            aggregate_id    => 'thread-reuse',
+            created_at      => '2026-05-28T08:00:00Z',
+            event_id        => 'generated-1',
+            event_type      => 'thread.created',
+            idempotency_key => 'thread.created:thread-reuse',
+        }
+    );
+    $schema->find_misses(1);
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $event = $recorder->record_event(
+        actor_id       => 'user-1',
+        aggregate_id   => 'thread-reuse',
+        aggregate_type => 'thread',
+        correlation_id => 'correlation-event-reuse',
+        event_type     => 'thread.created',
+        payload        => { category_id => 'category-1' },
+        timestamp      => '2026-05-28T08:00:00Z',
+    );
+
+    ok( $event->{skipped},
+        'leftover event id race reuses this event and finishes' );
+    is( $event->{event_id},
+        'generated-1', 'leftover event id race keeps this event' );
+    is( scalar @{ $schema->created_for('EventLog') },
+        1, 'leftover event id race does not insert a second event' );
+    is( scalar @{ $schema->created_for('OutboxMessage') },
+        1, 'leftover event id race inserts the missing outbox' );
+};
+
 subtest 'moderation write stores use the shared event recorder boundary' =>
   sub {
     for my $store (
@@ -354,6 +591,13 @@ subtest 'browser security headers are testable outside bootstrap' => sub {
     like( $csp, qr/script-src [ ] 'self'/msx,  'CSP declares script source' );
     like( $csp, qr/style-src [ ] 'self'/msx,   'CSP declares style source' );
     like( $csp, qr/object-src [ ] 'none'/msx,  'CSP forbids object content' );
+    like(
+        $headers->hsts_policy,
+        qr/\A max-age= [[:digit:]]+ ; [ ] includeSubDomains \z/msx,
+        'HSTS policy is a max-age includeSubDomains header'
+    );
+    ok( !$headers->include_hsts,
+        'HSTS is off until secure transport is enabled' );
 };
 
 subtest 'SSR render policy centralizes raw HTML decisions' => sub {

@@ -54,7 +54,7 @@ our $VERSION = '0.001';
     }
 }
 
-const my $EXPECTED_TESTS            => 95;
+const my $EXPECTED_TESTS            => 106;
 const my $HTTP_OK                   => 200;
 const my $HTTP_UNAUTHORIZED         => 401;
 const my $RATE_LIMIT                => 2;
@@ -71,6 +71,7 @@ const my $BAD_REALTIME_PROCESSES    => 0;
 const my $FIRST_REMAINING_ALLOWANCE => 1;
 const my $EXHAUSTED_ALLOWANCE       => 0;
 const my $BUCKET_COUNT              => 1;
+const my $METRICS_ROTATION_HITS     => 3;
 const my $STRICT_WORKER_THRESHOLD   => 99;
 const my $STRICT_FD_THRESHOLD       => 1;
 const my $THREAD_VIEW_QUERY_BUDGET  => 8;
@@ -392,6 +393,39 @@ is(
     'query budget sync writes every catalog endpoint'
 );
 is(
+    $sync->{written},
+    scalar keys %{ $query_budget->catalog },
+    'first query budget sync inserts every catalog row'
+);
+my $updated_count = scalar @{ $query_budget_resultset->updated };
+my $same_sync     = $query_budget->sync_schema($query_budget_schema);
+is( $same_sync->{written}, 0,
+    'unchanged query budget sync does not rewrite rows' );
+is(
+    $same_sync->{skipped},
+    scalar keys %{ $query_budget->catalog },
+    'unchanged query budget sync skips every catalog endpoint'
+);
+is( scalar @{ $query_budget_resultset->updated },
+    $updated_count, 'unchanged query budget sync keeps the stored rows' );
+$query_budget_resultset->skip_search_count(1);
+my $raced_sync = $query_budget->sync_schema($query_budget_schema);
+is( $raced_sync->{written},
+    0, 'unique query budget race does not rewrite rows' );
+is(
+    $raced_sync->{skipped},
+    scalar keys %{ $query_budget->catalog },
+    'unique query budget race skips every catalog endpoint'
+);
+is( scalar @{ $query_budget_resultset->updated },
+    $updated_count,
+    'unique query budget race does not insert a second catalog' );
+is(
+    $raced_sync->{synced},
+    scalar keys %{ $query_budget->catalog },
+    'unique query budget race still reports the catalog'
+);
+is(
     $query_budget_resultset->rows->{thread_view}->get_column('max_queries'),
     $THREAD_VIEW_QUERY_BUDGET,
     'query budget sync persists thread view budget'
@@ -450,7 +484,10 @@ my $protected_metrics = GPForum::Test::MetricsSnapshot->new;
 my $protected_test    = Test::Mojo->new('GPForum');
 $protected_test->app->helper(
     gp_config => sub {
-        return GPForum::Config->new( metrics_token => 'metrics-secret' );
+        return GPForum::Config->new(
+            metrics_token           => 'metrics-secret',
+            previous_metrics_tokens => ['previous-metrics'],
+        );
     }
 );
 $protected_test->app->helper(
@@ -477,5 +514,12 @@ $protected_test->get_ok(
 $protected_test->status_is($HTTP_OK);
 is( $protected_metrics->collected,
     2, 'metrics token header authorizes metrics snapshot' );
+
+$protected_test->get_ok(
+    '/metrics' => { 'X-GPForum-Metrics-Token' => 'previous-metrics' } );
+$protected_test->status_is($HTTP_OK);
+is( $protected_metrics->collected,
+    $METRICS_ROTATION_HITS,
+    'a previous metrics token still authorizes during rotation' );
 
 1;

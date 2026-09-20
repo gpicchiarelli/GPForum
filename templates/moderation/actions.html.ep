@@ -64,12 +64,22 @@
                 <button type="submit"><%= t('moderation.unlock_thread') %></button>
               </form>
             % }
+            % if ($action->{target_type} eq 'thread' && $action->{action_type} eq 'thread.hidden') {
+              <form method="post" action="<%= url_for('moderation_thread_restore', thread_id => $action->{target_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $action->{command_id} || q{} %>">
+                <label for="<%= $action->{ui}{restore_reason_id} %>"><%= t('common.reason') %></label>
+                <input id="<%= $action->{ui}{restore_reason_id} %>" name="reason" required>
+                <button type="submit"><%= t('moderation.restore_thread') %></button>
+              </form>
+            % }
             % if (!$action->{reversed_at}) {
               <%= include 'components/confirmation',
                 heading_id => $action->{ui}{reverse_heading_id},
                 component_title => t('moderation.reverse_action') %>
               <form method="post" action="<%= url_for('moderation_action_reverse', action_id => $action->{moderation_action_id}) %>">
                 <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $action->{reverse_command_id} || q{} %>">
                 <label for="<%= $action->{ui}{reverse_reason_id} %>"><%= t('common.reason') %></label>
                 <input id="<%= $action->{ui}{reverse_reason_id} %>" name="reason" required>
                 <button type="submit"><%= t('moderation.reverse_action') %></button>

@@ -29,6 +29,8 @@ const my $STATUS_POST_HIDDEN        => 'post_hidden';
 const my $STATUS_POST_RESTORED      => 'post_restored';
 const my $STATUS_THREAD_LOCKED      => 'thread_locked';
 const my $STATUS_THREAD_UNLOCKED    => 'thread_unlocked';
+const my $STATUS_THREAD_HIDDEN      => 'thread_hidden';
+const my $STATUS_THREAD_RESTORED    => 'thread_restored';
 const my $STATUS_ACTION_REVERSED    => 'action_reversed';
 const my $STATUS_ASSIGNED           => 'assigned';
 const my $STATUS_RELEASED           => 'released';
@@ -41,6 +43,22 @@ const my $SUSPENSION_STATUS_ALL     => 'all';
 const my $STATUS_FAILED             => 'failed';
 const my $STATUS_NOT_FOUND          => 'not_found';
 const my $STATUS_INVALID            => 'invalid';
+const my $STATUS_CONFLICT           => 'conflict';
+
+const my %WRITE_FLASH => (
+    $STATUS_ACTION_REVERSED    => 'moderation.reversed',
+    $STATUS_ASSIGNED           => 'moderation.assigned',
+    $STATUS_POST_HIDDEN        => 'moderation.action.post_hidden',
+    $STATUS_POST_RESTORED      => 'moderation.action.post_restored',
+    $STATUS_RELEASED           => 'moderation.released',
+    $STATUS_RESOLVED           => 'moderation.resolved',
+    $STATUS_SUSPENSION_REVOKED => 'moderation.suspension_revoked',
+    $STATUS_THREAD_HIDDEN      => 'moderation.action.thread_hidden',
+    $STATUS_THREAD_LOCKED      => 'moderation.action.thread_locked',
+    $STATUS_THREAD_RESTORED    => 'moderation.action.thread_restored',
+    $STATUS_THREAD_UNLOCKED    => 'moderation.action.thread_unlocked',
+    $STATUS_USER_SUSPENDED     => 'moderation.user_suspended',
+);
 
 sub queue_limit {
     my ( undef, $requested ) = @_;
@@ -148,6 +166,14 @@ sub thread_unlocked_status {
     return $STATUS_THREAD_UNLOCKED;
 }
 
+sub thread_hidden_status {
+    return $STATUS_THREAD_HIDDEN;
+}
+
+sub thread_restored_status {
+    return $STATUS_THREAD_RESTORED;
+}
+
 sub action_reversed_status {
     return $STATUS_ACTION_REVERSED;
 }
@@ -170,6 +196,19 @@ sub user_suspended_status {
 
 sub suspension_revoked_status {
     return $STATUS_SUSPENSION_REVOKED;
+}
+
+sub write_flash_key {
+    my ( undef, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
+    if ( exists $WRITE_FLASH{$status} ) {
+        return $WRITE_FLASH{$status};
+    }
+
+    return;
 }
 
 sub authorization_target {
@@ -202,6 +241,9 @@ sub failure_status {
         return $status;
     }
     if ( $status eq $STATUS_INVALID ) {
+        return $status;
+    }
+    if ( $status eq $STATUS_CONFLICT ) {
         return $status;
     }
 
@@ -336,6 +378,14 @@ Returns C<thread_locked>.
 
 Returns C<thread_unlocked>.
 
+=head2 thread_hidden_status
+
+Returns C<thread_hidden>.
+
+=head2 thread_restored_status
+
+Returns C<thread_restored>.
+
 =head2 action_reversed_status
 
 Returns C<action_reversed>.
@@ -359,6 +409,11 @@ Returns C<user_suspended>.
 =head2 suspension_revoked_status
 
 Returns C<suspension_revoked>.
+
+=head2 write_flash_key
+
+Returns the i18n catalog key for a successful HTML write, or undef when the
+status has no flash copy.
 
 =head2 authorization_target
 

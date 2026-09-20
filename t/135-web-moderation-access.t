@@ -89,6 +89,8 @@ is( $access->failure_status( { status => 'not_found' } ),
     'not_found', 'failure_status keeps not_found' );
 is( $access->failure_status( { status => 'invalid' } ),
     'invalid', 'failure_status keeps invalid' );
+is( $access->failure_status( { status => 'conflict' } ),
+    'conflict', 'failure_status keeps conflict' );
 ok( !defined $access->failure_status( { status => 'failed' } ),
     'failure_status ignores system failures' );
 ok( !defined $access->failure_status( { status => 'ok' } ),
@@ -133,6 +135,11 @@ is( $access->thread_locked_status,
     'thread_locked', 'thread_locked_status keeps the lock write status' );
 is( $access->thread_unlocked_status,
     'thread_unlocked', 'thread_unlocked_status keeps the unlock write status' );
+is( $access->thread_hidden_status,
+    'thread_hidden', 'thread_hidden_status keeps the hide write status' );
+is( $access->thread_restored_status,
+    'thread_restored',
+    'thread_restored_status keeps the restore write status' );
 is( $access->action_reversed_status,
     'action_reversed',
     'action_reversed_status keeps the reversal write status' );
@@ -147,6 +154,17 @@ is( $access->user_suspended_status,
 is( $access->suspension_revoked_status,
     'suspension_revoked',
     'suspension_revoked_status keeps the revoke write status' );
+is(
+    $access->write_flash_key('post_hidden'),
+    'moderation.action.post_hidden',
+    'write_flash_key maps hide to the action catalog key'
+);
+is( $access->write_flash_key('assigned'),
+    'moderation.assigned', 'write_flash_key maps assign to the flash key' );
+ok(
+    !defined $access->write_flash_key('unknown'),
+    'write_flash_key ignores an unmapped status'
+);
 
 done_testing();
 

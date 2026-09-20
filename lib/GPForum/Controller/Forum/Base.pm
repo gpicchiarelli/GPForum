@@ -68,16 +68,45 @@ sub create_report {
         return $prepared;
     }
 
-    my $report = eval {
-        return $self->gp_report_store->create_report( $prepared->{report} );
-    };
+    return $self->_commanded_report( $prepared->{report} );
+}
 
-    if ($EVAL_ERROR) {
-        $self->app->log->error("report create failed: $EVAL_ERROR");
+sub _commanded_report {
+    my ( $self, $report ) = @_;
+
+    return $self->_mapped_report(
+        $self->gp_community_workflow->create_report(
+            {
+                command_id => $self->command_id_param,
+                %{$report},
+            }
+        )
+    );
+}
+
+sub _mapped_report {
+    my ( $self, $result ) = @_;
+
+    if ( $result->{ok} ) {
+        return { ok => 1, report => $result->{stored} };
+    }
+
+    return $self->_failed_report($result);
+}
+
+sub _failed_report {
+    my ( $self, $result ) = @_;
+
+    if ( $self->forum_access->is_unavailable($result) ) {
         return { ok => 0, system_error => 1 };
     }
 
-    return { ok => 1, report => $report };
+    return {
+        error  => $result->{error},
+        errors => $result->{errors},
+        ok     => 0,
+        status => $result->{status},
+    };
 }
 
 sub _report_input {
@@ -125,14 +154,27 @@ sub profilereport_response {
         return $self->_report_json_response($result);
     }
 
-    return $self->redirect_to( 'profile', username => $username );
+    return $self->_html_success(
+        $self->forum_access->reported_status,
+        $self->url_for( 'profile', username => $username ),
+    );
 }
 
 sub _report_error_response {
     my ( $self, $result ) = @_;
 
-    if ( $result->{system_error} ) {
-        return $self->_system_failure;
+    if ( $self->forum_access->is_unavailable($result) ) {
+        return $self->_service_unavailable;
+    }
+
+    return $self->_report_client_error($result);
+}
+
+sub _report_client_error {
+    my ( $self, $result ) = @_;
+
+    if ( ( $result->{status} || q{} ) eq 'conflict' ) {
+        return $self->_conflict( $result->{error} );
     }
 
     return $self->_bad_request( $result->{errors} );
@@ -156,7 +198,7 @@ sub _report_redirect {
         $url->fragment( 'post-' . $post_id );
     }
 
-    return $self->redirect_to($url);
+    return $self->_html_success( $self->forum_access->reported_status, $url );
 }
 
 sub created_thread_response {
@@ -170,8 +212,99 @@ sub created_thread_response {
         );
     }
 
-    return $self->redirect_to( 'thread',
-        thread_id => $self->_column( $stored->{thread}, 'thread_id' ), );
+    return $self->_html_success(
+        $self->forum_access->thread_created_status,
+        $self->url_for(
+            'thread',
+            thread_id => $self->_column( $stored->{thread}, 'thread_id' ),
+        ),
+    );
+}
+
+sub updated_thread_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json =>
+              $self->gp_forum_view_model->updated_thread_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->_html_success(
+        $self->forum_access->thread_updated_status,
+        $self->url_for(
+            'thread',
+            thread_id => $self->_column( $stored->{thread}, 'thread_id' ),
+        ),
+    );
+}
+
+sub moved_thread_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_forum_view_model->moved_thread_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->_html_success(
+        $self->forum_access->thread_moved_status,
+        $self->url_for(
+            'thread',
+            thread_id => $self->_column( $stored->{thread}, 'thread_id' ),
+        ),
+    );
+}
+
+sub deleted_thread_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json =>
+              $self->gp_forum_view_model->deleted_thread_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->_redirect_after_thread_delete($stored);
+}
+
+sub restored_thread_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json =>
+              $self->gp_forum_view_model->restored_thread_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    my $thread_id = $self->_column( $stored->{thread}, 'thread_id' );
+
+    return $self->_html_success(
+        $self->forum_access->thread_restored_status,
+        $self->url_for( 'thread', thread_id => $thread_id ),
+    );
+}
+
+sub _redirect_after_thread_delete {
+    my ( $self, $stored ) = @_;
+
+    my $status      = $self->forum_access->thread_deleted_status;
+    my $category_id = $self->_column( $stored->{thread}, 'category_id' );
+    if ($category_id) {
+        return $self->_html_success( $status,
+            $self->url_for( 'category', category_id => $category_id ),
+        );
+    }
+
+    return $self->_html_success( $status, $self->url_for('categories') );
 }
 
 sub created_post_response {
@@ -187,9 +320,69 @@ sub created_post_response {
     my $thread_id = $self->param('thread_id');
     my $post_id   = $self->_column( $stored->{post}, 'post_id' );
 
-    return $self->redirect_to(
+    return $self->_html_success(
+        $self->forum_access->post_created_status,
         $self->url_for( 'thread', thread_id => $thread_id )
-          ->fragment( 'post-' . $post_id ) );
+          ->fragment( 'post-' . $post_id ),
+    );
+}
+
+sub updated_post_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_forum_view_model->updated_post_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    my $thread_id = $self->_column( $stored->{post}, 'thread_id' );
+    my $post_id   = $self->_column( $stored->{post}, 'post_id' );
+
+    return $self->_html_success(
+        $self->forum_access->post_updated_status,
+        $self->url_for( 'thread', thread_id => $thread_id )
+          ->fragment( 'post-' . $post_id ),
+    );
+}
+
+sub deleted_post_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_forum_view_model->deleted_post_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    my $thread_id = $self->_column( $stored->{post}, 'thread_id' );
+
+    return $self->_html_success(
+        $self->forum_access->post_deleted_status,
+        $self->url_for( 'thread', thread_id => $thread_id ),
+    );
+}
+
+sub restored_post_response {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_forum_view_model->restored_post_response($stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    my $thread_id = $self->_column( $stored->{post}, 'thread_id' );
+    my $post_id   = $self->_column( $stored->{post}, 'post_id' );
+
+    return $self->_html_success(
+        $self->forum_access->post_restored_status,
+        $self->url_for( 'thread', thread_id => $thread_id )
+          ->fragment( 'post-' . $post_id ),
+    );
 }
 
 sub read_marker_response {
@@ -202,8 +395,12 @@ sub read_marker_response {
         );
     }
 
-    return $self->redirect_to( 'thread',
-        thread_id => $marked->{read_state}{thread_id}, );
+    return $self->_html_success(
+        $self->forum_access->read_marked_status,
+        $self->url_for(
+            'thread', thread_id => $marked->{read_state}{thread_id},
+        ),
+    );
 }
 
 sub bookmark_action_response {
@@ -218,8 +415,9 @@ sub bookmark_action_response {
         );
     }
 
-    return $self->redirect_to( 'thread',
-        thread_id => $self->param('thread_id'), );
+    return $self->_html_success( $status,
+        $self->url_for( 'thread', thread_id => $self->param('thread_id') ),
+    );
 }
 
 sub subscription_action_response {
@@ -234,8 +432,9 @@ sub subscription_action_response {
         );
     }
 
-    return $self->redirect_to( 'thread',
-        thread_id => $self->param('thread_id'), );
+    return $self->_html_success( $status,
+        $self->url_for( 'thread', thread_id => $self->param('thread_id') ),
+    );
 }
 
 sub render_payload {
@@ -254,6 +453,26 @@ sub public_cache_options {
             tags       => $tags,
         }
     );
+}
+
+sub _html_success {
+    my ( $self, $status, $location ) = @_;
+
+    $self->_set_success_flash( $self->forum_access->write_flash_key($status) );
+
+    return $self->redirect_to($location);
+}
+
+sub _set_success_flash {
+    my ( $self, $flash_key ) = @_;
+
+    if ( !$flash_key ) {
+        return;
+    }
+
+    $self->flash( success => $self->t($flash_key) );
+
+    return;
 }
 
 sub _wants_json {
@@ -368,6 +587,10 @@ sub reply_write_failure {
 
 sub _write_failure {
     my ( $self, $result, $handlers ) = @_;
+
+    if ( $self->forum_access->is_unavailable($result) ) {
+        return $self->_service_unavailable;
+    }
 
     my $status  = $result->{status} || q{};
     my $handler = $handlers->{$status};
@@ -677,6 +900,12 @@ sub _system_failure {
     my ($self) = @_;
 
     return GPForum::Web::Guard->new->system_failure($self);
+}
+
+sub _service_unavailable {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->service_unavailable($self);
 }
 
 sub _record_security_event {

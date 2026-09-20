@@ -23,7 +23,7 @@ sub review {
     my $payload = eval { return $self->_review_payload; };
     if ($EVAL_ERROR) {
         $self->app->log->error("privacy review failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -47,6 +47,7 @@ sub approve_deletion {
         $self->gp_privacy_workflow->approve_deletion(
             {
                 actor_user_id => $actor_id,
+                command_id    => $self->command_id_param,
                 reason        => $self->param('reason'),
                 request_id    => $self->param('request_id'),
             }
@@ -67,6 +68,7 @@ sub hold_deletion {
         $self->gp_privacy_workflow->hold_deletion(
             {
                 actor_user_id => $actor_id,
+                command_id    => $self->command_id_param,
                 reason        => $self->param('reason'),
                 request_id    => $self->param('request_id'),
             }
@@ -87,6 +89,7 @@ sub run_erasure_job {
         $self->gp_privacy_workflow->run_erasure_job(
             {
                 actor_user_id => $actor_id,
+                command_id    => $self->command_id_param,
                 job_id        => $self->param('job_id'),
             }
         ),
@@ -102,18 +105,62 @@ sub _review_payload {
         active_holds =>
           $self->gp_data_rights_review->active_holds( { limit => $limit }, ),
         csrf_token        => $self->csrf_token,
-        deletion_requests =>
-          $self->gp_data_rights_review->pending_deletion_requests(
-            { limit => $limit },
-          ),
-        erasure_jobs => $self->gp_data_rights_review->erasure_jobs_by_status(
-            'pending', { limit => $limit },
+        deletion_requests => $self->_with_review_command_ids(
+            $self->gp_data_rights_review->pending_deletion_requests(
+                { limit => $limit },
+            )
+        ),
+        erasure_jobs => $self->_with_erasure_command_ids(
+            $self->gp_data_rights_review->erasure_jobs_by_status(
+                'pending', { limit => $limit },
+            )
         ),
         export_requests =>
           $self->gp_data_rights_review->pending_export_requests(
             { limit => $limit },
           ),
     );
+}
+
+sub _with_review_command_ids {
+    my ( $self, $rows ) = @_;
+
+    return [ map { $self->_with_review_command_id($_) } @{ $rows || [] } ];
+}
+
+sub _with_review_command_id {
+    my ( $self, $row ) = @_;
+
+    return {
+        %{ $self->_row_hash($row) },
+        approve_command_id => $self->gp_id->uuid,
+        hold_command_id    => $self->gp_id->uuid,
+    };
+}
+
+sub _with_erasure_command_ids {
+    my ( $self, $rows ) = @_;
+
+    return [ map { $self->_with_write_command_id($_) } @{ $rows || [] } ];
+}
+
+sub _with_write_command_id {
+    my ( $self, $row ) = @_;
+
+    return { %{ $self->_row_hash($row) }, command_id => $self->gp_id->uuid, };
+}
+
+sub _row_hash {
+    my ( undef, $row ) = @_;
+
+    if ( ref $row eq 'HASH' ) {
+        return { %{$row} };
+    }
+    if ( $row && $row->can('get_columns') ) {
+        return { $row->get_columns };
+    }
+
+    return {};
 }
 
 1;

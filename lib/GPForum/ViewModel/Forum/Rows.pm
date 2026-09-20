@@ -50,6 +50,7 @@ sub thread {
         slug                 => $self->column( $row, 'slug' ),
         thread_id            => $thread_id,
         title                => $self->column( $row, 'title' ),
+        deleted_at           => $self->column( $row, 'deleted_at' ),
         ui                   => {
             heading_id => 'thread-' . $self->string($thread_id) . '-heading',
             locked     => $locked_at ? 1 : 0,
@@ -76,6 +77,7 @@ sub post {
         thread_id            => $self->column( $row, 'thread_id' ),
         ui                   => $self->_post_ui($post_id),
         visibility           => $self->column( $row, 'visibility' ),
+        deleted_at           => $self->column( $row, 'deleted_at' ),
     };
 }
 

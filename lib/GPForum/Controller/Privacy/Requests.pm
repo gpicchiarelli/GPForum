@@ -18,7 +18,8 @@ sub request_export {
     return $self->export_write_response(
         $self->gp_privacy_workflow->request_export(
             {
-                user_id => $user_id,
+                command_id => $self->command_id_param,
+                user_id    => $user_id,
             }
         ),
     );
@@ -35,8 +36,9 @@ sub request_deletion {
     return $self->deletion_write_response(
         $self->gp_privacy_workflow->request_deletion(
             {
-                reason  => $self->param('reason'),
-                user_id => $user_id,
+                command_id => $self->command_id_param,
+                reason     => $self->param('reason'),
+                user_id    => $user_id,
             }
         ),
     );

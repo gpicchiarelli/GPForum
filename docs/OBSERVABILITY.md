@@ -224,8 +224,11 @@ can expose it.
 ## Replay And Projection Guarantees
 
 Projection tests now validate that replay/idempotent observation of projection
-offsets does not mutate canonical state. Rebuild and generation switches remain
-projection-only operations:
+offsets does not mutate canonical state. A second `record_progress` of the same
+`last_event_id` keeps the original `updated_at`. A second `mark_failed` of an
+already-failed offset keeps the original timestamp. Ready, active, and failed
+generation status writes skip when the stored status already matches. Rebuild
+and generation switches remain projection-only operations:
 
 * event/audit/canonical tables remain authoritative;
 * projection offsets are operational state;

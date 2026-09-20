@@ -77,6 +77,44 @@ ok(
     ),
     'replayed_scan ignores a scan that has not been applied'
 );
+ok(
+    $lifecycle->already_scanned($clean_row),
+    'already_scanned accepts a clean available row'
+);
+ok(
+    $lifecycle->already_scanned(
+        { scan_status => 'infected', state => 'quarantined' }
+    ),
+    'already_scanned accepts an infected quarantined row'
+);
+ok(
+    !$lifecycle->already_scanned(
+        { scan_status => 'pending', state => 'uploaded' }
+    ),
+    'already_scanned rejects a pending scan'
+);
+ok(
+    !$lifecycle->already_scanned(
+        { scan_status => 'failed', state => 'quarantined' }
+    ),
+    'already_scanned rejects a failed scan so the object can be reread'
+);
+is_deeply(
+    $lifecycle->scanned_replay(
+        {
+            attachment_id => 'att-1',
+            scan_status   => 'clean',
+            state         => 'available',
+        }
+    ),
+    {
+        attachment_id => 'att-1',
+        idempotent    => 1,
+        scan_status   => 'clean',
+        state         => 'available',
+    },
+    'scanned_replay keeps the stored scan fields'
+);
 
 is_deeply(
     $lifecycle->scan_changes( { scan_status => 'clean' } ),
@@ -131,6 +169,13 @@ is(
 );
 is( $lifecycle->orphan_reason( { reason => 'stale intent' } ),
     'stale intent', 'orphan_reason keeps an explicit reason' );
+is(
+    $lifecycle->author_delete_reason( {} ),
+    'author delete',
+    'author_delete_reason defaults the author reason'
+);
+is( $lifecycle->author_delete_reason( { reason => 'moderator' } ),
+    'moderator', 'author_delete_reason keeps an explicit reason' );
 is(
     $lifecycle->orphan_actor(
         { owner_user_id => 'owner-1' },

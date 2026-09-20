@@ -15,7 +15,8 @@ sub email_verify_request_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/email_verify_request',
+        template   => 'identity/email_verify_request',
+        command_id => $self->gp_id->uuid,
         %{ $self->gp_identity_view_model->email_verify_request_form },
     );
 }
@@ -35,7 +36,8 @@ sub email_verify_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/email_verify',
+        template   => 'identity/email_verify',
+        command_id => $self->gp_id->uuid,
         %{
             $self->gp_identity_view_model->email_verify_form(
                 values => { token => $self->param('token') || q{} },
@@ -60,6 +62,7 @@ sub _submit_verification_request {
 
     my $result = $self->gp_identity_workflow->request_email_verification(
         {
+            command_id      => $self->command_id_param,
             identifier      => $self->param('identifier'),
             request_address => $self->request_address,
         }
@@ -68,7 +71,7 @@ sub _submit_verification_request {
         return $self->_verification_request_form_error( $result->{errors} );
     }
     if ( !$result->{ok} ) {
-        return $self->identity_system_failure;
+        return $self->identity_write_failure($result);
     }
 
     return $self->render(
@@ -80,14 +83,17 @@ sub _submit_verification_request {
 sub _submit_verification {
     my ($self) = @_;
 
-    my $result =
-      $self->gp_identity_workflow->verify_email(
-        { token => $self->param('token') } );
+    my $result = $self->gp_identity_workflow->verify_email(
+        {
+            command_id => $self->command_id_param,
+            token      => $self->param('token'),
+        }
+    );
     if ( $result->{status} eq 'invalid' ) {
         return $self->_verification_form_error;
     }
     if ( !$result->{ok} ) {
-        return $self->identity_system_failure;
+        return $self->identity_write_failure($result);
     }
 
     return $self->render(
@@ -100,8 +106,9 @@ sub _verification_request_form_error {
     my ( $self, $errors ) = @_;
 
     return $self->render(
-        template => 'identity/email_verify_request',
-        status   => $HTTP_BAD_REQUEST,
+        template   => 'identity/email_verify_request',
+        command_id => $self->gp_id->uuid,
+        status     => $HTTP_BAD_REQUEST,
         %{
             $self->gp_identity_view_model->email_verify_request_form(
                 errors => $errors,

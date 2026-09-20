@@ -675,6 +675,34 @@ article,
   font-size: var(--font-size-sm);
 }
 
+.forum-post-edit {
+  display: grid;
+  gap: var(--space-3);
+  max-inline-size: var(--measure-readable);
+}
+
+.forum-post-delete {
+  margin-block-start: var(--space-3);
+}
+
+.forum-thread-edit {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+  max-inline-size: var(--measure-readable);
+}
+
+.forum-thread-delete {
+  margin-block-end: var(--space-4);
+}
+
+.forum-thread-move {
+  display: grid;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+  max-inline-size: var(--measure-readable);
+}
+
 .ui-empty-state {
   border: 1px dashed var(--color-border);
   border-radius: var(--radius-md);

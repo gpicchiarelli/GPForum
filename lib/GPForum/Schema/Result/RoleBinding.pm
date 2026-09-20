@@ -22,6 +22,8 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key('binding_id');
+__PACKAGE__->add_unique_constraint( idx_role_bindings_active_unique =>
+      [qw(user_id role_id resource_type resource_id space_id)] );
 __PACKAGE__->belongs_to( user => 'GPForum::Schema::Result::User', 'user_id' );
 __PACKAGE__->belongs_to( role => 'GPForum::Schema::Result::Role', 'role_id' );
 __PACKAGE__->belongs_to(

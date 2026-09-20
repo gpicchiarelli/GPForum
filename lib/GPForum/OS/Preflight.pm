@@ -295,11 +295,11 @@ sub _recommendations {
         postgresql => {
             application_name  => 'gpforum',
             statement_timeout =>
-              'set per role; web paths should remain bounded',
+              'GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS on connect (0 disables)',
             idle_in_transaction_session_timeout =>
-              'required to prevent stuck web transactions',
+              'GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS on connect',
             lock_timeout =>
-              'use conservative timeouts for online migration safety',
+              'GPFORUM_DATABASE_LOCK_TIMEOUT_MS on connect; migrate keeps it',
             sslmode => 'prefer in development, require in production',
         },
     };

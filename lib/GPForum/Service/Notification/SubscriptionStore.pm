@@ -14,6 +14,8 @@ use GPForum::Service::Id;
 our $VERSION = '0.001';
 
 const my $DEFAULT_PREFERENCE => 'all';
+const my $ID_CONSTRAINT      => 'subscriptions_pkey';
+const my $TARGET_CONSTRAINT  => 'subscriptions_unique_target';
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub { return GPForum::Service::Id->new; };
@@ -52,14 +54,82 @@ sub _restore_after_conflict {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
-    my $existing =
-      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
-        $input->{target_id}, );
+    return $self->_subscription_after_unique( $input, $error );
+}
+
+sub _subscription_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _subscription_id_conflict($error) ) {
+        return $self->_subscription_after_id_conflict($input);
+    }
+    if ( _subscription_target_conflict($error) ) {
+        return $self->_reuse_subscription_row( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _subscription_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_existing_subscription($input);
+    if ($existing) {
+        return $self->_restore_subscription( $existing, $input );
+    }
+
+    return $self->_retry_subscription_id($input);
+}
+
+sub _retry_subscription_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->subscribe($input); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_subscription_row {
+    my ( $self, $input, $error ) = @_;
+
+    my $existing = $self->_existing_subscription($input);
     if ( !$existing ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return $self->_restore_subscription( $existing, $input );
+}
+
+sub _existing_subscription {
+    my ( $self, $input ) = @_;
+
+    return $self->find_for_user_target( $input->{user_id},
+        $input->{target_type}, $input->{target_id}, );
+}
+
+sub _subscription_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _subscription_target_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $TARGET_CONSTRAINT ) >= 0 ? 1 : 0;
 }
 
 sub subscribe {
@@ -117,53 +187,25 @@ sub status_for_user_target {
 sub mute {
     my ( $self, $subscription_id ) = @_;
 
-    return $self->_update_subscription( $subscription_id,
-        { muted_at => $self->clock->now_iso8601 } );
+    return $self->_stamp_by_id( $subscription_id, 'muted_at' );
 }
 
 sub revoke {
     my ( $self, $subscription_id ) = @_;
 
-    return $self->_update_subscription( $subscription_id,
-        { revoked_at => $self->clock->now_iso8601 } );
+    return $self->_stamp_by_id( $subscription_id, 'revoked_at' );
 }
 
 sub mute_for_user_target {
     my ( $self, $input ) = @_;
 
-    my $subscription =
-      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
-        $input->{target_id}, );
-
-    return { ok => 0, error => 'not_found' } if !$subscription;
-
-    my $changes = { muted_at => $self->clock->now_iso8601 };
-    $subscription->update($changes);
-
-    return {
-        ok              => 1,
-        subscription_id => _column( $subscription, 'subscription_id' ),
-        %{$changes},
-    };
+    return $self->_stamp_user_target( $input, 'muted_at' );
 }
 
 sub revoke_for_user_target {
     my ( $self, $input ) = @_;
 
-    my $subscription =
-      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
-        $input->{target_id}, );
-
-    return { ok => 0, error => 'not_found' } if !$subscription;
-
-    my $changes = { revoked_at => $self->clock->now_iso8601 };
-    $subscription->update($changes);
-
-    return {
-        ok              => 1,
-        subscription_id => _column( $subscription, 'subscription_id' ),
-        %{$changes},
-    };
+    return $self->_stamp_user_target( $input, 'revoked_at' );
 }
 
 sub subscribers_for {
@@ -183,39 +225,98 @@ sub subscribers_for {
       _rows($search);
 }
 
-sub _update_subscription {
-    my ( $self, $subscription_id, $changes ) = @_;
+sub _stamp_user_target {
+    my ( $self, $input, $column ) = @_;
+
+    my $subscription =
+      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
+        $input->{target_id}, );
+
+    if ( !$subscription ) {
+        return { ok => 0, error => 'not_found' };
+    }
+
+    return $self->_stamp_column( $subscription, $column );
+}
+
+sub _stamp_by_id {
+    my ( $self, $subscription_id, $column ) = @_;
 
     my $subscription =
       $self->schema->resultset('Subscription')->find($subscription_id);
-    $subscription->update($changes);
+
+    return $self->_stamp_column( $subscription, $column );
+}
+
+sub _stamp_column {
+    my ( $self, $subscription, $column ) = @_;
+
+    my $existing = _column( $subscription, $column );
+    if ( defined $existing ) {
+        return {
+            ok              => 1,
+            skipped         => 1,
+            subscription_id => _column( $subscription, 'subscription_id' ),
+            $column         => $existing,
+        };
+    }
+
+    my $stamped = $self->clock->now_iso8601;
+    $subscription->update( { $column => $stamped } );
 
     return {
-        subscription_id => $subscription_id,
-        %{$changes},
+        ok              => 1,
+        subscription_id => _column( $subscription, 'subscription_id' ),
+        $column         => $stamped,
     };
 }
 
 sub _restore_subscription {
     my ( $self, $subscription, $input ) = @_;
 
-    my $changes = {
-        preference => $input->{preference} || $DEFAULT_PREFERENCE,
-        muted_at   => undef,
-        revoked_at => undef,
-    };
-    $subscription->update($changes);
+    my $preference = $input->{preference} || $DEFAULT_PREFERENCE;
+    my $skipped    = _subscription_already_active( $subscription, $preference );
+    if ( !$skipped ) {
+        $subscription->update(
+            {
+                muted_at   => undef,
+                preference => $preference,
+                revoked_at => undef,
+            }
+        );
+    }
 
-    return {
-        subscription_id => _column( $subscription, 'subscription_id' ),
-        user_id         => $input->{user_id},
-        target_type     => $input->{target_type},
-        target_id       => $input->{target_id},
-        preference      => $changes->{preference},
+    my $result = {
         created_at      => _column( $subscription, 'created_at' ),
         muted_at        => undef,
+        preference      => $preference,
+        subscription_id => _column( $subscription, 'subscription_id' ),
+        target_id       => $input->{target_id},
+        target_type     => $input->{target_type},
+        user_id         => $input->{user_id},
         revoked_at      => undef,
     };
+    if ($skipped) {
+        $result->{skipped} = 1;
+    }
+
+    return $result;
+}
+
+sub _subscription_already_active {
+    my ( $subscription, $preference ) = @_;
+
+    if ( defined _column( $subscription, 'muted_at' ) ) {
+        return 0;
+    }
+    if ( defined _column( $subscription, 'revoked_at' ) ) {
+        return 0;
+    }
+    if ( ( _column( $subscription, 'preference' ) || q{} ) ne $preference ) {
+        return 0;
+    }
+
+    return 1;
 }
 
 sub _preference_allows {

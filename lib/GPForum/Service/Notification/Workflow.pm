@@ -8,9 +8,10 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-has dispatcher       => undef;
-has logger           => undef;
-has preference_store => undef;
+has command_idempotency => undef;
+has dispatcher          => undef;
+has logger              => undef;
+has preference_store    => undef;
 
 sub mark_read {
     my ( $self, $input ) = @_;
@@ -24,7 +25,47 @@ sub mark_read {
     );
 }
 
+sub mark_all_read {
+    my ( $self, $input ) = @_;
+
+    return $self->_run_store(
+        'notification inbox not found',
+        sub {
+            return $self->dispatcher->mark_all_read( $input->{user_id} );
+        },
+    );
+}
+
 sub set_preferences {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_command_id($input);
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_preferences($input);
+}
+
+sub _commanded_preferences {
+    my ( $self, $input ) = @_;
+
+    return $self->_commanded_write(
+        {
+            actor_id     => $input->{user_id},
+            command_id   => $input->{command_id},
+            command_type => 'notification.preferences',
+            request      => {
+                preferences =>
+                  _public_preference_request( $input->{preferences} ),
+                user_id => $input->{user_id},
+            },
+            run => sub { return $self->_preference_store_write($input); },
+        }
+    );
+}
+
+sub _preference_store_write {
     my ( $self, $input ) = @_;
 
     return $self->_run_store(
@@ -38,6 +79,123 @@ sub set_preferences {
             );
         },
     );
+}
+
+sub _commanded_write {
+    my ( $self, $job ) = @_;
+
+    if ( !$self->command_idempotency ) {
+        return $job->{run}->();
+    }
+
+    return $self->_idempotent_write($job);
+}
+
+sub _idempotent_write {
+    my ( $self, $job ) = @_;
+
+    my $guarded = eval { return $self->_command_guard($job); };
+    if ($EVAL_ERROR) {
+        $self->_log_error("notification command log failed: $EVAL_ERROR");
+        return _failed_result();
+    }
+
+    return _guard_result($guarded);
+}
+
+sub _command_guard {
+    my ( $self, $job ) = @_;
+
+    return $self->command_idempotency->run(
+        {
+            actor_id     => $job->{actor_id},
+            command_id   => _trim( $job->{command_id} ),
+            command_type => $job->{command_type},
+            request      => $job->{request} || {},
+        },
+        sub { return $job->{run}->(); },
+        sub {
+            my ($result) = @_;
+            return $result;
+        },
+    );
+}
+
+sub _guard_result {
+    my ($guarded) = @_;
+
+    if ( $guarded->{replayed} ) {
+        return $guarded->{response};
+    }
+    if ( $guarded->{recorded} ) {
+        return $guarded->{result};
+    }
+
+    return _guard_failure($guarded);
+}
+
+sub _guard_failure {
+    my ($guarded) = @_;
+
+    if ( $guarded->{invalid} ) {
+        return _result(
+            errors => { command_id => 'command_id is required' },
+            status => 'invalid',
+        );
+    }
+
+    return _result(
+        error  => $guarded->{error},
+        status => 'conflict',
+    );
+}
+
+sub _missing_command_id {
+    my ( undef, $input ) = @_;
+
+    if ( length _trim( $input->{command_id} ) ) {
+        return;
+    }
+
+    return _result(
+        errors => { command_id => 'command_id is required' },
+        status => 'invalid',
+    );
+}
+
+sub _public_preference_request {
+    my ($preferences) = @_;
+
+    my @rows;
+    for my $pref ( @{ $preferences || [] } ) {
+        push @rows,
+          {
+            channel          => $pref->{channel},
+            digest_frequency => $pref->{digest_frequency},
+            enabled          => $pref->{enabled} ? 1 : 0,
+          };
+    }
+
+    return \@rows;
+}
+
+sub _failed_result {
+    return _result(
+        error  => 'notification store failed',
+        status => 'failed',
+    );
+}
+
+sub _trim {
+    my ($value) = @_;
+
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
 }
 
 sub _run_store {
@@ -159,9 +317,15 @@ ownership.
 
 Marks a recipient inbox row read or reports it missing.
 
+=head2 mark_all_read
+
+Marks every unread inbox row for the member. An empty inbox is success with
+C<marked_count> 0.
+
 =head2 set_preferences
 
-Replaces the member notification channel preferences.
+Replaces the member notification channel preferences. Requires
+C<command_id> and replays from C<command_log> when the helper is present.
 
 =head1 DIAGNOSTICS
 

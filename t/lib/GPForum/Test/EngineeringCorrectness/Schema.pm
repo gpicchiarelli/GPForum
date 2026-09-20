@@ -29,8 +29,7 @@ sub resultset {
 sub txn_do {
     my ( $self, $code ) = @_;
 
-    my $snapshot =
-      { map { $_ => [ @{ $self->created->{$_} } ] } keys %{ $self->created } };
+    my $snapshot          = $self->_clone_created;
     my $position_snapshot = { %{ $self->post_positions } };
     $self->transactions( $self->transactions + 1 );
 
@@ -51,12 +50,30 @@ sub txn_do {
     return $result;
 }
 
+sub _clone_created {
+    my ($self) = @_;
+
+    my %clone;
+    for my $name ( keys %{ $self->created } ) {
+        $clone{$name} =
+          [ map { _copied_row($_) } @{ $self->created->{$name} } ];
+    }
+
+    return \%clone;
+}
+
 sub created_for {
     my ( $self, $name ) = @_;
 
     $self->created->{$name} ||= [];
 
     return $self->created->{$name};
+}
+
+sub _copied_row {
+    my ($row) = @_;
+
+    return { %{$row} };
 }
 
 1;

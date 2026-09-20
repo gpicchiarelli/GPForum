@@ -9,6 +9,7 @@
 
   <form method="post" action="<%= url_for('settings_update') %>">
     <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= $settings_command_id || q{} %>">
 
     <section class="ui-card" aria-labelledby="<%= $ui->{appearance_heading_id} %>">
       <h2 id="<%= $ui->{appearance_heading_id} %>"><%= t('settings.appearance') %></h2>
@@ -65,6 +66,7 @@
     <h2 id="<%= $ui->{credentials_heading_id} %>"><%= t('settings.credentials') %></h2>
     <form method="post" action="<%= url_for('settings_password_update') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $password_command_id || q{} %>">
       <label for="settings-current-password"><%= t('auth.current_password') %></label>
       <input id="settings-current-password" name="current_password" type="password" autocomplete="current-password">
       <label for="settings-new-password"><%= t('auth.new_password') %></label>
@@ -77,6 +79,7 @@
     <h2 id="<%= $ui->{email_heading_id} %>"><%= t('settings.email') %></h2>
     <form method="post" action="<%= url_for('settings_email_update') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $email_command_id || q{} %>">
       <label for="settings-email"><%= t('auth.email') %></label>
       <input id="settings-email" name="email" type="email" autocomplete="email">
       <button type="submit"><%= t('settings.change_email') %></button>

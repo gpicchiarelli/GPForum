@@ -1,16 +1,24 @@
 # Posting Workflow Boundary
 
 `GPForum::Service::Forum::PostingWorkflow` is the application boundary for
-creating threads and replies from HTTP controllers.
+creating threads and replies from HTTP controllers, and for author post
+edit, delete, restore, and thread title/move/delete/restore commands.
 
 Responsibilities:
 
 - validate category existence before thread composition;
 - validate thread existence and locked state before reply composition;
 - invoke `ThreadComposer` or `PostComposer`;
-- invoke `ThreadStore` or `PostStore`;
+- invoke `ThreadStore` or `PostStore`; a title edit, move, or post edit
+  whose stored title/slug, category, or body hash already match skips the
+  store restamp;
+- leave unique thread `thread_id` replay inside `ThreadStore`;
+- leave unique reply `post_id` replay inside `PostStore`;
+- leave unique edit `body_id` and `revision_id` replay inside `PostStore`;
 - leave transaction ownership inside stores;
 - record mentions only after successful persistence;
+- reuse unique `(source_type, source_id, mentioned_user_id)` mention rows
+  on conflict without a second notification;
 - degrade safely if mention recording fails;
 - return a normalized result hash.
 

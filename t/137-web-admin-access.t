@@ -72,6 +72,15 @@ is( $access->default_redirect,
     'admin_roles', 'default_redirect keeps the roles catalog' );
 is( $access->categories_redirect,
     'admin_categories', 'categories_redirect keeps the category catalog' );
+is( $access->write_flash_key('role_created'),
+    'admin.role_created', 'write_flash_key maps role create to the flash key' );
+is( $access->write_flash_key('category_created'),
+    'admin.category_created',
+    'write_flash_key maps category create to the flash key' );
+ok(
+    !defined $access->write_flash_key('unknown'),
+    'write_flash_key ignores an unmapped status'
+);
 
 is_deeply(
     $access->permission_target('manage'),
@@ -95,6 +104,8 @@ is( $access->failure_status( { status => 'not_found' } ),
     'not_found', 'failure_status keeps not_found' );
 is( $access->failure_status( { status => 'invalid' } ),
     'invalid', 'failure_status keeps invalid' );
+is( $access->failure_status( { status => 'conflict' } ),
+    'conflict', 'failure_status keeps conflict' );
 ok( !defined $access->failure_status( { status => 'failed' } ),
     'failure_status ignores system failures' );
 ok( !defined $access->failure_status( { status => 'ok' } ),

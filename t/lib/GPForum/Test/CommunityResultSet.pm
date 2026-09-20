@@ -21,7 +21,14 @@ has last_attrs  => sub { return {}; };
 sub create {
     my ( $self, $row ) = @_;
 
+    $self->_assert_bookmark_id_unique($row);
     $self->_assert_bookmark_unique($row);
+    $self->_assert_reputation_id_unique($row);
+    $self->_assert_reputation_unique($row);
+    $self->_assert_snapshot_unique($row);
+    $self->_assert_mention_id_unique($row);
+    $self->_assert_mention_unique($row);
+    $self->_assert_feed_unique($row);
     my $object = GPForum::Test::CommunityRow->new( data => $row );
     push @{ $self->created }, $row;
     $self->_store_row( $row, $object );
@@ -31,6 +38,11 @@ sub create {
 
 sub update_or_create {
     my ( $self, $row ) = @_;
+
+    my $existing = $self->find($row);
+    if ($existing) {
+        return $existing->update($row);
+    }
 
     return $self->create($row);
 }
@@ -76,6 +88,19 @@ sub delete_matching {
     return scalar @removed;
 }
 
+sub _assert_bookmark_id_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !$row->{bookmark_id} ) {
+        return;
+    }
+    if ( $self->rows->{ $row->{bookmark_id} } ) {
+        GPForum::Infrastructure::UniqueConflict->throw('bookmarks_pkey');
+    }
+
+    return;
+}
+
 sub _assert_bookmark_unique {
     my ( $self, $row ) = @_;
 
@@ -90,6 +115,148 @@ sub _assert_bookmark_unique {
     }
 
     return;
+}
+
+sub _assert_reputation_id_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_reputation_source($row) ) {
+        return;
+    }
+    if ( $self->rows->{ $row->{reputation_event_id} } ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'reputation_events_pkey');
+    }
+
+    return;
+}
+
+sub _assert_reputation_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_reputation_source($row) ) {
+        return;
+    }
+
+    my $key = _composite_key($row);
+    if ( $key && $self->rows->{$key} ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'idx_reputation_events_source_unique');
+    }
+
+    return;
+}
+
+sub _assert_snapshot_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_snapshot_row($row) ) {
+        return;
+    }
+    if ( $self->rows->{ $row->{user_id} } ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'trust_score_snapshots_pkey');
+    }
+
+    return;
+}
+
+sub _assert_mention_id_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !$row->{mention_id} ) {
+        return;
+    }
+    if ( $self->rows->{ $row->{mention_id} } ) {
+        GPForum::Infrastructure::UniqueConflict->throw('mentions_pkey');
+    }
+
+    return;
+}
+
+sub _assert_mention_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !$row->{mention_id} ) {
+        return;
+    }
+
+    my $key = _composite_key($row);
+    if ( $key && $self->rows->{$key} ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'mentions_source_user_key');
+    }
+
+    return;
+}
+
+sub _assert_feed_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_feed_item_row($row) ) {
+        return;
+    }
+
+    my $key = _composite_key($row);
+    if ( $key && $self->rows->{$key} ) {
+        GPForum::Infrastructure::UniqueConflict->throw('user_feed_items_pkey');
+    }
+
+    return;
+}
+
+sub _feed_item_row {
+    my ($row) = @_;
+
+    if ( !exists $row->{visibility_version} ) {
+        return;
+    }
+    if ( !defined $row->{user_id} ) {
+        return;
+    }
+    if ( !defined $row->{item_type} ) {
+        return;
+    }
+    if ( !defined $row->{item_id} ) {
+        return;
+    }
+
+    return 1;
+}
+
+sub _reputation_source {
+    my ($row) = @_;
+
+    if ( !$row->{reputation_event_id} ) {
+        return;
+    }
+
+    return
+         defined $row->{source_id}
+      && defined $row->{source_type}
+      && defined $row->{user_id} ? 1 : 0;
+}
+
+sub _snapshot_row {
+    my ($row) = @_;
+
+    if ( $row->{reputation_event_id} ) {
+        return 0;
+    }
+    if ( !defined $row->{calculated_at} ) {
+        return 0;
+    }
+    if ( !defined $row->{score} ) {
+        return 0;
+    }
+
+    return _has_text( $row->{user_id} );
+}
+
+sub _has_text {
+    my ($value) = @_;
+
+    return defined $value && length $value ? 1 : 0;
 }
 
 sub _store_row {
@@ -132,11 +299,28 @@ sub _unique_matching_rows {
 
     my ( %seen, @removed );
     for my $row ( values %{$rows} ) {
-        next if !$row || $seen{ 0 + $row }++;
-        push @removed, $row if _row_matches_item( $row, $query );
+        if ( _seen_row( \%seen, $row ) ) {
+            next;
+        }
+        if ( _row_matches_item( $row, $query ) ) {
+            push @removed, $row;
+        }
     }
 
     return @removed;
+}
+
+sub _seen_row {
+    my ( $seen, $row ) = @_;
+
+    if ( !$row ) {
+        return 1;
+    }
+    if ( $seen->{ 0 + $row }++ ) {
+        return 1;
+    }
+
+    return 0;
 }
 
 sub _rows_without {
@@ -146,21 +330,69 @@ sub _rows_without {
     my %keep;
     for my $key ( keys %{$rows} ) {
         my $row = $rows->{$key};
-        $keep{$key} = $row if $row && !$drop{ 0 + $row };
+        if ( _kept_row( $row, \%drop ) ) {
+            $keep{$key} = $row;
+        }
     }
 
     return \%keep;
 }
 
+sub _kept_row {
+    my ( $row, $drop ) = @_;
+
+    if ( !$row ) {
+        return 0;
+    }
+    if ( $drop->{ 0 + $row } ) {
+        return 0;
+    }
+
+    return 1;
+}
+
 sub _row_matches_item {
     my ( $row, $query ) = @_;
 
-    my $data = $row->can('data') ? $row->data : $row;
-
-    return 0 if ( $data->{item_type} || q{} ) ne $query->{item_type};
-    return 0 if ( $data->{item_id}   || q{} ) ne $query->{item_id};
+    my $data = _row_data($row);
+    if ( !_same_field( $data, $query, 'item_type' ) ) {
+        return 0;
+    }
+    if ( !_same_field( $data, $query, 'item_id' ) ) {
+        return 0;
+    }
 
     return 1;
+}
+
+sub _row_data {
+    my ($row) = @_;
+
+    if ( $row->can('data') ) {
+        return $row->data;
+    }
+
+    return $row;
+}
+
+sub _same_field {
+    my ( $data, $query, $field ) = @_;
+
+    if ( _text( $data->{$field} ) ne $query->{$field} ) {
+        return 0;
+    }
+
+    return 1;
+}
+
+sub _text {
+    my ($value) = @_;
+
+    if ( defined $value ) {
+        return $value;
+    }
+
+    return q{};
 }
 
 sub _composite_key {

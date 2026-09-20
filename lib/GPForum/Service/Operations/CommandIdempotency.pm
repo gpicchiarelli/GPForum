@@ -3,6 +3,7 @@ package GPForum::Service::Operations::CommandIdempotency;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use English     qw(-no_match_vars);
 use JSON::MaybeXS;
@@ -13,6 +14,9 @@ use GPForum::Service::Clock;
 use GPForum::Service::Id;
 
 our $VERSION = '0.001';
+
+const my $ID_CONSTRAINT  => 'command_log_pkey';
+const my $KEY_CONSTRAINT => 'command_log_idempotency_key_key';
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub { return GPForum::Service::Id->new; };
@@ -60,16 +64,20 @@ sub _run_inside_txn {
 sub _create_and_execute {
     my ( $self, $job ) = @_;
 
-    my $row = eval {
-        return $self->_create_command_row( $job->{input}, $job->{key},
-            $job->{request_hash} );
-    };
+    my $row   = eval { return $self->_insert_command_row($job); };
     my $error = $EVAL_ERROR;
     if ($row) {
         return $self->_finish_new_command( $job, $row );
     }
 
     return $self->_replay_after_conflict( $job, $error );
+}
+
+sub _insert_command_row {
+    my ( $self, $job ) = @_;
+
+    $job->{row} = $self->_command_row($job);
+    return $self->_create_command( $job->{row} );
 }
 
 sub _finish_new_command {
@@ -96,6 +104,119 @@ sub _replay_after_conflict {
     if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
+
+    return $self->_command_after_unique( $job, $error );
+}
+
+sub _command_after_unique {
+    my ( $self, $job, $error ) = @_;
+
+    if ( _command_id_conflict($error) ) {
+        return $self->_retry_or_reuse_command($job);
+    }
+    if ( _idempotency_key_conflict($error) ) {
+        return $self->_replay_existing( $job, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _retry_or_reuse_command {
+    my ( $self, $job ) = @_;
+
+    my $stored = $self->_command_by_id( $job->{row}{command_id} );
+    if ( $self->_same_open_command( $stored, $job ) ) {
+        return $self->_reuse_command( $job, $stored );
+    }
+
+    return $self->_retry_command_id($job);
+}
+
+sub _same_open_command {
+    my ( $self, $stored, $job ) = @_;
+
+    if ( !$stored ) {
+        return 0;
+    }
+
+    return _same_text( _column( $stored, 'idempotency_key' ), $job->{key} );
+}
+
+sub _reuse_command {
+    my ( $self, $job, $stored ) = @_;
+
+    my $replayed = $self->_replay_if_complete( $job, $stored );
+    if ($replayed) {
+        return $replayed;
+    }
+
+    return $self->_finish_new_command( $job, $stored );
+}
+
+sub _replay_if_complete {
+    my ( $self, $job, $stored ) = @_;
+
+    my $payload = _payload_hash( _column( $stored, 'payload' ) );
+    if ( !_has_response($payload) ) {
+        return;
+    }
+
+    return $self->_existing_result( $stored, $job->{request_hash} );
+}
+
+sub _command_by_id {
+    my ( $self, $command_id ) = @_;
+
+    return $self->schema->resultset('CommandLog')
+      ->find( { command_id => $command_id } );
+}
+
+sub _same_text {
+    my ( $stored, $candidate ) = @_;
+
+    if ( !defined $stored || !defined $candidate ) {
+        return 0;
+    }
+
+    return $stored eq $candidate ? 1 : 0;
+}
+
+sub _retry_command_id {
+    my ( $self, $job ) = @_;
+
+    $job->{row} = { %{ $job->{row} }, command_id => $self->id_service->uuid, };
+    my $created = eval { return $self->_create_command( $job->{row} ); };
+    if ($created) {
+        return $self->_finish_new_command( $job, $created );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _command_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _idempotency_key_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $KEY_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _replay_existing {
+    my ( $self, $job, $error ) = @_;
 
     my $existing = $self->_find_existing( $job->{key} );
     if ( !$existing ) {
@@ -137,23 +258,27 @@ sub _existing_result {
     };
 }
 
-sub _create_command_row {
-    my ( $self, $input, $key, $request_hash ) = @_;
+sub _command_row {
+    my ( $self, $job ) = @_;
 
-    return $self->schema->resultset('CommandLog')->create(
-        {
-            command_id      => $self->id_service->uuid,
-            command_type    => _trim( $input->{command_type} ),
-            actor_id        => _nullable_trim( $input->{actor_id} ),
-            correlation_id  => $self->id_service->uuid,
-            idempotency_key => $key,
-            payload         => { request_hash => $request_hash },
-            response_hash   => undef,
-            status          => 'accepted',
-            created_at      => $self->clock->now_iso8601,
-            handled_at      => undef,
-        }
-    );
+    return {
+        actor_id        => _nullable_trim( $job->{input}{actor_id} ),
+        command_id      => $self->id_service->uuid,
+        command_type    => _trim( $job->{input}{command_type} ),
+        correlation_id  => $self->id_service->uuid,
+        created_at      => $self->clock->now_iso8601,
+        handled_at      => undef,
+        idempotency_key => $job->{key},
+        payload         => { request_hash => $job->{request_hash} },
+        response_hash   => undef,
+        status          => 'accepted',
+    };
+}
+
+sub _create_command {
+    my ( $self, $row ) = @_;
+
+    return $self->schema->resultset('CommandLog')->create($row);
 }
 
 sub _finish_command_row {

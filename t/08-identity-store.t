@@ -15,12 +15,15 @@ use GPForum::Test::FixedClock;
 use GPForum::Test::PostStoreLockDbh;
 use GPForum::Test::PostStoreLockStorage;
 use GPForum::Test::SessionToken;
+use GPForum::Service::Identity::CredentialStore;
+use GPForum::Service::Identity::SessionStore;
 use GPForum::Service::Identity::Store;
+use GPForum::Service::Identity::TokenStore;
 use GPForum::Service::Password;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 44;
+const my $EXPECTED_TESTS   => 84;
 const my $FIXED_2026_EPOCH => 1_779_537_600;
 
 plan tests => $EXPECTED_TESTS;
@@ -179,6 +182,17 @@ ok(
     $login_schema->sessions->[0]{revoked_at},
     'revoked session records revocation timestamp'
 );
+my $revoked_at    = $login_schema->sessions->[0]{revoked_at};
+my $revoked_again = $login_store->revoke_session(
+    {
+        session_id => 'generated-1',
+        user_id    => 'user-1',
+    }
+);
+ok( $revoked_again->{ok},      'second logout of the same session succeeds' );
+ok( $revoked_again->{skipped}, 'second logout of the same session is skipped' );
+is( $login_schema->sessions->[0]{revoked_at},
+    $revoked_at, 'second logout keeps the original revocation timestamp' );
 
 my $session_schema = GPForum::Test::Schema->new(
     sessions => [
@@ -334,11 +348,48 @@ subtest 'password reset token is one-time, locked, and audited' => sub {
         'identity.password_reset.requested',
         'reset request is audited'
     );
+    is( $reset_schema->created_for('EventLog')->[0]{event_type},
+        'identity.mail.requested', 'reset request queues identity mail' );
+    is_deeply(
+        $reset_schema->created_for('EventLog')->[0]{payload},
+        {
+            kind     => 'password_reset',
+            token_id => $reset_schema->identity_tokens->[0]{token_id},
+        },
+        'mail event payload keeps kind and token id only'
+    );
+    is(
+        $reset_schema->created_for('OutboxMessage')->[0]{payload}{mail}{token},
+        'token-1', 'mail outbox payload keeps the raw token until delivery'
+    );
     is(
         $reset_schema->created_for('AuditLog')->[1]{action},
         'identity.password_reset.completed',
         'reset completion is audited'
     );
+
+    my $repeat_request = $reset_store->request_password_reset(
+        {
+            identifier      => 'GIACOMO@example.test',
+            request_address => '198.51.100.1',
+        }
+    );
+    ok( $repeat_request->{ok}, 'same-secret reset can issue a new token' );
+    my $same_reset = $reset_store->reset_password(
+        {
+            password => 'new correct horse battery',
+            token    => 'token-2',
+        }
+    );
+    ok( $same_reset->{ok},      'same-secret reset succeeds' );
+    ok( $same_reset->{skipped}, 'same-secret reset skips credential rotation' );
+    is( scalar @{ $reset_schema->created_for('Credential') },
+        1, 'same-secret reset does not create another credential' );
+    is( $reset_schema->credentials->[0]{revoked_at},
+        '2026-05-23T12:00:00Z',
+        'same-secret reset keeps the original credential revocation' );
+    is( $reset_schema->sessions->[0]{revoked_at},
+        '2026-05-23T12:00:00Z', 'same-secret reset still revokes sessions' );
 
     my $reused = $reset_store->reset_password(
         {
@@ -475,6 +526,11 @@ subtest 'email change requires confirmation token and prevents replay' => sub {
         'email change request is audited'
     );
     is(
+        $email_schema->created_for('OutboxMessage')->[0]{payload}{mail}{to},
+        'new@example.test',
+        'email change mail is addressed to the pending address'
+    );
+    is(
         $email_schema->created_for('AuditLog')->[1]{action},
         'identity.email_change.confirmed',
         'email confirmation is audited'
@@ -484,5 +540,341 @@ subtest 'email change requires confirmation token and prevents replay' => sub {
     ok( !$reused->{ok}, 'used email token is rejected' );
     is( $reused->{error}, 'token_used', 'used email token error is explicit' );
 };
+
+subtest
+  'password reset rotates an unused token instead of inserting another' => sub {
+    my $reset_schema = GPForum::Test::Schema->new(
+        credentials => [
+            {
+                user_id     => 'user-1',
+                type        => 'password',
+                secret_hash => $password_service->hash_password(
+                    'correct horse battery staple'),
+                revoked_at => undef,
+            },
+        ],
+        sessions => [
+            {
+                session_id => 'session-1',
+                user_id    => 'user-1',
+                revoked_at => undef,
+            },
+        ],
+        users => [
+            {
+                id               => 'user-1',
+                username         => 'giacomo',
+                display_name     => 'Giacomo Picchiarelli',
+                email_normalized => 'giacomo@example.test',
+                status           => 'active',
+            },
+        ],
+    );
+    my $reset_store = GPForum::Service::Identity::Store->new(
+        clock => GPForum::Test::FixedClock->new(
+            epoch => $FIXED_2026_EPOCH
+        ),
+        id_service     => GPForum::Test::Id->new,
+        schema         => $reset_schema,
+        session_tokens => GPForum::Test::SessionToken->new,
+    );
+
+    my $first = $reset_store->request_password_reset(
+        {
+            identifier      => 'giacomo@example.test',
+            request_address => '198.51.100.1',
+        }
+    );
+    ok( $first->{ok}, 'first password reset request is accepted' );
+    my $rotated = $reset_store->request_password_reset(
+        {
+            identifier      => 'giacomo@example.test',
+            request_address => '198.51.100.1',
+        }
+    );
+    ok( $rotated->{ok}, 'second password reset request is accepted' );
+    ok( $rotated->{token}{rotated},
+        'second password reset rotates the unused token' );
+    is( $rotated->{token}{raw_token},
+        'token-2', 'rotated reset token returns the new raw token' );
+    is( scalar @{ $reset_schema->identity_tokens },
+        1, 'second password reset does not insert another token row' );
+    is( $reset_schema->identity_tokens->[0]{token_hash},
+        'hash:token-2', 'rotated reset token replaces the previous hash' );
+  };
+
+my $credential_schema = GPForum::Test::Schema->new;
+my $credential_store  = GPForum::Service::Identity::CredentialStore->new(
+    id_service => GPForum::Test::Id->new,
+    schema     => $credential_schema,
+);
+my $credential = $credential_store->create_password_credential(
+    {
+        secret_hash => 'argon2id-hash',
+        user_id     => 'user-1',
+    }
+);
+is( $credential->{id}, 'generated-1', 'password credential id is generated' );
+
+my $same_credential = $credential_store->create_password_credential(
+    {
+        secret_hash => 'argon2id-hash-other',
+        user_id     => 'user-1',
+    }
+);
+ok( $same_credential->{skipped},
+    'already-active password credential skip does not insert a second row' );
+is( scalar @{ $credential_schema->created_for('Credential') },
+    1, 'already-active password credential does not insert a second row' );
+
+$credential_schema->skip_search_count(1);
+my $raced_credential = $credential_store->create_password_credential(
+    {
+        secret_hash => 'argon2id-hash-race',
+        user_id     => 'user-1',
+    }
+);
+ok( $raced_credential->{skipped},
+    'unique active password race reuses the credential' );
+
+my $cred_id_schema = GPForum::Test::Schema->new(
+    credentials => [
+        {
+            id          => 'generated-1',
+            secret_hash => 'argon2id-other',
+            type        => 'password',
+            user_id     => 'user-other',
+        }
+    ]
+);
+my $cred_id_store = GPForum::Service::Identity::CredentialStore->new(
+    id_service => GPForum::Test::Id->new,
+    schema     => $cred_id_schema,
+);
+my $id_credential = $cred_id_store->create_password_credential(
+    {
+        secret_hash => 'argon2id-hash-new',
+        user_id     => 'user-1',
+    }
+);
+is( $id_credential->{id},
+    'generated-2', 'unique credential id collision remints the id' );
+is( $id_credential->{user_id},
+    'user-1', 'unique credential id collision does not return another user' );
+ok( !$id_credential->{skipped},
+    'unique credential id collision does not skip another credential' );
+is( scalar @{ $cred_id_schema->created_for('Credential') },
+    1, 'unique credential id collision inserts one retried credential' );
+
+my $leftover_schema = GPForum::Test::Schema->new;
+$leftover_schema->resultset('Credential')->create(
+    {
+        id          => 'generated-1',
+        secret_hash => 'argon2id-leftover',
+        type        => 'password',
+        user_id     => 'user-1',
+    }
+);
+$leftover_schema->skip_search_count(1);
+my $leftover_store = GPForum::Service::Identity::CredentialStore->new(
+    id_service => GPForum::Test::Id->new,
+    schema     => $leftover_schema,
+);
+my $leftover_credential = $leftover_store->create_password_credential(
+    {
+        secret_hash => 'argon2id-hash-leftover',
+        user_id     => 'user-1',
+    }
+);
+ok( $leftover_credential->{skipped},
+    'leftover credential id race reuses this credential' );
+is( $leftover_credential->{id},
+    'generated-1', 'leftover credential id race keeps this credential' );
+is( $leftover_credential->{user_id},
+    'user-1', 'leftover credential id race keeps this user' );
+is( scalar @{ $leftover_schema->created_for('Credential') },
+    1, 'leftover credential id race does not insert a second credential' );
+
+my $hash_schema = GPForum::Test::Schema->new(
+    sessions => [
+        {
+            session_hash => 'hash:token-1',
+            session_id   => 'session-seed',
+            user_id      => 'user-other',
+        }
+    ]
+);
+my $hash_store = GPForum::Service::Identity::SessionStore->new(
+    id_service     => GPForum::Test::Id->new,
+    schema         => $hash_schema,
+    session_tokens => GPForum::Test::SessionToken->new,
+);
+my $created_session = $hash_store->create_session(
+    { id => 'user-1' },
+    {
+        request_address => '198.51.100.1',
+        user_agent      => 'test-agent',
+    }
+);
+is( $created_session->{session}{session_hash},
+    'hash:token-2', 'unique session hash collision remints the hash' );
+is( $created_session->{session}{user_id},
+    'user-1', 'unique session hash collision does not return another user' );
+is( $created_session->{session}{session_id},
+    'generated-1', 'unique session hash collision keeps a new session id' );
+is( scalar @{ $hash_schema->created_for('Session') },
+    1, 'unique session hash collision inserts one retried session' );
+
+my $id_schema = GPForum::Test::Schema->new(
+    sessions => [
+        {
+            session_hash => 'hash:other',
+            session_id   => 'generated-1',
+            user_id      => 'user-other',
+        }
+    ]
+);
+my $id_store = GPForum::Service::Identity::SessionStore->new(
+    id_service     => GPForum::Test::Id->new,
+    schema         => $id_schema,
+    session_tokens => GPForum::Test::SessionToken->new,
+);
+my $id_session = $id_store->create_session(
+    { id => 'user-1' },
+    {
+        request_address => '198.51.100.1',
+        user_agent      => 'test-agent',
+    }
+);
+is( $id_session->{session}{session_id},
+    'generated-2', 'unique session id collision remints the id' );
+is( $id_session->{session}{user_id},
+    'user-1', 'unique session id collision does not return another user' );
+is( $id_session->{session}{session_hash},
+    'hash:token-1', 'unique session id collision keeps the minted hash' );
+is( scalar @{ $id_schema->created_for('Session') },
+    1, 'unique session id collision inserts one retried session' );
+
+my $session_leftover_schema = GPForum::Test::Schema->new;
+$session_leftover_schema->resultset('Session')->create(
+    {
+        session_hash => 'hash:token-1',
+        session_id   => 'generated-1',
+        user_id      => 'user-1',
+    }
+);
+my $session_leftover_store = GPForum::Service::Identity::SessionStore->new(
+    id_service     => GPForum::Test::Id->new,
+    schema         => $session_leftover_schema,
+    session_tokens => GPForum::Test::SessionToken->new,
+);
+my $leftover_session = $session_leftover_store->create_session(
+    { id => 'user-1' },
+    {
+        request_address => '198.51.100.1',
+        user_agent      => 'test-agent',
+    }
+);
+ok( $leftover_session->{skipped},
+    'leftover session id race reuses this session' );
+is( $leftover_session->{session}{session_id},
+    'generated-1', 'leftover session id race keeps this session' );
+is( $leftover_session->{session}{user_id},
+    'user-1', 'leftover session id race keeps this user' );
+is( scalar @{ $session_leftover_schema->created_for('Session') },
+    1, 'leftover session id race does not insert a second session' );
+
+my $issued_schema = GPForum::Test::Schema->new(
+    identity_tokens => [
+        {
+            token_hash => 'hash:token-1',
+            token_id   => 'token-seed',
+            token_type => 'password_reset',
+            used_at    => '2026-05-23T12:00:00Z',
+            user_id    => 'user-other',
+        }
+    ]
+);
+my $issued_store = GPForum::Service::Identity::TokenStore->new(
+    id_service     => GPForum::Test::Id->new,
+    schema         => $issued_schema,
+    session_tokens => GPForum::Test::SessionToken->new,
+);
+my $issued_token = $issued_store->create_token(
+    {
+        token_type  => 'password_reset',
+        ttl_seconds => 3600,
+        user_id     => 'user-1',
+    }
+);
+is( $issued_token->{token_hash},
+    'hash:token-2', 'unique token hash collision remints the hash' );
+is( $issued_token->{row}{user_id},
+    'user-1', 'unique token hash collision does not return another user' );
+ok( !$issued_token->{rotated},
+    'unique token hash collision does not rotate another token' );
+is( scalar @{ $issued_schema->created_for('IdentityToken') },
+    1, 'unique token hash collision inserts one retried token' );
+
+my $token_id_schema = GPForum::Test::Schema->new(
+    identity_tokens => [
+        {
+            token_hash => 'hash:other',
+            token_id   => 'generated-1',
+            token_type => 'password_reset',
+            used_at    => '2026-05-23T12:00:00Z',
+            user_id    => 'user-other',
+        }
+    ]
+);
+my $token_id_store = GPForum::Service::Identity::TokenStore->new(
+    id_service     => GPForum::Test::Id->new,
+    schema         => $token_id_schema,
+    session_tokens => GPForum::Test::SessionToken->new,
+);
+my $id_issued = $token_id_store->create_token(
+    {
+        token_type  => 'password_reset',
+        ttl_seconds => 3600,
+        user_id     => 'user-1',
+    }
+);
+is( $id_issued->{token_id},
+    'generated-2', 'unique token id collision remints the id' );
+is( $id_issued->{row}{user_id},
+    'user-1', 'unique token id collision does not return another user' );
+is( $id_issued->{token_hash},
+    'hash:token-1', 'unique token id collision keeps the minted hash' );
+is( scalar @{ $token_id_schema->created_for('IdentityToken') },
+    1, 'unique token id collision inserts one retried token' );
+
+my $token_leftover_schema = GPForum::Test::Schema->new;
+$token_leftover_schema->resultset('IdentityToken')->create(
+    {
+        token_hash => 'hash:token-1',
+        token_id   => 'generated-1',
+        token_type => 'password_reset',
+        user_id    => 'user-1',
+    }
+);
+my $token_leftover_store = GPForum::Service::Identity::TokenStore->new(
+    id_service     => GPForum::Test::Id->new,
+    schema         => $token_leftover_schema,
+    session_tokens => GPForum::Test::SessionToken->new,
+);
+my $leftover_token = $token_leftover_store->create_token(
+    {
+        token_type  => 'password_reset',
+        ttl_seconds => 3600,
+        user_id     => 'user-1',
+    }
+);
+ok( $leftover_token->{skipped}, 'leftover token id race reuses this token' );
+is( $leftover_token->{token_id},
+    'generated-1', 'leftover token id race keeps this token' );
+is( $leftover_token->{row}{user_id},
+    'user-1', 'leftover token id race keeps this user' );
+is( scalar @{ $token_leftover_schema->created_for('IdentityToken') },
+    1, 'leftover token id race does not insert a second token' );
 
 1;

@@ -32,7 +32,7 @@ sub reports {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("moderation report queue failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -72,7 +72,7 @@ sub actions {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("moderation action history failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
@@ -114,14 +114,14 @@ sub suspensions {
 
     if ($EVAL_ERROR) {
         $self->app->log->error("moderation suspensions failed: $EVAL_ERROR");
-        return $self->_system_failure;
+        return $self->system_failure;
     }
 
     return $self->render_payload(
         {
             payload => $self->gp_moderation_view_model->suspensions_page(
                 csrf_token => $self->csrf_token,
-                page       => $page,
+                page       => $self->_suspensions_page_with_command_ids($page),
                 status     => $status,
                 user_id    => $self->optional_param('user_id'),
             ),
@@ -139,6 +139,28 @@ sub _actions_page_with_command_ids {
     return { %{$page}, items => $self->_with_command_ids( $page->{items} ), };
 }
 
+sub _suspensions_page_with_command_ids {
+    my ( $self, $page ) = @_;
+
+    $page ||= {};
+
+    return { %{$page},
+        items => $self->_with_revoke_command_ids( $page->{items} ), };
+}
+
+sub _with_revoke_command_ids {
+    my ( $self, $rows ) = @_;
+
+    return [ map { $self->_with_revoke_command_id($_) } @{ $rows || [] } ];
+}
+
+sub _with_revoke_command_id {
+    my ( $self, $row ) = @_;
+
+    return { %{ $self->_row_hash($row) },
+        revoke_command_id => $self->gp_id->uuid, };
+}
+
 sub _with_command_ids {
     my ( $self, $rows ) = @_;
 
@@ -148,7 +170,27 @@ sub _with_command_ids {
 sub _with_command_id {
     my ( $self, $row ) = @_;
 
-    return { %{ $self->_row_hash($row) }, command_id => $self->gp_id->uuid, };
+    my $hash = $self->_row_hash($row);
+
+    return {
+        %{$hash},
+        assign_command_id  => $self->gp_id->uuid,
+        command_id         => $self->gp_id->uuid,
+        release_command_id => $self->gp_id->uuid,
+        resolve_command_id => $self->gp_id->uuid,
+        reverse_command_id => $self->gp_id->uuid,
+        suspend_command_id => $self->_suspend_command_id($hash),
+    };
+}
+
+sub _suspend_command_id {
+    my ( $self, $hash ) = @_;
+
+    if ( ( $hash->{target_type} || q{} ) eq 'user' ) {
+        return $self->gp_id->uuid;
+    }
+
+    return q{};
 }
 
 sub _row_hash {

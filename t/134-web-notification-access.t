@@ -57,6 +57,20 @@ ok( !defined $access->failure_status( { status => 'failed' } ),
     'failure_status ignores system failures' );
 ok( !defined $access->failure_status( { status => 'ok' } ),
     'failure_status ignores success' );
+is( $access->write_flash_key('read'),
+    'notifications.marked_read',
+    'write_flash_key maps mark-read to the flash key' );
+is(
+    $access->write_flash_key('all_read'),
+    'notifications.marked_all_read',
+    'write_flash_key maps mark-all-read to the flash key'
+);
+is( $access->marked_all_read_status,
+    'all_read', 'marked_all_read_status exposes the bulk status' );
+ok(
+    !defined $access->write_flash_key('unknown'),
+    'write_flash_key ignores an unmapped status'
+);
 
 done_testing();
 

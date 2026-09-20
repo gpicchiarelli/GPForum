@@ -10,18 +10,47 @@ use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
 
-const my $THREAD_CREATED => 'thread.created';
-const my $POST_CREATED   => 'post.created';
-const my $POST_HIDDEN    => 'post.hidden';
-const my $POST_RESTORED  => 'post.restored';
-const my $THREAD_TARGET  => 'thread';
-const my $POST_ITEM      => 'post';
+const my $THREAD_CREATED   => 'thread.created';
+const my $THREAD_DELETED   => 'thread.deleted';
+const my $THREAD_HIDDEN    => 'thread.hidden';
+const my $THREAD_RESTORED  => 'thread.restored';
+const my $THREAD_UNDELETED => 'thread.undeleted';
+const my $POST_CREATED     => 'post.created';
+const my $POST_UPDATED     => 'post.updated';
+const my $POST_DELETED     => 'post.deleted';
+const my $POST_HIDDEN      => 'post.hidden';
+const my $POST_RESTORED    => 'post.restored';
+const my $POST_UNDELETED   => 'post.undeleted';
+const my $THREAD_TARGET    => 'thread';
+const my $POST_ITEM        => 'post';
 
 const my %SUPPORTED => (
-    $POST_CREATED   => 1,
+    $POST_CREATED     => 1,
+    $POST_DELETED     => 1,
+    $POST_HIDDEN      => 1,
+    $POST_RESTORED    => 1,
+    $POST_UNDELETED   => 1,
+    $POST_UPDATED     => 1,
+    $THREAD_CREATED   => 1,
+    $THREAD_DELETED   => 1,
+    $THREAD_HIDDEN    => 1,
+    $THREAD_RESTORED  => 1,
+    $THREAD_UNDELETED => 1,
+);
+
+const my %FEED_HIDE => (
+    $POST_DELETED   => 1,
     $POST_HIDDEN    => 1,
-    $POST_RESTORED  => 1,
-    $THREAD_CREATED => 1,
+    $THREAD_DELETED => 1,
+    $THREAD_HIDDEN  => 1,
+);
+
+const my %THREAD_ITEM => (
+    $THREAD_CREATED   => 1,
+    $THREAD_DELETED   => 1,
+    $THREAD_HIDDEN    => 1,
+    $THREAD_RESTORED  => 1,
+    $THREAD_UNDELETED => 1,
 );
 
 has clock              => sub { return GPForum::Service::Clock->new; };
@@ -80,6 +109,26 @@ sub _remove {
     my ( $self, $task ) = @_;
 
     return if !$self->projector;
+    if ( $task->{item_type} eq $THREAD_TARGET ) {
+        return $self->_remove_thread($task);
+    }
+
+    return $self->_remove_item($task);
+}
+
+sub _remove_thread {
+    my ( $self, $task ) = @_;
+
+    my $projector = $self->projector;
+    if ( $projector->can('remove_thread') ) {
+        return $projector->remove_thread( $task->{item_id} );
+    }
+
+    return $self->_remove_item($task);
+}
+
+sub _remove_item {
+    my ( $self, $task ) = @_;
 
     return $self->projector->remove_item(
         {
@@ -123,7 +172,9 @@ sub _subscriber_ids {
 sub _thread_id {
     my ( $self, $event ) = @_;
 
-    return $event->{aggregate_id} if _is_thread_create($event);
+    if ( _is_thread_item($event) ) {
+        return $event->{aggregate_id};
+    }
 
     my $thread_id = _event_value( $event, 'thread_id' );
     return $thread_id if _has_text($thread_id);
@@ -134,12 +185,37 @@ sub _thread_id {
 sub _schema_column {
     my ( $self, $event, $name ) = @_;
 
-    return if !$self->schema;
+    if ( !$self->schema ) {
+        return;
+    }
 
-    my $row = $self->schema->resultset('Post')->find( $event->{aggregate_id} );
-    return if !$row;
+    my $row = $self->_schema_row($event);
+    if ( !$row ) {
+        return;
+    }
 
     return $row->get_column($name);
+}
+
+sub _schema_row {
+    my ( $self, $event ) = @_;
+
+    my $name = _schema_resultset($event);
+    if ( !$name ) {
+        return;
+    }
+
+    return $self->schema->resultset($name)->find( $event->{aggregate_id} );
+}
+
+sub _schema_resultset {
+    my ($event) = @_;
+
+    if ( _is_thread_item($event) ) {
+        return 'Thread';
+    }
+
+    return 'Post';
 }
 
 sub _capture {
@@ -166,7 +242,9 @@ sub _task {
 sub _item_type {
     my ($event) = @_;
 
-    return $THREAD_TARGET if _is_thread_create($event);
+    if ( _is_thread_item($event) ) {
+        return $THREAD_TARGET;
+    }
 
     return $POST_ITEM;
 }
@@ -174,7 +252,12 @@ sub _item_type {
 sub _is_hide {
     my ($event) = @_;
 
-    return ( $event->{event_type} || q{} ) eq $POST_HIDDEN ? 1 : 0;
+    my $event_type = $event->{event_type};
+    if ( !defined $event_type ) {
+        return 0;
+    }
+
+    return exists $FEED_HIDE{$event_type} ? 1 : 0;
 }
 
 sub _is_create {
@@ -182,15 +265,21 @@ sub _is_create {
 
     my $event_type = $event->{event_type} || q{};
 
-    return $event_type eq $THREAD_CREATED || $event_type eq $POST_CREATED
-      ? 1
-      : 0;
+    return
+         $event_type eq $THREAD_CREATED
+      || $event_type eq $POST_CREATED
+      || $event_type eq $POST_UPDATED ? 1 : 0;
 }
 
-sub _is_thread_create {
+sub _is_thread_item {
     my ($event) = @_;
 
-    return ( $event->{event_type} || q{} ) eq $THREAD_CREATED ? 1 : 0;
+    my $event_type = $event->{event_type};
+    if ( !defined $event_type ) {
+        return 0;
+    }
+
+    return exists $THREAD_ITEM{$event_type} ? 1 : 0;
 }
 
 sub _created_at {
@@ -248,18 +337,25 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Outbox handler for C<thread.created>, C<post.created>, C<post.hidden>, and
-C<post.restored>. Create and restore call
+Outbox handler for C<thread.created>, C<thread.deleted>, C<thread.hidden>,
+C<thread.restored>, C<thread.undeleted>, C<post.created>,
+C<post.updated>, C<post.deleted>, C<post.hidden>, C<post.restored>, and
+C<post.undeleted>. Create,
+update, restore, and author undelete call
 L<GPForum::Service::Community::FeedProjector/project_item> for the author and
-active thread subscribers. Hide calls
-L<GPForum::Service::Community::FeedProjector/remove_item> so C</feed> drops
-moderated posts.
+active thread subscribers. Hide and author post delete call
+L<GPForum::Service::Community::FeedProjector/remove_item>. Author thread
+delete and moderation thread hide call
+L<GPForum::Service::Community::FeedProjector/remove_thread> so C</feed>
+drops the thread item and every post item in that thread.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 supports
 
-True for created thread and post events, plus post hide and restore.
+True for created thread and post events, plus post hide, restore, author
+post delete, author post undelete, author thread delete, author thread
+undelete, and moderation thread hide/restore.
 
 =head2 handle
 

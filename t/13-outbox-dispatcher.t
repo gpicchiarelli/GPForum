@@ -9,6 +9,7 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Service::Outbox::DeadLetterRecorder;
 use GPForum::Service::Outbox::Dispatcher;
 use GPForum::Test::Id;
 use GPForum::Test::OutboxClock;
@@ -24,6 +25,7 @@ our $VERSION = '0.001';
 
 const my $LIMIT_BIND_INDEX  => 6;
 const my $WORKER_BIND_INDEX => 9;
+const my $DEFAULT_MAX       => 5;
 
 my $successful = GPForum::Test::OutboxRow->new(
     data => {
@@ -139,6 +141,137 @@ is_deeply(
     { event_id => 'event-2' },
     'dead letter stores failed payload'
 );
+
+my $letter_failure = {
+    attempt_count => 2,
+    error_class   => 'transport',
+    error_message => 'failed',
+    failure_type  => 'transient',
+};
+my $same_letter =
+  $dispatcher->dead_letter_recorder->create_dead_letter( $failing,
+    $letter_failure );
+ok( $same_letter->{skipped}, 'already-recorded dead letter is skipped' );
+is( scalar @{ $dead_letters->created },
+    1, 'already-recorded dead letter does not insert another row' );
+$dead_letters->find_misses(1);
+my $raced_letter =
+  $dispatcher->dead_letter_recorder->create_dead_letter( $failing,
+    $letter_failure );
+ok( $raced_letter->{skipped}, 'unique dead-letter race reuses the source row' );
+is( scalar @{ $dead_letters->created },
+    1, 'unique dead-letter race does not insert another row' );
+
+my $letter_pk_rows = GPForum::Test::OutboxCreateResultSet->new;
+$letter_pk_rows->create(
+    {
+        dead_letter_id => 'generated-1',
+        source_id      => 'other-outbox',
+        source_table   => 'outbox_messages',
+    }
+);
+my $letter_pk_recorder = GPForum::Service::Outbox::DeadLetterRecorder->new(
+    clock      => GPForum::Test::OutboxClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::OutboxSchema->new(
+        dead_letter_resultset => $letter_pk_rows,
+    ),
+);
+my $letter_pk_message = GPForum::Test::OutboxRow->new(
+    data => {
+        outbox_id => 'outbox-pk',
+        payload   => { event_id => 'event-pk' },
+    }
+);
+my $letter_pk = $letter_pk_recorder->create_dead_letter( $letter_pk_message,
+    $letter_failure );
+ok( !$letter_pk->{skipped},
+    'unique dead-letter id collision remints and records' );
+is( $letter_pk->{dead_letter_id},
+    'generated-2', 'unique dead-letter id collision remints the id' );
+is( $letter_pk->{source_id},
+    'outbox-pk', 'unique dead-letter id collision keeps this source' );
+is( scalar @{ $letter_pk_rows->created },
+    2, 'unique dead-letter id collision inserts this review row' );
+
+my $letter_leftover_rows = GPForum::Test::OutboxCreateResultSet->new;
+$letter_leftover_rows->create(
+    {
+        dead_letter_id => 'generated-1',
+        source_id      => 'outbox-leftover',
+        source_table   => 'outbox_messages',
+    }
+);
+$letter_leftover_rows->find_misses(1);
+my $letter_leftover_recorder =
+  GPForum::Service::Outbox::DeadLetterRecorder->new(
+    clock      => GPForum::Test::OutboxClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::OutboxSchema->new(
+        dead_letter_resultset => $letter_leftover_rows,
+    ),
+  );
+my $letter_leftover_message = GPForum::Test::OutboxRow->new(
+    data => {
+        outbox_id => 'outbox-leftover',
+        payload   => { event_id => 'event-leftover' },
+    }
+);
+my $letter_leftover =
+  $letter_leftover_recorder->create_dead_letter( $letter_leftover_message,
+    $letter_failure );
+ok( $letter_leftover->{skipped},
+    'leftover dead-letter id race reuses this review row' );
+is( $letter_leftover->{dead_letter_id},
+    'generated-1', 'leftover dead-letter id race keeps this review row' );
+is( $letter_leftover->{source_id},
+    'outbox-leftover', 'leftover dead-letter id race keeps this source' );
+is( scalar @{ $letter_leftover_rows->created },
+    1, 'leftover dead-letter id race does not insert a second review row' );
+
+my $replay = $dispatcher->dispatch_pending(2);
+is( $replay->{selected}, 0,
+    'cancelled dead-lettered row is not claimed again' );
+is( $replay->{dead_lettered}, 0, 'cancelled row is not dead-lettered twice' );
+is( scalar @{ $dead_letters->created },
+    1, 'dead letter remains a single review row' );
+
+my $permanent = GPForum::Test::OutboxRow->new(
+    data => {
+        attempt_count => 0,
+        outbox_id     => 'outbox-permanent',
+        payload       => { event_id => 'event-permanent' },
+    }
+);
+my $permanent_letters = GPForum::Test::OutboxCreateResultSet->new;
+my $permanent_schema  = GPForum::Test::OutboxSchema->new(
+    dead_letter_resultset => $permanent_letters,
+    outbox_resultset      =>
+      GPForum::Test::OutboxResultSet->new( rows => [$permanent] ),
+);
+my $permanent_transport = GPForum::Test::OutboxTransport->new(
+    fail_ids   => { 'outbox-permanent' => 1 },
+    fail_types => { 'outbox-permanent' => 'permanent' },
+);
+my $permanent_dispatcher = GPForum::Service::Outbox::Dispatcher->new(
+    clock        => GPForum::Test::OutboxClock->new,
+    id_service   => GPForum::Test::Id->new,
+    max_attempts => $DEFAULT_MAX,
+    schema       => $permanent_schema,
+    transport    => $permanent_transport,
+    worker_id    => 'worker-permanent',
+);
+my $permanent_summary = $permanent_dispatcher->dispatch_pending(1);
+is( $permanent_summary->{dead_lettered},
+    1, 'permanent failure is dead-lettered on the first attempt' );
+is( $permanent_summary->{failed},
+    0, 'permanent failure is not scheduled for retry' );
+is( $permanent->get_column('status'),
+    'cancelled', 'permanent failure cancels the outbox row' );
+is( $permanent_letters->created->[0]{failure_type},
+    'permanent', 'permanent dead letter stores the classified failure type' );
+is( $permanent_dispatcher->dispatch_pending(1)->{selected},
+    0, 'permanent dead-lettered row is not claimed again' );
 
 my $pg_row = GPForum::Test::OutboxRow->new(
     data => {

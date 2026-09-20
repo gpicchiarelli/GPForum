@@ -1,0 +1,426 @@
+# ADR 0101: Search, Feed, Syndication And Retrieval Execution Constitution
+
+## Status
+
+Accepted. Converted on 2026-09-19 from `prompt/53.txt` ("GPForum - Search,
+Feed, Syndication And Retrieval Execution Constitution"); this ADR replaces
+the prompt as the binding source.
+
+## Context
+
+Retrieval surfaces (search, feeds, RSS, Atom, autocomplete, ranking,
+metadata, sitemaps, recommendations) are where restricted content most
+easily leaks and where derived indexes most easily drift into hidden
+authority or opaque engagement machinery.
+
+This ADR defines the mandatory execution discipline for search architecture,
+feed generation, syndication, RSS, Atom, retrieval safety, indexing
+workflows, autocomplete, ranking, projection rebuild, and permission-safe
+discovery in the existing GPForum repository.
+
+It extends ADR 0098 (the general execution checklist), ADR 0099 (operational
+scalability and projection stability), and ADR 0100 (domain integrity,
+authorization correctness, moderation safety, and anti-leak guarantees), and
+specializes those rules for retrieval and public discovery. It governs the
+search, discovery, notification-feed, SEO, and plugin retrieval contexts.
+
+## Decision
+
+### Relationship To Other Constitutions
+
+- This constitution preserves all GPForum constitutions, including
+  PostgreSQL authority, Perl-first implementation, Mojolicious delivery,
+  DBIx::Class persistence, Minion workers, SSR-first rendering,
+  append-oriented persistence, event/audit/outbox discipline, projection
+  rebuildability, explicit governance, accessibility, privacy boundaries,
+  domain integrity, and optional Redis acceleration only.
+
+### 1. Primary Objective
+
+- GPForum MUST evolve into:
+  - a PostgreSQL-native retrieval platform;
+  - a permission-safe discovery system;
+  - a rebuildable indexing system;
+  - a moderation-safe syndication system;
+  - an operationally sustainable search architecture.
+- Search and discovery MUST remain derived, rebuildable, permission-aware,
+  moderation-aware, deletion-aware, observable, and operationally optional.
+- If search, feeds, metadata, autocomplete, ranking, or syndication cannot
+  prove that content is safe to expose, they MUST omit it.
+
+### 2. Authoritative Rule
+
+- Canonical truth remains: relational domain entities; append-only
+  event_log; immutable audit_log.
+- Search indexes are derived projections.
+- RSS feeds are derived projections.
+- Atom feeds are derived projections.
+- Autocomplete is derived.
+- Trending is derived.
+- Recommendations are derived.
+- OpenGraph metadata, preview snippets, sitemap entries, and public feed
+  entries are derived.
+- No retrieval or discovery surface may become authoritative state.
+
+### 3. PostgreSQL Search Discipline
+
+- Search MUST remain PostgreSQL-native by default.
+- Preferred PostgreSQL features: tsvector; tsquery; websearch_to_tsquery;
+  GIN indexes; pg_trgm; weighted ranking; unaccent; language-aware
+  configuration.
+- Italian language support SHOULD remain first-class.
+- OpenSearch, external search services, SaaS ranking systems, and
+  Redis-backed search MAY exist only as optional acceleration or plugin
+  surfaces approved by ADR. They MUST NOT become correctness infrastructure.
+
+### 4. Search Projection Discipline
+
+- Search projections MUST remain rebuildable.
+- Recommended fields: `entity_type`; `entity_id`; `visibility`;
+  `permission_scope`; `language`; `title`; `excerpt`; `body`;
+  `search_vector`; `indexed_at`; `source_version`; `visibility_version`;
+  `permission_version`; `generation_id` where rebuild generations are used.
+- Search projections MUST NOT become authoritative.
+- Search projections MUST fail closed when permission, visibility,
+  moderation, or deletion state is ambiguous.
+- Search projections MUST be invalidated or rebuilt when current revision,
+  visibility_version, permission_version, moderation_state, deletion state,
+  language, title, body, or canonical URL changes.
+
+### 5. Indexing Workflow
+
+The canonical indexing workflow is:
+
+1. canonical write;
+2. event_log append;
+3. outbox message;
+4. Minion indexing job;
+5. projection update;
+6. cache invalidation.
+
+- Indexing MUST remain asynchronous.
+- User-facing writes MUST NOT block on search indexing.
+- Indexing jobs MUST be idempotent, retryable, observable, and safe to
+  replay.
+- Indexing failures MUST NOT corrupt canonical forum state.
+
+### 6. Search Rebuild Discipline
+
+- Search rebuild MUST support:
+  - full rebuild;
+  - targeted rebuild;
+  - replay from event range;
+  - resumable rebuild;
+  - interruption safety;
+  - idempotency;
+  - generation switching.
+- Search rebuild MUST NOT block canonical writes.
+- Search rebuild SHOULD expose progress, generation, last processed event,
+  failure count, and activation state.
+- Search rebuilds MUST preserve permission, visibility, moderation, and
+  deletion rules exactly as normal indexing does.
+
+### 7. Projection Generations
+
+- Search projections SHOULD support:
+  - generation_id;
+  - inactive rebuild generation;
+  - blue/green activation;
+  - rollback activation.
+- The active generation MUST be switchable safely.
+- Inactive generations MUST NOT be visible to normal user-facing search
+  unless an authorized operator explicitly selects them for inspection.
+- Generation activation MUST be auditable when it changes public retrieval
+  behavior.
+
+### 8. Ranking Discipline
+
+- Ranking SHOULD combine: ts_rank; title weighting; freshness; moderation
+  state; visibility; category relevance; optional Perl-side ranking policy.
+- Ranking MUST remain explainable.
+- Ranking MUST remain deterministic enough for debugging, support,
+  moderation review, and regression tests.
+- Avoid:
+  - opaque scoring;
+  - nondeterministic ranking;
+  - hidden personalization;
+  - irreproducible results;
+  - engagement-maximizing dark patterns;
+  - ranking that weakens moderation or permission boundaries.
+- Personalized ranking requires ADR approval and MUST remain explainable,
+  reversible, privacy-aware, and non-manipulative.
+
+### 9. Autocomplete Discipline
+
+- Autocomplete SHOULD:
+  - use pg_trgm where useful;
+  - remain permission-aware;
+  - remain moderation-aware;
+  - remain rate-limited;
+  - remain bounded;
+  - avoid leaking hidden entities;
+  - expose only minimal safe display text.
+- Autocomplete MUST NEVER expose:
+  - private content;
+  - quarantined content;
+  - hidden entities;
+  - moderated content;
+  - inaccessible threads;
+  - deleted resources;
+  - restricted author metadata.
+- Autocomplete caches MUST be scoped, bounded, disposable, and invalidated by
+  visibility or permission changes where relevant.
+
+### 10. RSS And Atom Discipline
+
+- RSS and Atom feeds are syndication projections.
+- Feeds MUST:
+  - respect visibility;
+  - respect moderation;
+  - respect deletion;
+  - respect permissions;
+  - support cache safety;
+  - support rebuildability;
+  - expose stable canonical URLs;
+  - avoid leaking restricted metadata.
+- Feeds SHOULD:
+  - expose excerpts by default;
+  - avoid unsafe HTML;
+  - expose canonical URLs;
+  - remain rate-limited;
+  - include updated timestamps;
+  - avoid embedding private analytics identifiers.
+- Public feeds MUST be conservative. Member-scoped or private feeds MUST use
+  scope-safe authentication and cache keys.
+
+### 11. OpenGraph And Metadata Discipline
+
+- Metadata generation MUST: remain permission-safe; remain moderation-safe;
+  remain deletion-aware; avoid unsafe rendering; avoid hidden content
+  leakage; avoid body snippets when visibility is uncertain.
+- Private or moderated content MUST NOT appear in:
+  - OpenGraph;
+  - Twitter cards;
+  - previews;
+  - snippets;
+  - sitemap entries;
+  - syndication feeds.
+- Metadata builders MUST prefer safe fallbacks over partial restricted
+  content.
+
+### 12. Feed Discipline
+
+- Feed systems SHOULD remain derived projections. Examples: latest threads;
+  trending threads; personalized feed; subscribed threads; moderation queue
+  feeds; public Atom feed; contributor activity feed.
+- Feed rebuild MUST remain possible.
+- Feed entries MUST preserve source_version, visibility_version, and
+  permission_version where permission-sensitive rendering depends on them.
+- Feed renderers MUST re-check visibility where feed entries can outlive a
+  permission or moderation change.
+
+### 13. Trending And Analytics Discipline
+
+- Trending systems MUST:
+  - tolerate rebuild;
+  - tolerate lag;
+  - tolerate replay;
+  - avoid canonical dependency;
+  - avoid hot-row contention;
+  - avoid abuse amplification;
+  - expose bounded query costs.
+- Trending MUST remain approximate-safe, operationally bounded,
+  abuse-resistant, and explainable.
+- Trending MUST NOT override moderation, visibility, deletion, or permission
+  rules.
+
+### 14. Cache Discipline
+
+- Search caches and feed caches remain optional acceleration.
+- Caches MUST:
+  - be disposable;
+  - tolerate loss;
+  - tolerate rebuild;
+  - remain permission-safe;
+  - remain moderation-safe;
+  - use scope-safe keys where content is not public;
+  - expose bounded TTL and size.
+- Cache invalidation SHOULD remain event-driven.
+- Cache misses MUST fall back to canonical state or derived projections
+  without changing user-visible permissions.
+
+### 15. Anti-Leak Rules
+
+- Restricted content MUST NEVER leak through:
+  - search snippets;
+  - autocomplete;
+  - RSS;
+  - Atom;
+  - metadata;
+  - previews;
+  - trending;
+  - feeds;
+  - cache entries;
+  - sitemap generation;
+  - OpenGraph;
+  - contributor profile activity;
+  - related-thread recommendations.
+- Permission safety overrides discoverability.
+- When a retrieval surface cannot determine whether content is safe, it MUST
+  omit the content and expose an observable degraded state where
+  appropriate.
+
+### 16. Observability
+
+- The architecture SHOULD expose:
+  - search latency;
+  - projection lag;
+  - rebuild progress;
+  - indexing throughput;
+  - failed indexing jobs;
+  - dead letters;
+  - feed generation latency;
+  - cache invalidation lag;
+  - active search generation;
+  - stale document counts;
+  - no-leak test status for discovery surfaces.
+- Retrieval failures MUST be classifiable as validation, authorization,
+  not-found, degraded-projection, indexing, rebuild, cache, or
+  infrastructure failures.
+
+### 17. HTTP Retrieval Discipline
+
+- HTTP retrieval routes MUST:
+  - use bounded query limits;
+  - use keyset pagination where lists can grow;
+  - avoid OFFSET on hot paths;
+  - avoid unbounded search result pages;
+  - avoid loading heavy bodies for listing surfaces unless needed;
+  - render permission-filtered view models;
+  - return safe empty states when projections are unavailable.
+- Search forms, feed links, pagination, snippets, and empty states MUST
+  remain accessible under the accessibility constitution (ADR 0094).
+
+### 18. Plugin Retrieval Boundaries
+
+- Plugins MAY extend retrieval through documented hooks for safe embeds,
+  ranking policy, feed channels, metadata builders, result formatting, and
+  moderation-aware filters.
+- Plugins MUST NOT:
+  - bypass authorization;
+  - bypass moderation state;
+  - index restricted content without permission-safe scope;
+  - emit public metadata for private content;
+  - make external search authoritative;
+  - hide ranking manipulation from operators.
+- Plugin retrieval extensions require capability declarations and
+  audit-visible registration.
+
+### 19. Required Implementation Review
+
+Before merging a retrieval, search, feed, syndication, metadata, or
+autocomplete change, implementation MUST answer:
+
+1. What is canonical truth?
+2. What projection exists?
+3. How is indexing triggered?
+4. How is rebuild performed?
+5. How is permission safety enforced?
+6. How is moderation safety enforced?
+7. What can leak?
+8. How is replay preserved?
+9. What cache invalidates?
+10. What happens if indexing fails?
+
+If these answers do not exist, the implementation is incomplete.
+
+### 20. Testing Requirements
+
+- Retrieval changes MUST include tests for:
+  - empty query;
+  - valid query;
+  - permission-denied query;
+  - hidden content exclusion;
+  - deleted content exclusion;
+  - moderated content exclusion;
+  - feed visibility;
+  - metadata no-leak behavior;
+  - autocomplete no-leak behavior where autocomplete is touched;
+  - indexing idempotency where indexing is touched;
+  - rebuild behavior where rebuild is touched;
+  - cache invalidation where caches are touched.
+- Search and feed tests MUST include negative no-leak cases.
+- Ranking tests SHOULD verify deterministic ordering for controlled
+  fixtures.
+
+### 21. ADR Requirements
+
+- ADR approval is required for:
+  - making an external search system part of production retrieval;
+  - introducing personalized ranking;
+  - changing public feed semantics;
+  - adding member-scoped feeds;
+  - adding private authenticated feeds;
+  - indexing new restricted entity types;
+  - exposing new metadata surfaces;
+  - adding external recommendations;
+  - using Redis or another external cache for retrieval acceleration;
+  - adding opaque ranking signals.
+- ADR records MUST include anti-leak analysis, rebuild strategy, replay
+  impact, operational failure modes, and cache invalidation behavior.
+
+### 22. Final Rule
+
+- GPForum retrieval must be useful because it is safe, explainable, and
+  rebuildable.
+- Search, feeds, syndication, autocomplete, ranking, metadata, and
+  recommendations are derived discovery surfaces. They exist to help people
+  find permissible community knowledge, not to create hidden authority, leak
+  restricted content, or turn engagement into an opaque control system.
+
+## Consequences
+
+- Retrieval stays PostgreSQL-native and derived: losing search, feed, or
+  cache infrastructure degrades discovery but never canonical forum state,
+  and every index can be rebuilt or replayed from the event range.
+- Indexing is always asynchronous through the outbox and Minion, so search
+  results are eventually consistent with canonical writes.
+- Generation-based rebuilds allow blue/green activation and rollback, at the
+  cost of generation bookkeeping and audited activation.
+- Every retrieval surface fails closed on ambiguous visibility, trading
+  discoverability for safety; feeds default to excerpts and metadata to safe
+  fallbacks.
+- Ranking stays explainable and deterministic; personalization, external
+  search, external recommendations, and retrieval caches in Redis or other
+  external stores need an ADR first.
+- Retrieval changes carry the ten-question review and negative no-leak
+  tests.
+- Open conflicts:
+  - Section 3 keeps Italian language support first-class and lists
+    `unaccent` as a preferred feature, but `Search::DocumentBuilder` defaults
+    the search `language` to `simple`, and the migrations install `pg_trgm`
+    only, not `unaccent`.
+  - Section 4 recommends `excerpt` and `generation_id` fields, but
+    `search_documents` (`migrations/003_forum_projection.sql`,
+    `migrations/018_search_product_hardening.sql`) has neither column.
+
+## Alignment
+
+- ADR 0098, ADR 0099, ADR 0100 (extended constitutions)
+- ADR 0058, ADR 0062, ADR 0067, ADR 0078, ADR 0082, ADR 0090 (constitutions
+  aligned with this one); ADR 0091, ADR 0093; ADR 0094 (accessibility)
+- `docs/adr/0019-public-cache-access.md`
+- `docs/adr/0030-discovery-access.md`
+- `lib/GPForum/Service/Search/` (`DocumentBuilder`, `Indexer`, `Searcher`,
+  `PermissionEngine`)
+- `lib/GPForum/Service/Discovery/` (`CanonicalUrl`, `FeedBuilder`,
+  `MetadataBuilder`, `RobotsPolicy`, `SitemapBuilder`, `VisibilityPolicy`)
+- `lib/GPForum/Worker/MinionRegistrar.pm` (`gpforum.search.dispatch` task)
+- `lib/GPForum/Controller/Discovery.pm`, `lib/GPForum/Web/DiscoveryAccess.pm`,
+  `lib/GPForum/Web/DiscoveryPayload.pm`
+- `migrations/003_forum_projection.sql` (`search_documents`),
+  `migrations/018_search_product_hardening.sql`
+- `t/19-search.t`, `t/30-public-discovery.t`, `t/71-bootstrap-discovery.t`,
+  `t/78-web-operations-discovery-payloads.t`,
+  `t/126-web-discovery-access.t`
+- `t/09-prompt-alignment.t`

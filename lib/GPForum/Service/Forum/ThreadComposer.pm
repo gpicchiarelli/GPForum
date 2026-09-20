@@ -39,6 +39,36 @@ sub prepare {
     };
 }
 
+sub prepare_title {
+    my ( $self, $input ) = @_;
+
+    my $values = _title_edit_values($input);
+    my $errors = _title_edit_errors($values);
+    if ( keys %{$errors} ) {
+        return { ok => 0, errors => $errors, values => $values };
+    }
+
+    return {
+        ok      => 1,
+        command => _title_command($values),
+    };
+}
+
+sub prepare_move {
+    my ( $self, $input ) = @_;
+
+    my $values = _move_values($input);
+    my $errors = _move_errors($values);
+    if ( keys %{$errors} ) {
+        return { ok => 0, errors => $errors, values => $values };
+    }
+
+    return {
+        ok      => 1,
+        command => _move_command($values),
+    };
+}
+
 sub _command {
     my ( $self, $values ) = @_;
 
@@ -172,6 +202,82 @@ sub _validation_errors {
     _set_error( \%errors, 'visibility', _visibility_error($values) );
 
     return \%errors;
+}
+
+sub _title_edit_values {
+    my ($input) = @_;
+
+    return {
+        editor_user_id  => _trim( $input->{editor_user_id} ),
+        idempotency_key => _trim( $input->{idempotency_key} ),
+        thread_id       => _trim( $input->{thread_id} ),
+        title           => _single_line( $input->{title} ),
+    };
+}
+
+sub _title_edit_errors {
+    my ($values) = @_;
+
+    my %errors;
+    _set_error( \%errors, 'editor_user_id',
+        _required_error( $values, 'editor_user_id' ) );
+    _set_error( \%errors, 'thread_id',
+        _required_error( $values, 'thread_id' ) );
+    _set_error( \%errors, 'title', _title_error($values) );
+
+    return \%errors;
+}
+
+sub _title_command {
+    my ($values) = @_;
+
+    return {
+        idempotency_key => $values->{idempotency_key},
+        thread          => {
+            editor_user_id => $values->{editor_user_id},
+            slug           => _slug_from_title( $values->{title} ),
+            thread_id      => $values->{thread_id},
+            title          => $values->{title},
+        },
+    };
+}
+
+sub _move_values {
+    my ($input) = @_;
+
+    return {
+        category_id     => _trim( $input->{category_id} ),
+        editor_user_id  => _trim( $input->{editor_user_id} ),
+        idempotency_key => _trim( $input->{idempotency_key} ),
+        thread_id       => _trim( $input->{thread_id} ),
+    };
+}
+
+sub _move_errors {
+    my ($values) = @_;
+
+    my %errors;
+    _set_error( \%errors, 'category_id',
+        _required_error( $values, 'category_id' ) );
+    _set_error( \%errors, 'editor_user_id',
+        _required_error( $values, 'editor_user_id' ) );
+    _set_error( \%errors, 'thread_id',
+        _required_error( $values, 'thread_id' ) );
+
+    return \%errors;
+}
+
+sub _move_command {
+    my ($values) = @_;
+
+    return {
+        idempotency_key => $values->{idempotency_key},
+        thread          => {
+            category_id    => $values->{category_id},
+            editor_user_id => $values->{editor_user_id},
+            thread_id      => $values->{thread_id},
+        },
+    };
 }
 
 sub _set_error {

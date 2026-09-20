@@ -38,6 +38,7 @@ for my $worker_count (@WORKER_COUNTS) {
 _assert_retry_backoff();
 _assert_stale_lock_recovery();
 _assert_fresh_running_lock_is_not_claimed();
+_assert_crash_between_claim_and_dispatch();
 _assert_benchmark_json_smoke();
 
 done_testing();
@@ -145,6 +146,54 @@ sub _assert_fresh_running_lock_is_not_claimed {
     is( $summary->{selected}, 0, 'fresh running row is not claimed' );
     is_deeply( $transport->delivered,
         [], 'fresh running row is not delivered by another worker' );
+
+    return;
+}
+
+sub _assert_crash_between_claim_and_dispatch {
+    my $row       = _ready_row('claim-crash-1');
+    my $schema    = _schema_for_rows($row);
+    my $transport = GPForum::Test::OutboxTransport->new;
+    my $clock     = GPForum::Test::OutboxClock->new;
+    my $crashed   = GPForum::Service::Outbox::Dispatcher->new(
+        clock      => $clock,
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+        transport  => $transport,
+        worker_id  => 'crashed-worker',
+    );
+    my @claimed = $crashed->claim_ready_batch(1);
+
+    is( scalar @claimed, 1, 'pending row is claimed before the crash' );
+    is( $row->get_column('status'),
+        'running', 'crash after claim leaves the row running' );
+    is( $row->get_column('locked_by'),
+        'crashed-worker', 'crash after claim keeps the claimant lock' );
+    is_deeply( $transport->delivered, [],
+        'crash after claim does not dispatch' );
+
+    my $other = GPForum::Service::Outbox::Dispatcher->new(
+        clock      => $clock,
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+        transport  => $transport,
+        worker_id  => 'other-worker',
+    );
+    my $fresh = $other->dispatch_pending(1);
+    is( $fresh->{selected}, 0, 'fresh lock after claim crash is not taken' );
+    is_deeply( $transport->delivered, [],
+        'fresh lock after claim crash is not delivered' );
+
+    $clock->now($FUTURE_LOCK);
+    my $recovered = $other->dispatch_pending(1);
+    is( $recovered->{selected}, 1,
+        'stale lock after claim crash is reclaimed' );
+    is( $recovered->{dispatched},
+        1, 'stale lock after claim crash is dispatched' );
+    is_deeply( $transport->delivered,
+        ['claim-crash-1'], 'claim crash recovery delivers once' );
+    is( $row->get_column('status'),
+        'done', 'claim crash recovery acknowledges the row' );
 
     return;
 }

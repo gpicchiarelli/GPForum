@@ -8,15 +8,17 @@ use Digest::SHA qw(sha1_hex);
 use English     qw(-no_match_vars);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Forum::PageWindow;
 use GPForum::Service::Id;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_RANK   => 0;
-const my $DEFAULT_LIMIT  => 25;
-const my @CURSOR_COLUMNS => qw(created_at notification_id);
+const my $DEFAULT_RANK               => 0;
+const my $DEFAULT_LIMIT              => 25;
+const my $NOTIFICATION_ID_CONSTRAINT => 'notifications_pkey';
+const my @CURSOR_COLUMNS             => qw(created_at notification_id);
 
 has clock       => sub { return GPForum::Service::Clock->new; };
 has id_service  => sub { return GPForum::Service::Id->new; };
@@ -47,58 +49,167 @@ sub create_notification {
 sub _create_notification {
     my ( $self, $input ) = @_;
 
-    my $idempotency_key = _idempotency_key($input);
-    my $notification_id = $input->{notification_id}
-      || _notification_id_for($idempotency_key);
+    my $ctx      = _delivery_ctx($input);
     my $existing = $self->_find_inbox(
         {
-            notification_id   => $notification_id,
+            notification_id   => $ctx->{notification_id},
             recipient_user_id => $input->{recipient_user_id},
         }
     );
+    if ($existing) {
+        return $self->_duplicate_delivery( $input, $existing,
+            $ctx->{idempotency_key} );
+    }
 
-    return $self->_duplicate_delivery( $input, $existing, $idempotency_key )
-      if $existing;
+    return $self->_insert_or_reuse_delivery($ctx);
+}
 
-    return $self->_insert_delivery( $input, $notification_id,
-        $idempotency_key );
+sub _delivery_ctx {
+    my ($input) = @_;
+
+    my $idempotency_key = _idempotency_key($input);
+
+    return {
+        idempotency_key => $idempotency_key,
+        input           => $input,
+        notification_id => $input->{notification_id}
+          || _notification_id_for($idempotency_key),
+    };
+}
+
+sub _insert_or_reuse_delivery {
+    my ( $self, $ctx ) = @_;
+
+    my $created = eval { return $self->_insert_delivery($ctx); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_delivery_after_conflict( $ctx, $EVAL_ERROR );
+}
+
+sub _delivery_after_conflict {
+    my ( $self, $ctx, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    my $existing = $self->_find_inbox(
+        {
+            notification_id   => $ctx->{notification_id},
+            recipient_user_id => $ctx->{input}{recipient_user_id},
+        }
+    );
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_duplicate_delivery( $ctx->{input}, $existing,
+        $ctx->{idempotency_key} );
 }
 
 sub _insert_delivery {
-    my ( $self, $input, $notification_id, $idempotency_key ) = @_;
+    my ( $self, $ctx ) = @_;
 
-    my $created_at   = $self->clock->now_iso8601;
-    my $notification = {
+    $self->_fill_delivery_rows($ctx);
+    $self->_insert_or_reuse_notification($ctx);
+    $self->_create_inbox($ctx);
+
+    return $self->_created_delivery($ctx);
+}
+
+sub _fill_delivery_rows {
+    my ( $self, $ctx ) = @_;
+
+    my $input           = $ctx->{input};
+    my $notification_id = $ctx->{notification_id};
+    my $created_at      = $self->clock->now_iso8601;
+    $ctx->{notification} = {
+        created_at        => $created_at,
         notification_id   => $notification_id,
-        recipient_user_id => $input->{recipient_user_id},
-        source_type       => $input->{source_type},
-        source_id         => $input->{source_id},
         notification_type => $input->{notification_type},
         payload           => {
-            %{ $input->{payload} || {} }, idempotency_key => $idempotency_key,
+            %{ $input->{payload} || {} },
+            idempotency_key => $ctx->{idempotency_key},
         },
-        created_at => $created_at,
-    };
-    my $inbox = {
         recipient_user_id => $input->{recipient_user_id},
-        notification_id   => $notification_id,
+        source_id         => $input->{source_id},
+        source_type       => $input->{source_type},
+    };
+    $ctx->{inbox} = {
         created_at        => $created_at,
-        read_at           => undef,
+        notification_id   => $notification_id,
         rank_score        => $input->{rank_score} || $DEFAULT_RANK,
+        read_at           => undef,
+        recipient_user_id => $input->{recipient_user_id},
     };
 
-    $self->schema->resultset('Notification')->create($notification);
-    $self->schema->resultset('NotificationInbox')->create($inbox);
+    return;
+}
+
+sub _insert_or_reuse_notification {
+    my ( $self, $ctx ) = @_;
+
+    my $created = eval { return $self->_create_notification_row($ctx); };
+    if ($created) {
+        return $created;
+    }
+
+    return $self->_notification_after_conflict( $ctx, $EVAL_ERROR );
+}
+
+sub _create_notification_row {
+    my ( $self, $ctx ) = @_;
+
+    $self->schema->resultset('Notification')->create( $ctx->{notification} );
+
+    return $ctx;
+}
+
+sub _notification_after_conflict {
+    my ( $self, $ctx, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+    if ( !_notification_id_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $ctx;
+}
+
+sub _notification_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $NOTIFICATION_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _create_inbox {
+    my ( $self, $ctx ) = @_;
+
+    $self->schema->resultset('NotificationInbox')->create( $ctx->{inbox} );
+
+    return $ctx;
+}
+
+sub _created_delivery {
+    my ( $self, $ctx ) = @_;
 
     my $unread_count =
-      $self->_broadcast_unread_count( $input->{recipient_user_id} );
+      $self->_broadcast_unread_count( $ctx->{input}{recipient_user_id} );
 
     return {
-        ok              => 1,
         duplicate       => 0,
-        idempotency_key => $idempotency_key,
-        notification    => $notification,
-        inbox           => $inbox,
+        idempotency_key => $ctx->{idempotency_key},
+        inbox           => $ctx->{inbox},
+        notification    => $ctx->{notification},
+        ok              => 1,
         unread_count    => $unread_count,
     };
 }
@@ -231,15 +342,10 @@ sub _mark_read {
 
     my $existing_read_at = _column( $inbox, 'read_at' );
     my $read_at          = $existing_read_at || $self->clock->now_iso8601;
-    my $read             = {
-        notification_id   => $notification_id,
-        recipient_user_id => $recipient_user_id,
-        read_at           => $read_at,
-    };
+    my $read             = _read_payload( $inbox, $read_at );
 
     if ( !$existing_read_at ) {
-        $self->schema->resultset('NotificationRead')->update_or_create($read);
-        $inbox->update( { read_at => $read_at } );
+        $self->_persist_read( $inbox, $read );
     }
 
     my $unread_count = $self->_broadcast_unread_count($recipient_user_id);
@@ -249,6 +355,124 @@ sub _mark_read {
         duplicate    => $existing_read_at ? 1 : 0,
         unread_count => $unread_count,
         %{$read},
+    };
+}
+
+sub mark_all_read {
+    my ( $self, $recipient_user_id ) = @_;
+
+    my $work = sub {
+        return $self->_mark_all_read($recipient_user_id);
+    };
+
+    return $self->schema->can('txn_do')
+      ? $self->schema->txn_do($work)
+      : $work->();
+}
+
+sub _mark_all_read {
+    my ( $self, $recipient_user_id ) = @_;
+
+    my $read_at      = $self->clock->now_iso8601;
+    my $marked_count = $self->_mark_unread_rows( $recipient_user_id, $read_at );
+    my $unread_count = $self->_broadcast_unread_count($recipient_user_id);
+
+    return {
+        duplicate         => $marked_count ? 0 : 1,
+        marked_count      => $marked_count,
+        ok                => 1,
+        read_at           => $read_at,
+        recipient_user_id => $recipient_user_id,
+        unread_count      => $unread_count,
+    };
+}
+
+sub _mark_unread_rows {
+    my ( $self, $recipient_user_id, $read_at ) = @_;
+
+    my $count = 0;
+    for my $inbox ( @{ $self->_unread_inbox_rows($recipient_user_id) } ) {
+        $self->_persist_read( $inbox, _read_payload( $inbox, $read_at ) );
+        $count += 1;
+    }
+
+    return $count;
+}
+
+sub _unread_inbox_rows {
+    my ( $self, $recipient_user_id ) = @_;
+
+    my $search = $self->schema->resultset('NotificationInbox')->search(
+        {
+            read_at           => undef,
+            recipient_user_id => $recipient_user_id,
+        }
+    );
+
+    return [ _rows($search) ];
+}
+
+sub _persist_read {
+    my ( $self, $inbox, $read ) = @_;
+
+    $self->_insert_or_reuse_read($read);
+    $inbox->update( { read_at => $read->{read_at} } );
+
+    return;
+}
+
+sub _insert_or_reuse_read {
+    my ( $self, $read ) = @_;
+
+    my $created = eval { return $self->_create_read($read); };
+    if ($created) {
+        return;
+    }
+
+    return $self->_read_after_conflict( $read, $EVAL_ERROR );
+}
+
+sub _create_read {
+    my ( $self, $read ) = @_;
+
+    return $self->schema->resultset('NotificationRead')->create($read);
+}
+
+sub _read_after_conflict {
+    my ( $self, $read, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_reuse_read( $read, $error );
+}
+
+sub _reuse_read {
+    my ( $self, $read, $error ) = @_;
+
+    my $stored = $self->schema->resultset('NotificationRead')->find(
+        {
+            notification_id   => $read->{notification_id},
+            recipient_user_id => $read->{recipient_user_id},
+        }
+    );
+    if ( !$stored ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    $read->{read_at} = _column( $stored, 'read_at' );
+
+    return;
+}
+
+sub _read_payload {
+    my ( $inbox, $read_at ) = @_;
+
+    return {
+        notification_id   => _column( $inbox, 'notification_id' ),
+        recipient_user_id => _column( $inbox, 'recipient_user_id' ),
+        read_at           => $read_at,
     };
 }
 

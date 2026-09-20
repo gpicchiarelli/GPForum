@@ -60,5 +60,7 @@ __PACKAGE__->add_columns(
 GPForum::Schema::JsonColumn->inflate_json_columns(__PACKAGE__);
 
 __PACKAGE__->set_primary_key('dead_letter_id');
+__PACKAGE__->add_unique_constraint(
+    idx_dead_letters_source_unique => [qw(source_table source_id)] );
 
 1;

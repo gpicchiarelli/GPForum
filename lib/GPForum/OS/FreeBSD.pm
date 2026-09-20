@@ -21,4 +21,20 @@ sub event_backend {
     return 'kqueue';
 }
 
+sub cpu_count_sources {
+    return [
+        {
+            name    => 'sysctl hw.ncpu',
+            type    => 'command',
+            command => [ '/sbin/sysctl', '-n', 'hw.ncpu' ],
+        },
+        {
+            name    => 'sysctl kern.smp.cpus',
+            type    => 'command',
+            command => [ '/sbin/sysctl', '-n', 'kern.smp.cpus' ],
+        },
+        { name => 'sysconf _SC_NPROCESSORS_ONLN', type => 'sysconf' },
+    ];
+}
+
 1;

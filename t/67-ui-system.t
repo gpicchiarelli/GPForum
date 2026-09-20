@@ -42,6 +42,7 @@ for my $template (
     templates/forum/search.html.ep
     templates/forum/thread.html.ep
     templates/identity/profile.html.ep
+    templates/legal/page.html.ep
     templates/moderation/actions.html.ep
     templates/moderation/reports.html.ep
     templates/moderation/suspensions.html.ep
@@ -102,6 +103,8 @@ like(
     qr/components\/notification_surface/msx,
     'notification inbox uses shared notification surface'
 );
+like( path('templates/notifications/inbox.html.ep')->slurp,
+    qr/notifications_read_all/msx, 'notification inbox exposes mark-all-read' );
 like(
     path('templates/moderation/actions.html.ep')->slurp,
     qr/components\/moderation_indicator/msx,
@@ -121,6 +124,11 @@ like(
     path('templates/forum/thread.html.ep')->slurp,
     qr/ui_trusted_html[(]\$post->\{body\}, [ ] 'forum[.]post[.]body'/msx,
     'thread raw post body rendering goes through render policy helper'
+);
+like(
+    path('templates/forum/thread.html.ep')->slurp,
+    qr/post_attachment_delete/msx,
+    'thread exposes author attachment delete'
 );
 like(
     path('templates/forum/search.html.ep')->slurp,

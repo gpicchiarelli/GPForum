@@ -3,9 +3,14 @@ package GPForum::Security::BrowserHeaders;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Mojo::Base -base;
 
 our $VERSION = '0.001';
+
+const my $HSTS_MAX_AGE => 31_536_000;
+
+has include_hsts => sub { return 0; };
 
 sub apply {
     my ( $self, $controller ) = @_;
@@ -18,6 +23,7 @@ sub apply {
     $headers->header( 'Permissions-Policy' =>
           'camera=(), microphone=(), geolocation=(), payment=()' );
     $headers->content_security_policy( $self->content_security_policy );
+    $self->_apply_hsts($headers);
 
     return;
 }
@@ -26,6 +32,10 @@ sub content_security_policy {
     my ($self) = @_;
 
     return join q{; }, @{ $self->directives };
+}
+
+sub hsts_policy {
+    return 'max-age=' . $HSTS_MAX_AGE . '; includeSubDomains';
 }
 
 sub directives {
@@ -41,6 +51,18 @@ sub directives {
         q{frame-ancestors 'none'},
         q{object-src 'none'},
     ];
+}
+
+sub _apply_hsts {
+    my ( $self, $headers ) = @_;
+
+    if ( !$self->include_hsts ) {
+        return;
+    }
+
+    $headers->header( 'Strict-Transport-Security' => $self->hsts_policy );
+
+    return;
 }
 
 1;

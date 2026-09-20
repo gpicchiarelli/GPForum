@@ -11,11 +11,13 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Test::AttachmentWebServices;
+use GPForum::Test::CommandIdempotency;
 
 our $VERSION = '0.001';
 
 const my $HTTP_OK           => 200;
 const my $HTTP_CREATED      => 201;
+const my $HTTP_FOUND        => 302;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
@@ -49,6 +51,7 @@ $test->status_is($HTTP_OK);
 my $csrf_token = _csrf_token($test);
 $test->post_ok(
     '/p/post-1/attachments' => { Accept => 'application/json' } => form => {
+        command_id => 'upload-forbidden-1',
         csrf_token => $csrf_token,
         attachment => {
             content      => $PNG_BYTES,
@@ -64,14 +67,18 @@ $test->get_ok('/__test/session/user-1');
 $test->status_is($HTTP_OK);
 $csrf_token = _csrf_token($test);
 $test->post_ok(
-    '/p/post-1/attachments' => { Accept => 'application/json' } => form =>
-      { csrf_token => $csrf_token } );
+    '/p/post-1/attachments' => { Accept => 'application/json' } => form => {
+        command_id => 'upload-invalid-1',
+        csrf_token => $csrf_token,
+    }
+);
 $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/attachment' => 'attachment is required' );
 $services->upload_calls( [] );
 
 $test->post_ok(
     '/p/post-1/attachments' => { Accept => 'application/json' } => form => {
+        command_id => 'upload-json-1',
         csrf_token => $csrf_token,
         attachment => {
             content      => $PNG_BYTES,
@@ -89,6 +96,73 @@ $test->json_is( '/link/target_id'   => 'post-1' );
 is( scalar @{ $services->upload_calls },
     1, 'authorized upload calls attachment pipeline once' );
 
+$test->post_ok(
+    '/p/post-1/attachments' => form => {
+        command_id => 'upload-html-1',
+        csrf_token => $csrf_token,
+        attachment => {
+            content      => $PNG_BYTES,
+            filename     => 'photo.png',
+            content_type => 'image/png',
+        },
+    }
+);
+$test->status_is($HTTP_FOUND);
+$test->header_like( Location => qr{/t/thread-1\#post-post-1\z}msx );
+$test->get_ok('/login');
+$test->status_is($HTTP_OK);
+$test->content_like(qr/Attachment uploaded/ms);
+
+$test->get_ok('/__test/session/user-2');
+$test->status_is($HTTP_OK);
+$csrf_token = _csrf_token($test);
+$test->post_ok(
+    '/p/post-1/attachments/attachment-1/delete' =>
+      { Accept => 'application/json' } => form => {
+        command_id => 'delete-forbidden-1',
+        csrf_token => $csrf_token,
+      }
+);
+$test->status_is($HTTP_FORBIDDEN);
+$test->json_is( '/error' => 'post author required' );
+
+$test->get_ok('/__test/session/user-1');
+$test->status_is($HTTP_OK);
+$csrf_token = _csrf_token($test);
+$test->post_ok(
+    '/p/post-1/attachments/missing/delete' =>
+      { Accept => 'application/json' } => form => {
+        command_id => 'delete-missing-1',
+        csrf_token => $csrf_token,
+      }
+);
+$test->status_is($HTTP_NOT_FOUND);
+$test->json_is( '/status' => 'not_found' );
+
+$test->post_ok(
+    '/p/post-1/attachments/attachment-1/delete' =>
+      { Accept => 'application/json' } => form => {
+        command_id => 'delete-json-1',
+        csrf_token => $csrf_token,
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'                   => 'deleted' );
+$test->json_is( '/attachment/attachment_id' => 'attachment-1' );
+$test->json_is( '/attachment/state'         => 'deleted' );
+
+$test->post_ok(
+    '/p/post-1/attachments/attachment-1/delete' => form => {
+        command_id => 'delete-html-1',
+        csrf_token => $csrf_token,
+    }
+);
+$test->status_is($HTTP_FOUND);
+$test->header_like( Location => qr{/t/thread-1\#post-post-1\z}msx );
+$test->get_ok('/login');
+$test->status_is($HTTP_OK);
+$test->content_like(qr/Attachment deleted/ms);
+
 done_testing();
 
 sub _install_attachment_fakes {
@@ -101,7 +175,14 @@ sub _install_attachment_fakes {
     $test_object->app->helper(
         gp_post_reader => sub { return $fake_services; } );
     $test_object->app->helper(
+        gp_attachment_store => sub { return $fake_services; } );
+    $test_object->app->helper(
         gp_rate_limiter => sub { return $fake_services; } );
+    $test_object->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
 
     return;
 }

@@ -15,6 +15,7 @@ use GPForum::Service::Forum::HomePageReader;
 use GPForum::Service::Forum::PostPosition;
 use GPForum::Service::Forum::PostReader;
 use GPForum::Service::Forum::ThreadDetailReader;
+use GPForum::Service::Forum::ThreadReader;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Test::ForumReadResultSet;
 use GPForum::Test::ForumReadRow;
@@ -22,7 +23,7 @@ use GPForum::Test::ForumReadSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS         => 44;
+const my $EXPECTED_TESTS         => 51;
 const my $HOME_THREAD_FETCH_ROWS => 2;
 const my $NEXT_REPLY_POSITION    => 3;
 
@@ -161,6 +162,23 @@ is( $schema->resultset('Thread')->last_attrs->{order_by}[0]{-desc},
 is( $schema->resultset('Thread')->last_attrs->{order_by}[1]{-desc},
     'me.thread_id', 'home page reader uses thread id tie breaker' );
 
+my $thread_reader =
+  GPForum::Service::Forum::ThreadReader->new( schema => $schema );
+$thread_reader->list_category_threads( { category_id => 'category-1' } );
+is( $schema->resultset('Thread')->last_query->{'me.deleted_at'},
+    undef, 'category listing excludes deleted threads for anonymous viewers' );
+$thread_reader->list_category_threads(
+    {
+        category_id    => 'category-1',
+        viewer_user_id => 'user-1',
+    }
+);
+is_deeply(
+    $schema->resultset('Thread')->last_query->{-or},
+    [ { 'me.deleted_at' => undef }, { 'me.author_user_id' => 'user-1' }, ],
+    'category listing includes the author deleted threads for the viewer'
+);
+
 my $visible_post_schema = GPForum::Test::ForumReadSchema->new(
     resultsets => {
         Post => GPForum::Test::ForumReadResultSet->new(
@@ -218,6 +236,23 @@ is( $schema->resultset('Post')->last_query->{'me.deleted_at'},
 ok(
     !exists $schema->resultset('Post')->last_query->{deleted_at},
     'post reader avoids ambiguous unqualified deleted filter'
+);
+
+my $viewer_posts = $detail_reader->thread_page(
+    {
+        thread_id      => 'thread-1',
+        viewer_user_id => 'user-1',
+    }
+);
+ok( $viewer_posts->{ok}, 'viewer thread page is ok' );
+is_deeply(
+    $schema->resultset('Post')->last_query->{-or},
+    [ { 'me.deleted_at' => undef }, { 'me.author_user_id' => 'user-1' }, ],
+    'post reader includes the author deleted posts for the viewer'
+);
+ok(
+    !exists $schema->resultset('Post')->last_query->{'me.deleted_at'},
+    'viewer post listing does not require deleted_at to be null'
 );
 
 my $missing_page = $detail_reader->thread_page( { thread_id => 'missing' } );
@@ -285,6 +320,35 @@ my $locked_detail =
   GPForum::Service::Forum::ThreadDetailReader->new( schema => $locked_schema );
 is( $locked_detail->find_thread('thread-locked')->get_column('thread_id'),
     'thread-locked', 'locked thread remains readable' );
+
+my $deleted_thread_schema = GPForum::Test::ForumReadSchema->new(
+    resultsets => {
+        Thread => GPForum::Test::ForumReadResultSet->new(
+            rows => [
+                _row(
+                    {
+                        thread_id        => 'thread-deleted',
+                        author_user_id   => 'user-1',
+                        moderation_state => 'visible',
+                        visibility       => 'public',
+                        deleted_at       => '2026-05-23T12:00:00Z',
+                    }
+                ),
+            ],
+        ),
+    },
+);
+my $deleted_detail =
+  GPForum::Service::Forum::ThreadDetailReader->new(
+    schema => $deleted_thread_schema );
+is( $deleted_detail->find_thread('thread-deleted'),
+    undef, 'deleted thread is hidden from anonymous viewers' );
+is(
+    $deleted_detail->find_thread( 'thread-deleted', 'user-1' )
+      ->get_column('thread_id'),
+    'thread-deleted',
+    'author still sees a deleted thread'
+);
 
 my $deleted_category_schema = GPForum::Test::ForumReadSchema->new(
     resultsets => {

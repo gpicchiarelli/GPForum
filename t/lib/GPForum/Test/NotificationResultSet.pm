@@ -22,7 +22,12 @@ sub create {
     my ( $self, $row ) = @_;
 
     die 'notification create failed' if $self->fail_create;
+    $self->_assert_subscription_id_unique($row);
     $self->_assert_subscription_unique($row);
+    $self->_assert_notification_unique($row);
+    $self->_assert_inbox_unique($row);
+    $self->_assert_preference_unique($row);
+    $self->_assert_read_unique($row);
 
     my $object = GPForum::Test::NotificationRow->new( data => $row );
     push @{ $self->created }, $row;
@@ -91,6 +96,19 @@ sub search {
     return GPForum::Test::NotificationSearch->new( rows => \@rows, );
 }
 
+sub _assert_subscription_id_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_has_text( $row->{subscription_id} ) ) {
+        return;
+    }
+    if ( $self->rows->{ $row->{subscription_id} } ) {
+        GPForum::Infrastructure::UniqueConflict->throw('subscriptions_pkey');
+    }
+
+    return;
+}
+
 sub _assert_subscription_unique {
     my ( $self, $row ) = @_;
 
@@ -101,6 +119,214 @@ sub _assert_subscription_unique {
     }
 
     return;
+}
+
+sub _assert_notification_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_notification_pk_row($row) ) {
+        return;
+    }
+
+    for my $existing ( @{ $self->created } ) {
+        if ( _same_notification_pk( $existing, $row ) ) {
+            GPForum::Infrastructure::UniqueConflict->throw(
+                'notifications_pkey');
+        }
+    }
+
+    return;
+}
+
+sub _notification_pk_row {
+    my ($row) = @_;
+
+    if ( !_has_text( $row->{source_type} ) ) {
+        return 0;
+    }
+    if ( !_has_text( $row->{notification_id} ) ) {
+        return 0;
+    }
+
+    return _has_text( $row->{created_at} );
+}
+
+sub _same_notification_pk {
+    my ( $existing, $row ) = @_;
+
+    if ( !_notification_pk_row($existing) ) {
+        return 0;
+    }
+    if ( !_same_text( $existing->{notification_id}, $row->{notification_id} ) )
+    {
+        return 0;
+    }
+
+    return _same_text( $existing->{created_at}, $row->{created_at} );
+}
+
+sub _assert_inbox_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_inbox_row($row) ) {
+        return;
+    }
+
+    for my $existing ( @{ $self->created } ) {
+        if ( _same_inbox_key( $existing, $row ) ) {
+            GPForum::Infrastructure::UniqueConflict->throw(
+                'notification_inbox_pkey');
+        }
+    }
+
+    return;
+}
+
+sub _inbox_row {
+    my ($row) = @_;
+
+    if ( !exists $row->{rank_score} ) {
+        return 0;
+    }
+    if ( _has_text( $row->{source_type} ) ) {
+        return 0;
+    }
+    if ( !_has_text( $row->{notification_id} ) ) {
+        return 0;
+    }
+
+    return _has_text( $row->{recipient_user_id} );
+}
+
+sub _same_inbox_key {
+    my ( $existing, $row ) = @_;
+
+    if ( !_inbox_row($existing) ) {
+        return 0;
+    }
+    if ( !_same_text( $existing->{notification_id}, $row->{notification_id} ) )
+    {
+        return 0;
+    }
+
+    return _same_text( $existing->{recipient_user_id},
+        $row->{recipient_user_id} );
+}
+
+sub _assert_preference_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_preference_row($row) ) {
+        return;
+    }
+
+    for my $existing ( @{ $self->created } ) {
+        if ( _same_preference_key( $existing, $row ) ) {
+            GPForum::Infrastructure::UniqueConflict->throw(
+                'notification_preferences_pkey');
+        }
+    }
+
+    return;
+}
+
+sub _preference_row {
+    my ($row) = @_;
+
+    if ( _has_text( $row->{target_type} ) ) {
+        return 0;
+    }
+    if ( _has_text( $row->{notification_id} ) ) {
+        return 0;
+    }
+    if ( !_has_text( $row->{user_id} ) ) {
+        return 0;
+    }
+
+    return _has_text( $row->{channel} );
+}
+
+sub _same_preference_key {
+    my ( $existing, $row ) = @_;
+
+    if ( !_preference_row($existing) ) {
+        return 0;
+    }
+    if ( !_same_text( $existing->{user_id}, $row->{user_id} ) ) {
+        return 0;
+    }
+
+    return _same_text( $existing->{channel}, $row->{channel} );
+}
+
+sub _assert_read_unique {
+    my ( $self, $row ) = @_;
+
+    if ( !_read_row($row) ) {
+        return;
+    }
+
+    for my $existing ( @{ $self->created } ) {
+        if ( _same_read_key( $existing, $row ) ) {
+            GPForum::Infrastructure::UniqueConflict->throw(
+                'notification_reads_pkey');
+        }
+    }
+
+    return;
+}
+
+sub _read_row {
+    my ($row) = @_;
+
+    if ( exists $row->{rank_score} ) {
+        return 0;
+    }
+    if ( _has_text( $row->{source_type} ) ) {
+        return 0;
+    }
+    if ( !_has_text( $row->{notification_id} ) ) {
+        return 0;
+    }
+    if ( !_has_text( $row->{recipient_user_id} ) ) {
+        return 0;
+    }
+
+    return _has_text( $row->{read_at} );
+}
+
+sub _same_read_key {
+    my ( $existing, $row ) = @_;
+
+    if ( !_read_row($existing) ) {
+        return 0;
+    }
+    if ( !_same_text( $existing->{notification_id}, $row->{notification_id} ) )
+    {
+        return 0;
+    }
+
+    return _same_text( $existing->{recipient_user_id},
+        $row->{recipient_user_id} );
+}
+
+sub _has_text {
+    my ($value) = @_;
+
+    if ( !defined $value ) {
+        return 0;
+    }
+
+    return length $value ? 1 : 0;
+}
+
+sub _same_text {
+    my ( $stored, $candidate ) = @_;
+
+    $stored    = defined $stored    ? $stored    : q{};
+    $candidate = defined $candidate ? $candidate : q{};
+
+    return $stored eq $candidate ? 1 : 0;
 }
 
 sub _subscription_unique {

@@ -12,10 +12,17 @@ const my $UPLOAD_ACTION    => 'attachment.upload';
 const my $UPLOAD_LIMIT     => 20;
 const my $UPLOAD_WINDOW    => 60;
 const my $DEFAULT_FILENAME => 'attachment';
+const my $STATUS_CONFLICT  => 'conflict';
 const my $STATUS_FAILED    => 'failed';
 const my $STATUS_NOT_FOUND => 'not_found';
 const my $STATUS_INVALID   => 'invalid';
 const my $STATUS_FORBIDDEN => 'forbidden';
+const my $STATUS_UPLOADED  => 'uploaded';
+const my $STATUS_DELETED   => 'deleted';
+const my %WRITE_FLASH => (
+    $STATUS_DELETED  => 'forum.attachment_deleted',
+    $STATUS_UPLOADED => 'forum.attachment_uploaded',
+);
 
 sub upload_rate_input {
     my ( undef, $user_id ) = @_;
@@ -65,6 +72,9 @@ sub failure_status {
     if ( $status eq $STATUS_FORBIDDEN ) {
         return $status;
     }
+    if ( $status eq $STATUS_CONFLICT ) {
+        return $STATUS_INVALID;
+    }
 
     return;
 }
@@ -84,6 +94,27 @@ sub rate_limited_payload {
         error => 'rate limit exceeded',
         title => 'Rate limited',
     };
+}
+
+sub uploaded_status {
+    return $STATUS_UPLOADED;
+}
+
+sub deleted_status {
+    return $STATUS_DELETED;
+}
+
+sub write_flash_key {
+    my ( undef, $status ) = @_;
+
+    if ( !defined $status ) {
+        return;
+    }
+    if ( exists $WRITE_FLASH{$status} ) {
+        return $WRITE_FLASH{$status};
+    }
+
+    return;
 }
 
 sub _status {
@@ -137,7 +168,7 @@ True when the workflow status is C<failed>.
 =head2 failure_status
 
 Returns C<not_found>, C<invalid>, or C<forbidden> when those statuses are
-present.
+present. C<conflict> maps to C<invalid>.
 
 =head2 invalid_request
 
@@ -146,6 +177,19 @@ Returns the Guard bad-request payload for an invalid upload.
 =head2 rate_limited_payload
 
 Returns the Guard rate-limit payload used by attachment HTTP.
+
+=head2 uploaded_status
+
+Returns C<uploaded>.
+
+=head2 deleted_status
+
+Returns C<deleted>.
+
+=head2 write_flash_key
+
+Returns the i18n catalog key for a successful HTML write, or undef when the
+status has no flash copy.
 
 =head1 DIAGNOSTICS
 

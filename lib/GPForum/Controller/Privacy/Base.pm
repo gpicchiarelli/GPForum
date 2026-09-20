@@ -38,6 +38,17 @@ sub member_user_id {
     return $user_id;
 }
 
+sub command_id_param {
+    my ($self) = @_;
+
+    my $command_id = $self->_trim( $self->param('command_id') );
+    if ( length $command_id ) {
+        return $command_id;
+    }
+
+    return $self->_trim( $self->param('idempotency_key') );
+}
+
 sub write_user_id {
     my ($self) = @_;
 
@@ -145,7 +156,7 @@ sub write_failure {
     my ( $self, $result ) = @_;
 
     if ( $self->privacy_access->is_failed($result) ) {
-        return $self->_system_failure;
+        return $self->_service_unavailable;
     }
 
     return $self->_mapped_failure($result);
@@ -161,8 +172,9 @@ sub privacy_action_response {
         );
     }
 
-    return $self->redirect_to( $redirect_route
-          || $self->privacy_access->default_redirect );
+    return $self->_html_success( $payload->{status},
+        $redirect_route || $self->privacy_access->default_redirect,
+    );
 }
 
 sub render_payload {
@@ -237,6 +249,27 @@ sub _current_user_id {
     return GPForum::Web::Access->new->user_id($self);
 }
 
+sub _html_success {
+    my ( $self, $status, $route ) = @_;
+
+    $self->_set_success_flash(
+        $self->privacy_access->write_flash_key($status) );
+
+    return $self->redirect_to($route);
+}
+
+sub _set_success_flash {
+    my ( $self, $flash_key ) = @_;
+
+    if ( !$flash_key ) {
+        return;
+    }
+
+    $self->flash( success => $self->t($flash_key) );
+
+    return;
+}
+
 sub _wants_json {
     my ($self) = @_;
 
@@ -303,6 +336,33 @@ sub _current_route_name {
     return 'unknown';
 }
 
+sub render_export_download {
+    my ( $self, $row ) = @_;
+
+    my $request_id = $self->_row_value( $row, 'export_request_id' );
+    $self->res->headers->content_type('application/json; charset=UTF-8');
+    $self->res->headers->content_disposition(
+        $self->privacy_access->export_download_disposition($request_id) );
+
+    return $self->render(
+        json   => $self->_row_value( $row, 'manifest' ) || {},
+        status => $HTTP_OK,
+    );
+}
+
+sub _row_value {
+    my ( undef, $row, $name ) = @_;
+
+    if ( ref $row eq 'HASH' ) {
+        return $row->{$name};
+    }
+    if ( $row && $row->can('get_column') ) {
+        return $row->get_column($name);
+    }
+
+    return;
+}
+
 sub _not_found {
     my ( $self, $error ) = @_;
 
@@ -316,10 +376,28 @@ sub _conflict {
         $self->privacy_access->conflict_payload($error) );
 }
 
-sub _system_failure {
+sub system_failure {
     my ($self) = @_;
 
     return GPForum::Web::Guard->new->system_failure($self);
+}
+
+sub _service_unavailable {
+    my ($self) = @_;
+
+    return GPForum::Web::Guard->new->service_unavailable($self);
+}
+
+sub _trim {
+    my ( undef, $value ) = @_;
+
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
 }
 
 1;
@@ -364,6 +442,10 @@ Requires an authenticated actor with the requested privacy permission.
 =head2 write_failure
 
 Maps workflow statuses to HTTP error responses.
+
+=head2 command_id_param
+
+Reads the submitted C<command_id>, falling back to C<idempotency_key>.
 
 =head1 DIAGNOSTICS
 

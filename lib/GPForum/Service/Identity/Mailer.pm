@@ -344,8 +344,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Does not queue mail through the outbox. Send happens at the identity
-workflow boundary after the token transaction commits.
+Does not queue mail through the outbox. The identity worker handler
+sends after the token transaction commits an outbox row.
 
 =head1 AUTHOR
 

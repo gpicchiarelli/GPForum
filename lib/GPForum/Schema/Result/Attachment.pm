@@ -71,6 +71,8 @@ __PACKAGE__->add_columns(
 );
 
 __PACKAGE__->set_primary_key('attachment_id');
+__PACKAGE__->add_unique_constraint(
+    attachments_object_key_key => ['object_key'] );
 __PACKAGE__->belongs_to(
     owner => 'GPForum::Schema::Result::User',
     'owner_user_id'

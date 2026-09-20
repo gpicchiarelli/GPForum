@@ -198,6 +198,7 @@ sub _register {
     $client->status_is($HTTP_OK);
     $client->post_ok(
         '/register' => form => {
+            command_id   => _form_value( $client, 'command_id' ),
             csrf_token   => _form_value( $client, 'csrf_token' ),
             username     => $username,
             display_name => "Integration $username",
@@ -217,6 +218,7 @@ sub _login {
     $client->status_is($HTTP_OK);
     $client->post_ok(
         '/login' => form => {
+            command_id => _form_value( $client, 'command_id' ),
             csrf_token => _form_value( $client, 'csrf_token' ),
             identifier => $username,
             password   => $PASSWORD,
@@ -232,8 +234,12 @@ sub _logout {
     my ($client) = @_;
 
     $client->get_ok('/settings');
-    $client->post_ok( '/logout' => form =>
-          { csrf_token => _form_value( $client, 'csrf_token' ) } );
+    $client->post_ok(
+        '/logout' => form => {
+            command_id => _form_value( $client, 'command_id' ),
+            csrf_token => _form_value( $client, 'csrf_token' ),
+        }
+    );
     $client->get_ok('/bookmarks');
     $client->status_is($HTTP_UNAUTHORIZED);
 
@@ -433,6 +439,7 @@ sub _post_form {
     $client->get_ok($form_page);
     $client->post_ok(
         $path => form => {
+            command_id => _form_command_id( $client, $path ),
             csrf_token => _form_value( $client, 'csrf_token' ),
             %{$fields},
         }
@@ -531,6 +538,24 @@ sub _form_value {
     my ($value) = $body =~ /name="\Q$name\E" [^>]+ value="([^"]+)"/msx;
 
     return $value;
+}
+
+sub _form_command_id {
+    my ( $client, $form_action ) = @_;
+
+    const my $FORM_SNIPPET => 800;
+    my $body   = $client->tx->res->body;
+    my $quote  = q{"};
+    my $marker = 'action=' . $quote . $form_action . $quote;
+    my $start  = index $body, $marker;
+    if ( $start < 0 ) {
+        return;
+    }
+
+    my $chunk        = substr $body, $start, $FORM_SNIPPET;
+    my ($command_id) = $chunk =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
 }
 
 sub _quietly {

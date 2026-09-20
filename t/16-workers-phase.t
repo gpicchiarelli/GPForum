@@ -18,10 +18,12 @@ use GPForum::Test::MinionJob;
 use GPForum::Test::NotificationDispatcher;
 use GPForum::Test::OutboxDispatcher;
 use GPForum::Test::OutboxPayloadRow;
+use GPForum::Test::IdentityMailer;
 use GPForum::Test::WorkerSink;
 use GPForum::Worker::Handler::AttachmentScanning;
 use GPForum::Worker::Handler::CacheInvalidation;
 use GPForum::Worker::Handler::FeedProjection;
+use GPForum::Worker::Handler::IdentityMail;
 use GPForum::Worker::Handler::MediaProcessing;
 use GPForum::Worker::Handler::NotificationDispatch;
 use GPForum::Worker::Handler::ReputationUpdate;
@@ -31,9 +33,15 @@ use GPForum::Worker::MinionRegistrar;
 
 our $VERSION = '0.001';
 
-const my $OUTBOX_LIMIT    => 7;
-const my $POST_HANDLERS   => 5;
-const my $THREAD_HANDLERS => 4;
+const my $OUTBOX_LIMIT           => 7;
+const my $POST_HANDLERS          => 5;
+const my $POST_UPDATE_HANDLERS   => 3;
+const my $THREAD_HANDLERS        => 4;
+const my $THREAD_UPDATE_HANDLERS => 2;
+const my $THREAD_DELETE_HANDLERS => 3;
+const my $THREAD_HIDDEN_HANDLERS => 4;
+const my $REPUTATION_SINK_INDEX  => 4;
+const my $THREAD_MOVE_HANDLERS   => 2;
 
 my $sink  = GPForum::Test::WorkerSink->new;
 my $cache = GPForum::Service::Operations::LocalCache->new;
@@ -99,10 +107,171 @@ is( $sink->records->[3]{action},
     'feed.project', 'feed handler records projection action' );
 is( $sink->records->[3]{item_type},
     'post', 'feed handler records post item type' );
-is( $sink->records->[4]{action},
+is( $sink->records->[$REPUTATION_SINK_INDEX]{action},
     'reputation.record', 'reputation handler records ledger action' );
-is( $sink->records->[4]{reason},
+is( $sink->records->[$REPUTATION_SINK_INDEX]{reason},
     'post_created', 'reputation handler records post reason' );
+
+my $update_sink      = GPForum::Test::WorkerSink->new;
+my $update_transport = GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new( sink => $update_sink ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $update_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $update_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new( sink => $update_sink ),
+        GPForum::Worker::Handler::ReputationUpdate->new( sink => $update_sink ),
+    ],
+);
+my $update_dispatch = $update_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'post-1',
+                aggregate_type => 'post',
+                event_id       => 'event-edit-1',
+                event_type     => 'post.updated',
+                thread_id      => 'thread-1',
+            },
+        },
+    )
+);
+ok( $update_dispatch->{ok}, 'post update transport succeeds' );
+is( $update_dispatch->{handlers},
+    $POST_UPDATE_HANDLERS, 'post update skips notification and reputation' );
+is( $update_sink->records->[0]{action},
+    'search.index', 'post update reindexes search' );
+is( $update_sink->records->[1]{action},
+    'cache.invalidate', 'post update invalidates cache' );
+is( $update_sink->records->[2]{action},
+    'feed.project', 'post update reprojects feed rows' );
+
+my $delete_sink      = GPForum::Test::WorkerSink->new;
+my $delete_transport = GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new( sink => $delete_sink ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $delete_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $delete_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new( sink => $delete_sink ),
+        GPForum::Worker::Handler::ReputationUpdate->new( sink => $delete_sink ),
+    ],
+);
+my $delete_dispatch = $delete_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'post-1',
+                aggregate_type => 'post',
+                event_id       => 'event-delete-1',
+                event_type     => 'post.deleted',
+                thread_id      => 'thread-1',
+            },
+        },
+    )
+);
+ok( $delete_dispatch->{ok}, 'post delete transport succeeds' );
+is( $delete_dispatch->{handlers},
+    $POST_UPDATE_HANDLERS, 'post delete skips notification and reputation' );
+is( $delete_sink->records->[0]{action},
+    'search.remove', 'post delete removes search' );
+is( $delete_sink->records->[1]{action},
+    'cache.invalidate', 'post delete invalidates cache' );
+is( $delete_sink->records->[2]{action},
+    'feed.remove', 'post delete removes feed rows' );
+
+my $undelete_sink      = GPForum::Test::WorkerSink->new;
+my $undelete_transport = GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new(
+            sink => $undelete_sink
+        ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $undelete_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $undelete_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new(
+            sink => $undelete_sink
+        ),
+        GPForum::Worker::Handler::ReputationUpdate->new(
+            sink => $undelete_sink
+        ),
+    ],
+);
+my $undelete_dispatch = $undelete_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'post-1',
+                aggregate_type => 'post',
+                event_id       => 'event-undelete-1',
+                event_type     => 'post.undeleted',
+                thread_id      => 'thread-1',
+            },
+        },
+    )
+);
+ok( $undelete_dispatch->{ok}, 'post undelete transport succeeds' );
+is( $undelete_dispatch->{handlers},
+    $POST_UPDATE_HANDLERS, 'post undelete skips notification and reputation' );
+is( $undelete_sink->records->[0]{action},
+    'search.index', 'post undelete reindexes search' );
+is( $undelete_sink->records->[1]{action},
+    'cache.invalidate', 'post undelete invalidates cache' );
+is( $undelete_sink->records->[2]{action},
+    'feed.project', 'post undelete reprojects feed rows' );
+
+my $thread_undelete_sink = GPForum::Test::WorkerSink->new;
+my $thread_undelete_transport =
+  GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new(
+            sink => $thread_undelete_sink
+        ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $thread_undelete_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $thread_undelete_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new(
+            sink => $thread_undelete_sink
+        ),
+        GPForum::Worker::Handler::ReputationUpdate->new(
+            sink => $thread_undelete_sink
+        ),
+    ],
+  );
+my $thread_undelete_dispatch = $thread_undelete_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'thread-1',
+                aggregate_type => 'thread',
+                event_id       => 'event-thread-undelete-1',
+                event_type     => 'thread.undeleted',
+            },
+        },
+    )
+);
+ok( $thread_undelete_dispatch->{ok}, 'thread undelete transport succeeds' );
+is( $thread_undelete_dispatch->{handlers},
+    $THREAD_DELETE_HANDLERS,
+    'thread undelete skips notification and reputation' );
+is( $thread_undelete_sink->records->[0]{action},
+    'search.index', 'thread undelete reindexes search' );
+is( $thread_undelete_sink->records->[1]{action},
+    'cache.invalidate', 'thread undelete invalidates cache' );
+is( $thread_undelete_sink->records->[2]{action},
+    'feed.project', 'thread undelete reprojects feed rows' );
 
 my $notification_dispatcher = GPForum::Test::NotificationDispatcher->new;
 my $notification_handler = GPForum::Worker::Handler::NotificationDispatch->new(
@@ -160,6 +329,190 @@ is( $thread_dispatch->{results}[2]{action},
     'feed.project', 'thread event also projects the feed' );
 is( $thread_dispatch->{results}[3]{reason},
     'thread_created', 'thread event also records reputation' );
+
+my $thread_update_sink = GPForum::Test::WorkerSink->new;
+my $thread_update_transport =
+  GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new(
+            sink => $thread_update_sink
+        ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $thread_update_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $thread_update_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new(
+            sink => $thread_update_sink
+        ),
+        GPForum::Worker::Handler::ReputationUpdate->new(
+            sink => $thread_update_sink
+        ),
+    ],
+  );
+my $thread_update_dispatch = $thread_update_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'thread-1',
+                aggregate_type => 'thread',
+                event_id       => 'event-thread-edit-1',
+                event_type     => 'thread.updated',
+            },
+        },
+    )
+);
+ok( $thread_update_dispatch->{ok}, 'thread update transport succeeds' );
+is( $thread_update_dispatch->{handlers},
+    $THREAD_UPDATE_HANDLERS,
+    'thread update skips notification, feed, and reputation' );
+is( $thread_update_sink->records->[0]{action},
+    'search.index', 'thread update reindexes search' );
+is( $thread_update_sink->records->[1]{action},
+    'cache.invalidate', 'thread update invalidates cache' );
+
+my $thread_delete_sink = GPForum::Test::WorkerSink->new;
+my $thread_delete_transport =
+  GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new(
+            sink => $thread_delete_sink
+        ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $thread_delete_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $thread_delete_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new(
+            sink => $thread_delete_sink
+        ),
+        GPForum::Worker::Handler::ReputationUpdate->new(
+            sink => $thread_delete_sink
+        ),
+    ],
+  );
+my $thread_delete_dispatch = $thread_delete_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'thread-1',
+                aggregate_type => 'thread',
+                event_id       => 'event-thread-delete-1',
+                event_type     => 'thread.deleted',
+            },
+        },
+    )
+);
+ok( $thread_delete_dispatch->{ok}, 'thread delete transport succeeds' );
+is( $thread_delete_dispatch->{handlers},
+    $THREAD_DELETE_HANDLERS,
+    'thread delete skips notification and reputation' );
+is( $thread_delete_sink->records->[0]{action},
+    'search.remove', 'thread delete removes search' );
+is( $thread_delete_sink->records->[1]{action},
+    'cache.invalidate', 'thread delete invalidates cache' );
+is( $thread_delete_sink->records->[2]{action},
+    'feed.remove', 'thread delete removes feed rows' );
+
+my $thread_hide_sink = GPForum::Test::WorkerSink->new;
+my $thread_hide_transport =
+  GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new(
+            sink => $thread_hide_sink
+        ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $thread_hide_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $thread_hide_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new(
+            sink => $thread_hide_sink
+        ),
+        GPForum::Worker::Handler::ReputationUpdate->new(
+            sink => $thread_hide_sink
+        ),
+    ],
+  );
+my $thread_hide_dispatch = $thread_hide_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id   => 'thread-1',
+                aggregate_type => 'thread',
+                event_id       => 'event-thread-hide-1',
+                event_type     => 'thread.hidden',
+            },
+        },
+    )
+);
+ok( $thread_hide_dispatch->{ok}, 'thread hide transport succeeds' );
+is( $thread_hide_dispatch->{handlers},
+    $THREAD_HIDDEN_HANDLERS, 'thread hide skips notification' );
+is( $thread_hide_sink->records->[0]{action},
+    'search.remove', 'thread hide removes search' );
+is( $thread_hide_sink->records->[1]{action},
+    'cache.invalidate', 'thread hide invalidates cache' );
+is( $thread_hide_sink->records->[2]{action},
+    'feed.remove', 'thread hide removes feed rows' );
+is( $thread_hide_sink->records->[3]{action},
+    'reputation.record', 'thread hide records reputation' );
+
+my $thread_move_sink = GPForum::Test::WorkerSink->new;
+my $thread_move_transport =
+  GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::SearchIndexing->new(
+            sink => $thread_move_sink
+        ),
+        GPForum::Worker::Handler::NotificationDispatch->new(
+            sink => $thread_move_sink
+        ),
+        GPForum::Worker::Handler::CacheInvalidation->new(
+            sink => $thread_move_sink
+        ),
+        GPForum::Worker::Handler::FeedProjection->new(
+            sink => $thread_move_sink
+        ),
+        GPForum::Worker::Handler::ReputationUpdate->new(
+            sink => $thread_move_sink
+        ),
+    ],
+  );
+my $thread_move_dispatch = $thread_move_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                aggregate_id         => 'thread-1',
+                aggregate_type       => 'thread',
+                category_id          => 'category-2',
+                event_id             => 'event-thread-move-1',
+                event_type           => 'thread.moved',
+                previous_category_id => 'category-1',
+            },
+        },
+    )
+);
+ok( $thread_move_dispatch->{ok}, 'thread move transport succeeds' );
+is( $thread_move_dispatch->{handlers},
+    $THREAD_MOVE_HANDLERS,
+    'thread move skips notification, feed, and reputation' );
+is( $thread_move_sink->records->[0]{action},
+    'search.index', 'thread move reindexes search' );
+is( $thread_move_sink->records->[1]{action},
+    'cache.invalidate', 'thread move invalidates cache' );
+is_deeply(
+    $thread_move_sink->records->[1]{tags},
+    [
+        'threads',         'forum-index',
+        'thread:thread-1', 'category:category-2',
+        'category:category-1',
+    ],
+    'thread move invalidates origin and destination category tags'
+);
 
 $cache->put(
     'categories:list:10',
@@ -426,6 +779,41 @@ is( scalar @factory_jobs, 1,
     'registrar can build dispatcher from job factory' );
 is( $factory_dispatcher->calls->[0],
     5, 'factory-built dispatcher receives job limit' );
+
+my $mailer         = GPForum::Test::IdentityMailer->new;
+my $mail_sink      = GPForum::Test::WorkerSink->new;
+my $mail_transport = GPForum::Service::Outbox::DomainEventTransport->new(
+    handlers => [
+        GPForum::Worker::Handler::IdentityMail->new(
+            mailer => $mailer,
+            sink   => $mail_sink,
+        ),
+    ],
+);
+my $mail_dispatch = $mail_transport->dispatch(
+    GPForum::Test::OutboxPayloadRow->new(
+        data => {
+            payload => {
+                event_id   => 'event-mail-1',
+                event_type => 'identity.mail.requested',
+                mail       => {
+                    kind  => 'password_reset',
+                    to    => 'member@example.test',
+                    token => 'raw-reset',
+                },
+            },
+        },
+    )
+);
+ok( $mail_dispatch->{ok}, 'identity mail transport succeeds' );
+is( $mail_dispatch->{handlers},
+    1, 'identity mail event dispatches to the mail handler' );
+is( $mailer->sent->[0]{kind},
+    'password_reset', 'identity mail handler sends reset mail' );
+is( $mailer->sent->[0]{token},
+    'raw-reset', 'identity mail handler gives the mailer the raw token' );
+is( $mail_sink->records->[0]{action},
+    'identity.mail', 'identity mail handler records delivery' );
 
 done_testing();
 

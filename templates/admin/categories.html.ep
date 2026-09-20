@@ -17,6 +17,7 @@
       component_title => t('admin.create_category') %>
     <form method="post" action="<%= url_for('admin_category_create') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $create_command_id || q{} %>">
       <label for="category-title"><%= t('forum.thread_title') %></label>
       <input id="category-title" name="title" required>
       <label for="category-slug"><%= t('admin.slug') %></label>
@@ -51,6 +52,7 @@
             <p><%= $category->{description} %></p>
             <form method="post" action="<%= url_for('admin_category_update', category_id => $category->{category_id}) %>">
               <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $category->{update_command_id} || q{} %>">
               <input type="hidden" name="category_id" value="<%= $category->{category_id} %>">
               <label for="category-<%= $category->{category_id} %>-title"><%= t('forum.thread_title') %></label>
               <input id="category-<%= $category->{category_id} %>-title" name="title" value="<%= $category->{title} %>" required>

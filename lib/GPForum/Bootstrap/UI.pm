@@ -147,6 +147,13 @@ sub _register_presentation_helpers {
     my ( $application, $theme_cookie ) = @_;
 
     $application->helper(
+        ui_command_id => sub {
+            my ($controller) = @_;
+
+            return $controller->gp_id->uuid;
+        }
+    );
+    $application->helper(
         ui_label => sub {
             my ( $controller, $namespace, $value ) = @_;
 
@@ -406,6 +413,9 @@ sub _ui_breadcrumbs {
         category               => 'nav.categories',
         feed                   => 'nav.feed',
         forum_search           => 'nav.search',
+        legal_cookies          => 'legal.cookies',
+        legal_privacy          => 'legal.privacy',
+        legal_terms            => 'legal.terms',
         login                  => 'auth.login',
         mentions               => 'nav.mentions',
         moderation_actions     => 'nav.moderation',

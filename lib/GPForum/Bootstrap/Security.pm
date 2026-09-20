@@ -12,11 +12,11 @@ sub register {
 
     my $application = $input{application};
     my $config      = $input{config};
-    my $headers     = GPForum::Security::BrowserHeaders->new;
+    my $headers     = GPForum::Security::BrowserHeaders->new(
+        include_hsts => $config->requires_secure_transport, );
 
     $application->sessions->samesite('Lax');
-    $application->sessions->secure(
-        $config->environment eq 'production' ? 1 : 0 );
+    $application->sessions->secure( $config->requires_secure_transport );
 
     $application->hook(
         after_dispatch => sub {

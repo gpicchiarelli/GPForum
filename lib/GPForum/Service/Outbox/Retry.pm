@@ -12,6 +12,7 @@ const my $FIRST_FAILURE_OFFSET => 1;
 const my $LOCK_SECONDS         => 60;
 const my $FAILED_STATUS        => 'failed';
 const my $CANCELLED_STATUS     => 'cancelled';
+const my $PERMANENT_FAILURE    => 'permanent';
 const my $DEFAULT_MAX_ATTEMPTS => 5;
 
 has max_attempts => $DEFAULT_MAX_ATTEMPTS;
@@ -25,13 +26,26 @@ sub next_attempt {
 }
 
 sub status {
-    my ( $self, $attempt_count ) = @_;
+    my ( $self, $attempt_count, $failure_type ) = @_;
 
+    if ( _is_permanent($failure_type) ) {
+        return $CANCELLED_STATUS;
+    }
     if ( $attempt_count >= $self->max_attempts ) {
         return $CANCELLED_STATUS;
     }
 
     return $FAILED_STATUS;
+}
+
+sub _is_permanent {
+    my ($failure_type) = @_;
+
+    if ( defined $failure_type && $failure_type eq $PERMANENT_FAILURE ) {
+        return 1;
+    }
+
+    return 0;
 }
 
 sub backoff_seconds {
@@ -66,6 +80,7 @@ Version 0.001.
 
     my $attempt = $retry->next_attempt($message);
     my $status  = $retry->status($attempt);
+    my $done    = $retry->status( $attempt, 'permanent' );
 
 =head1 DESCRIPTION
 
@@ -81,7 +96,8 @@ Returns the next attempt count from the current row.
 
 =head2 status
 
-Returns C<cancelled> when attempts are exhausted, otherwise C<failed>.
+Returns C<cancelled> when attempts are exhausted or the failure is
+C<permanent>, otherwise C<failed>.
 
 =head2 backoff_seconds
 

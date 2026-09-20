@@ -14,8 +14,10 @@ use GPForum::Service::Id;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_LIMIT  => 50;
-const my @CURSOR_COLUMNS => qw(created_at bookmark_id);
+const my $DEFAULT_LIMIT     => 50;
+const my $ID_CONSTRAINT     => 'bookmarks_pkey';
+const my $TARGET_CONSTRAINT => 'bookmarks_user_target_key';
+const my @CURSOR_COLUMNS    => qw(created_at bookmark_id);
 
 has clock       => sub { return GPForum::Service::Clock->new; };
 has id_service  => sub { return GPForum::Service::Id->new; };
@@ -55,14 +57,82 @@ sub _restore_after_conflict {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
-    my $existing =
-      $self->find_for_user_target( $input->{user_id}, $input->{target_type},
-        $input->{target_id}, );
+    return $self->_bookmark_after_unique( $input, $error );
+}
+
+sub _bookmark_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _bookmark_id_conflict($error) ) {
+        return $self->_bookmark_after_id_conflict($input);
+    }
+    if ( _bookmark_target_conflict($error) ) {
+        return $self->_reuse_bookmark_row( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _bookmark_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_existing_bookmark($input);
+    if ($existing) {
+        return $self->_restore_bookmark( $existing, $input );
+    }
+
+    return $self->_retry_bookmark_id($input);
+}
+
+sub _retry_bookmark_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->create_bookmark($input); };
+    if ($created) {
+        return $created;
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reuse_bookmark_row {
+    my ( $self, $input, $error ) = @_;
+
+    my $existing = $self->_existing_bookmark($input);
     if ( !$existing ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return $self->_restore_bookmark( $existing, $input );
+}
+
+sub _existing_bookmark {
+    my ( $self, $input ) = @_;
+
+    return $self->find_for_user_target( $input->{user_id},
+        $input->{target_type}, $input->{target_id}, );
+}
+
+sub _bookmark_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _bookmark_target_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $TARGET_CONSTRAINT ) >= 0 ? 1 : 0;
 }
 
 sub create_bookmark {
@@ -115,11 +185,9 @@ sub status_for_user_target {
 sub remove_bookmark {
     my ( $self, $bookmark_id ) = @_;
 
-    my $deleted_at = $self->clock->now_iso8601;
-    my $bookmark   = $self->schema->resultset('Bookmark')->find($bookmark_id);
-    $bookmark->update( { deleted_at => $deleted_at } );
+    my $bookmark = $self->schema->resultset('Bookmark')->find($bookmark_id);
 
-    return { bookmark_id => $bookmark_id, deleted_at => $deleted_at };
+    return $self->_soft_delete_bookmark($bookmark);
 }
 
 sub remove_for_user_target {
@@ -129,14 +197,34 @@ sub remove_for_user_target {
       $self->find_for_user_target( $input->{user_id}, $input->{target_type},
         $input->{target_id}, );
 
-    return { ok => 0, error => 'not_found' } if !$bookmark;
+    if ( !$bookmark ) {
+        return { ok => 0, error => 'not_found' };
+    }
+
+    my $removed = $self->_soft_delete_bookmark($bookmark);
+    $removed->{ok} = 1;
+
+    return $removed;
+}
+
+sub _soft_delete_bookmark {
+    my ( $self, $bookmark ) = @_;
+
+    my $bookmark_id = _column( $bookmark, 'bookmark_id' );
+    my $existing    = _column( $bookmark, 'deleted_at' );
+    if ( defined $existing ) {
+        return {
+            bookmark_id => $bookmark_id,
+            deleted_at  => $existing,
+            skipped     => 1,
+        };
+    }
 
     my $deleted_at = $self->clock->now_iso8601;
     $bookmark->update( { deleted_at => $deleted_at } );
 
     return {
-        ok          => 1,
-        bookmark_id => _column( $bookmark, 'bookmark_id' ),
+        bookmark_id => $bookmark_id,
         deleted_at  => $deleted_at,
     };
 }
@@ -170,21 +258,44 @@ sub list_page_for_user {
 sub _restore_bookmark {
     my ( $self, $bookmark, $input ) = @_;
 
-    my $changes = {
-        note       => $input->{note} || q{},
-        deleted_at => undef,
-    };
-    $bookmark->update($changes);
+    my $note    = $input->{note} || q{};
+    my $skipped = _bookmark_already_active( $bookmark, $note );
+    if ( !$skipped ) {
+        $bookmark->update(
+            {
+                deleted_at => undef,
+                note       => $note,
+            }
+        );
+    }
 
-    return {
+    my $result = {
         bookmark_id => _column( $bookmark, 'bookmark_id' ),
-        user_id     => $input->{user_id},
-        target_type => $input->{target_type},
-        target_id   => $input->{target_id},
-        note        => $changes->{note},
         created_at  => _column( $bookmark, 'created_at' ),
         deleted_at  => undef,
+        note        => $note,
+        target_id   => $input->{target_id},
+        target_type => $input->{target_type},
+        user_id     => $input->{user_id},
     };
+    if ($skipped) {
+        $result->{skipped} = 1;
+    }
+
+    return $result;
+}
+
+sub _bookmark_already_active {
+    my ( $bookmark, $note ) = @_;
+
+    if ( defined _column( $bookmark, 'deleted_at' ) ) {
+        return 0;
+    }
+    if ( ( _column( $bookmark, 'note' ) || q{} ) ne $note ) {
+        return 0;
+    }
+
+    return 1;
 }
 
 sub _search_for_user {

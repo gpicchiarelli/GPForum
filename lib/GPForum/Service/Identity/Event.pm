@@ -17,6 +17,7 @@ const my $LOGOUT_REQUESTED => 'identity.logout.requested';
 const my $TARGET_IDENTITY  => 'identity';
 const my $TARGET_SESSION   => 'session';
 const my $OUTCOME_ACCEPTED => 'accepted';
+const my $MAIL_REQUESTED   => 'identity.mail.requested';
 
 sub registered_envelope {
     my ( undef, $user, $correlation_id ) = @_;
@@ -59,6 +60,36 @@ sub action {
         schema_version => $SCHEMA_VERSION,
         target_id      => $input->{target_id},
         target_type    => $input->{target_type},
+    };
+}
+
+sub mail_envelope {
+    my ( undef, $input ) = @_;
+
+    return {
+        actor_id          => $input->{user_id},
+        aggregate_id      => $input->{user_id},
+        aggregate_type    => $USER_AGGREGATE,
+        aggregate_version => $SCHEMA_VERSION,
+        event_type        => $MAIL_REQUESTED,
+        idempotency_key   => join( q{:}, $MAIL_REQUESTED, $input->{token_id} ),
+        payload           => {
+            kind     => $input->{kind},
+            token_id => $input->{token_id},
+        },
+        schema_version => $SCHEMA_VERSION,
+    };
+}
+
+sub mail_outbox_payload {
+    my ( undef, $input ) = @_;
+
+    return {
+        mail => {
+            kind  => $input->{kind},
+            to    => $input->{to},
+            token => $input->{token},
+        },
     };
 }
 
@@ -130,7 +161,8 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Owns C<user.registered> EventLog envelopes, registration AuditLog hashes,
-generic identity audit arguments, and login/logout request AuditLog hashes.
+generic identity audit arguments, identity mail EventLog/outbox hashes,
+and login/logout request AuditLog hashes.
 It does not persist rows. L<GPForum::Service::Identity::Audit> still writes
 EventLog, OutboxMessage, and AuditLog.
 L<GPForum::Service::Identity::SecurityAudit> still writes login and logout
@@ -149,6 +181,15 @@ Returns AuditLog arguments for a registration.
 =head2 action
 
 Returns AuditLog arguments for a typed identity action.
+
+=head2 mail_envelope
+
+Returns EventLog arguments for C<identity.mail.requested>. The payload
+is C<kind> and C<token_id> only.
+
+=head2 mail_outbox_payload
+
+Returns the outbox-only C<mail> hash with recipient and raw token.
 
 =head2 login_request_audit
 

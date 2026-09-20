@@ -7,6 +7,14 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
+has binding_revokes     => sub { return []; };
+has category_creates    => sub { return []; };
+has category_updates    => sub { return []; };
+has permission_attaches => sub { return []; };
+has permission_creates  => sub { return []; };
+has role_binds          => sub { return []; };
+has role_creates        => sub { return []; };
+
 sub dashboard_summary {
     return {
         async => {
@@ -76,6 +84,8 @@ sub list_categories {
 sub create_category {
     my ( $self, $input ) = @_;
 
+    push @{ $self->category_creates }, $input;
+
     my $category;
     if ( !_missing_space( $input->{space_id} ) ) {
         $category = _category_created($input);
@@ -86,6 +96,8 @@ sub create_category {
 
 sub update_category {
     my ( $self, $input ) = @_;
+
+    push @{ $self->category_updates }, $input;
 
     my $category;
     if ( ( $input->{category_id} || q{} ) eq 'category-1' ) {
@@ -160,6 +172,8 @@ sub _category_row {
 sub create_role {
     my ( $self, $input ) = @_;
 
+    push @{ $self->role_creates }, $input;
+
     return {
         role_id     => 'role-created',
         name        => $input->{name},
@@ -170,6 +184,8 @@ sub create_role {
 
 sub create_permission {
     my ( $self, $input ) = @_;
+
+    push @{ $self->permission_creates }, $input;
 
     return {
         permission_id => 'permission-created',
@@ -182,6 +198,8 @@ sub create_permission {
 
 sub attach_permission {
     my ( $self, $input ) = @_;
+
+    push @{ $self->permission_attaches }, $input;
 
     return {
         role_id       => $input->{role_id},
@@ -211,6 +229,8 @@ sub roles_for_user {
 sub bind_role {
     my ( $self, $input ) = @_;
 
+    push @{ $self->role_binds }, $input;
+
     return {
         ok      => 1,
         binding => {
@@ -230,7 +250,15 @@ sub bind_role {
 sub revoke_binding {
     my ( $self, $binding_id, $actor_user_id ) = @_;
 
-    return if $binding_id ne 'binding-1';
+    if ( $binding_id ne 'binding-1' ) {
+        return;
+    }
+
+    push @{ $self->binding_revokes },
+      {
+        actor_user_id => $actor_user_id,
+        binding_id    => $binding_id,
+      };
 
     return {
         binding_id         => $binding_id,

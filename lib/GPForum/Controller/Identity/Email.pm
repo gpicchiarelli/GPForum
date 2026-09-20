@@ -25,7 +25,8 @@ sub email_confirm_form {
     my ($self) = @_;
 
     return $self->render(
-        template => 'identity/email_confirm',
+        template   => 'identity/email_confirm',
+        command_id => $self->gp_id->uuid,
         %{
             $self->gp_identity_view_model->email_confirm_form(
                 values => { token => $self->param('token') || q{} },
@@ -55,16 +56,14 @@ sub _submit_email_change {
 
     my $result = $self->gp_identity_workflow->request_email_change(
         {
+            command_id      => $self->command_id_param,
             email           => $self->param('email'),
             request_address => $self->request_address,
             user_id         => $user_id,
         }
     );
-    if ( $result->{status} eq 'failed' ) {
-        return $self->identity_system_failure;
-    }
     if ( !$result->{ok} ) {
-        return $self->identity_bad_request;
+        return $self->identity_write_failure($result);
     }
 
     $self->flash( success => $self->t('settings.email_change_requested') );
@@ -75,12 +74,13 @@ sub _complete_email_change {
     my ($self) = @_;
 
     my $result = $self->gp_identity_workflow->confirm_email_change(
-        { token => $self->param('token') } );
-    if ( $result->{status} eq 'failed' ) {
-        return $self->identity_system_failure;
-    }
+        {
+            command_id => $self->command_id_param,
+            token      => $self->param('token'),
+        }
+    );
     if ( !$result->{ok} ) {
-        return $self->identity_bad_request;
+        return $self->identity_write_failure($result);
     }
 
     return $self->render(

@@ -10,35 +10,83 @@ use GPForum::Service::Identity::Support;
 
 our $VERSION = '0.001';
 
-has logger       => undef;
-has mailer       => undef;
-has registration => undef;
-has store        => undef;
-has support      => sub { return GPForum::Service::Identity::Support->new; };
+has command_idempotency => undef;
+has logger              => undef;
+has registration        => undef;
+has store               => undef;
+has support => sub { return GPForum::Service::Identity::Support->new; };
 
 sub register {
     my ( $self, $input ) = @_;
 
-    my $prepared = $self->_prepared_registration($input);
-    if ( $prepared->{status} ne 'ok' ) {
-        return $prepared;
+    my $invalid = $self->_missing_fields( $input, ['command_id'] );
+    if ($invalid) {
+        return $invalid;
     }
 
-    return $self->_store_registration( $prepared->{stored} );
+    return $self->_commanded_write(
+        {
+            actor_id     => undef,
+            command_id   => $input->{command_id},
+            command_type => 'identity.register',
+            request      => {
+                email    => _trim( $input->{email} ),
+                username => _trim( $input->{username} ),
+            },
+            run => sub { return $self->_register_account($input); },
+        }
+    );
 }
 
 sub login {
     my ( $self, $input ) = @_;
 
-    my $invalid = $self->_missing_fields( $input, [qw(identifier password)] );
+    my $invalid =
+      $self->_missing_fields( $input, [qw(command_id identifier password)] );
     if ($invalid) {
         return $invalid;
     }
 
-    return $self->_authenticate($input);
+    return $self->_commanded_write(
+        {
+            actor_id     => undef,
+            command_id   => $input->{command_id},
+            command_type => 'identity.login',
+            request      => { identifier => _trim( $input->{identifier} ) },
+            run          => sub { return $self->_login_account($input); },
+        }
+    );
 }
 
 sub logout {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_fields( $input, ['command_id'] );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_logout($input);
+}
+
+sub _commanded_logout {
+    my ( $self, $input ) = @_;
+
+    return $self->_commanded_write(
+        {
+            actor_id     => $input->{user_id},
+            command_id   => $input->{command_id},
+            command_type => 'identity.logout',
+            request      => {
+                session_id => _trim( $input->{session_id} ),
+                user_id    => _trim( $input->{user_id} ),
+            },
+            run => sub { return $self->_logout_store($input); },
+        }
+    );
+}
+
+sub _logout_store {
     my ( $self, $input ) = @_;
 
     if ( !length _trim( $input->{session_id} ) ) {
@@ -48,103 +96,232 @@ sub logout {
         );
     }
 
-    return $self->_store_write(
+    return $self->_public_consume_result(
         sub { return $self->store->revoke_session($input); } );
 }
 
 sub request_password_reset {
     my ( $self, $input ) = @_;
 
-    my $invalid = $self->_missing_fields( $input, ['identifier'] );
+    my $invalid = $self->_missing_fields( $input, [qw(command_id identifier)] );
     if ($invalid) {
         return $invalid;
     }
 
-    return $self->_token_write( 'password_reset',
-        sub { return $self->store->request_password_reset($input); } );
+    return $self->_commanded_token_write(
+        {
+            actor_id     => undef,
+            command_id   => $input->{command_id},
+            command_type => 'identity.password_reset',
+            request      => { identifier => _trim( $input->{identifier} ) },
+            run          => sub {
+                return $self->store->request_password_reset($input);
+            },
+        }
+    );
 }
 
 sub reset_password {
     my ( $self, $input ) = @_;
 
-    my $invalid = $self->_missing_fields( $input, [qw(token password)] );
-    if ($invalid) {
-        return $invalid;
-    }
-
-    return $self->_store_write(
-        sub { return $self->store->reset_password($input); } );
+    return $self->_token_consume_write(
+        {
+            command_type => 'identity.password_reset_complete',
+            extra_fields => ['password'],
+            input        => $input,
+            run          => sub {
+                return $self->store->reset_password($input);
+            },
+        }
+    );
 }
 
 sub change_password {
     my ( $self, $input ) = @_;
 
-    return $self->_store_write(
-        sub { return $self->store->change_password($input); } );
+    my $invalid = $self->_missing_fields( $input,
+        [qw(command_id current_password new_password user_id)] );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_write(
+        {
+            actor_id     => $input->{user_id},
+            command_id   => $input->{command_id},
+            command_type => 'identity.password_change',
+            request      => { user_id => $input->{user_id} },
+            run          => sub {
+                return $self->_public_consume_result(
+                    sub { return $self->store->change_password($input); } );
+            },
+        }
+    );
 }
 
 sub request_email_change {
     my ( $self, $input ) = @_;
 
-    return $self->_token_write( 'email_change',
-        sub { return $self->store->request_email_change($input); } );
+    my $invalid = $self->_missing_fields( $input, ['command_id'] );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_token_write(
+        {
+            actor_id     => $input->{user_id},
+            command_id   => $input->{command_id},
+            command_type => 'identity.email_change',
+            request      => {
+                email   => _trim( $input->{email} ),
+                user_id => $input->{user_id},
+            },
+            run => sub {
+                return $self->store->request_email_change($input);
+            },
+        }
+    );
 }
 
 sub request_email_verification {
     my ( $self, $input ) = @_;
 
-    my $invalid = $self->_missing_fields( $input, ['identifier'] );
+    my $invalid = $self->_missing_fields( $input, [qw(command_id identifier)] );
     if ($invalid) {
         return $invalid;
     }
 
-    return $self->_token_write( 'email_verification',
-        sub { return $self->store->request_email_verification($input); } );
+    return $self->_commanded_token_write(
+        {
+            actor_id     => undef,
+            command_id   => $input->{command_id},
+            command_type => 'identity.email_verification',
+            request      => { identifier => _trim( $input->{identifier} ) },
+            run          => sub {
+                return $self->store->request_email_verification($input);
+            },
+        }
+    );
 }
 
 sub verify_email {
     my ( $self, $input ) = @_;
 
-    my $invalid = $self->_missing_fields( $input, ['token'] );
-    if ($invalid) {
-        return $invalid;
-    }
-
-    return $self->_store_write(
-        sub { return $self->store->confirm_email_verification($input); } );
+    return $self->_token_consume_write(
+        {
+            command_type => 'identity.email_verification_complete',
+            input        => $input,
+            run          => sub {
+                return $self->store->confirm_email_verification($input);
+            },
+        }
+    );
 }
 
 sub confirm_email_change {
     my ( $self, $input ) = @_;
 
-    return $self->_store_write(
-        sub { return $self->store->confirm_email_change($input); } );
+    return $self->_token_consume_write(
+        {
+            command_type => 'identity.email_change_complete',
+            input        => $input,
+            run          => sub {
+                return $self->store->confirm_email_change($input);
+            },
+        }
+    );
 }
 
 sub update_preferred_locale {
     my ( $self, $input ) = @_;
 
-    my $invalid =
-      $self->_missing_fields( $input, [qw(user_id preferred_locale)] );
-    if ($invalid) {
-        return $invalid;
-    }
-
-    return $self->_store_write(
-        sub { return $self->store->update_preferred_locale($input); } );
+    return $self->_preference_write(
+        {
+            command_type => 'identity.locale_change',
+            field        => 'preferred_locale',
+            input        => $input,
+            run          => sub {
+                return $self->store->update_preferred_locale($input);
+            },
+        }
+    );
 }
 
 sub update_preferred_theme {
     my ( $self, $input ) = @_;
 
+    return $self->_preference_write(
+        {
+            command_type => 'identity.theme_change',
+            field        => 'preferred_theme',
+            input        => $input,
+            run          => sub {
+                return $self->store->update_preferred_theme($input);
+            },
+        }
+    );
+}
+
+sub _preference_write {
+    my ( $self, $job ) = @_;
+
+    my $input = $job->{input};
+    my $field = $job->{field};
     my $invalid =
-      $self->_missing_fields( $input, [qw(user_id preferred_theme)] );
+      $self->_missing_fields( $input, [ 'command_id', 'user_id', $field ] );
     if ($invalid) {
         return $invalid;
     }
 
-    return $self->_store_write(
-        sub { return $self->store->update_preferred_theme($input); } );
+    return $self->_commanded_preference($job);
+}
+
+sub _commanded_preference {
+    my ( $self, $job ) = @_;
+
+    my $input = $job->{input};
+    my $field = $job->{field};
+    return $self->_commanded_write(
+        {
+            actor_id     => $input->{user_id},
+            command_id   => $input->{command_id},
+            command_type => $job->{command_type},
+            request      => {
+                $field  => _trim( $input->{$field} ),
+                user_id => $input->{user_id},
+            },
+            run => sub { return $self->_public_preference_result($job); },
+        }
+    );
+}
+
+sub _public_preference_result {
+    my ( $self, $job ) = @_;
+
+    my $result = $self->_store_write( $job->{run} );
+    if ( !$result->{ok} ) {
+        return $result;
+    }
+
+    my $field = $job->{field};
+    return _result(
+        status => 'ok',
+        stored => {
+            ok     => 1,
+            $field => $result->{stored}{$field},
+        },
+    );
+}
+
+sub _register_account {
+    my ( $self, $input ) = @_;
+
+    my $prepared = $self->_prepared_registration($input);
+    if ( $prepared->{status} ne 'ok' ) {
+        return $prepared;
+    }
+
+    return $self->_store_registration( $prepared->{stored} );
 }
 
 sub _prepared_registration {
@@ -226,16 +403,97 @@ sub _created_registration {
     );
 }
 
+sub _token_consume_write {
+    my ( $self, $job ) = @_;
+
+    my $invalid = $self->_missing_fields( $job->{input},
+        [ 'command_id', 'token', @{ $job->{extra_fields} || [] } ] );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_consume($job);
+}
+
+sub _commanded_consume {
+    my ( $self, $job ) = @_;
+
+    my $input = $job->{input};
+    return $self->_commanded_write(
+        {
+            actor_id     => undef,
+            command_id   => $input->{command_id},
+            command_type => $job->{command_type},
+            request      => { token => _trim( $input->{token} ) },
+            run          => sub {
+                return $self->_public_consume_result( $job->{run} );
+            },
+        }
+    );
+}
+
+sub _public_consume_result {
+    my ( $self, $code ) = @_;
+
+    my $result = $self->_store_write($code);
+    if ( !$result->{ok} ) {
+        return $result;
+    }
+
+    return _result(
+        status => 'ok',
+        stored => { ok => 1 },
+    );
+}
+
+sub _login_account {
+    my ( $self, $input ) = @_;
+
+    my $result = $self->_authenticate($input);
+    if ( !$result->{ok} ) {
+        return $result;
+    }
+
+    return _result(
+        status => 'ok',
+        stored => $self->_public_login_stored( $result->{stored} ),
+    );
+}
+
 sub _authenticate {
     my ( $self, $input ) = @_;
 
     my $evaled = $self->_eval_store(
         sub { return $self->store->authenticate_login($input); } );
     if ( $evaled->{failed} ) {
-        return _rejected_login();
+        return _failed_result();
     }
 
     return _login_result( $evaled->{value} );
+}
+
+sub _public_login_stored {
+    my ( $self, $stored ) = @_;
+
+    $stored ||= {};
+    return {
+        preferred_locale =>
+          $self->_login_preference( $stored, 'preferred_locale' ),
+        preferred_theme =>
+          $self->_login_preference( $stored, 'preferred_theme' ),
+        session_id => $stored->{session_id},
+        user_id    => $stored->{user_id},
+    };
+}
+
+sub _login_preference {
+    my ( $self, $stored, $name ) = @_;
+
+    if ( $self->support->has_text( $stored->{$name} ) ) {
+        return $stored->{$name};
+    }
+
+    return $self->support->column( $stored->{user}, $name );
 }
 
 sub _login_result {
@@ -269,21 +527,99 @@ sub _unverified_login {
 }
 
 sub _token_write {
-    my ( $self, $kind, $code ) = @_;
+    my ( $self, $code ) = @_;
 
     my $result = $self->_store_write($code);
-    return $self->_after_token_mail( $result, $kind );
-}
-
-sub _after_token_mail {
-    my ( $self, $result, $kind ) = @_;
-
     if ( !$result->{ok} ) {
         return $result;
     }
 
-    $self->_deliver_token_mail( $result->{stored}, $kind );
     return _public_write_result($result);
+}
+
+sub _commanded_write {
+    my ( $self, $job ) = @_;
+
+    if ( !$self->command_idempotency ) {
+        return $job->{run}->();
+    }
+
+    return $self->_idempotent_token_write($job);
+}
+
+sub _commanded_token_write {
+    my ( $self, $job ) = @_;
+
+    return $self->_commanded_write(
+        {
+            actor_id     => $job->{actor_id},
+            command_id   => $job->{command_id},
+            command_type => $job->{command_type},
+            request      => $job->{request},
+            run          => sub {
+                return $self->_token_write( $job->{run} );
+            },
+        }
+    );
+}
+
+sub _idempotent_token_write {
+    my ( $self, $job ) = @_;
+
+    my $guarded = eval { return $self->_token_command_guard($job); };
+    if ($EVAL_ERROR) {
+        $self->_log_error("identity command log failed: $EVAL_ERROR");
+        return _failed_result();
+    }
+
+    return _token_guard_result($guarded);
+}
+
+sub _token_command_guard {
+    my ( $self, $job ) = @_;
+
+    return $self->command_idempotency->run(
+        {
+            actor_id     => $job->{actor_id},
+            command_id   => _trim( $job->{command_id} ),
+            command_type => $job->{command_type},
+            request      => $job->{request} || {},
+        },
+        sub { return $job->{run}->(); },
+        sub {
+            my ($result) = @_;
+            return $result;
+        },
+    );
+}
+
+sub _token_guard_result {
+    my ($guarded) = @_;
+
+    if ( $guarded->{replayed} ) {
+        return $guarded->{response};
+    }
+    if ( $guarded->{recorded} ) {
+        return $guarded->{result};
+    }
+
+    return _token_guard_failure($guarded);
+}
+
+sub _token_guard_failure {
+    my ($guarded) = @_;
+
+    if ( $guarded->{invalid} ) {
+        return _result(
+            errors => { command_id => 'command_id is required' },
+            status => 'invalid',
+        );
+    }
+
+    return _result(
+        error  => $guarded->{error},
+        status => 'conflict',
+    );
 }
 
 sub _after_registration_mail {
@@ -293,15 +629,14 @@ sub _after_registration_mail {
         return $result;
     }
 
-    my $issued = $self->_issue_registration_verification( $result->{stored} );
-    $self->_deliver_token_mail( $issued, 'email_verification' );
+    $self->_issue_registration_verification( $result->{stored} );
     return $result;
 }
 
 sub _issue_registration_verification {
     my ( $self, $stored ) = @_;
 
-    my $evaled = $self->_eval_store(
+    return $self->_eval_store(
         sub {
             return $self->store->request_email_verification(
                 {
@@ -310,94 +645,6 @@ sub _issue_registration_verification {
             );
         }
     );
-    return $self->_registration_mail_payload( $stored, $evaled );
-}
-
-sub _registration_mail_payload {
-    my ( $self, $stored, $evaled ) = @_;
-
-    my $email = $self->support->column( $stored->{user}, 'email_normalized' );
-    if ( $evaled->{failed} || !$evaled->{value} ) {
-        return { email_normalized => $email };
-    }
-
-    my $value = $evaled->{value};
-    $value->{email_normalized} ||= $email;
-    return $value;
-}
-
-sub _deliver_token_mail {
-    my ( $self, $stored, $kind ) = @_;
-
-    if ( !$self->mailer ) {
-        return;
-    }
-
-    my $input = $self->_mail_input($stored);
-    if ( !$input ) {
-        return;
-    }
-
-    $self->_send_kind_mail( $kind, $input );
-    return;
-}
-
-sub _mail_input {
-    my ( $self, $stored ) = @_;
-
-    my $token = $self->_raw_token($stored);
-    my $to    = $self->_mail_address($stored);
-    if ( !$token || !$to ) {
-        return;
-    }
-
-    return { to => $to, token => $token };
-}
-
-sub _raw_token {
-    my ( undef, $stored ) = @_;
-
-    my $token = $stored->{token} || {};
-    return $token->{raw_token};
-}
-
-sub _mail_address {
-    my ( $self, $stored ) = @_;
-
-    if ( $self->support->has_text( $stored->{email_normalized} ) ) {
-        return $stored->{email_normalized};
-    }
-
-    my $token = $stored->{token} || {};
-    return $token->{email_normalized};
-}
-
-sub _send_kind_mail {
-    my ( $self, $kind, $input ) = @_;
-
-    if ( $kind eq 'password_reset' ) {
-        return $self->_eval_mail(
-            sub { return $self->mailer->send_password_reset($input); } );
-    }
-    if ( $kind eq 'email_change' ) {
-        return $self->_eval_mail(
-            sub { return $self->mailer->send_email_change($input); } );
-    }
-
-    return $self->_eval_mail(
-        sub { return $self->mailer->send_email_verification($input); } );
-}
-
-sub _eval_mail {
-    my ( $self, $code ) = @_;
-
-    my $value = eval { return $code->(); };
-    if ($EVAL_ERROR) {
-        $self->_log_error("identity mail failed: $EVAL_ERROR");
-        return { failed => 1 };
-    }
-
-    return { value => $value };
 }
 
 sub _public_write_result {
@@ -542,6 +789,7 @@ Version 0.001.
 
     my $result = $workflow->login(
         {
+            command_id => $command_id,
             identifier => $identifier,
             password   => $password,
         }
@@ -551,9 +799,17 @@ Version 0.001.
 
 Application boundary for registration, login, logout, password, email, and
 preference writes. Validates required fields, delegates persistence to
-C<Identity::Registration> and C<Identity::Store>, delivers identity tokens
-through C<Identity::Mailer> when configured, and returns a normalized
-result hash without raw tokens. Stores keep transaction, event, audit, and
+C<Identity::Registration> and C<Identity::Store>, and returns a normalized
+result hash without raw tokens. Token mail is queued on the identity
+outbox by the store in the same transaction as issuance. Registration,
+password-reset, email-change, and verification-resend require C<command_id>
+and replay from C<command_log> when the helper is present. Registration
+request hashes include email and username only, never the password. Login
+request hashes include the identifier only, never the password, and the
+recorded result is JSON-safe session identity. Token-consume commands
+(password-reset complete, email-change complete, and verification complete)
+request hashes include the token only, never a new password, and the
+recorded result is JSON-safe. Stores keep transaction, event, audit, and
 outbox ownership.
 
 =head1 SUBROUTINES/METHODS
@@ -561,51 +817,57 @@ outbox ownership.
 =head2 register
 
 Prepares and stores a registration, hiding duplicate-account details.
+Requires C<command_id>.
 
 =head2 login
 
-Authenticates an identifier and password. Failed credentials are C<rejected>
-without enumerating whether the account exists.
+Authenticates an identifier and password. Requires C<command_id>. Failed
+credentials are C<rejected> without enumerating whether the account exists.
 
 =head2 logout
 
-Revokes a server-side session when a session id is present.
+Revokes a server-side session when a session id is present. Requires
+C<command_id>. Command hashes include C<session_id> and C<user_id> only.
 
 =head2 request_password_reset
 
-Starts a password reset for an identifier.
+Starts a password reset for an identifier. Requires C<command_id>.
 
 =head2 reset_password
 
-Completes a password reset with a token.
+Completes a password reset with a token. Requires C<command_id>.
+A reset to the same secret still revokes sessions.
 
 =head2 change_password
 
-Changes the password of an authenticated member.
+Changes the password of an authenticated member. Requires C<command_id>.
+Command hashes include C<user_id> only, never the current or new password.
 
 =head2 request_email_change
 
-Starts an email change for an authenticated member.
+Starts an email change for an authenticated member. Requires C<command_id>.
+A request for the member's already-verified address does not issue a token.
 
 =head2 confirm_email_change
 
-Completes an email change with a token.
+Completes an email change with a token. Requires C<command_id>.
 
 =head2 request_email_verification
 
-Starts a registration verification resend for an identifier.
+Starts a registration verification resend for an identifier. Requires
+C<command_id>.
 
 =head2 verify_email
 
-Completes registration verification with a token.
+Completes registration verification with a token. Requires C<command_id>.
 
 =head2 update_preferred_locale
 
-Persists an authenticated member locale preference.
+Persists an authenticated member locale preference. Requires C<command_id>.
 
 =head2 update_preferred_theme
 
-Persists an authenticated member theme preference.
+Persists an authenticated member theme preference. Requires C<command_id>.
 
 =head1 DIAGNOSTICS
 
@@ -630,8 +892,8 @@ None known.
 
 Cookie-session rotation remains in the HTTP controller. Locale and theme
 cookie writes stay HTTP-specific; persistence goes through this workflow.
-Command-id replay is not required; stores keep their existing token and
-session idempotency.
+Guest cookie writes omit C<command_id>; authenticated preference writes
+replay from C<command_log>.
 
 =head1 AUTHOR
 

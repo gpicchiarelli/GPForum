@@ -66,6 +66,26 @@ sub job_hash {
     };
 }
 
+sub request_hash {
+    my ( $self, $request ) = @_;
+
+    if ( !$request ) {
+        return;
+    }
+
+    return {
+        completed_at        => $self->column( $request, 'completed_at' ),
+        created_at          => $self->column( $request, 'created_at' ),
+        deletion_request_id => $self->column( $request, 'deletion_request_id' ),
+        reason              => $self->column( $request, 'reason' ),
+        request_type        => $self->column( $request, 'request_type' ),
+        requester_user_id   => $self->column( $request, 'requester_user_id' ),
+        resource_id         => $self->column( $request, 'resource_id' ),
+        resource_type       => $self->column( $request, 'resource_type' ),
+        status              => $self->column( $request, 'status' ),
+    };
+}
+
 sub _row_column {
     my ( $row, $name ) = @_;
 
@@ -130,6 +150,10 @@ Returns the canonical deletion-request event payload.
 =head2 job_hash
 
 Copies erasure-job fields into a plain hash.
+
+=head2 request_hash
+
+Copies deletion-request fields into a plain hash.
 
 =head1 DIAGNOSTICS
 

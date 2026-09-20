@@ -85,6 +85,16 @@ sub _write_preference {
         return { error => $command->{required}, ok => 0 };
     }
 
+    my $held = $self->support->column( $user, $column );
+    if ( _same_preference( $held, $trimmed ) ) {
+        return {
+            ok      => 1,
+            skipped => 1,
+            $column => $trimmed,
+            user    => $user,
+        };
+    }
+
     $self->support->update_row(
         $user,
         {
@@ -98,6 +108,16 @@ sub _write_preference {
         $column => $trimmed,
         user    => $user,
     };
+}
+
+sub _same_preference {
+    my ( $held, $incoming ) = @_;
+
+    if ( !defined $held ) {
+        return 0;
+    }
+
+    return $held eq $incoming ? 1 : 0;
 }
 
 sub _find_user_by_id {
@@ -149,11 +169,13 @@ Returns the stored theme for a user id.
 
 =head2 update_preferred_locale
 
-Persists a non-empty locale and refreshes C<updated_at>.
+Persists a non-empty locale and refreshes C<updated_at>. A second write of
+the same locale returns C<skipped> and does not restamp the user row.
 
 =head2 update_preferred_theme
 
-Persists a non-empty theme and refreshes C<updated_at>.
+Persists a non-empty theme and refreshes C<updated_at>. A second write of
+the same theme returns C<skipped> and does not restamp the user row.
 
 =head1 DIAGNOSTICS
 

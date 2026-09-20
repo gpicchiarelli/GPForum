@@ -11,6 +11,7 @@ has actions        => sub { return []; };
 has consumed       => sub { return []; };
 has created_tokens => sub { return []; };
 has credentials    => sub { return {}; };
+has mail_jobs      => sub { return []; };
 has revokes        => sub { return []; };
 has rotations      => sub { return []; };
 
@@ -84,6 +85,14 @@ sub record_action {
     return;
 }
 
+sub record_mail {
+    my ( $self, $input ) = @_;
+
+    push @{ $self->mail_jobs }, $input;
+
+    return;
+}
+
 sub _consume_result {
     my ( $self, $raw ) = @_;
 
@@ -143,6 +152,14 @@ sub _special_consume {
             user_id          => 'gone',
         };
     }
+    if ( $raw eq 'taken-email' ) {
+        return {
+            email_normalized => 'other@example.test',
+            ok               => 1,
+            token_id         => 'tok-taken',
+            user_id          => 'user-1',
+        };
+    }
     if ( $raw eq 'verify-pending' ) {
         return {
             email_normalized => 'pending@example.test',
@@ -200,7 +217,8 @@ Records token commands and returns a fixed token id.
 
 =head2 consume_token
 
-Maps known raw tokens to invalid, used, empty-email, missing-user, or success.
+Maps known raw tokens to invalid, used, empty-email, missing-user,
+taken-email, or success.
 
 =head2 revoke_user_sessions
 

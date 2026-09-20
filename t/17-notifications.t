@@ -27,7 +27,8 @@ use GPForum::Worker::Handler::NotificationDispatch;
 
 our $VERSION = '0.001';
 
-const my $LIST_LIMIT => 10;
+const my $LIST_LIMIT       => 10;
+const my $MARKED_READ_ROWS => 3;
 
 my $subscriptions = GPForum::Test::NotificationResultSet->new;
 my $preferences   = GPForum::Test::NotificationResultSet->new;
@@ -89,9 +90,101 @@ is( $saved_subscription->{preference},
     'mentions', 'idempotent subscription save updates preference' );
 is( scalar @{ $subscriptions->created },
     1, 'idempotent subscription save does not insert a duplicate' );
+my $held_subscription = $subscriptions->find('generated-1');
+my $save_updates      = scalar @{ $held_subscription->updates };
+my $saved_again       = $subscription_store->save_subscription(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+        preference  => 'mentions',
+    }
+);
+ok( $saved_again->{skipped}, 'already-active subscription save is skipped' );
+is( $saved_again->{preference},
+    'mentions', 'already-active subscription keeps the preference' );
+is( scalar @{ $held_subscription->updates },
+    $save_updates, 'already-active subscription does not update the row' );
+
+my $subscription_pk_rows = GPForum::Test::NotificationResultSet->new;
+$subscription_pk_rows->create(
+    {
+        subscription_id => 'generated-1',
+        target_id       => 'other-thread',
+        target_type     => 'thread',
+        user_id         => 'other-user',
+    }
+);
+my $subscription_pk_store =
+  GPForum::Service::Notification::SubscriptionStore->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::NotificationSchema->new(
+        resultsets => { Subscription => $subscription_pk_rows },
+    ),
+  );
+my $subscription_pk = $subscription_pk_store->save_subscription(
+    {
+        target_id   => 'thread-1',
+        target_type => 'thread',
+        user_id     => 'user-1',
+    }
+);
+ok( !$subscription_pk->{skipped},
+    'unique subscription id collision remints and saves' );
+is( $subscription_pk->{subscription_id},
+    'generated-2', 'unique subscription id collision remints the id' );
+is( $subscription_pk->{user_id},
+    'user-1', 'unique subscription id collision keeps this user' );
+is( $subscription_pk->{target_id},
+    'thread-1', 'unique subscription id collision keeps this target' );
+
+my $subscription_leftover_rows = GPForum::Test::NotificationResultSet->new;
+$subscription_leftover_rows->create(
+    {
+        preference      => 'all',
+        subscription_id => 'generated-1',
+        target_id       => 'thread-1',
+        target_type     => 'thread',
+        user_id         => 'user-1',
+    }
+);
+$subscription_leftover_rows->find_misses(1);
+my $subscription_leftover_store =
+  GPForum::Service::Notification::SubscriptionStore->new(
+    clock      => GPForum::Test::FixedClock->new,
+    id_service => GPForum::Test::Id->new,
+    schema     => GPForum::Test::NotificationSchema->new(
+        resultsets => { Subscription => $subscription_leftover_rows },
+    ),
+  );
+my $subscription_leftover = $subscription_leftover_store->save_subscription(
+    {
+        target_id   => 'thread-1',
+        target_type => 'thread',
+        user_id     => 'user-1',
+    }
+);
+ok( $subscription_leftover->{skipped},
+    'leftover subscription id race reuses this subscription' );
+is( $subscription_leftover->{subscription_id},
+    'generated-1', 'leftover subscription id race keeps this subscription' );
+is( $subscription_leftover->{user_id},
+    'user-1', 'leftover subscription id race keeps this user' );
+is( scalar @{ $subscription_leftover_rows->created },
+    1, 'leftover subscription id race does not insert a second subscription' );
 
 my $muted = $subscription_store->mute('generated-1');
 is( $muted->{muted_at}, '2026-05-23T12:00:00Z', 'subscription can be muted' );
+my $muted_row    = $subscriptions->find('generated-1');
+my $mute_updates = scalar @{ $muted_row->updates };
+my $muted_again  = $subscription_store->mute('generated-1');
+ok( $muted_again->{skipped}, 'already-muted subscription is skipped' );
+is( $muted_again->{muted_at},
+    $muted->{muted_at},
+    'already-muted subscription keeps the original timestamp' );
+is( scalar @{ $muted_row->updates },
+    $mute_updates, 'already-muted subscription does not update the row' );
 my $revoked = $subscription_store->revoke('generated-1');
 is( $revoked->{revoked_at},
     '2026-05-23T12:00:00Z', 'subscription can be revoked' );
@@ -124,6 +217,24 @@ my $target_muted = $subscription_store->mute_for_user_target(
 ok( $target_muted->{ok}, 'subscription can be muted by target' );
 is( $target_muted->{muted_at},
     '2026-05-23T12:00:00Z', 'target mute records timestamp' );
+my $target_mute_updates = scalar @{ $muted_row->updates };
+my $target_muted_again  = $subscription_store->mute_for_user_target(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+ok( $target_muted_again->{skipped},
+    'already-muted target subscription is skipped' );
+is(
+    $target_muted_again->{muted_at},
+    $target_muted->{muted_at},
+    'already-muted target subscription keeps the original timestamp'
+);
+is( scalar @{ $muted_row->updates },
+    $target_mute_updates,
+    'already-muted target subscription does not update the row' );
 
 my $unmuted_subscription = $subscription_store->save_subscription(
     {
@@ -147,6 +258,24 @@ my $target_revoked = $subscription_store->revoke_for_user_target(
 ok( $target_revoked->{ok}, 'subscription can be revoked by target' );
 is( $target_revoked->{revoked_at},
     '2026-05-23T12:00:00Z', 'target revoke records timestamp' );
+my $target_revoke_updates = scalar @{ $muted_row->updates };
+my $target_revoked_again  = $subscription_store->revoke_for_user_target(
+    {
+        user_id     => 'user-1',
+        target_type => 'thread',
+        target_id   => 'thread-1',
+    }
+);
+ok( $target_revoked_again->{skipped},
+    'already-revoked target subscription is skipped' );
+is(
+    $target_revoked_again->{revoked_at},
+    $target_revoked->{revoked_at},
+    'already-revoked target subscription keeps the original timestamp'
+);
+is( scalar @{ $muted_row->updates },
+    $target_revoke_updates,
+    'already-revoked target subscription does not update the row' );
 
 my $active_subscription = $subscription_store->save_subscription(
     {
@@ -185,6 +314,49 @@ is( $preference->{digest_frequency},
 is( $preference->{updated_at},
     '2026-05-23T12:00:00Z', 'preference stores update time' );
 is( scalar @{ $preferences->created }, 1, 'preference row is upserted' );
+my $email_row =
+  $preferences->find( { channel => 'email', user_id => 'user-1' } );
+my $pref_updates    = scalar @{ $email_row->updates };
+my $same_preference = $preference_store->set_preference(
+    {
+        user_id          => 'user-1',
+        channel          => 'email',
+        enabled          => 1,
+        digest_frequency => 'daily',
+    }
+);
+ok( $same_preference->{skipped},
+    'already-applied notification preference is skipped' );
+is(
+    $same_preference->{updated_at},
+    $preference->{updated_at},
+    'already-applied notification preference keeps the original timestamp'
+);
+is( scalar @{ $email_row->updates },
+    $pref_updates,
+    'already-applied notification preference does not update the row' );
+
+$preferences->find_misses(1);
+my $raced_preference = $preference_store->set_preference(
+    {
+        user_id          => 'user-1',
+        channel          => 'email',
+        enabled          => 1,
+        digest_frequency => 'daily',
+    }
+);
+ok( $raced_preference->{skipped},
+    'unique preference race skips the existing row' );
+is(
+    $raced_preference->{updated_at},
+    $preference->{updated_at},
+    'unique preference race keeps the original timestamp'
+);
+is( scalar @{ $preferences->created },
+    1, 'unique preference race does not insert another row' );
+is( scalar @{ $email_row->updates },
+    $pref_updates, 'unique preference race does not update the row' );
+
 is_deeply( [ $preference_store->enabled_channels('user-1') ],
     ['email'], 'enabled channels can be listed' );
 
@@ -392,6 +564,66 @@ is( scalar @{ $notifications->created },
     1, 'duplicate delivery does not insert notification row' );
 is( scalar @{ $inbox->created },
     1, 'duplicate delivery does not insert inbox row' );
+
+$inbox->find_misses(1);
+my $raced = $dispatcher->create_notification(
+    {
+        recipient_user_id => 'user-1',
+        source_type       => 'post',
+        source_id         => 'post-1',
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-1' },
+    }
+);
+ok( $raced->{ok}, 'unique notification race succeeds' );
+ok( $raced->{duplicate},
+    'unique notification race is identified as duplicate' );
+is( scalar @{ $notifications->created },
+    1, 'unique notification race does not insert a second notification' );
+is( scalar @{ $inbox->created },
+    1, 'unique notification race does not insert a second inbox row' );
+
+my $orphan_notifications = GPForum::Test::NotificationResultSet->new;
+$orphan_notifications->create(
+    {
+        created_at        => '2026-05-23T12:00:00Z',
+        notification_id   => 'notify-orphan-1',
+        notification_type => 'reply',
+        source_type       => 'post',
+    }
+);
+my $orphan_inbox  = GPForum::Test::NotificationResultSet->new;
+my $orphan_schema = GPForum::Test::NotificationSchema->new(
+    resultsets => {
+        Notification      => $orphan_notifications,
+        NotificationInbox => $orphan_inbox,
+        NotificationRead  => GPForum::Test::NotificationResultSet->new,
+    },
+);
+my $orphan_dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    clock             => $clock,
+    permission_engine => GPForum::Test::PermissionEngine->new,
+    schema            => $orphan_schema,
+);
+my $orphan = $orphan_dispatcher->create_notification(
+    {
+        notification_id   => 'notify-orphan-1',
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-1' },
+        recipient_user_id => 'user-1',
+        source_id         => 'post-orphan',
+        source_type       => 'post',
+    }
+);
+ok( $orphan->{ok}, 'leftover notification race completes delivery' );
+ok( !$orphan->{duplicate},
+    'leftover notification race does not treat a missing inbox as duplicate' );
+is( $orphan->{notification}{notification_id},
+    'notify-orphan-1', 'leftover notification race keeps this notification' );
+is( scalar @{ $orphan_notifications->created },
+    1, 'leftover notification race does not insert a second notification' );
+is( scalar @{ $orphan_inbox->created },
+    1, 'leftover notification race inserts the missing inbox' );
 
 my $denied_dispatcher = GPForum::Service::Notification::Dispatcher->new(
     schema            => $schema,
@@ -629,10 +861,55 @@ ok( $duplicate_read->{duplicate}, 'duplicate mark-read is idempotent' );
 is( scalar @{ $reads->created },
     1, 'duplicate mark-read does not insert another read row' );
 
+$inbox->find(
+    {
+        recipient_user_id => 'user-1',
+        notification_id   => $created->{notification}{notification_id},
+    }
+)->update( { read_at => undef } );
+my $raced_read =
+  $dispatcher->mark_read( $created->{notification}{notification_id}, 'user-1' );
+ok( $raced_read->{ok}, 'unique mark-read race succeeds' );
+is( scalar @{ $reads->created },
+    1, 'unique mark-read race does not insert a second read row' );
+is( $raced_read->{unread_count},
+    2, 'unique mark-read race keeps the unread count' );
+is(
+    $inbox->find(
+        {
+            recipient_user_id => 'user-1',
+            notification_id   => $created->{notification}{notification_id},
+        }
+    )->get_column('read_at'),
+    '2026-05-23T12:00:00Z',
+    'unique mark-read race keeps the stored read timestamp'
+);
+
 my $missing_read = $dispatcher->mark_read( 'missing', 'user-1' );
 ok( !$missing_read->{ok}, 'missing notification read is rejected' );
 is( $missing_read->{error},
     'not_found', 'missing notification read is explicit' );
+
+my $all_read = $dispatcher->mark_all_read('user-1');
+ok( $all_read->{ok}, 'mark all read succeeds' );
+is( $all_read->{marked_count},
+    2, 'mark all read updates remaining unread rows' );
+is( $all_read->{unread_count}, 0, 'mark all read clears the unread badge' );
+ok( !$all_read->{duplicate},
+    'mark all read is not a duplicate when rows change' );
+is( scalar @{ $reads->created },
+    $MARKED_READ_ROWS, 'mark all read upserts remaining read rows' );
+is( $realtime_connection->sent->[-1]{json}{unread_count},
+    0, 'mark all read broadcasts a zero badge' );
+
+my $duplicate_all = $dispatcher->mark_all_read('user-1');
+ok( $duplicate_all->{duplicate},
+    'mark all read is idempotent when the inbox is already read' );
+is( $duplicate_all->{marked_count},
+    0, 'duplicate mark all read updates no rows' );
+is( scalar @{ $reads->created },
+    $MARKED_READ_ROWS,
+    'duplicate mark all read does not insert more read rows' );
 
 done_testing();
 

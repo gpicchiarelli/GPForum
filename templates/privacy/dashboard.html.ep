@@ -12,6 +12,7 @@
       component_title => t('privacy.data_export') %>
     <form method="post" action="<%= url_for('privacy_export_request') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $export_command_id || q{} %>">
       <button type="submit"><%= t('privacy.request_export') %></button>
     </form>
 
@@ -28,6 +29,9 @@
               </p>
               % if (%{$counts}) {
                 <p><%= t('data.posts') %> <%= $counts->{posts} || 0 %>, <%= t('data.attachments') %> <%= $counts->{attachments} || 0 %>, <%= t('data.notifications') %> <%= $counts->{notifications} || 0 %>, <%= t('data.subscriptions') %> <%= $counts->{subscriptions} || 0 %>.</p>
+              % }
+              % if (($request->{status} || q{}) eq 'completed') {
+                <p><a href="<%= url_for('privacy_export_download', export_request_id => $request->{export_request_id}) %>"><%= t('privacy.download_export') %></a></p>
               % }
             </article>
           </li>
@@ -46,6 +50,7 @@
       component_title => t('privacy.account_deletion') %>
     <form method="post" action="<%= url_for('privacy_deletion_request') %>">
       <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $deletion_command_id || q{} %>">
       <label for="privacy-deletion-reason"><%= t('common.reason') %></label>
       <textarea id="privacy-deletion-reason" name="reason" required></textarea>
       <button type="submit"><%= t('privacy.request_deletion') %></button>

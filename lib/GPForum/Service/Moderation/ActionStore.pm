@@ -14,11 +14,14 @@ use GPForum::Service::Moderation::Event;
 
 our $VERSION = '0.001';
 
-const my $STATE_VISIBLE => 'visible';
-const my $STATE_HIDDEN  => 'hidden';
-const my $STATE_LOCKED  => 'locked';
-const my $TARGET_POST   => 'post';
-const my $TARGET_THREAD => 'thread';
+const my $COMMAND_CONSTRAINT => 'idx_moderation_actions_command_id';
+const my $ID_CONSTRAINT      => 'moderation_actions_pkey';
+const my $ROW_LIMIT_ONE      => 1;
+const my $STATE_VISIBLE      => 'visible';
+const my $STATE_HIDDEN       => 'hidden';
+const my $STATE_LOCKED       => 'locked';
+const my $TARGET_POST        => 'post';
+const my $TARGET_THREAD      => 'thread';
 const my %LOCK_SQL_FOR => (
     post   => 'SELECT post_id FROM posts WHERE post_id = ? FOR UPDATE',
     thread => 'SELECT thread_id FROM threads WHERE thread_id = ? FOR UPDATE',
@@ -128,6 +131,50 @@ sub unlock_thread {
     );
 }
 
+sub hide_thread {
+    my ( $self, $input ) = @_;
+
+    my $timestamp = $self->clock->now_iso8601;
+
+    return $self->_apply_action(
+        {
+            %{$input},
+            action_type    => 'thread.hidden',
+            created_at     => $timestamp,
+            expected_state => $STATE_HIDDEN,
+            lock_kind      => $TARGET_THREAD,
+            resultset      => 'Thread',
+            target_id      => $input->{thread_id},
+            target_type    => $TARGET_THREAD,
+            updates        => {
+                hidden_at        => $timestamp,
+                moderation_state => $STATE_HIDDEN,
+            },
+        }
+    );
+}
+
+sub restore_thread {
+    my ( $self, $input ) = @_;
+
+    return $self->_apply_action(
+        {
+            %{$input},
+            action_type    => 'thread.restored',
+            created_at     => $self->clock->now_iso8601,
+            expected_state => $STATE_VISIBLE,
+            lock_kind      => $TARGET_THREAD,
+            resultset      => 'Thread',
+            target_id      => $input->{thread_id},
+            target_type    => $TARGET_THREAD,
+            updates        => {
+                hidden_at        => undef,
+                moderation_state => $STATE_VISIBLE,
+            },
+        }
+    );
+}
+
 sub reverse_action {
     my ( $self, $action_id, $reversed_by_user_id, $reason ) = @_;
 
@@ -203,9 +250,37 @@ sub _apply_action_once {
 sub _record_target_change {
     my ( $self, $target, $input ) = @_;
 
+    my $applied = $self->_applied_target_change( $target, $input );
+    if ($applied) {
+        return $applied;
+    }
+
+    return $self->_persist_target_change( $target, $input );
+}
+
+sub _applied_target_change {
+    my ( $self, $target, $input ) = @_;
+
+    if ( !_already_applied( $target, $input ) ) {
+        return;
+    }
+
+    return $self->_replayed_target_action($input);
+}
+
+sub _already_applied {
+    my ( $target, $input ) = @_;
+
+    my $previous = _column( $target, 'moderation_state' ) || q{};
+
+    return $previous eq $input->{expected_state} ? 1 : 0;
+}
+
+sub _persist_target_change {
+    my ( $self, $target, $input ) = @_;
+
     my $previous_state = _column( $target, 'moderation_state' );
-    my $idempotent =
-      ( $previous_state || q{} ) eq $input->{expected_state} ? 1 : 0;
+    my $idempotent     = _already_applied( $target, $input );
     if ( !$idempotent ) {
         $target->update( $input->{updates} );
     }
@@ -229,6 +304,39 @@ sub _record_target_change {
     );
 }
 
+sub _replayed_target_action {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_latest_target_action($input);
+    if ( !$existing ) {
+        return;
+    }
+
+    return {
+        action     => _action_hash($existing),
+        idempotent => 1,
+        ok         => 1,
+        skipped    => 1,
+    };
+}
+
+sub _latest_target_action {
+    my ( $self, $input ) = @_;
+
+    return $self->schema->resultset('ModerationAction')->search(
+        {
+            action_type => $input->{action_type},
+            reversed_at => undef,
+            target_id   => $input->{target_id},
+            target_type => $input->{target_type},
+        },
+        {
+            order_by => { -desc => 'created_at' },
+            rows     => 1,
+        },
+    )->single;
+}
+
 sub _replayed_command {
     my ( $self, $input ) = @_;
 
@@ -242,15 +350,15 @@ sub _replayed_command {
         return;
     }
 
-    return {
-        action   => _action_hash($existing),
-        ok       => 1,
-        replayed => 1,
-    };
+    return $self->_finish_leftover_action( $existing, $input );
 }
 
 sub _find_command_action {
     my ( $self, $command_id ) = @_;
+
+    if ( !_has_text($command_id) ) {
+        return;
+    }
 
     return $self->schema->resultset('ModerationAction')
       ->search( { command_id => $command_id }, { rows => 1 }, )
@@ -274,6 +382,18 @@ sub _lock_target {
 sub _record_action {
     my ( $self, $input ) = @_;
 
+    my $created = eval { return $self->_insert_action($input); };
+    my $error   = $EVAL_ERROR;
+    if ($created) {
+        return $self->_recorded_action( $created, $input );
+    }
+
+    return $self->_action_after_conflict( $input, $error );
+}
+
+sub _insert_action {
+    my ( $self, $input ) = @_;
+
     my $action = {
         actor_user_id        => $input->{actor_user_id},
         action_type          => $input->{action_type},
@@ -287,16 +407,9 @@ sub _record_action {
         target_id            => $input->{target_id},
         target_type          => $input->{target_type},
     };
-    my $created = eval {
-        $self->schema->resultset('ModerationAction')->create($action);
-        return $action;
-    };
-    my $error = $EVAL_ERROR;
-    if ($created) {
-        return $self->_recorded_action( $action, $input );
-    }
+    $self->schema->resultset('ModerationAction')->create($action);
 
-    return $self->_action_after_conflict( $input, $error );
+    return $action;
 }
 
 sub _recorded_action {
@@ -312,6 +425,42 @@ sub _recorded_action {
     return { action => $action, ok => 1 };
 }
 
+sub _finish_leftover_action {
+    my ( $self, $existing, $input ) = @_;
+
+    if ( !$self->_action_event_exists($existing) ) {
+        $self->_record_event_and_audit(
+            {
+                action         => $existing,
+                correlation_id => $input->{correlation_id},
+            }
+        );
+    }
+
+    return _replayed_action($existing);
+}
+
+sub _action_event_exists {
+    my ( $self, $existing ) = @_;
+
+    my $search = $self->schema->resultset('EventLog')->search(
+        {
+            idempotency_key => join( q{:},
+                _column( $existing, 'action_type' ),
+                _column( $existing, 'target_type' ),
+                _column( $existing, 'target_id' ),
+                _column( $existing, 'moderation_action_id' ) ),
+        },
+        { rows => $ROW_LIMIT_ONE },
+    );
+
+    if ( $search->can('single') ) {
+        return $search->single;
+    }
+
+    return;
+}
+
 sub _action_after_conflict {
     my ( $self, $input, $error ) = @_;
 
@@ -319,16 +468,85 @@ sub _action_after_conflict {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
+    return $self->_action_after_unique( $input, $error );
+}
+
+sub _action_after_unique {
+    my ( $self, $input, $error ) = @_;
+
+    if ( _action_id_conflict($error) ) {
+        return $self->_action_after_id_conflict($input);
+    }
+    if ( _action_command_conflict($error) ) {
+        return $self->_replay_command_action( $input, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    return;
+}
+
+sub _action_after_id_conflict {
+    my ( $self, $input ) = @_;
+
+    my $existing = $self->_find_command_action( $input->{command_id} );
+    if ($existing) {
+        return $self->_finish_leftover_action( $existing, $input );
+    }
+
+    return $self->_retry_action_id($input);
+}
+
+sub _retry_action_id {
+    my ( $self, $input ) = @_;
+
+    my $created = eval { return $self->_insert_action($input); };
+    if ($created) {
+        return $self->_recorded_action( $created, $input );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _replay_command_action {
+    my ( $self, $input, $error ) = @_;
+
     my $existing = $self->_find_command_action( $input->{command_id} );
     if ( !$existing ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
+
+    return $self->_finish_leftover_action( $existing, $input );
+}
+
+sub _replayed_action {
+    my ($existing) = @_;
 
     return {
         action   => _action_hash($existing),
         ok       => 1,
         replayed => 1,
     };
+}
+
+sub _action_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _action_command_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $COMMAND_CONSTRAINT ) >= 0 ? 1 : 0;
 }
 
 sub _action_hash {

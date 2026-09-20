@@ -42,8 +42,9 @@ has recorder => sub {
 };
 has session_tokens  => sub { return GPForum::Service::SessionToken->new; };
 has session_seconds => sub { return $SESSION_DAYS * $DAY_SECONDS; };
-has support         => sub { return GPForum::Service::Identity::Support->new; };
-has audit           => sub {
+has session_touch_interval_seconds => undef;
+has support => sub { return GPForum::Service::Identity::Support->new; };
+has audit   => sub {
     my ($self) = @_;
 
     return GPForum::Service::Identity::Audit->new(
@@ -72,6 +73,7 @@ has session_store => sub {
         session_seconds => $self->session_seconds,
         session_tokens  => $self->session_tokens,
         support         => $self->support,
+        _session_touch_arguments($self),
     );
 };
 has token_store => sub {
@@ -218,6 +220,17 @@ sub update_preferred_theme {
     my ( $self, $input ) = @_;
 
     return $self->preference_store->update_preferred_theme($input);
+}
+
+sub _session_touch_arguments {
+    my ($self) = @_;
+
+    if ( !defined $self->session_touch_interval_seconds ) {
+        return;
+    }
+
+    return ( session_touch_interval_seconds =>
+          $self->session_touch_interval_seconds );
 }
 
 1;

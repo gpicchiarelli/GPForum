@@ -38,6 +38,21 @@ sub prepare {
     };
 }
 
+sub prepare_revision {
+    my ( $self, $input ) = @_;
+
+    my $values = _normalized_revision_values($input);
+    my $errors = _revision_validation_errors($values);
+
+    return { ok => 0, errors => $errors, values => $values }
+      if keys %{$errors};
+
+    return {
+        ok      => 1,
+        command => $self->_revision_command($values),
+    };
+}
+
 sub _command {
     my ( $self, $values ) = @_;
 
@@ -53,6 +68,26 @@ sub _command {
         body            => $self->_body_record( $values, $ids ),
         revision        => _revision_record( $values, $ids ),
         counter_shard   => _counter_shard_record($values),
+    };
+}
+
+sub _revision_command {
+    my ( $self, $values ) = @_;
+
+    my $ids = {
+        body_id     => $self->id_service->uuid,
+        revision_id => $self->id_service->uuid,
+    };
+
+    return {
+        body            => $self->_body_record( $values, $ids ),
+        idempotency_key => $values->{idempotency_key},
+        post            => {
+            editor_user_id => $values->{editor_user_id},
+            post_id        => $values->{post_id},
+            thread_id      => $values->{thread_id},
+        },
+        revision => _revision_record( $values, $ids ),
     };
 }
 
@@ -83,7 +118,7 @@ sub _body_record {
 
     return {
         body_id            => $ids->{body_id},
-        post_id            => $ids->{post_id},
+        post_id            => $ids->{post_id} || $values->{post_id},
         body_format        => 'markdown',
         body_source        => $values->{body_source},
         body_rendered_safe =>
@@ -96,12 +131,13 @@ sub _revision_record {
     my ( $values, $ids ) = @_;
 
     return {
-        revision_id     => $ids->{revision_id},
-        post_id         => $ids->{post_id},
-        body_id         => $ids->{body_id},
-        editor_user_id  => $values->{author_user_id},
-        revision_number => $FIRST_REVISION,
-        edit_reason     => undef,
+        revision_id    => $ids->{revision_id},
+        post_id        => $ids->{post_id} || $values->{post_id},
+        body_id        => $ids->{body_id},
+        editor_user_id => $values->{editor_user_id}
+          || $values->{author_user_id},
+        revision_number => _revision_number($values),
+        edit_reason     => $values->{edit_reason},
     };
 }
 
@@ -130,6 +166,38 @@ sub _normalized_values {
     };
 }
 
+sub _normalized_revision_values {
+    my ($input) = @_;
+
+    return {
+        allocate_revision => 1,
+        body_hash         => _trim( $input->{body_hash} ),
+        body_source       => _trim( $input->{body_source} ),
+        edit_reason       => _optional_text( $input->{edit_reason} ),
+        editor_user_id    => _trim( $input->{editor_user_id} ),
+        idempotency_key   => _trim( $input->{idempotency_key} ),
+        post_id           => _trim( $input->{post_id} ),
+        revision_number   => 0,
+        thread_id         => _trim( $input->{thread_id} ),
+    };
+}
+
+sub _optional_text {
+    my ($value) = @_;
+
+    my $text = _trim($value);
+
+    return length $text ? $text : undef;
+}
+
+sub _revision_number {
+    my ($values) = @_;
+
+    return 0 if $values->{allocate_revision};
+
+    return $values->{revision_number} || $FIRST_REVISION;
+}
+
 sub _validation_errors {
     my ($values) = @_;
 
@@ -144,6 +212,21 @@ sub _validation_errors {
     _set_error( \%errors, 'body_hash',
         _required_error( $values, 'body_hash' ) );
     _set_error( \%errors, 'visibility', _visibility_error($values) );
+
+    return \%errors;
+}
+
+sub _revision_validation_errors {
+    my ($values) = @_;
+
+    my %errors;
+
+    _set_error( \%errors, 'post_id', _required_error( $values, 'post_id' ) );
+    _set_error( \%errors, 'editor_user_id',
+        _required_error( $values, 'editor_user_id' ) );
+    _set_error( \%errors, 'body_source', _body_error($values) );
+    _set_error( \%errors, 'body_hash',
+        _required_error( $values, 'body_hash' ) );
 
     return \%errors;
 }

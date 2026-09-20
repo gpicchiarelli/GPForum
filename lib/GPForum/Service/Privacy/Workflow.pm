@@ -8,19 +8,17 @@ use Mojo::Base -base;
 
 our $VERSION = '0.001';
 
-has deletion_workflow => undef;
-has export_builder    => undef;
-has hold_store        => undef;
-has logger            => undef;
-has reviewer          => undef;
+has command_idempotency => undef;
+has deletion_workflow   => undef;
+has export_builder      => undef;
+has hold_store          => undef;
+has logger              => undef;
+has reviewer            => undef;
 
 sub request_export {
     my ( $self, $input ) = @_;
 
-    return $self->_run_store(
-        'export request not found',
-        sub { return $self->_complete_export( $input->{user_id} ); },
-    );
+    return $self->_export_with_command($input);
 }
 
 sub request_deletion {
@@ -38,7 +36,8 @@ sub request_deletion {
         return $invalid;
     }
 
-    return $self->_run_store(
+    return $self->_commanded_store(
+        $input,
         'deletion request not found',
         sub { return $self->deletion_workflow->request_deletion($command); },
     );
@@ -57,7 +56,17 @@ sub approve_deletion {
         return $invalid;
     }
 
-    return $self->_approve_once($command);
+    return $self->_commanded_store(
+        $input,
+        'deletion request not found',
+        sub {
+            return $self->deletion_workflow->approve_request(
+                $command->{request_id},
+                $command->{actor_user_id},
+                $command->{reason},
+            );
+        },
+    );
 }
 
 sub hold_deletion {
@@ -73,42 +82,23 @@ sub hold_deletion {
         return $invalid;
     }
 
-    return $self->_hold_once($command);
+    return $self->_commanded_store(
+        $input,
+        'deletion request not found',
+        sub { return $self->_create_hold($command); },
+    );
 }
 
 sub run_erasure_job {
     my ( $self, $input ) = @_;
 
-    return $self->_run_store(
+    return $self->_commanded_store(
+        $input,
         'erasure job not found',
         sub {
             return $self->deletion_workflow->complete_job( $input->{job_id},
                 $input->{actor_user_id} );
         },
-    );
-}
-
-sub _approve_once {
-    my ( $self, $command ) = @_;
-
-    return $self->_run_store(
-        'deletion request not found',
-        sub {
-            return $self->deletion_workflow->approve_request(
-                $command->{request_id},
-                $command->{actor_user_id},
-                $command->{reason},
-            );
-        },
-    );
-}
-
-sub _hold_once {
-    my ( $self, $command ) = @_;
-
-    return $self->_run_store(
-        'deletion request not found',
-        sub { return $self->_create_hold($command); },
     );
 }
 
@@ -133,6 +123,88 @@ sub _create_hold {
         $command->{request_id},
         $command->{actor_user_id},
         $command->{reason}, $hold,
+    );
+}
+
+sub _export_with_command {
+    my ( $self, $input ) = @_;
+
+    my $invalid = $self->_missing_field( $input, 'command_id' );
+    if ($invalid) {
+        return $invalid;
+    }
+    if ( $self->command_idempotency ) {
+        return $self->_idempotent_export($input);
+    }
+
+    return $self->_run_export_store($input);
+}
+
+sub _idempotent_export {
+    my ( $self, $input ) = @_;
+
+    my $guarded = eval { return $self->_export_command_guard($input); };
+    if ($EVAL_ERROR) {
+        $self->_log_error("privacy command log failed: $EVAL_ERROR");
+        return _result(
+            error  => 'privacy store failed',
+            status => 'failed',
+        );
+    }
+
+    return _export_guard_result($guarded);
+}
+
+sub _export_command_guard {
+    my ( $self, $input ) = @_;
+
+    return $self->command_idempotency->run(
+        {
+            actor_id     => $input->{user_id},
+            command_id   => _trim( $input->{command_id} ),
+            command_type => 'privacy.export',
+            request      => { user_id => $input->{user_id} },
+        },
+        sub { return $self->_run_export_store($input); },
+        sub { my ($result) = @_; return $result; },
+    );
+}
+
+sub _export_guard_result {
+    my ($guarded) = @_;
+
+    if ( $guarded->{replayed} ) {
+        return $guarded->{response};
+    }
+    if ( $guarded->{recorded} ) {
+        return $guarded->{result};
+    }
+
+    return _guard_failure($guarded);
+}
+
+sub _guard_failure {
+    my ($guarded) = @_;
+
+    if ( $guarded->{invalid} ) {
+        return _result(
+            errors => { command_id => 'command_id is required' },
+            status => 'invalid',
+        );
+    }
+
+    return _result(
+        error  => $guarded->{error},
+        status => 'conflict',
+    );
+}
+
+sub _run_export_store {
+    my ( $self, $input ) = @_;
+
+    return $self->_run_store(
+        'export request not found',
+        sub { return $self->_complete_export( $input->{user_id} ); },
     );
 }
 
@@ -161,6 +233,17 @@ sub _missing_field {
         errors => { $name => "$name is required" },
         status => 'invalid',
     );
+}
+
+sub _commanded_store {
+    my ( $self, $input, $not_found, $code ) = @_;
+
+    my $invalid = $self->_missing_field( $input, 'command_id' );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_run_store( $not_found, $code );
 }
 
 sub _run_store {
@@ -323,29 +406,34 @@ transaction, event, audit, and outbox ownership.
 
 =head2 request_export
 
-Creates and completes a user export bundle.
+Creates and completes a user export bundle when a command id is present.
 
 =head2 request_deletion
 
-Creates an anonymize deletion request when a reason is present.
+Creates an anonymize deletion request when a command id and reason are present.
+An open request for the same resource is reused.
 
 =head2 approve_deletion
 
-Approves a pending deletion request or reports an active hold as conflict.
+Approves a pending deletion request or reports an active hold as conflict when
+a command id and reason are present.
 
 =head2 hold_deletion
 
-Creates a retention hold and marks the deletion request held.
+Creates a retention hold and marks the deletion request held when a command id
+and reason are present. C<hold_request> stays four arguments besides the
+invocant.
 
 =head2 run_erasure_job
 
-Completes an erasure job or reports an active hold as conflict.
+Completes an erasure job or reports an active hold as conflict when a command
+id is present.
 
 =head1 DIAGNOSTICS
 
 Returns C<invalid>, C<not_found>, C<conflict>, or C<failed> statuses instead of
-throwing for expected write outcomes. Unexpected store exceptions are logged
-and mapped to C<failed>.
+throwing for expected write outcomes. Unexpected store or command-log
+exceptions are logged and mapped to C<failed>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -362,8 +450,11 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Command-id replay is not required; deletion stores keep their existing
-idempotency for approval and job completion.
+Command-id is required for export, deletion, approval, hold, and erasure
+writes. Open deletion requests, pending exports, and active holds replay on
+retry. The same export C<command_id> replays from C<command_log> after the
+bundle is already completed. C<hold_request> stays four arguments besides
+the invocant.
 
 =head1 AUTHOR
 

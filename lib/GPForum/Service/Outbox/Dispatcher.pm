@@ -365,12 +365,13 @@ sub _mark_failed {
     my ( $self, $message, $exception ) = @_;
 
     my $attempt_count = $self->retry->next_attempt($message);
-    my $status        = $self->retry->status($attempt_count);
+    my $failure_type  = $self->failure_types->classify($exception);
+    my $status        = $self->retry->status( $attempt_count, $failure_type );
     my $failure       = {
         attempt_count => $attempt_count,
         error_class   => ref $exception || $GENERIC_ERROR_CLASS,
         error_message => "$exception",
-        failure_type  => $self->failure_types->classify($exception),
+        failure_type  => $failure_type,
     };
     $message->update( $self->_failed_columns( $status, $failure ) );
     $self->_record_dead_letter( $message, $status, $failure );

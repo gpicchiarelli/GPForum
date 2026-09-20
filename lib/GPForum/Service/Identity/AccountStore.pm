@@ -4,8 +4,10 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Identity::Support;
 
@@ -73,6 +75,9 @@ sub request_email_change {
     my $checked = $self->_email_change_precheck($input);
     if ( !$checked->{ok} ) {
         return $checked;
+    }
+    if ( $checked->{skipped} ) {
+        return $self->_skipped_email_request($checked);
     }
 
     $checked->{input} = $input;
@@ -156,6 +161,14 @@ sub _issue_password_reset {
             token_id => $token->{token_id},
         }
     );
+    $self->_queue_issued_mail(
+        $user,
+        {
+            kind  => 'password_reset',
+            to    => $self->support->column( $user, 'email_normalized' ),
+            token => $token,
+        }
+    );
 
     return {
         email_normalized => $self->support->column( $user, 'email_normalized' ),
@@ -184,13 +197,34 @@ sub _reset_password_in_txn {
 sub _apply_reset_password {
     my ( $self, $user, $password, $token ) = @_;
 
+    my $now     = $self->clock->now_iso8601;
+    my $user_id = $self->support->column( $user, 'id' );
+    my $same    = $self->_password_matches( $user, $password );
+    if ( !$same ) {
+        $self->_rotate_reset_secret( $user, $password, $now );
+    }
+    $self->session_store->revoke_user_sessions( $user_id, $now );
+    $self->_record_user_action(
+        $user,
+        'identity.password_reset.completed',
+        { token_id => $token->{token_id} }
+    );
+
+    return {
+        ok      => 1,
+        skipped => $same,
+        user    => $user,
+    };
+}
+
+sub _rotate_reset_secret {
+    my ( $self, $user, $password, $now ) = @_;
+
     my $secret_hash = $self->password->hash_password($password);
-    my $now         = $self->clock->now_iso8601;
-    my $user_id     = $self->support->column( $user, 'id' );
     $self->credential_store->rotate_password_credential(
         {
             secret_hash => $secret_hash,
-            user_id     => $user_id,
+            user_id     => $self->support->column( $user, 'id' ),
         }
     );
     $self->support->update_row(
@@ -200,14 +234,8 @@ sub _apply_reset_password {
             updated_at    => $now,
         }
     );
-    $self->session_store->revoke_user_sessions( $user_id, $now );
-    $self->_record_user_action(
-        $user,
-        'identity.password_reset.completed',
-        { token_id => $token->{token_id} }
-    );
 
-    return { ok => 1, user => $user };
+    return;
 }
 
 sub _change_password_precheck {
@@ -236,6 +264,20 @@ sub _change_password_user {
 }
 
 sub _change_password_in_txn {
+    my ( $self, $user, $input ) = @_;
+
+    if ( $self->_password_matches( $user, $input->{new_password} ) ) {
+        return {
+            ok      => 1,
+            skipped => 1,
+            user    => $user,
+        };
+    }
+
+    return $self->_rotate_password( $user, $input );
+}
+
+sub _rotate_password {
     my ( $self, $user, $input ) = @_;
 
     my $secret_hash = $self->password->hash_password( $input->{new_password} );
@@ -273,20 +315,41 @@ sub _email_change_precheck {
 sub _email_change_user {
     my ( $self, $input, $email ) = @_;
 
-    if ( $self->_email_taken( $email, $input->{user_id} ) ) {
-        return { error => 'email_already_registered', ok => 0 };
-    }
-
     my $user = $self->_find_user_by_id( $input->{user_id} );
     if ( !$user ) {
         return { error => 'not_found', ok => 0 };
+    }
+    if ( $self->_email_already_confirmed( $user, $email ) ) {
+        return {
+            email   => $email,
+            ok      => 1,
+            skipped => 1,
+            user    => $user,
+        };
+    }
+    if ( $self->_email_taken( $email, $input->{user_id} ) ) {
+        return { error => 'email_already_registered', ok => 0 };
     }
 
     return { email => $email, ok => 1, user => $user };
 }
 
+sub _skipped_email_request {
+    my ( $self, $checked ) = @_;
+
+    return {
+        email_normalized => $checked->{email},
+        ok               => 1,
+        skipped          => 1,
+    };
+}
+
 sub _request_email_change_in_txn {
     my ( $self, $checked ) = @_;
+
+    if ( $checked->{skipped} ) {
+        return $self->_skipped_email_request($checked);
+    }
 
     my $email   = $checked->{email};
     my $input   = $checked->{input};
@@ -310,6 +373,14 @@ sub _request_email_change_in_txn {
         {
             email_hash => $self->support->hash_value($email),
             token_id   => $token->{token_id},
+        }
+    );
+    $self->_queue_issued_mail(
+        $user,
+        {
+            kind  => 'email_change',
+            to    => $email,
+            token => $token,
         }
     );
 
@@ -413,6 +484,14 @@ sub _issue_email_verification {
             token_id => $token->{token_id},
         }
     );
+    $self->_queue_issued_mail(
+        $user,
+        {
+            kind  => 'email_verification',
+            to    => $email,
+            token => $token,
+        }
+    );
 
     return {
         email_normalized => $email,
@@ -448,6 +527,14 @@ sub _apply_email_verification {
 sub _store_email_verification {
     my ( $self, $user, $token ) = @_;
 
+    if ( $self->_already_verified($user) ) {
+        return {
+            ok      => 1,
+            skipped => 1,
+            user    => $user,
+        };
+    }
+
     my $now = $self->clock->now_iso8601;
     $self->support->update_row(
         $user,
@@ -464,6 +551,19 @@ sub _store_email_verification {
     );
 
     return { ok => 1, user => $user };
+}
+
+sub _already_verified {
+    my ( $self, $user ) = @_;
+
+    if ( $self->_pending_user($user) ) {
+        return 0;
+    }
+    if ( !defined $self->support->column( $user, 'email_verified_at' ) ) {
+        return 0;
+    }
+
+    return 1;
 }
 
 sub _pending_user {
@@ -513,25 +613,96 @@ sub _confirmed_email_user {
 sub _store_confirmed_email {
     my ( $self, $user, $email, $token ) = @_;
 
+    if ( $self->_email_already_confirmed( $user, $email ) ) {
+        return {
+            ok      => 1,
+            skipped => 1,
+            user    => $user,
+        };
+    }
+
+    return $self->_persist_confirmed_email(
+        {
+            email => $email,
+            token => $token,
+            user  => $user,
+        }
+    );
+}
+
+sub _persist_confirmed_email {
+    my ( $self, $job ) = @_;
+
+    my $stored = eval { return $self->_write_confirmed_email($job); };
+    if ($stored) {
+        return $stored;
+    }
+
+    return $self->_email_after_conflict($EVAL_ERROR);
+}
+
+sub _write_confirmed_email {
+    my ( $self, $job ) = @_;
+
+    $self->_guard_email_unique($job);
+    return $self->_commit_confirmed_email($job);
+}
+
+sub _guard_email_unique {
+    my ( $self, $job ) = @_;
+
+    my $user_id = $self->support->column( $job->{user}, 'id' );
+    if ( $self->_email_taken( $job->{email}, $user_id ) ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'users_email_normalized_key');
+    }
+
+    return;
+}
+
+sub _commit_confirmed_email {
+    my ( $self, $job ) = @_;
+
     my $now = $self->clock->now_iso8601;
     $self->support->update_row(
-        $user,
+        $job->{user},
         {
-            email_normalized  => $email,
+            email_normalized  => $job->{email},
             email_verified_at => $now,
             updated_at        => $now,
         }
     );
     $self->_record_user_action(
-        $user,
+        $job->{user},
         'identity.email_change.confirmed',
         {
-            email_hash => $self->support->hash_value($email),
-            token_id   => $token->{token_id},
+            email_hash => $self->support->hash_value( $job->{email} ),
+            token_id   => $job->{token}{token_id},
         }
     );
 
-    return { ok => 1, user => $user };
+    return { ok => 1, user => $job->{user} };
+}
+
+sub _email_after_conflict {
+    my ( undef, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return { error => 'email_already_registered', ok => 0 };
+}
+
+sub _email_already_confirmed {
+    my ( $self, $user, $email ) = @_;
+
+    if ( !$self->_already_verified($user) ) {
+        return 0;
+    }
+
+    my $held = $self->support->column( $user, 'email_normalized' ) || q{};
+    return $held eq $email ? 1 : 0;
 }
 
 sub _record_user_action {
@@ -549,6 +720,43 @@ sub _record_user_action {
     );
 
     return;
+}
+
+sub _queue_issued_mail {
+    my ( $self, $user, $mail ) = @_;
+
+    if ( !$self->_mailable($mail) ) {
+        return;
+    }
+
+    $self->audit->record_mail( $self->_mail_record( $user, $mail ) );
+
+    return;
+}
+
+sub _mailable {
+    my ( $self, $mail ) = @_;
+
+    my $token = $mail->{token} || {};
+    if ( !$self->support->has_text( $mail->{to} ) ) {
+        return 0;
+    }
+
+    return $self->support->has_text( $token->{raw_token} );
+}
+
+sub _mail_record {
+    my ( $self, $user, $mail ) = @_;
+
+    my $token = $mail->{token};
+
+    return {
+        kind     => $mail->{kind},
+        to       => $mail->{to},
+        token    => $token->{raw_token},
+        token_id => $token->{token_id},
+        user_id  => $self->support->column( $user, 'id' ),
+    };
 }
 
 sub _password_matches {
@@ -683,7 +891,9 @@ Version 0.001.
 Owns password reset, password change, and email change persistence. The
 identity store facade delegates these commands so HTTP and workflow callers
 keep a stable API. Credential, session, token, and audit stores keep their
-row-level ownership.
+row-level ownership. Issued tokens enqueue C<identity.mail.requested> on
+the outbox in the same transaction; EventLog payloads keep C<kind> and
+C<token_id> only.
 
 =head1 SUBROUTINES/METHODS
 
@@ -693,19 +903,28 @@ Issues a reset token without revealing whether the identifier exists.
 
 =head2 reset_password
 
-Consumes a reset token and rotates the password credential.
+Consumes a reset token and rotates the password credential. A reset to
+the same secret still consumes the token and revokes sessions, but does
+not rotate the credential.
 
 =head2 change_password
 
-Rotates the password for an authenticated member.
+Rotates the password for an authenticated member. A second write of the
+same secret returns C<skipped> and does not rotate the credential.
 
 =head2 request_email_change
 
-Issues an email-change token when the address is available.
+Issues an email-change token when the address is available. A request
+for the member's already-verified address returns C<skipped> and does
+not issue a token.
 
 =head2 confirm_email_change
 
-Consumes an email-change token and updates the user row.
+Consumes an email-change token and updates the user row. A second
+confirmation of the same already-verified address returns C<skipped>
+and does not restamp C<email_verified_at>. A unique race on
+C<email_normalized> returns C<email_already_registered> and does not
+restamp the user.
 
 =head2 request_email_verification
 
@@ -715,7 +934,8 @@ revealing whether the identifier exists.
 =head2 confirm_email_verification
 
 Consumes a verification token, marks the email verified, and activates
-the user.
+the user. A second confirmation for an already-active verified user
+returns C<skipped> and does not restamp C<email_verified_at>.
 
 =head1 DIAGNOSTICS
 
@@ -731,7 +951,8 @@ audit collaborators supplied by the identity store facade.
 
 =head1 DEPENDENCIES
 
-Uses L<GPForum::Service::Identity::Support>.
+Uses L<GPForum::Infrastructure::UniqueConflict> and
+L<GPForum::Service::Identity::Support>.
 
 =head1 INCOMPATIBILITIES
 

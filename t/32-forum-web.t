@@ -19,7 +19,7 @@ use GPForum::Test::SuspendedParticipation;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS       => 180;
+const my $EXPECTED_TESTS       => 249;
 const my $HTTP_OK              => 200;
 const my $HTTP_CREATED         => 201;
 const my $HTTP_BAD_REQUEST     => 400;
@@ -64,6 +64,7 @@ $test->get_ok('/sitemap.xml');
 $test->status_is($HTTP_OK);
 $test->content_like(qr/<urlset/msx);
 $test->content_like(qr/\/t\/thread-1\/welcome/msx);
+$test->content_like(qr/\/legal\/terms/msx);
 
 $test->get_ok('/feed.atom');
 $test->status_is($HTTP_OK);
@@ -126,6 +127,13 @@ $test->status_is($HTTP_UNAUTHORIZED);
 
 $test->get_ok('/__test/session/user-1');
 $test->status_is($HTTP_OK);
+_get_json_ok( $test, '/t/thread-1' );
+$test->status_is($HTTP_OK);
+$test->json_is( '/posts/0/can_edit'         => 1 );
+$test->json_is( '/posts/0/can_delete'       => 1 );
+$test->json_is( '/thread/can_edit_thread'   => 1 );
+$test->json_is( '/thread/can_delete_thread' => 1 );
+$test->json_is( '/thread/can_move_thread'   => 1 );
 _get_json_ok( $test, '/new-thread' );
 my $session_csrf = _json_value( $test, 'csrf_token' );
 
@@ -174,6 +182,145 @@ $test->post_ok(
 );
 $test->status_is($HTTP_CREATED);
 $test->json_is( '/post_id' => 'post-created' );
+
+$test->post_ok(
+    '/p/post-1' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        body_source => 'Edited post',
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/p/post-1' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        body_source => 'Edited post',
+        command_id  => 'edit-command-1',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/post_id' => 'post-1' );
+$test->json_is( '/status'  => 'updated' );
+
+$test->post_ok(
+    '/p/post-1/delete' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/p/post-1/delete' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        command_id => 'delete-command-1',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/post_id'   => 'post-1' );
+$test->json_is( '/status'    => 'deleted' );
+$test->json_is( '/thread_id' => 'thread-1' );
+
+$test->post_ok(
+    '/p/post-deleted-1/restore' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/p/post-deleted-1/restore' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        command_id => 'restore-command-1',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/post_id'   => 'post-deleted-1' );
+$test->json_is( '/status'    => 'restored' );
+$test->json_is( '/thread_id' => 'thread-1' );
+
+$test->post_ok(
+    '/t/thread-1/edit' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        title      => 'Edited Welcome',
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/t/thread-1/edit' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        command_id => 'thread-edit-command-1',
+        title      => 'Edited Welcome',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/thread_id' => 'thread-1' );
+$test->json_is( '/status'    => 'updated' );
+$test->json_is( '/title'     => 'Edited Welcome' );
+
+$test->post_ok(
+    '/t/thread-1/move' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        category_id => 'category-2',
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/t/thread-1/move' => { Accept => 'application/json' } => form => {
+        csrf_token  => $session_csrf,
+        category_id => 'category-2',
+        command_id  => 'thread-move-command-1',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/thread_id'   => 'thread-1' );
+$test->json_is( '/status'      => 'moved' );
+$test->json_is( '/category_id' => 'category-2' );
+
+$test->post_ok(
+    '/t/thread-1/delete' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        title      => 'ignored',
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/t/thread-1/delete' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+        command_id => 'thread-delete-command-1',
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/thread_id' => 'thread-1' );
+$test->json_is( '/status'    => 'deleted' );
+
+$test->post_ok(
+    '/t/thread-deleted-1/restore' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $session_csrf,
+      }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/t/thread-deleted-1/restore' => { Accept => 'application/json' } =>
+      form => {
+        csrf_token => $session_csrf,
+        command_id => 'thread-restore-command-1',
+      }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/thread_id' => 'thread-deleted-1' );
+$test->json_is( '/status'    => 'restored' );
 
 $test->app->helper(
     gp_command_idempotency => sub {
@@ -230,6 +377,12 @@ $test->status_is($HTTP_CONFLICT);
 $test->json_is( '/status' => 'conflict' );
 
 $test->app->helper(
+    gp_command_idempotency => sub {
+        return GPForum::Test::CommandIdempotency->new;
+    }
+);
+
+$test->app->helper(
     gp_suspension_store => sub {
         return GPForum::Test::SuspendedParticipation->new;
     }
@@ -252,6 +405,16 @@ $test->app->helper(
 
 $test->post_ok(
     '/t/thread-1/read' => { Accept => 'application/json' } => form => {
+        csrf_token         => $session_csrf,
+        last_read_position => 1,
+    }
+);
+$test->status_is($HTTP_BAD_REQUEST);
+$test->json_is( '/errors/command_id' => 'command_id is required' );
+
+$test->post_ok(
+    '/t/thread-1/read' => { Accept => 'application/json' } => form => {
+        command_id         => 'read-command-1',
         csrf_token         => $session_csrf,
         last_read_position => 1,
     }
@@ -299,6 +462,16 @@ $test->json_is( '/read/notification_id' => 'notification-1' );
 $test->json_is( '/unread_count'         => 0 );
 
 $test->post_ok(
+    '/notifications/read-all' => { Accept => 'application/json' } => form => {
+        csrf_token => $session_csrf,
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'       => 'all_read' );
+$test->json_is( '/marked_count' => 1 );
+$test->json_is( '/unread_count' => 0 );
+
+$test->post_ok(
     '/notifications/missing/read' => { Accept => 'application/json' } =>
       form => {
         csrf_token => $session_csrf,
@@ -309,6 +482,7 @@ $test->json_is( '/status' => 'not_found' );
 
 $test->post_ok(
     '/t/thread-1/bookmark' => { Accept => 'application/json' } => form => {
+        command_id => 'bookmark-1',
         csrf_token => $session_csrf,
         note       => 'Read later',
     }
@@ -320,6 +494,7 @@ $test->json_is( '/bookmark/target_id' => 'thread-1' );
 $test->post_ok(
     '/t/thread-1/bookmark/remove' => { Accept => 'application/json' } =>
       form => {
+        command_id => 'bookmark-remove-1',
         csrf_token => $session_csrf,
       }
 );
@@ -328,6 +503,7 @@ $test->json_is( '/status' => 'bookmark_removed' );
 
 $test->post_ok(
     '/t/thread-1/subscribe' => { Accept => 'application/json' } => form => {
+        command_id => 'subscribe-1',
         csrf_token => $session_csrf,
         preference => 'all',
     }
@@ -340,6 +516,7 @@ $test->json_is( '/subscription/target_id'  => 'thread-1' );
 $test->post_ok(
     '/t/thread-1/subscribe/mute' => { Accept => 'application/json' } => form =>
       {
+        command_id => 'subscribe-mute-1',
         csrf_token => $session_csrf,
       }
 );
@@ -349,6 +526,7 @@ $test->json_is( '/status' => 'subscription_muted' );
 $test->post_ok(
     '/t/thread-1/subscribe/remove' => { Accept => 'application/json' } =>
       form => {
+        command_id => 'subscribe-remove-1',
         csrf_token => $session_csrf,
       }
 );
@@ -357,6 +535,7 @@ $test->json_is( '/status' => 'unsubscribed' );
 
 $test->post_ok(
     '/t/thread-1/report' => { Accept => 'application/json' } => form => {
+        command_id => 'thread-report-1',
         csrf_token => $session_csrf,
         reason     => 'spam',
         details    => 'Thread report',
@@ -368,6 +547,7 @@ $test->json_is( '/report/target_type' => 'thread' );
 
 $test->post_ok(
     '/p/post-1/report' => { Accept => 'application/json' } => form => {
+        command_id => 'post-report-1',
         csrf_token => $session_csrf,
         reason     => 'abuse',
         details    => 'Post report',

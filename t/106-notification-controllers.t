@@ -30,6 +30,8 @@ ok(
 );
 ok( $GPForum::Controller::Notifications::Read::{mark_read},
     'read controller owns mark-read writes' );
+ok( $GPForum::Controller::Notifications::Read::{mark_all_read},
+    'read controller owns mark-all-read writes' );
 ok( $GPForum::Controller::Notifications::Mentions::{mentions},
     'mentions controller owns mention reads' );
 isa_ok(
@@ -49,7 +51,9 @@ my $app = Mojolicious->new;
 GPForum::Bootstrap::Routes->register( application => $app );
 _assert_route( $app, 'notifications',     'Notifications',       'inbox' );
 _assert_route( $app, 'notification_read', 'Notifications::Read', 'mark_read' );
-_assert_route( $app, 'mentions', 'Notifications::Mentions',      'mentions' );
+_assert_route( $app, 'notifications_read_all', 'Notifications::Read',
+    'mark_all_read' );
+_assert_route( $app, 'mentions', 'Notifications::Mentions', 'mentions' );
 
 done_testing();
 

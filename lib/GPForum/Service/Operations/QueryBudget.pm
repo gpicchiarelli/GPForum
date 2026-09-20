@@ -4,7 +4,10 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
+
+use GPForum::Infrastructure::UniqueConflict;
 
 our $VERSION = '0.001';
 
@@ -185,17 +188,130 @@ sub sync_schema {
     my ( $self, $schema ) = @_;
 
     my $resultset = $self->_resultset($schema);
+    my %stored    = $self->_stored_budget_rows($schema);
     my @endpoints = sort keys %{ $self->budgets };
+    my $written   = 0;
 
     for my $endpoint_name (@endpoints) {
-        $resultset->update_or_create(
-            _storage_row( $self->budget_for($endpoint_name) ) );
+        $written += $self->_sync_endpoint(
+            {
+                endpoint_name => $endpoint_name,
+                stored        => $stored{$endpoint_name},
+                resultset     => $resultset,
+            }
+        );
     }
 
     return {
-        synced    => scalar @endpoints,
         endpoints => \@endpoints,
+        skipped   => scalar(@endpoints) - $written,
+        synced    => scalar @endpoints,
+        written   => $written,
     };
+}
+
+sub _sync_endpoint {
+    my ( $self, $job ) = @_;
+
+    $job->{row} = _storage_row( $self->budget_for( $job->{endpoint_name} ) );
+    if ( _unchanged_budget( $job->{stored}, $job->{row} ) ) {
+        return 0;
+    }
+
+    return $self->_persist_budget($job);
+}
+
+sub _persist_budget {
+    my ( $self, $job ) = @_;
+
+    if ( $job->{stored} ) {
+        $job->{resultset}->update_or_create( $job->{row} );
+        return 1;
+    }
+
+    return $self->_insert_or_reuse_budget($job);
+}
+
+sub _insert_or_reuse_budget {
+    my ( $self, $job ) = @_;
+
+    my $created = eval { return $self->_create_budget($job); };
+    if ($created) {
+        return 1;
+    }
+
+    return $self->_budget_after_conflict( $job, $EVAL_ERROR );
+}
+
+sub _create_budget {
+    my ( $self, $job ) = @_;
+
+    return $job->{resultset}->create( $job->{row} );
+}
+
+sub _budget_after_conflict {
+    my ( $self, $job, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    $job->{error} = $error;
+    return $self->_reuse_budget($job);
+}
+
+sub _reuse_budget {
+    my ( $self, $job ) = @_;
+
+    my $stored = $job->{resultset}->find( $job->{endpoint_name} );
+    if ( _unchanged_budget( $stored, $job->{row} ) ) {
+        return 0;
+    }
+    if ( !$stored ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow( $job->{error} );
+    }
+
+    $job->{resultset}->update_or_create( $job->{row} );
+    return 1;
+}
+
+sub _unchanged_budget {
+    my ( $held, $incoming ) = @_;
+
+    if ( !$held ) {
+        return 0;
+    }
+    if ( _budget_mismatch( $incoming, $held ) ) {
+        return 0;
+    }
+
+    return _same_text( _column( $held, 'notes' ), $incoming->{notes} );
+}
+
+sub _same_text {
+    my ( $held, $incoming ) = @_;
+
+    return _same_notes( _text($held), _text($incoming) );
+}
+
+sub _text {
+    my ($value) = @_;
+
+    if ( defined $value ) {
+        return $value;
+    }
+
+    return q{};
+}
+
+sub _same_notes {
+    my ( $held, $incoming ) = @_;
+
+    if ( $held eq $incoming ) {
+        return 1;
+    }
+
+    return 0;
 }
 
 sub drift_report {

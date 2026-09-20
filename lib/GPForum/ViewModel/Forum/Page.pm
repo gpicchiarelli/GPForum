@@ -24,7 +24,7 @@ sub category_page {
     return {
         category    => $self->category( $input{category} ),
         next_cursor => $input{threads_page}{next_cursor},
-        threads     => [ map { $self->thread($_) } @{$items} ],
+        threads => [ map { $self->_category_thread( $_, \%input ) } @{$items} ],
     };
 }
 
@@ -90,12 +90,81 @@ sub created_thread_response {
     };
 }
 
+sub updated_thread_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        slug      => $self->column( $stored->{thread}, 'slug' ),
+        status    => 'updated',
+        thread_id => $self->column( $stored->{thread}, 'thread_id' ),
+        title     => $self->column( $stored->{thread}, 'title' ),
+    };
+}
+
+sub deleted_thread_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        status    => 'deleted',
+        thread_id => $self->column( $stored->{thread}, 'thread_id' ),
+    };
+}
+
+sub restored_thread_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        status    => 'restored',
+        thread_id => $self->column( $stored->{thread}, 'thread_id' ),
+    };
+}
+
+sub moved_thread_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        category_id => $self->column( $stored->{thread}, 'category_id' ),
+        status      => 'moved',
+        thread_id   => $self->column( $stored->{thread}, 'thread_id' ),
+    };
+}
+
 sub created_post_response {
     my ( $self, $stored ) = @_;
 
     return {
         post_id => $self->column( $stored->{post}, 'post_id' ),
         status  => 'created',
+    };
+}
+
+sub updated_post_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        post_id   => $self->column( $stored->{post}, 'post_id' ),
+        status    => 'updated',
+        thread_id => $self->column( $stored->{post}, 'thread_id' ),
+    };
+}
+
+sub deleted_post_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        post_id   => $self->column( $stored->{post}, 'post_id' ),
+        status    => 'deleted',
+        thread_id => $self->column( $stored->{post}, 'thread_id' ),
+    };
+}
+
+sub restored_post_response {
+    my ( $self, $stored ) = @_;
+
+    return {
+        post_id   => $self->column( $stored->{post}, 'post_id' ),
+        status    => 'restored',
+        thread_id => $self->column( $stored->{post}, 'thread_id' ),
     };
 }
 
@@ -115,9 +184,20 @@ sub reading_summary {
         return { authenticated => 0 };
     }
 
-    return $input{read_state}->summary_for_page( $input{user_id},
-        $input{thread_id}, $input{posts} || [],
-    );
+    return $self->_reading_for_user( \%input );
+}
+
+sub _reading_for_user {
+    my ( $self, $input ) = @_;
+
+    my $summary =
+      $input->{read_state}->summary_for_page( $input->{user_id},
+        $input->{thread_id}, $input->{posts} || [],
+      );
+    $summary->{read_command_id} =
+      $self->string_or_empty( $input->{read_command_id} );
+
+    return $summary;
 }
 
 sub engagement_summary {
@@ -145,12 +225,31 @@ sub thread_page_metadata {
 sub _thread_page_parts {
     my ( $self, $input ) = @_;
 
-    my $page  = $input->{page};
-    my $posts = $self->_thread_page_posts(
-        $self->array_or_empty( $page->{posts}{items} ),
-        $self->hash_or_empty( $input->{attachments_by_post} ),
-    );
+    my $page   = $input->{page};
     my $thread = $self->thread( $page->{thread} );
+    my $posts  = $self->_thread_page_posts(
+        $self->array_or_empty( $page->{posts}{items} ),
+        {
+            attachments =>
+              $self->hash_or_empty( $input->{attachments_by_post} ),
+            attachment_delete_command_ids =>
+              $self->hash_or_empty( $input->{attachment_delete_command_ids} ),
+            attachment_upload_command_ids =>
+              $self->hash_or_empty( $input->{attachment_upload_command_ids} ),
+            delete_command_ids =>
+              $self->hash_or_empty( $input->{delete_command_ids} ),
+            edit_command_ids =>
+              $self->hash_or_empty( $input->{edit_command_ids} ),
+            restore_command_ids =>
+              $self->hash_or_empty( $input->{restore_command_ids} ),
+            report_command_ids =>
+              $self->hash_or_empty( $input->{report_command_ids} ),
+            thread         => $thread,
+            viewer_user_id => $input->{viewer_user_id},
+        },
+    );
+    $self->_apply_thread_edit_state( $thread, $input );
+    $self->_apply_thread_restore_state( $thread, $input );
 
     return {
         engagement       => $self->_summary_hash( $input->{engagement} ),
@@ -164,23 +263,230 @@ sub _thread_page_parts {
 }
 
 sub _thread_page_posts {
-    my ( $self, $post_rows, $attachments ) = @_;
+    my ( $self, $post_rows, $context ) = @_;
 
     my @posts;
     for my $row ( @{$post_rows} ) {
-        push @posts, $self->_post_with_attachments( $row, $attachments );
+        push @posts, $self->_post_with_attachments( $row, $context );
     }
 
     return \@posts;
 }
 
 sub _post_with_attachments {
-    my ( $self, $row, $attachments ) = @_;
+    my ( $self, $row, $context ) = @_;
 
     my $post = $self->post($row);
-    $post->{attachments} = $attachments->{ $post->{post_id} } || [];
+    $post->{attachments} = $self->_attachments_for_post( $post, $context );
+    $self->_apply_edit_state( $post, $row, $context );
+    $self->_apply_restore_state( $post, $context );
+    $self->_apply_report_state( $post, $context );
 
     return $post;
+}
+
+sub _category_thread {
+    my ( $self, $row, $input ) = @_;
+
+    my $thread = $self->thread($row);
+    $self->_apply_thread_restore_state( $thread, $input );
+
+    return $thread;
+}
+
+sub _apply_thread_restore_state {
+    my ( $self, $thread, $input ) = @_;
+
+    return if !$self->_thread_is_restorable( $thread, $input );
+
+    $thread->{can_restore_thread} = 1;
+    $thread->{restore_thread_command_id} =
+      $self->_restore_thread_command_id( $thread, $input );
+
+    return;
+}
+
+sub _restore_thread_command_id {
+    my ( $self, $thread, $input ) = @_;
+
+    my $ids = $self->hash_or_empty( $input->{restore_thread_command_ids} );
+
+    return $self->string_or_empty( $ids->{ $thread->{thread_id} }
+          || $input->{restore_thread_command_id} );
+}
+
+sub _apply_thread_edit_state {
+    my ( $self, $thread, $input ) = @_;
+
+    if ( !$self->_thread_is_editable( $thread, $input ) ) {
+        return;
+    }
+
+    $thread->{can_edit_thread}   = 1;
+    $thread->{can_delete_thread} = 1;
+    $thread->{can_move_thread}   = 1;
+    $thread->{edit_thread_command_id} =
+      $self->string_or_empty( $input->{edit_thread_command_id} );
+    $thread->{delete_thread_command_id} =
+      $self->string_or_empty( $input->{delete_thread_command_id} );
+    $thread->{move_thread_command_id} =
+      $self->string_or_empty( $input->{move_thread_command_id} );
+    $thread->{move_categories} = $self->_move_categories($input);
+
+    return;
+}
+
+sub _thread_is_editable {
+    my ( $self, $thread, $input ) = @_;
+
+    return 0 if $self->has_text( $thread->{deleted_at} );
+
+    return $self->_author_thread_write( $thread, $input );
+}
+
+sub _thread_is_restorable {
+    my ( $self, $thread, $input ) = @_;
+
+    return 0 if !$self->has_text( $thread->{deleted_at} );
+
+    return $self->_author_thread_write( $thread, $input );
+}
+
+sub _author_thread_write {
+    my ( $self, $thread, $input ) = @_;
+
+    my $viewer = $input->{viewer_user_id};
+    if ( !$self->has_text($viewer) ) {
+        return 0;
+    }
+    if ( $thread->{locked_at} ) {
+        return 0;
+    }
+
+    my $author = $thread->{author_user_id} || q{};
+
+    return $author eq $viewer ? 1 : 0;
+}
+
+sub _move_categories {
+    my ( $self, $input ) = @_;
+
+    my $categories = $self->array_or_empty( $input->{categories} );
+
+    return [ map { $self->category($_) } @{$categories} ];
+}
+
+sub _apply_report_state {
+    my ( $self, $post, $context ) = @_;
+
+    $post->{report_command_id} =
+      $self->string_or_empty(
+        $context->{report_command_ids}{ $post->{post_id} } );
+
+    return;
+}
+
+sub _apply_edit_state {
+    my ( $self, $post, $row, $context ) = @_;
+
+    return if !$self->_post_is_editable( $post, $context );
+
+    $post->{body_source} = $self->_edit_body_source($row);
+    $post->{can_edit}    = 1;
+    $post->{can_delete}  = 1;
+    $post->{delete_command_id} =
+      $self->string_or_empty(
+        $context->{delete_command_ids}{ $post->{post_id} } );
+    $post->{edit_command_id} =
+      $self->string_or_empty(
+        $context->{edit_command_ids}{ $post->{post_id} } );
+    $post->{upload_command_id} =
+      $self->string_or_empty(
+        $context->{attachment_upload_command_ids}{ $post->{post_id} } );
+
+    return;
+}
+
+sub _attachments_for_post {
+    my ( $self, $post, $context ) = @_;
+
+    my $rows = $context->{attachments}{ $post->{post_id} } || [];
+    my @attachments;
+    for my $row ( @{$rows} ) {
+        push @attachments, $self->_attachment_with_command( $row, $context );
+    }
+
+    return \@attachments;
+}
+
+sub _attachment_with_command {
+    my ( $self, $row, $context ) = @_;
+
+    my %attachment = %{$row};
+    $attachment{delete_command_id} = $self->string_or_empty(
+        $context->{attachment_delete_command_ids}{ $attachment{attachment_id} }
+    );
+
+    return \%attachment;
+}
+
+sub _apply_restore_state {
+    my ( $self, $post, $context ) = @_;
+
+    return if !$self->_post_is_restorable( $post, $context );
+
+    $post->{can_restore} = 1;
+    $post->{restore_command_id} =
+      $self->string_or_empty(
+        $context->{restore_command_ids}{ $post->{post_id} } );
+
+    return;
+}
+
+sub _edit_body_source {
+    my ( $self, $row ) = @_;
+
+    my $source = $self->_body_source($row);
+    if ( $self->has_text($source) ) {
+        return $source;
+    }
+
+    return $self->string_or_empty( $self->column( $row, 'body' ) );
+}
+
+sub _post_is_editable {
+    my ( $self, $post, $context ) = @_;
+
+    return 0 if !$self->_author_write_context($context);
+    return 0 if $self->has_text( $post->{deleted_at} );
+
+    return $self->_same_viewer( $post, $context );
+}
+
+sub _post_is_restorable {
+    my ( $self, $post, $context ) = @_;
+
+    return 0 if !$self->_author_write_context($context);
+    return 0 if !$self->has_text( $post->{deleted_at} );
+
+    return $self->_same_viewer( $post, $context );
+}
+
+sub _author_write_context {
+    my ( $self, $context ) = @_;
+
+    return 0 if !$self->has_text( $context->{viewer_user_id} );
+    return 0 if $context->{thread}{locked_at};
+
+    return 1;
+}
+
+sub _same_viewer {
+    my ( $self, $post, $context ) = @_;
+
+    my $author = $post->{author_user_id} || q{};
+
+    return $author eq ( $context->{viewer_user_id} || q{} ) ? 1 : 0;
 }
 
 sub _summary_hash {
@@ -224,8 +530,19 @@ sub _engagement_lookup {
         authenticated => 1,
         bookmark      => $input->{bookmark_store}
           ->status_for_user_target( $input->{user_id}, 'thread', $thread_id ),
+        bookmark_command_id =>
+          $self->string_or_empty( $input->{bookmark_command_id} ),
+        bookmark_remove_command_id =>
+          $self->string_or_empty( $input->{bookmark_remove_command_id} ),
+        mute_command_id => $self->string_or_empty( $input->{mute_command_id} ),
+        subscribe_command_id =>
+          $self->string_or_empty( $input->{subscribe_command_id} ),
         subscription => $input->{subscription_store}
           ->status_for_user_target( $input->{user_id}, 'thread', $thread_id ),
+        thread_report_command_id =>
+          $self->string_or_empty( $input->{thread_report_command_id} ),
+        unsubscribe_command_id =>
+          $self->string_or_empty( $input->{unsubscribe_command_id} ),
     };
 }
 
@@ -301,9 +618,33 @@ Returns a created-report payload.
 
 Returns a created-thread mutation payload.
 
+=head2 updated_thread_response
+
+Returns an updated-thread mutation payload.
+
+=head2 deleted_thread_response
+
+Returns a deleted-thread mutation payload.
+
+=head2 restored_thread_response
+
+Returns a restored-thread mutation payload.
+
+=head2 moved_thread_response
+
+Returns a moved-thread mutation payload.
+
 =head2 created_post_response
 
 Returns a created-post mutation payload.
+
+=head2 updated_post_response
+
+Returns an updated-post mutation payload.
+
+=head2 deleted_post_response
+
+Returns a deleted-post mutation payload.
 
 =head2 read_marker_response
 

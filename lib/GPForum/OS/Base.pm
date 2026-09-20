@@ -6,8 +6,8 @@ use warnings;
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base;
-use POSIX qw(sysconf);
 
+use GPForum::OS::CpuCount;
 use GPForum::OS::Filesystem;
 use GPForum::OS::Process;
 use GPForum::OS::Resource;
@@ -15,15 +15,20 @@ use GPForum::OS::Socket;
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_CPU_COUNT    => 1;
-const my $DEFAULT_WEB_FLOOR    => 1;
-const my $MAX_WEB_PER_CPU      => 2;
-const my $FEATURE_AUTO         => 'auto';
-const my $FEATURE_ON           => 'on';
-const my $FEATURE_OFF          => 'off';
-const my $NPROCESSORS_CONSTANT => '_SC_NPROCESSORS_ONLN';
+const my $DEFAULT_WEB_FLOOR => 1;
+const my $MAX_WEB_PER_CPU   => 2;
+const my $FEATURE_AUTO      => 'auto';
+const my $FEATURE_ON        => 'on';
+const my $FEATURE_OFF       => 'off';
 
-has name           => 'unknown';
+has name          => 'unknown';
+has cpu_probe     => sub { return GPForum::OS::CpuCount->new; };
+has cpu_detection => sub {
+    my ($self) = @_;
+
+    return $self->cpu_probe->detect( $self->cpu_count_sources,
+        $self->cpu_count_limits );
+};
 has filesystem     => sub { return GPForum::OS::Filesystem->new; };
 has process_policy => sub { return GPForum::OS::Process->new; };
 has resource_probe => sub { return GPForum::OS::Resource->new; };
@@ -41,17 +46,24 @@ sub event_backend {
     return 'select';
 }
 
+sub cpu_count_sources {
+    return [ { name => 'sysconf _SC_NPROCESSORS_ONLN', type => 'sysconf' } ];
+}
+
+sub cpu_count_limits {
+    return [];
+}
+
 sub cpu_count {
     my ($self) = @_;
 
-    my $code = POSIX->can($NPROCESSORS_CONSTANT);
-    return $DEFAULT_CPU_COUNT if !$code;
+    return $self->cpu_detection->{count};
+}
 
-    my $processors = eval { return sysconf( $code->() ); };
-    return $DEFAULT_CPU_COUNT
-      if !$processors || $processors < $DEFAULT_CPU_COUNT;
+sub cpu_count_source {
+    my ($self) = @_;
 
-    return $processors;
+    return $self->cpu_detection->{source};
 }
 
 sub recommended_worker_count {
@@ -118,6 +130,7 @@ sub snapshot {
         perl_version             => "$PERL_VERSION",
         event_backend            => $self->event_backend,
         cpu_count                => $self->cpu_count,
+        cpu_count_source         => $self->cpu_count_source,
         recommended_worker_count => $self->recommended_worker_count,
         supports_reuseport       => $self->supports_reuseport ? 1 : 0,
         supports_sendfile        => $self->supports_sendfile  ? 1 : 0,

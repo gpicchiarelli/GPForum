@@ -11,13 +11,14 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Test::AllowLimiter;
+use GPForum::Test::CommandIdempotency;
 use GPForum::Test::IdentityStore;
 use GPForum::Test::DenyLimiter;
 use GPForum::Test::IdentitySecurityAudit;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 104;
+const my $EXPECTED_TESTS    => 106;
 const my $HTTP_OK           => 200;
 const my $HTTP_ACCEPTED     => 202;
 const my $HTTP_BAD_REQUEST  => 400;
@@ -44,6 +45,11 @@ $test->app->helper(
 );
 $test->app->helper( gp_identity_security_audit => sub { return $audit; } );
 $test->app->helper(
+    gp_command_idempotency => sub {
+        return GPForum::Test::CommandIdempotency->new;
+    }
+);
+$test->app->helper(
     gp_rate_limiter => sub {
         return GPForum::Test::AllowLimiter->new;
     }
@@ -53,9 +59,11 @@ $test->get_ok('/register');
 $test->status_is($HTTP_OK);
 $test->text_is( 'h1' => 'Create account' );
 $test->element_exists('input[name="csrf_token"]');
+$test->element_exists('input[name="command_id"]');
 $test->element_exists('input[name="username"]');
 
-my $register_token = _csrf_token($test);
+my $register_token      = _csrf_token($test);
+my $register_command_id = _command_id($test);
 
 $test->post_ok('/register');
 $test->status_is($HTTP_FORBIDDEN);
@@ -63,6 +71,7 @@ $test->content_like(qr/Bad [ ] CSRF [ ] token/msx);
 
 $test->post_ok(
     '/register' => form => {
+        command_id   => $register_command_id,
         csrf_token   => $register_token,
         username     => 'gp',
         display_name => q{},
@@ -76,10 +85,12 @@ $test->content_like(qr/display [ ] name [ ] is [ ] required/msx);
 $test->content_like(qr/email [ ] format [ ] is [ ] invalid/msx);
 
 $test->get_ok('/register');
-my $fresh_register_token = _csrf_token($test);
+my $fresh_register_token      = _csrf_token($test);
+my $fresh_register_command_id = _command_id($test);
 
 $test->post_ok(
     '/register' => form => {
+        command_id   => $fresh_register_command_id,
         csrf_token   => $fresh_register_token,
         username     => 'Giacomo_Forum',
         display_name => 'Giacomo Picchiarelli',
@@ -95,16 +106,19 @@ $test->get_ok('/login');
 $test->status_is($HTTP_OK);
 $test->text_is( 'h1' => 'Login' );
 $test->element_exists('input[name="csrf_token"]');
+$test->element_exists('input[name="command_id"]');
 $test->element_exists('a[href="/password/reset"]');
 $test->content_like(qr/Forgot [ ] password[?]/msx);
 
-my $login_token = _csrf_token($test);
+my $login_token      = _csrf_token($test);
+my $login_command_id = _command_id($test);
 
 $test->post_ok('/login');
 $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
     '/login' => form => {
+        command_id => $login_command_id,
         csrf_token => $login_token,
         identifier => q{},
         password   => q{},
@@ -117,10 +131,12 @@ $test->content_like(qr/password [ ] is [ ] required/msx);
 $test->get_ok('/__test/fixate-session');
 $test->status_is($HTTP_OK);
 $test->get_ok('/login');
-my $fresh_login_token = _csrf_token($test);
+my $fresh_login_token      = _csrf_token($test);
+my $fresh_login_command_id = _command_id($test);
 
 $test->post_ok(
     '/login' => form => {
+        command_id => $fresh_login_command_id,
         csrf_token => $fresh_login_token,
         identifier => 'giacomo_forum',
         password   => 'correct horse battery staple',
@@ -156,10 +172,17 @@ $invalid_login_test->app->helper(
         return GPForum::Test::AllowLimiter->new;
     }
 );
+$invalid_login_test->app->helper(
+    gp_command_idempotency => sub {
+        return GPForum::Test::CommandIdempotency->new;
+    }
+);
 $invalid_login_test->get_ok('/login');
-my $invalid_login_token = _csrf_token($invalid_login_test);
+my $invalid_login_token      = _csrf_token($invalid_login_test);
+my $invalid_login_command_id = _command_id($invalid_login_test);
 $invalid_login_test->post_ok(
     '/login' => form => {
+        command_id => $invalid_login_command_id,
         csrf_token => $invalid_login_token,
         identifier => 'giacomo_forum',
         password   => 'wrong password',
@@ -176,6 +199,11 @@ subtest 'password reset web flow is csrf protected and rate limited' => sub {
     $reset_test->app->helper(
         gp_identity_store => sub { return $reset_store; } );
     $reset_test->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
+    $reset_test->app->helper(
         gp_identity_security_audit => sub {
             return GPForum::Test::IdentitySecurityAudit->new;
         }
@@ -190,14 +218,17 @@ subtest 'password reset web flow is csrf protected and rate limited' => sub {
     $reset_test->status_is($HTTP_OK);
     $reset_test->text_is( 'h1' => 'Reset password' );
     $reset_test->element_exists('input[name="csrf_token"]');
+    $reset_test->element_exists('input[name="command_id"]');
 
     $reset_test->post_ok('/password/reset');
     $reset_test->status_is($HTTP_FORBIDDEN);
 
     $reset_test->get_ok('/password/reset');
-    my $reset_token = _csrf_token($reset_test);
+    my $reset_token      = _csrf_token($reset_test);
+    my $reset_command_id = _command_id($reset_test);
     $reset_test->post_ok(
         '/password/reset' => form => {
+            command_id => $reset_command_id,
             csrf_token => $reset_token,
             identifier => 'giacomo@example.test',
         }
@@ -210,14 +241,17 @@ subtest 'password reset web flow is csrf protected and rate limited' => sub {
     $reset_test->get_ok('/password/reset/reset-token');
     $reset_test->status_is($HTTP_OK);
     $reset_test->element_exists('input[name="token"][value="reset-token"]');
+    $reset_test->element_exists('input[name="command_id"]');
 
     $reset_test->post_ok('/password/reset/complete');
     $reset_test->status_is($HTTP_FORBIDDEN);
 
     $reset_test->get_ok('/password/reset/reset-token');
-    my $complete_token = _csrf_token($reset_test);
+    my $complete_token      = _csrf_token($reset_test);
+    my $complete_command_id = _command_id($reset_test);
     $reset_test->post_ok(
         '/password/reset/complete' => form => {
+            command_id => $complete_command_id,
             csrf_token => $complete_token,
             password   => 'new correct horse battery',
             token      => 'reset-token',
@@ -252,6 +286,11 @@ subtest 'authenticated password and email changes require csrf' => sub {
     $settings_test->app->helper(
         gp_identity_store => sub { return $settings_store; } );
     $settings_test->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
+    $settings_test->app->helper(
         gp_rate_limiter => sub {
             return GPForum::Test::AllowLimiter->new;
         }
@@ -267,6 +306,7 @@ subtest 'authenticated password and email changes require csrf' => sub {
     my $settings_token = _csrf_token($settings_test);
     $settings_test->post_ok(
         '/settings/password' => form => {
+            command_id       => 'password-change-1',
             csrf_token       => $settings_token,
             current_password => 'correct horse battery staple',
             new_password     => 'new correct horse battery',
@@ -280,6 +320,7 @@ subtest 'authenticated password and email changes require csrf' => sub {
     my $email_token = _csrf_token($settings_test);
     $settings_test->post_ok(
         '/settings/email' => form => {
+            command_id => 'email-change-1',
             csrf_token => $email_token,
             email      => 'new@example.test',
         }
@@ -295,6 +336,11 @@ subtest 'email confirmation consumes token through csrf protected post' => sub {
     $confirm_test->app->helper(
         gp_identity_store => sub { return $confirm_store; } );
     $confirm_test->app->helper(
+        gp_command_idempotency => sub {
+            return GPForum::Test::CommandIdempotency->new;
+        }
+    );
+    $confirm_test->app->helper(
         gp_rate_limiter => sub {
             return GPForum::Test::AllowLimiter->new;
         }
@@ -304,14 +350,17 @@ subtest 'email confirmation consumes token through csrf protected post' => sub {
     $confirm_test->status_is($HTTP_OK);
     $confirm_test->text_is( 'h1' => 'Confirm email change' );
     $confirm_test->element_exists('input[name="token"][value="email-token"]');
+    $confirm_test->element_exists('input[name="command_id"]');
 
     $confirm_test->post_ok('/email/confirm');
     $confirm_test->status_is($HTTP_FORBIDDEN);
 
     $confirm_test->get_ok('/email/confirm/email-token');
-    my $confirm_token = _csrf_token($confirm_test);
+    my $confirm_token      = _csrf_token($confirm_test);
+    my $confirm_command_id = _command_id($confirm_test);
     $confirm_test->post_ok(
         '/email/confirm' => form => {
+            command_id => $confirm_command_id,
             csrf_token => $confirm_token,
             token      => 'email-token',
         }
@@ -326,9 +375,15 @@ $test->post_ok('/logout');
 $test->status_is($HTTP_FORBIDDEN);
 
 $test->get_ok('/login');
-my $logout_token = _csrf_token($test);
+my $logout_token      = _csrf_token($test);
+my $logout_command_id = _command_id($test);
 
-$test->post_ok( '/logout' => form => { csrf_token => $logout_token } );
+$test->post_ok(
+    '/logout' => form => {
+        command_id => $logout_command_id,
+        csrf_token => $logout_token,
+    }
+);
 $test->status_is($HTTP_ACCEPTED);
 $test->text_is( 'h1' => 'Logout request accepted' );
 is( scalar @{ $audit->records }, 2, 'logout request is audited' );
@@ -336,9 +391,14 @@ is( $audit->records->[1]{method},
     'record_logout_request', 'logout audit method is explicit' );
 
 $test->get_ok('/login');
-my $idempotent_logout_token = _csrf_token($test);
+my $idempotent_logout_token      = _csrf_token($test);
+my $idempotent_logout_command_id = _command_id($test);
 $test->post_ok(
-    '/logout' => form => { csrf_token => $idempotent_logout_token } );
+    '/logout' => form => {
+        command_id => $idempotent_logout_command_id,
+        csrf_token => $idempotent_logout_token,
+    }
+);
 $test->status_is($HTTP_ACCEPTED);
 
 my $invalid_session_test = Test::Mojo->new('GPForum');
@@ -396,10 +456,17 @@ $duplicate_test->app->helper(
         return GPForum::Test::AllowLimiter->new;
     }
 );
+$duplicate_test->app->helper(
+    gp_command_idempotency => sub {
+        return GPForum::Test::CommandIdempotency->new;
+    }
+);
 $duplicate_test->get_ok('/register');
-my $duplicate_token = _csrf_token($duplicate_test);
+my $duplicate_token      = _csrf_token($duplicate_test);
+my $duplicate_command_id = _command_id($duplicate_test);
 $duplicate_test->post_ok(
     '/register' => form => {
+        command_id   => $duplicate_command_id,
         csrf_token   => $duplicate_token,
         username     => 'Existing_User',
         display_name => 'Existing User',
@@ -416,9 +483,11 @@ $duplicate_test->content_unlike(qr/email [ ] is [ ] already/msx);
 $test->app->helper(
     gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
 $test->get_ok('/register');
-my $limited_register_token = _csrf_token($test);
+my $limited_register_token      = _csrf_token($test);
+my $limited_register_command_id = _command_id($test);
 $test->post_ok(
     '/register' => form => {
+        command_id   => $limited_register_command_id,
         csrf_token   => $limited_register_token,
         username     => 'limited_user',
         display_name => 'Limited User',
@@ -430,9 +499,11 @@ $test->status_is($HTTP_TOO_MANY);
 $test->content_like(qr/Too [ ] many [ ] requests/msx);
 
 $test->get_ok('/login');
-my $limited_login_token = _csrf_token($test);
+my $limited_login_token      = _csrf_token($test);
+my $limited_login_command_id = _command_id($test);
 $test->post_ok(
     '/login' => form => {
+        command_id => $limited_login_command_id,
         csrf_token => $limited_login_token,
         identifier => 'limited_user',
         password   => 'correct horse battery staple',
@@ -448,6 +519,15 @@ sub _csrf_token {
     my ($token) = $body =~ /name="csrf_token" [^>]+ value="([^"]+)"/msx;
 
     return $token;
+}
+
+sub _command_id {
+    my ($test_object) = @_;
+
+    my $body = $test_object->tx->res->body;
+    my ($command_id) = $body =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
+
+    return $command_id;
 }
 
 sub _install_session_state_routes {

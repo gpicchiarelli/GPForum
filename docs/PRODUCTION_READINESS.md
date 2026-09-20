@@ -14,7 +14,7 @@ that matches the production PostgreSQL major version.
 | Application | Bootstrap composition and command orchestration in `Bootstrap::*`, CLI command classes in `Command::*`, workflow boundaries such as `PostingWorkflow` |
 | Domain/Service | `Service::*`, `Domain::EventEnvelope`, `Infrastructure::EventRecorder`; controllers delegate reads/writes to these services |
 | Persistence | `GPForum::Schema`, `Schema::Result::*`, SQL migrations in `migrations/`, PostgreSQL as the authority |
-| Worker | `Command::OutboxDispatch`, `Worker::MinionRegistrar`, `Worker::Handler::*`, `Service::Outbox::*`, optional Minion PostgreSQL backend |
+| Worker | `Command::OutboxDispatch`, `Worker::MinionGuard`, `Worker::MinionRegistrar`, `Worker::Handler::*`, `Service::Outbox::*`, optional Minion PostgreSQL backend |
 | Realtime | `/realtime`, `Service::Realtime::*`, PostgreSQL LISTEN/NOTIFY plus outbox polling fallback; SSR remains authoritative |
 | Infra | `deploy/nginx`, `deploy/systemd`, `deploy/freebsd`, `deploy/launchd`, `script/gpforum-os-preflight`, runtime policy classes |
 | Observability | `/health/live`, `/health/ready`, `/metrics`, DB query observer, query budget gates, query plan evidence, benchmarks |
@@ -25,7 +25,7 @@ Entrypoints:
 - Development web: `carton exec morbo bin/gpforum`
 - Migration: `carton exec bin/gpforum-migrate --apply`
 - Outbox worker: `carton exec bin/gpforum-outbox-dispatch --loop --limit 100 --sleep 5`
-- Optional Minion worker: `GPFORUM_MINION_ENABLED=1 carton exec perl -Ilib bin/gpforum minion worker`
+- Optional Minion worker: `GPFORUM_MINION_ENABLED=1` plus a reachable `GPFORUM_MINION_PG_URL`; startup fails closed if the backend is absent. Direct outbox dispatch remains the worker of record.
 - Admin bootstrap: `carton exec bin/gpforum-admin-bootstrap --user-id USER_ID`
 
 Route surface is registered in `lib/GPForum/Bootstrap/Routes.pm`: home,
@@ -63,8 +63,12 @@ Minimum:
 Recommended production posture:
 
 - PostgreSQL role split: `gpforum_web`, `gpforum_worker`, `gpforum_migrator`.
-- `statement_timeout`, `idle_in_transaction_session_timeout`, and migration
-  `lock_timeout` configured at role or deployment level.
+- `statement_timeout` (default 15s), `idle_in_transaction_session_timeout`
+  (default 10s), and `lock_timeout` (default 3s) applied on every app
+  connection. `gpforum-migrate --apply` clears `statement_timeout` after
+  connect. Override with `GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`,
+  `GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`, and
+  `GPFORUM_DATABASE_LOCK_TIMEOUT_MS` (0 disables that timeout).
 - `LimitNOFILE=65536` or equivalent OS limit.
 - `/metrics` restricted by reverse proxy allowlist or private network, with
   `GPFORUM_METRICS_TOKEN` set for app-level protection.
@@ -76,12 +80,16 @@ Production must set:
 - `GPFORUM_ENV=production` (alias of `production-small`), `production-medium`,
   or `staging`
 - `GPFORUM_SESSION_SECRET` to a high-entropy secret, not the development default
+- `GPFORUM_SESSION_SECRETS` (optional, comma-separated previous secrets) so
+  existing cookies still validate after rotation
 - `GPFORUM_PUBLIC_BASE_URL`
 - `GPFORUM_DATABASE_DSN`
 - `GPFORUM_DATABASE_USER`
 - `GPFORUM_DATABASE_PASSWORD`
 - `GPFORUM_METRICS_TOKEN` for production metrics scrapes unless `/metrics` is
   isolated by a private listener with equivalent network controls
+- `GPFORUM_METRICS_TOKENS` (optional, comma-separated previous scrape tokens)
+  so scrapers can rotate without a hard cutover
 - `GPFORUM_RUNTIME_LISTEN`
 - `GPFORUM_LOG_LEVEL=info` or stricter
 - `GPFORUM_GLIFISTORE_URL` (`tcp://host:port` or `unix://path`) for the
@@ -106,8 +114,13 @@ Optional but production-relevant:
 - `GPFORUM_REALTIME_LISTENER_ENABLED`
 - `GPFORUM_MINION_ENABLED`
 - `GPFORUM_MINION_PG_URL`
+- `GPFORUM_SESSION_SECRETS`
+- `GPFORUM_METRICS_TOKENS`
 - `GPFORUM_LOCAL_CACHE_MAX_ENTRIES`
 - `GPFORUM_CATEGORY_CACHE_TTL_SECONDS`
+- `GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`
+- `GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`
+- `GPFORUM_DATABASE_LOCK_TIMEOUT_MS`
 
 The built-in runtime defaults are the small-production professional profile:
 loopback listen behind a reverse proxy, `4` web processes, `2` worker
@@ -202,6 +215,9 @@ Outbox guarantees:
 - Stale `running` locks are claimable after `locked_until`.
 - Retry attempts increment `attempt_count` and legacy `attempts`.
 - Exhausted messages are marked `cancelled` and copied to `dead_letters`.
+- A classified `permanent` failure cancels and dead-letters on that attempt.
+- Cancelled rows are not claimed again. Review them with
+  `docs/ops/dead-letters.md`; purge only through scheduled retention.
 - Failure type is classified as `transient`, `permanent`, `serialization`,
   `authorization`, or `transport`.
 
@@ -235,7 +251,8 @@ Covered controls:
 - Input validation in service composers/validators.
 - Attachment upload lifecycle, scan status, media processing boundary, and safe
   download filename handling.
-- Browser security headers through `Security::BrowserHeaders`.
+- Browser security headers through `Security::BrowserHeaders`, including HSTS
+  on staging and production.
 - PostgreSQL-backed rate limiting with local fallback telemetry.
 - No secrets committed for production; development defaults are rejected when
   `GPFORUM_ENV=production`.

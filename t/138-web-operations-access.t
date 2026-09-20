@@ -15,6 +15,7 @@ our $VERSION = '0.001';
 const my $HTTP_UNAUTHORIZED => 401;
 const my $TOKEN             => 'metrics-secret';
 const my $OTHER_TOKEN       => 'metrics-secreX';
+const my $PREVIOUS_TOKEN    => 'previous-metrics';
 
 my $access = GPForum::Web::OperationsAccess->new;
 
@@ -92,6 +93,29 @@ ok(
         }
     ),
     'metrics_authorized rejects a length-mismatched Bearer token'
+);
+
+ok(
+    $access->metrics_authorized(
+        {
+            accepted_tokens  => [ $TOKEN, $PREVIOUS_TOKEN ],
+            authorization    => q{},
+            configured_token => $TOKEN,
+            metrics_header   => $PREVIOUS_TOKEN,
+        }
+    ),
+    'metrics_authorized accepts a previous metrics header'
+);
+ok(
+    !$access->metrics_authorized(
+        {
+            accepted_tokens  => [ $TOKEN, $PREVIOUS_TOKEN ],
+            authorization    => q{},
+            configured_token => $TOKEN,
+            metrics_header   => $OTHER_TOKEN,
+        }
+    ),
+    'metrics_authorized rejects a token outside the accepted list'
 );
 
 is_deeply(

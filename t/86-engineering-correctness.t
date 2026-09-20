@@ -15,6 +15,8 @@ use GPForum::Domain::EventEnvelope;
 use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Forum::PostStore;
 use GPForum::Service::Moderation::ActionStore;
+use GPForum::Service::Moderation::ReportStore;
+use GPForum::Service::Privacy::DeletionWorkflow;
 use GPForum::Test::FixedClock;
 use GPForum::Test::EngineeringCorrectness::Schema;
 use GPForum::Test::Id;
@@ -82,12 +84,98 @@ const my @MIGRATION_CONSTRAINTS => (
         'migrations/022_outbox_concurrent_claim.sql',
         qr/idx_outbox_messages_stale_locks/msx,
     ],
+    [
+        'migrations/024_privacy_erasure_job_idempotency.sql',
+        qr/idx_erasure_jobs_request_unique/msx,
+    ],
+    [
+        'migrations/027_privacy_resource_uniqueness.sql',
+        qr/idx_deletion_requests_open_resource_unique/msx,
+    ],
+    [
+        'migrations/027_privacy_resource_uniqueness.sql',
+        qr/idx_export_requests_pending_unique/msx,
+    ],
+    [
+        'migrations/027_privacy_resource_uniqueness.sql',
+        qr/idx_retention_holds_active_resource_unique/msx,
+    ],
+    [
+        'migrations/028_reputation_source_uniqueness.sql',
+        qr/idx_reputation_events_source_unique/msx,
+    ],
+    [
+        'migrations/029_reputation_source_required.sql',
+        qr/ALTER [ ] COLUMN [ ] source_id [ ] SET [ ] NOT [ ] NULL/msx,
+    ],
+    [
+        'migrations/029_reputation_source_required.sql',
+        qr/idx_reputation_events_source_unique/msx,
+    ],
+    [
+        'migrations/030_identity_open_token_uniqueness.sql',
+        qr/idx_identity_tokens_open_user_type/msx,
+    ],
+    [
+        'migrations/030_identity_open_token_uniqueness.sql',
+        qr/email_verification/msx,
+    ],
+    [
+        'migrations/031_role_binding_active_uniqueness.sql',
+        qr/idx_role_bindings_active_unique/msx,
+    ],
+    [
+        'migrations/031_role_binding_active_uniqueness.sql',
+        qr/NULLS [ ] NOT [ ] DISTINCT/msx,
+    ],
+    [
+        'migrations/032_plugin_hook_uniqueness.sql',
+        qr/idx_plugin_hooks_plugin_name_unique/msx,
+    ],
+    [
+        'migrations/032_plugin_hook_uniqueness.sql',
+        qr/plugin_id, [ ] hook_name/msx,
+    ],
+    [
+        'migrations/033_dead_letter_source_uniqueness.sql',
+        qr/idx_dead_letters_source_unique/msx,
+    ],
+    [
+        'migrations/033_dead_letter_source_uniqueness.sql',
+        qr/source_table, [ ] source_id/msx,
+    ],
+    [
+        'migrations/034_import_failure_source_uniqueness.sql',
+        qr/idx_import_failures_source_unique/msx,
+    ],
+    [
+        'migrations/034_import_failure_source_uniqueness.sql',
+        qr/import_job_id, [ ] source_record_type, [ ] source_record_id/msx,
+    ],
+    [
+        'migrations/035_projection_generation_source_uniqueness.sql',
+        qr/idx_projection_generations_source_unique/msx,
+    ],
+    [
+        'migrations/035_projection_generation_source_uniqueness.sql',
+        qr/projection_name, [ ] built_from_event_id/msx,
+    ],
+    [
+        'migrations/036_credential_active_password_uniqueness.sql',
+        qr/idx_credentials_active_password_unique/msx,
+    ],
+    [
+        'migrations/036_credential_active_password_uniqueness.sql',
+        qr/revoked_at [ ] IS [ ] NULL [ ] AND [ ] type [ ] = [ ] 'password'/msx,
+    ],
 );
 const my $AT_SIGN_CODEPOINT => 64;
 
 _assert_canonical_boundaries();
 _assert_event_envelope_contract();
 _assert_thread_write_failure_rollback();
+_assert_pre_commit_write_rollback();
+_assert_erasure_write_failure_rollback();
 _assert_reply_and_moderation_concurrency();
 _assert_outbox_claim_contract();
 _assert_architectural_fitness();
@@ -194,32 +282,355 @@ sub _assert_event_envelope_payload {
 }
 
 sub _assert_thread_write_failure_rollback {
-    subtest 'thread write rolls back when outbox handoff fails' => sub {
-        _assert_thread_write_rollback();
-    };
+    subtest 'thread write rolls back on event, outbox, and audit timeout' =>
+      sub {
+        _assert_thread_write_rollback('EventLog');
+        _assert_thread_write_rollback('OutboxMessage');
+        _assert_thread_write_rollback('AuditLog');
+      };
 
     return;
 }
 
 sub _assert_thread_write_rollback {
-    my $schema = GPForum::Test::EngineeringCorrectness::Schema->new(
-        fail_resultset => 'OutboxMessage', );
-    my $store = GPForum::Service::Forum::ThreadStore->new(
+    my ($fail_resultset) = @_;
+
+    my $schema = _failing_schema($fail_resultset);
+    my $store  = GPForum::Service::Forum::ThreadStore->new(
         id_service => GPForum::Test::Id->new,
         schema     => $schema,
     );
+    my $error = exception { $store->create_thread( _thread_command() ) };
 
     like(
-        exception { $store->create_thread( _thread_command() ) },
-        qr/injected [ ] create [ ] failure [ ] for [ ] OutboxMessage/msx,
-        'outbox failure is surfaced to the canonical write'
+        $error,
+        _timeout_pattern($fail_resultset),
+        "thread $fail_resultset timeout is surfaced to the canonical write"
     );
-    is( $schema->transactions, 1, 'thread write attempted one transaction' );
+    is( $schema->transactions, 1,
+        "thread $fail_resultset write attempted one transaction" );
+    _assert_empty_after_rollback(
+        $schema,
+        [
+            qw(Thread Post PostBody PostRevision ThreadCounter EventLog OutboxMessage AuditLog)
+        ],
+    );
 
-    for my $resultset (
-        qw(Thread Post PostBody PostRevision ThreadCounter EventLog OutboxMessage AuditLog)
-      )
-    {
+    return;
+}
+
+sub _assert_pre_commit_write_rollback {
+    subtest 'report, hide, and approval roll back on insert timeout' => sub {
+        _assert_report_write_rollback('EventLog');
+        _assert_report_write_rollback('OutboxMessage');
+        _assert_hide_write_rollback('OutboxMessage');
+        _assert_hide_write_rollback('AuditLog');
+        _assert_approval_write_rollback('OutboxMessage');
+        _assert_approval_write_rollback('AuditLog');
+    };
+
+    return;
+}
+
+sub _assert_report_write_rollback {
+    my ($fail_resultset) = @_;
+
+    my $schema = _failing_schema($fail_resultset);
+    my $store  = GPForum::Service::Moderation::ReportStore->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $error = exception { $store->create_report( _report_command() ) };
+
+    like(
+        $error,
+        _timeout_pattern($fail_resultset),
+        "report $fail_resultset timeout is surfaced to the canonical write"
+    );
+    is( $schema->transactions, 1,
+        "report $fail_resultset write attempted one transaction" );
+    _assert_empty_after_rollback( $schema,
+        [qw(Report EventLog OutboxMessage AuditLog)],
+    );
+
+    return;
+}
+
+sub _assert_hide_write_rollback {
+    my ($fail_resultset) = @_;
+
+    my $schema = _failing_schema($fail_resultset);
+    $schema->resultset('Post')->create(
+        {
+            hidden_at        => undef,
+            moderation_state => 'visible',
+            post_id          => 'post-1',
+        }
+    );
+    my $store = GPForum::Service::Moderation::ActionStore->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $error = exception { $store->hide_post( _hide_command() ) };
+
+    like(
+        $error,
+        _timeout_pattern($fail_resultset),
+        "hide $fail_resultset timeout is surfaced to the canonical write"
+    );
+    is( $schema->transactions, 1,
+        "hide $fail_resultset write attempted one transaction" );
+    is(
+        $schema->resultset('Post')
+          ->find('post-1')
+          ->get_column('moderation_state'),
+        'visible',
+        "hide $fail_resultset does not keep a mutated post after rollback"
+    );
+    _assert_empty_after_rollback( $schema,
+        [qw(ModerationAction EventLog OutboxMessage AuditLog)],
+    );
+
+    return;
+}
+
+sub _assert_approval_write_rollback {
+    my ($fail_resultset) = @_;
+
+    my $schema = _failing_schema($fail_resultset);
+    $schema->resultset('DeletionRequest')->create(
+        {
+            created_at          => '2026-05-23T12:00:00Z',
+            deletion_request_id => 'delete-1',
+            reason              => 'account cleanup',
+            request_type        => 'anonymize',
+            requester_user_id   => 'user-1',
+            resource_id         => 'user-1',
+            resource_type       => 'user',
+            status              => 'pending',
+        }
+    );
+    my $workflow = GPForum::Service::Privacy::DeletionWorkflow->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $error = exception {
+        $workflow->approve_request( 'delete-1', 'moderator-1', 'approved' );
+    };
+
+    like(
+        $error,
+        _timeout_pattern($fail_resultset),
+        "approval $fail_resultset timeout is surfaced to the canonical write"
+    );
+    is( $schema->transactions, 1,
+        "approval $fail_resultset write attempted one transaction" );
+    is(
+        $schema->resultset('DeletionRequest')
+          ->find('delete-1')
+          ->get_column('status'),
+        'pending',
+"approval $fail_resultset does not keep an approved request after rollback"
+    );
+    _assert_empty_after_rollback( $schema,
+        [qw(DeletionAction ErasureJob EventLog OutboxMessage AuditLog)],
+    );
+
+    return;
+}
+
+sub _assert_erasure_write_failure_rollback {
+    subtest
+'erasure rolls back after credential and session revocation on insert timeout'
+      => sub {
+        _assert_erasure_write_rollback('EventLog');
+        _assert_erasure_write_rollback('OutboxMessage');
+        _assert_erasure_write_rollback('AuditLog');
+      };
+
+    return;
+}
+
+sub _assert_erasure_write_rollback {
+    my ($fail_resultset) = @_;
+
+    my $schema   = _seed_erasure_schema($fail_resultset);
+    my $workflow = GPForum::Service::Privacy::DeletionWorkflow->new(
+        clock      => GPForum::Test::FixedClock->new,
+        id_service => GPForum::Test::Id->new,
+        schema     => $schema,
+    );
+    my $error = exception { $workflow->complete_job( 'job-1', 'worker-1' ) };
+
+    like(
+        $error,
+        _timeout_pattern($fail_resultset),
+        "erasure $fail_resultset timeout is surfaced after revocation"
+    );
+    is( $schema->transactions, 1,
+        "erasure $fail_resultset write attempted one transaction" );
+    _assert_erasure_identity_intact( $schema, $fail_resultset );
+    $schema->fail_resultset(undef);
+    my $completed = $workflow->complete_job( 'job-1', 'worker-1' );
+    ok( $completed->{ok},
+        "erasure $fail_resultset retry completes after the timeout" );
+    _assert_erasure_identity_removed( $schema, $fail_resultset );
+
+    return;
+}
+
+sub _seed_erasure_schema {
+    my ($fail_resultset) = @_;
+
+    my $schema = _failing_schema($fail_resultset);
+    $schema->resultset('User')->create(
+        {
+            deleted_at       => undef,
+            display_name     => 'Member One',
+            email_normalized => 'member@example.test',
+            status           => 'active',
+            user_id          => 'user-1',
+        }
+    );
+    $schema->resultset('Credential')->create(
+        {
+            credential_id => 'credential-1',
+            revoked_at    => undef,
+            user_id       => 'user-1',
+        }
+    );
+    $schema->resultset('Session')->create(
+        {
+            revoked_at => undef,
+            session_id => 'session-1',
+            user_id    => 'user-1',
+        }
+    );
+    $schema->resultset('DeletionRequest')->create(
+        {
+            completed_at        => undef,
+            created_at          => '2026-05-23T12:00:00Z',
+            deletion_request_id => 'delete-1',
+            reason              => 'account cleanup',
+            request_type        => 'anonymize',
+            requester_user_id   => 'user-1',
+            resource_id         => 'user-1',
+            resource_type       => 'user',
+            status              => 'approved',
+        }
+    );
+    $schema->resultset('ErasureJob')->create(
+        {
+            completed_at        => undef,
+            deletion_request_id => 'delete-1',
+            erasure_job_id      => 'job-1',
+            last_error          => undef,
+            scheduled_at        => '2026-05-23T12:00:00Z',
+            status              => 'pending',
+        }
+    );
+
+    return $schema;
+}
+
+sub _assert_erasure_identity_intact {
+    my ( $schema, $fail_resultset ) = @_;
+
+    is(
+        $schema->resultset('User')->find('user-1')->get_column('deleted_at'),
+        undef,
+        "erasure $fail_resultset does not keep a deleted user after rollback"
+    );
+    is(
+        $schema->resultset('User')
+          ->find('user-1')
+          ->get_column('email_normalized'),
+        'member@example.test',
+        "erasure $fail_resultset restores the original email after rollback"
+    );
+    is(
+        $schema->resultset('Credential')
+          ->find('credential-1')
+          ->get_column('revoked_at'),
+        undef, "erasure $fail_resultset restores credentials after rollback"
+    );
+    is(
+        $schema->resultset('Session')
+          ->find('session-1')
+          ->get_column('revoked_at'),
+        undef, "erasure $fail_resultset restores sessions after rollback"
+    );
+    is(
+        $schema->resultset('ErasureJob')->find('job-1')->get_column('status'),
+        'pending',
+        "erasure $fail_resultset leaves the job pending after rollback"
+    );
+    is(
+        $schema->resultset('DeletionRequest')
+          ->find('delete-1')
+          ->get_column('status'),
+        'approved',
+        "erasure $fail_resultset leaves the request approved after rollback"
+    );
+    _assert_empty_after_rollback( $schema,
+        [qw(DeletionAction EventLog OutboxMessage AuditLog)],
+    );
+
+    return;
+}
+
+sub _assert_erasure_identity_removed {
+    my ( $schema, $fail_resultset ) = @_;
+
+    is(
+        $schema->resultset('User')->find('user-1')->get_column('deleted_at'),
+        '2026-05-23T12:00:00Z',
+        "erasure $fail_resultset retry anonymizes the user"
+    );
+    is(
+        $schema->resultset('Credential')
+          ->find('credential-1')
+          ->get_column('revoked_at'),
+        '2026-05-23T12:00:00Z',
+        "erasure $fail_resultset retry revokes credentials"
+    );
+    is(
+        $schema->resultset('Session')
+          ->find('session-1')
+          ->get_column('revoked_at'),
+        '2026-05-23T12:00:00Z',
+        "erasure $fail_resultset retry revokes sessions"
+    );
+    is( $schema->resultset('ErasureJob')->find('job-1')->get_column('status'),
+        'done', "erasure $fail_resultset retry completes the job" );
+
+    return;
+}
+
+sub _failing_schema {
+    my ($name) = @_;
+
+    return GPForum::Test::EngineeringCorrectness::Schema->new(
+        fail_resultset => $name, );
+}
+
+sub _timeout_pattern {
+    my ($name) = @_;
+
+    my $quoted   = quotemeta $name;
+    my $injected = qr/injected [ ] create [ ] failure [ ] for/msx;
+    my $timeout  = qr/statement [ ] timeout/msx;
+
+    return qr/$injected [ ] $quoted [:] [ ] $timeout/msx;
+}
+
+sub _assert_empty_after_rollback {
+    my ( $schema, $names ) = @_;
+
+    for my $resultset ( @{$names} ) {
         is( scalar @{ $schema->created_for($resultset) },
             0, "$resultset has no committed row after rollback" );
     }
@@ -298,10 +709,23 @@ sub _assert_repeated_moderation_action_is_idempotent {
 
     ok( $first->{ok}, 'first moderation action succeeds' );
     ok( $again->{ok}, 'repeated moderation action succeeds' );
+    ok( $again->{skipped},
+        'repeated moderation action is skipped when already applied' );
     is( $posts->find('post-1')->get_column('moderation_state'),
         'hidden', 'repeated moderation action leaves post hidden' );
-    is( $actions->created->[1]{metadata}{idempotent},
-        1, 'repeated moderation action is marked idempotent' );
+    is(
+        $first->{action}{moderation_action_id},
+        $again->{action}{moderation_action_id},
+        'repeated moderation action returns the original action'
+    );
+    is( scalar @{ $actions->created },
+        1, 'repeated moderation action does not insert a second row' );
+    is( scalar @{ $events->created },
+        1, 'repeated moderation action does not emit a second event' );
+    is( scalar @{ $audits->created },
+        1, 'repeated moderation action does not emit a second audit' );
+    is( scalar @{ $outbox->created },
+        1, 'repeated moderation action does not emit a second outbox row' );
 
     return;
 }
@@ -384,6 +808,11 @@ sub _assert_outbox_concurrency_fixture {
         $test,
         qr/stale [ ] running [ ] row [ ] is [ ] claimed/msx,
         'outbox concurrency test verifies stale-lock recovery'
+    );
+    like(
+        $test,
+        qr/crash [ ] after [ ] claim [ ] does [ ] not [ ] dispatch/msx,
+        'outbox concurrency test verifies crash between claim and dispatch'
     );
     like(
         $test,
@@ -678,6 +1107,16 @@ sub _reply_command {
             shard_id  => 0,
             thread_id => 'thread-1',
         },
+    };
+}
+
+sub _report_command {
+    return {
+        details          => 'too much spam',
+        reason           => 'spam',
+        reporter_user_id => 'user-1',
+        target_id        => 'post-1',
+        target_type      => 'post',
     };
 }
 

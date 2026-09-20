@@ -75,6 +75,17 @@ sub mark_read_response {
     return $self->_mark_read_success( $result->{stored} );
 }
 
+sub mark_all_read_response {
+    my ( $self, $result ) = @_;
+
+    my $failure = $self->write_failure($result);
+    if ($failure) {
+        return $failure;
+    }
+
+    return $self->_mark_all_read_success( $result->{stored} );
+}
+
 sub write_failure {
     my ( $self, $result ) = @_;
 
@@ -111,7 +122,24 @@ sub _mark_read_success {
         );
     }
 
-    return $self->redirect_to('notifications');
+    return $self->_html_success( $self->notification_access->marked_read_status,
+        'notifications', );
+}
+
+sub _mark_all_read_success {
+    my ( $self, $stored ) = @_;
+
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json => $self->gp_notifications_view_model->mark_all_read_response(
+                $stored),
+            status => $HTTP_OK,
+        );
+    }
+
+    return $self->_html_success(
+        $self->notification_access->marked_all_read_status,
+        'notifications', );
 }
 
 sub _mapped_failure {
@@ -144,6 +172,27 @@ sub _current_user_id {
     my ($self) = @_;
 
     return GPForum::Web::Access->new->user_id($self);
+}
+
+sub _html_success {
+    my ( $self, $status, $route ) = @_;
+
+    $self->_set_success_flash(
+        $self->notification_access->write_flash_key($status) );
+
+    return $self->redirect_to($route);
+}
+
+sub _set_success_flash {
+    my ( $self, $flash_key ) = @_;
+
+    if ( !$flash_key ) {
+        return;
+    }
+
+    $self->flash( success => $self->t($flash_key) );
+
+    return;
 }
 
 sub _wants_json {
@@ -260,6 +309,10 @@ Maps workflow statuses to HTTP error responses.
 =head2 mark_read_response
 
 Renders a successful mark-read as JSON or an inbox redirect.
+
+=head2 mark_all_read_response
+
+Renders a successful mark-all-read as JSON or an inbox redirect.
 
 =head1 DIAGNOSTICS
 

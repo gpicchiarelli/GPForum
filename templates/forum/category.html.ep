@@ -33,6 +33,16 @@
               <a href="<%= url_for('profile', username => $thread->{author_username}) %>"><%= $thread->{author_profile_label} || $thread->{author_display_name} %></a>
             </p>
           % }
+          % if ($thread->{deleted_at}) {
+            <p role="status"><%= t('forum.thread_deleted_notice') %></p>
+          % }
+          % if ($thread->{can_restore_thread}) {
+            <form class="forum-thread-restore" method="post" action="<%= url_for('thread_restore', thread_id => $thread->{thread_id}) %>">
+              <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $thread->{restore_thread_command_id} || q{} %>">
+              <button type="submit"><%= t('forum.restore_thread') %></button>
+            </form>
+          % }
         </li>
       % }
     </ol>

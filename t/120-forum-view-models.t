@@ -49,7 +49,10 @@ is( $input_visibility->{value},
 my $pages       = GPForum::ViewModel::Forum::Page->new;
 my $thread_page = $pages->thread_page(
     attachments_by_post => { 'post-1' => [ { attachment_id => 'att-1' } ] },
-    page                => {
+    attachment_delete_command_ids => { 'att-1'  => 'att-delete-1' },
+    attachment_upload_command_ids => { 'post-1' => 'att-upload-1' },
+    edit_command_ids              => { 'post-1' => 'edit-1' },
+    page                          => {
         posts  => { items     => [ { post_id => 'post-1', body => 'Hi' } ], },
         thread => { thread_id => 'thread-1', title => 'Welcome' },
     },
@@ -59,6 +62,10 @@ is( $thread_page->{reply_command_id},
     'reply-1', 'page keeps the reply command id' );
 is( $thread_page->{posts}[0]{attachments}[0]{attachment_id},
     'att-1', 'page attaches files by post id' );
+is( $thread_page->{posts}[0]{attachments}[0]{delete_command_id},
+    'att-delete-1', 'page keeps attachment delete command ids' );
+ok( !$thread_page->{posts}[0]{upload_command_id},
+    'page omits upload command ids unless the post is editable' );
 is( $thread_page->{thread}{ui}{heading_id},
     'thread-thread-1-heading', 'page shapes thread heading metadata' );
 

@@ -12,13 +12,17 @@ use GPForum::Service::Community::ReputationLedger;
 use GPForum::Service::Outbox::Dispatcher;
 use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Service::Search::Indexer;
+use GPForum::Worker::EventIdempotencyStore;
 use GPForum::Worker::Handler::AttachmentScanning;
 use GPForum::Worker::Handler::CacheInvalidation;
 use GPForum::Worker::Handler::FeedProjection;
+use GPForum::Worker::Handler::IdentityMail;
 use GPForum::Worker::Handler::MediaProcessing;
 use GPForum::Worker::Handler::NotificationDispatch;
 use GPForum::Worker::Handler::ReputationUpdate;
 use GPForum::Worker::Handler::SearchIndexing;
+use GPForum::Worker::IdempotentJobRunner;
+use GPForum::Worker::MinionGuard;
 use GPForum::Worker::MinionRegistrar;
 
 our $VERSION = '0.001';
@@ -44,6 +48,7 @@ sub _register_worker_helpers {
 
             return GPForum::Service::Outbox::DomainEventTransport->new(
                 handlers          => _event_handlers($controller),
+                job_runner        => _job_runner($controller),
                 realtime_notifier => $controller->gp_realtime_pg_notifier,
             );
         }
@@ -76,6 +81,16 @@ sub _register_worker_helpers {
     return;
 }
 
+sub _job_runner {
+    my ($controller) = @_;
+
+    return GPForum::Worker::IdempotentJobRunner->new(
+        store => GPForum::Worker::EventIdempotencyStore->new(
+            schema => $controller->gp_schema,
+        ),
+    );
+}
+
 sub _event_handlers {
     my ($controller) = @_;
 
@@ -105,6 +120,9 @@ sub _event_handlers {
             schema             => $controller->gp_schema,
             subscription_store => $controller->gp_subscription_store,
         ),
+        GPForum::Worker::Handler::IdentityMail->new(
+            mailer => $controller->gp_identity_mailer,
+        ),
         GPForum::Worker::Handler::ReputationUpdate->new(
             ledger => GPForum::Service::Community::ReputationLedger->new(
                 schema => $controller->gp_schema,
@@ -117,10 +135,40 @@ sub _event_handlers {
 sub _configure_minion {
     my ( $application, $config ) = @_;
 
-    return if !$config->minion_enabled;
+    if ( !GPForum::Worker::MinionGuard->requested($config) ) {
+        return;
+    }
 
     _require_minion_backend($config);
+    GPForum::Worker::MinionGuard->wrap(
+        sub {
+            _load_minion_plugin( $application, $config );
+            return;
+        }
+    );
+    GPForum::Worker::MinionGuard->wrap(
+        sub {
+            GPForum::Worker::MinionGuard->assert_reachable(
+                $application->minion );
+            return;
+        }
+    );
+    _register_minion_tasks($application);
+
+    return;
+}
+
+sub _load_minion_plugin {
+    my ( $application, $config ) = @_;
+
     $application->plugin( Minion => { Pg => $config->minion_pg_url } );
+
+    return 1;
+}
+
+sub _register_minion_tasks {
+    my ($application) = @_;
+
     my $tasks = GPForum::Worker::MinionRegistrar->new(
         dispatcher_factory => sub {
             my ($job) = @_;

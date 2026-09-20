@@ -19,8 +19,29 @@ sub upload_post {
         $self->gp_attachment_workflow->upload_for_post(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 post_id       => $self->param('post_id'),
                 upload        => $self->req->upload('attachment'),
+            }
+        ),
+    );
+}
+
+sub delete_post {
+    my ($self) = @_;
+
+    my $user_id = $self->write_user_id;
+    if ( !$user_id ) {
+        return;
+    }
+
+    return $self->delete_write_response(
+        $self->gp_attachment_workflow->delete_for_post(
+            {
+                actor_user_id => $user_id,
+                attachment_id => $self->param('attachment_id'),
+                command_id    => $self->command_id_param,
+                post_id       => $self->param('post_id'),
             }
         ),
     );
@@ -45,14 +66,20 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Accepts authenticated post attachment uploads through the attachment
-workflow.
+Accepts authenticated post attachment uploads and deletes through the
+attachment workflow.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 upload_post
 
 Uploads and links an attachment to a visible post owned by the actor.
+Requires C<command_id>.
+
+=head2 delete_post
+
+Soft-deletes an attachment linked to a visible post owned by the actor.
+Requires C<command_id>.
 
 =head1 DIAGNOSTICS
 

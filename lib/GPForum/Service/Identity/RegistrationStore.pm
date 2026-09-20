@@ -3,9 +3,15 @@ package GPForum::Service::Identity::RegistrationStore;
 use strict;
 use warnings;
 
+use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base;
 
+use GPForum::Infrastructure::UniqueConflict;
+
 our $VERSION = '0.001';
+
+const my $ID_CONSTRAINT => 'users_pkey';
 
 has audit            => undef;
 has credential_store => undef;
@@ -26,13 +32,173 @@ sub create_registration {
 sub _stored_registration {
     my ( $self, $registration ) = @_;
 
-    my $result = $self->schema->txn_do(
+    my $result = eval { return $self->_insert_in_txn($registration); };
+    if ($result) {
+        return { ok => 1, user => $result->{user} };
+    }
+
+    return $self->_registration_after_conflict( $registration, $EVAL_ERROR );
+}
+
+sub _insert_in_txn {
+    my ( $self, $registration ) = @_;
+
+    return $self->schema->txn_do(
         sub {
             return $self->_insert_registration($registration);
         }
     );
+}
 
-    return { ok => 1, user => $result->{user} };
+sub _registration_after_conflict {
+    my ( $self, $registration, $error ) = @_;
+
+    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_registration_after_unique( $registration, $error );
+}
+
+sub _registration_after_unique {
+    my ( $self, $registration, $error ) = @_;
+
+    if ( _user_id_conflict($error) ) {
+        return $self->_retry_or_reuse_user($registration);
+    }
+
+    return $self->_duplicate_result($registration);
+}
+
+sub _retry_or_reuse_user {
+    my ( $self, $registration ) = @_;
+
+    my $stored = $self->_user_by_id( $registration->{user}{id} );
+    if ( $self->_same_open_user( $stored, $registration->{user} ) ) {
+        return $self->_reuse_user( $stored, $registration );
+    }
+
+    return $self->_retry_user_id($registration);
+}
+
+sub _same_open_user {
+    my ( $self, $stored, $user ) = @_;
+
+    if ( !$stored ) {
+        return 0;
+    }
+    if ( !_same_text( _user_column( $stored, 'username' ), $user->{username} ) )
+    {
+        return 0;
+    }
+
+    return _same_text( _user_column( $stored, 'email_normalized' ),
+        $user->{email_normalized} );
+}
+
+sub _reuse_user {
+    my ( $self, $stored, $registration ) = @_;
+
+    my $user       = $registration->{user};
+    my $credential = $registration->{credential};
+    $self->credential_store->create_password_credential(
+        {
+            secret_hash => $credential->{secret_hash},
+            type        => $credential->{type},
+            user_id     => $user->{id},
+        }
+    );
+    $self->audit->record_registration( $user, $self->id_service->uuid );
+
+    return { ok => 1, user => $stored };
+}
+
+sub _user_by_id {
+    my ( $self, $user_id ) = @_;
+
+    return $self->schema->resultset('User')->find( { id => $user_id } );
+}
+
+sub _user_column {
+    my ( $row, $name ) = @_;
+
+    if ( ref $row eq 'HASH' ) {
+        return $row->{$name};
+    }
+    if ( $row && $row->can('get_column') ) {
+        return $row->get_column($name);
+    }
+
+    return;
+}
+
+sub _same_text {
+    my ( $stored, $candidate ) = @_;
+
+    if ( !defined $stored || !defined $candidate ) {
+        return 0;
+    }
+
+    return $stored eq $candidate ? 1 : 0;
+}
+
+sub _retry_user_id {
+    my ( $self, $registration ) = @_;
+
+    my $created = eval {
+        return $self->_insert_in_txn(
+            $self->_reissued_registration($registration) );
+    };
+    if ($created) {
+        return { ok => 1, user => $created->{user} };
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    return;
+}
+
+sub _reissued_registration {
+    my ( $self, $registration ) = @_;
+
+    return {
+        %{$registration},
+        user => {
+            %{ $registration->{user} }, id => $self->id_service->uuid,
+        },
+    };
+}
+
+sub _user_id_conflict {
+    my ($error) = @_;
+
+    if ( !defined $error || !length $error ) {
+        return 0;
+    }
+
+    return index( $error, $ID_CONSTRAINT ) >= 0 ? 1 : 0;
+}
+
+sub _duplicate_result {
+    my ( $self, $registration ) = @_;
+
+    return {
+        errors => $self->_conflict_errors( $registration->{user} ),
+        ok     => 0,
+    };
+}
+
+sub _conflict_errors {
+    my ( $self, $user ) = @_;
+
+    my $errors = $self->_duplicate_errors($user);
+    if ( keys %{$errors} ) {
+        return $errors;
+    }
+
+    return {
+        email    => 'email is already registered',
+        username => 'username is already registered',
+    };
 }
 
 sub _duplicate_errors {
@@ -120,7 +286,11 @@ Persists a prepared registration inside a transaction.
 =head1 DIAGNOSTICS
 
 Duplicate usernames and emails return field errors without opening a
-transaction.
+transaction. A unique race on insert returns the same field errors and does
+not persist a second user or credential. A unique C<id> collision remints
+the id once and does not return another user's account. A leftover unique
+C<id> with this username and email reuses the account and inserts the
+missing credential.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -129,7 +299,8 @@ collaborators supplied by the identity store facade.
 
 =head1 DEPENDENCIES
 
-None beyond the injected collaborators.
+Uses L<GPForum::Infrastructure::UniqueConflict> and the injected
+collaborators.
 
 =head1 INCOMPATIBILITIES
 

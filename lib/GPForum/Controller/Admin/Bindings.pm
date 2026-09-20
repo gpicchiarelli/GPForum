@@ -19,6 +19,7 @@ sub bind_role {
         $self->gp_admin_workflow->bind_role(
             {
                 actor_user_id => $actor_user_id,
+                command_id    => $self->command_id_param,
                 resource_id   => $self->param('resource_id'),
                 resource_type => $self->param('resource_type'),
                 role_id       => $self->param('role_id'),
@@ -43,6 +44,7 @@ sub revoke_binding {
             {
                 actor_user_id => $actor_user_id,
                 binding_id    => $self->param('binding_id'),
+                command_id    => $self->command_id_param,
             }
         ),
         $self->admin_access->role_binding_revoked_status,

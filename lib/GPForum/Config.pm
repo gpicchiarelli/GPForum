@@ -17,13 +17,17 @@ const my $DEFAULT_PUBLIC_BASE_URL => 'http://127.0.0.1:3000';
 const my $DEFAULT_SESSION_SECRET  => 'gpforum-development-secret-change-me';
 const my $DEFAULT_DATABASE_DSN =>
   'dbi:Pg:dbname=gpforum;host=127.0.0.1;port=5432';
-const my $DEFAULT_DATABASE_USER           => 'gpforum';
-const my $DEFAULT_DATABASE_PASSWORD       => q{};
-const my $DEFAULT_WEB_PROCESSES           => 4;
-const my $DEFAULT_WORKER_PROCESSES        => 2;
-const my $DEFAULT_REALTIME_PROCESSES      => 1;
-const my $DEFAULT_RUNTIME_LISTEN          => 'http://127.0.0.1:8080';
-const my $DEFAULT_RUNTIME_WORKER_POLICY   => 'cap-to-cpu';
+const my $DEFAULT_DATABASE_USER          => 'gpforum';
+const my $DEFAULT_DATABASE_PASSWORD      => q{};
+const my $DEFAULT_STATEMENT_TIMEOUT_MS   => 15_000;
+const my $DEFAULT_IDLE_IN_TXN_TIMEOUT_MS => 10_000;
+const my $DEFAULT_LOCK_TIMEOUT_MS        => 3_000;
+const my $SET_APPLICATION_NAME           => q{SET application_name = 'gpforum'};
+const my $DEFAULT_WEB_PROCESSES          => 4;
+const my $DEFAULT_WORKER_PROCESSES       => 2;
+const my $DEFAULT_REALTIME_PROCESSES     => 1;
+const my $DEFAULT_RUNTIME_LISTEN         => 'http://127.0.0.1:8080';
+const my $DEFAULT_RUNTIME_WORKER_POLICY  => 'cap-to-cpu';
 const my $DEFAULT_RUNTIME_MAX_WEB_PER_CPU => 2;
 const my $DEFAULT_RUNTIME_BACKLOG         => 256;
 const my $DEFAULT_RUNTIME_CLIENTS         => 250;
@@ -51,6 +55,7 @@ const my $DEFAULT_MINION_ENABLED          => 0;
 const my $DEFAULT_MINION_PG_URL           => q{};
 const my $DEFAULT_METRICS_TOKEN           => q{};
 const my $DEFAULT_GLIFISTORE_URL          => 'tcp://127.0.0.1:7379';
+const my $DEFAULT_SESSION_TOUCH_INTERVAL  => 300;
 const my $DEFAULT_MAIL_TRANSPORT          => 'test';
 const my $DEFAULT_MAIL_FROM               => 'noreply@localhost';
 const my $DEFAULT_SMTP_HOST               => q{};
@@ -83,20 +88,26 @@ const my %ROTATED_SECRET_ENV => map { $_ => 1 } qw(
   staging
 );
 
-has environment             => sub { return $DEFAULT_ENVIRONMENT; };
-has log_level               => sub { return $DEFAULT_LOG_LEVEL; };
-has default_locale          => sub { return $DEFAULT_LOCALE; };
-has default_theme           => sub { return $DEFAULT_THEME; };
-has public_base_url         => sub { return $DEFAULT_PUBLIC_BASE_URL; };
-has session_secret          => sub { return $DEFAULT_SESSION_SECRET; };
-has database_dsn            => sub { return $DEFAULT_DATABASE_DSN; };
-has database_user           => sub { return $DEFAULT_DATABASE_USER; };
-has database_password       => sub { return $DEFAULT_DATABASE_PASSWORD; };
-has web_processes           => sub { return $DEFAULT_WEB_PROCESSES; };
-has worker_processes        => sub { return $DEFAULT_WORKER_PROCESSES; };
-has realtime_processes      => sub { return $DEFAULT_REALTIME_PROCESSES; };
-has runtime_listen          => sub { return $DEFAULT_RUNTIME_LISTEN; };
-has runtime_worker_policy   => sub { return $DEFAULT_RUNTIME_WORKER_POLICY; };
+has environment              => sub { return $DEFAULT_ENVIRONMENT; };
+has log_level                => sub { return $DEFAULT_LOG_LEVEL; };
+has default_locale           => sub { return $DEFAULT_LOCALE; };
+has default_theme            => sub { return $DEFAULT_THEME; };
+has public_base_url          => sub { return $DEFAULT_PUBLIC_BASE_URL; };
+has session_secret           => sub { return $DEFAULT_SESSION_SECRET; };
+has previous_session_secrets => sub { return []; };
+has database_dsn             => sub { return $DEFAULT_DATABASE_DSN; };
+has database_user            => sub { return $DEFAULT_DATABASE_USER; };
+has database_password        => sub { return $DEFAULT_DATABASE_PASSWORD; };
+has database_statement_timeout_ms =>
+  sub { return $DEFAULT_STATEMENT_TIMEOUT_MS; };
+has database_idle_in_transaction_timeout_ms =>
+  sub { return $DEFAULT_IDLE_IN_TXN_TIMEOUT_MS; };
+has database_lock_timeout_ms => sub { return $DEFAULT_LOCK_TIMEOUT_MS; };
+has web_processes            => sub { return $DEFAULT_WEB_PROCESSES; };
+has worker_processes         => sub { return $DEFAULT_WORKER_PROCESSES; };
+has realtime_processes       => sub { return $DEFAULT_REALTIME_PROCESSES; };
+has runtime_listen           => sub { return $DEFAULT_RUNTIME_LISTEN; };
+has runtime_worker_policy    => sub { return $DEFAULT_RUNTIME_WORKER_POLICY; };
 has runtime_max_web_per_cpu => sub { return $DEFAULT_RUNTIME_MAX_WEB_PER_CPU; };
 has runtime_backlog         => sub { return $DEFAULT_RUNTIME_BACKLOG; };
 has runtime_clients         => sub { return $DEFAULT_RUNTIME_CLIENTS; };
@@ -127,10 +138,13 @@ has realtime_listener_reconnect_backoff_seconds =>
   sub { return $DEFAULT_REALTIME_BACKOFF; };
 has realtime_listener_heartbeat_interval_seconds =>
   sub { return $DEFAULT_REALTIME_HEARTBEAT; };
-has minion_enabled => sub { return $DEFAULT_MINION_ENABLED; };
-has minion_pg_url  => sub { return $DEFAULT_MINION_PG_URL; };
-has metrics_token  => sub { return $DEFAULT_METRICS_TOKEN; };
-has glifistore_url => sub { return $DEFAULT_GLIFISTORE_URL; };
+has minion_enabled          => sub { return $DEFAULT_MINION_ENABLED; };
+has minion_pg_url           => sub { return $DEFAULT_MINION_PG_URL; };
+has metrics_token           => sub { return $DEFAULT_METRICS_TOKEN; };
+has previous_metrics_tokens => sub { return []; };
+has glifistore_url          => sub { return $DEFAULT_GLIFISTORE_URL; };
+has session_touch_interval_seconds =>
+  sub { return $DEFAULT_SESSION_TOUCH_INTERVAL; };
 has mail_transport => sub { return $DEFAULT_MAIL_TRANSPORT; };
 has mail_from      => sub { return $DEFAULT_MAIL_FROM; };
 has smtp_host      => sub { return $DEFAULT_SMTP_HOST; };
@@ -161,6 +175,8 @@ sub from_environment {
         session_secret => _env_value(
             $environment, 'GPFORUM_SESSION_SECRET', $DEFAULT_SESSION_SECRET
         ),
+        previous_session_secrets =>
+          _env_csv( $environment, 'GPFORUM_SESSION_SECRETS' ),
         database_dsn => _env_value(
             $environment, 'GPFORUM_DATABASE_DSN', $DEFAULT_DATABASE_DSN
         ),
@@ -170,6 +186,20 @@ sub from_environment {
         database_password => _env_value(
             $environment, 'GPFORUM_DATABASE_PASSWORD',
             $DEFAULT_DATABASE_PASSWORD
+        ),
+        database_statement_timeout_ms => _env_integer(
+            $environment,
+            'GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS',
+            $DEFAULT_STATEMENT_TIMEOUT_MS
+        ),
+        database_idle_in_transaction_timeout_ms => _env_integer(
+            $environment,
+            'GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS',
+            $DEFAULT_IDLE_IN_TXN_TIMEOUT_MS
+        ),
+        database_lock_timeout_ms => _env_integer(
+            $environment, 'GPFORUM_DATABASE_LOCK_TIMEOUT_MS',
+            $DEFAULT_LOCK_TIMEOUT_MS
         ),
         web_processes => _env_integer(
             $environment, 'GPFORUM_WEB_PROCESSES', $DEFAULT_WEB_PROCESSES
@@ -306,7 +336,14 @@ sub from_environment {
         metrics_token => _env_value(
             $environment, 'GPFORUM_METRICS_TOKEN', $DEFAULT_METRICS_TOKEN
         ),
-        glifistore_url => _env_glifistore_url($environment),
+        previous_metrics_tokens =>
+          _env_csv( $environment, 'GPFORUM_METRICS_TOKENS' ),
+        glifistore_url                 => _env_glifistore_url($environment),
+        session_touch_interval_seconds => _env_integer(
+            $environment,
+            'GPFORUM_SESSION_TOUCH_INTERVAL_SECONDS',
+            $DEFAULT_SESSION_TOUCH_INTERVAL
+        ),
         mail_transport => _env_value(
             $environment,
             'GPFORUM_MAIL_TRANSPORT',
@@ -346,6 +383,7 @@ sub validate {
     _require_non_empty( 'session_secret',  $self->session_secret );
     _require_non_empty( 'database_dsn',    $self->database_dsn );
     _require_non_empty( 'database_user',   $self->database_user );
+    $self->_validate_database_timeouts;
     _require_process_count( 'web_processes',      $self->web_processes );
     _require_process_count( 'worker_processes',   $self->worker_processes );
     _require_process_count( 'realtime_processes', $self->realtime_processes );
@@ -406,13 +444,12 @@ sub validate {
       if $self->minion_enabled;
     _require_glifistore_url( $self->glifistore_url );
     _require_configured_glifistore($self);
+    _require_positive_integer(
+        'session_touch_interval_seconds',
+        $self->session_touch_interval_seconds
+    );
     $self->_validate_mail;
-
-    if ( _requires_rotated_secret( $self->environment )
-        && $self->session_secret eq $DEFAULT_SESSION_SECRET )
-    {
-        croak 'production requires GPFORUM_SESSION_SECRET';
-    }
+    $self->_validate_rotated_secrets;
 
     return $self;
 }
@@ -421,6 +458,25 @@ sub requires_glifistore {
     my ($self) = @_;
 
     return $self->environment_requires_glifistore( $self->environment );
+}
+
+sub requires_secure_transport {
+    my ($self) = @_;
+
+    return _requires_rotated_secret( $self->environment );
+}
+
+sub signing_secrets {
+    my ($self) = @_;
+
+    return _unique_head( $self->session_secret,
+        $self->previous_session_secrets );
+}
+
+sub accepted_metrics_tokens {
+    my ($self) = @_;
+
+    return _unique_head( $self->metrics_token, $self->previous_metrics_tokens );
 }
 
 sub environment_requires_glifistore {
@@ -462,16 +518,58 @@ sub database_connect_info {
     my ($self) = @_;
 
     return (
-        $self->database_dsn,
-        $self->database_user,
-        $self->database_password,
-        {
-            AutoCommit     => 1,
-            RaiseError     => 1,
-            PrintError     => 0,
-            pg_enable_utf8 => 1,
-        },
+        $self->database_dsn,      $self->database_user,
+        $self->database_password, $self->_database_dbi_attributes,
     );
+}
+
+sub _database_dbi_attributes {
+    my ($self) = @_;
+
+    return {
+        AutoCommit     => 1,
+        RaiseError     => 1,
+        PrintError     => 0,
+        on_connect_do  => $self->_database_session_settings,
+        pg_enable_utf8 => 1,
+    };
+}
+
+sub _database_session_settings {
+    my ($self) = @_;
+
+    return [
+        _timeout_setting(
+            'statement_timeout', $self->database_statement_timeout_ms
+        ),
+        _timeout_setting(
+            'idle_in_transaction_session_timeout',
+            $self->database_idle_in_transaction_timeout_ms
+        ),
+        _timeout_setting( 'lock_timeout', $self->database_lock_timeout_ms ),
+        $SET_APPLICATION_NAME,
+    ];
+}
+
+sub _timeout_setting {
+    my ( $name, $milliseconds ) = @_;
+
+    return "SET $name = $milliseconds";
+}
+
+sub _validate_database_timeouts {
+    my ($self) = @_;
+
+    _require_non_negative_integer( 'database_statement_timeout_ms',
+        $self->database_statement_timeout_ms );
+    _require_non_negative_integer(
+        'database_idle_in_transaction_timeout_ms',
+        $self->database_idle_in_transaction_timeout_ms
+    );
+    _require_non_negative_integer( 'database_lock_timeout_ms',
+        $self->database_lock_timeout_ms );
+
+    return;
 }
 
 sub _require_runtime_worker_policy {
@@ -517,6 +615,60 @@ sub _env_value {
       : $default;
 }
 
+sub _env_csv {
+    my ( $environment, $name ) = @_;
+
+    return [ _csv_items( _env_value( $environment, $name, q{} ) ) ];
+}
+
+sub _csv_items {
+    my ($raw) = @_;
+
+    return grep { length } map { _trim($_) } split /,/msx, $raw;
+}
+
+sub _unique_head {
+    my ( $first, $rest ) = @_;
+
+    return _collect_unique( $first, $rest || [] );
+}
+
+sub _collect_unique {
+    my ( $first, $rest ) = @_;
+
+    my %seen = ( $first => 1 );
+
+    return [ $first, _unseen_items( $rest, \%seen ) ];
+}
+
+sub _unseen_items {
+    my ( $rest, $seen ) = @_;
+
+    my @items;
+    for my $item ( @{$rest} ) {
+        if ( _take_unseen( $item, $seen ) ) {
+            push @items, $item;
+        }
+    }
+
+    return @items;
+}
+
+sub _take_unseen {
+    my ( $item, $seen ) = @_;
+
+    if ( !defined $item || !length $item ) {
+        return 0;
+    }
+    if ( $seen->{$item} ) {
+        return 0;
+    }
+
+    $seen->{$item} = 1;
+
+    return 1;
+}
+
 sub _env_integer {
     my ( $environment, $name, $default ) = @_;
 
@@ -536,6 +688,50 @@ sub _requires_rotated_secret {
     }
 
     return 1;
+}
+
+sub _validate_rotated_secrets {
+    my ($self) = @_;
+
+    if ( !_requires_rotated_secret( $self->environment ) ) {
+        return;
+    }
+
+    _require_rotated_session_secret($self);
+    _reject_development_previous( $self->previous_session_secrets );
+
+    return;
+}
+
+sub _require_rotated_session_secret {
+    my ($self) = @_;
+
+    if ( $self->session_secret eq $DEFAULT_SESSION_SECRET ) {
+        croak 'production requires GPFORUM_SESSION_SECRET';
+    }
+
+    return;
+}
+
+sub _reject_development_previous {
+    my ($secrets) = @_;
+
+    for my $secret ( @{$secrets} ) {
+        _reject_development_secret($secret);
+    }
+
+    return;
+}
+
+sub _reject_development_secret {
+    my ($secret) = @_;
+
+    if ( defined $secret && $secret eq $DEFAULT_SESSION_SECRET ) {
+        croak
+          'GPFORUM_SESSION_SECRETS must not include the development default';
+    }
+
+    return;
 }
 
 sub _require_non_empty {
@@ -591,6 +787,16 @@ sub _require_positive_integer {
 
     croak "$name must be >= 1"
       if $value < 1;
+
+    return;
+}
+
+sub _require_non_negative_integer {
+    my ( $name, $value ) = @_;
+
+    if ( $value < 0 ) {
+        croak "$name must be >= 0";
+    }
 
     return;
 }
@@ -741,13 +947,34 @@ production profiles require C<glifistore_url>.
 
 True when the configured environment must set a GlifiStore URL.
 
+=head2 requires_secure_transport
+
+True for staging and production profiles. Those environments require a
+rotated session secret, Secure cookies, and HSTS.
+
+=head2 signing_secrets
+
+Returns the Mojolicious secret list. The current session secret is first
+and signs new cookies. Previous secrets from
+C<GPFORUM_SESSION_SECRETS> still validate existing cookies.
+
+=head2 accepted_metrics_tokens
+
+Returns the current metrics token followed by previous tokens from
+C<GPFORUM_METRICS_TOKENS>. Scrapers may present either during rotation.
+
 =head2 environment_requires_glifistore
 
 Class helper for the same GlifiStore requirement check.
 
 =head2 database_connect_info
 
-Returns DBI connection arguments for DBIx::Class.
+Returns DBI connection arguments for DBIx::Class. Session
+C<statement_timeout>, C<idle_in_transaction_session_timeout>,
+C<lock_timeout>, and C<application_name> are applied on connect. Zero
+milliseconds disables that PostgreSQL timeout. C<gpforum-migrate --apply>
+clears C<statement_timeout> after connect so DDL is not capped at the web
+budget.
 
 =head1 DIAGNOSTICS
 
@@ -757,10 +984,17 @@ secrets.
 =head1 CONFIGURATION AND ENVIRONMENT
 
 Reads C<GPFORUM_*> environment variables, including PostgreSQL connection
-settings and mail delivery (C<GPFORUM_MAIL_TRANSPORT>, C<GPFORUM_MAIL_FROM>,
+settings (C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>,
+C<GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS>,
+C<GPFORUM_DATABASE_LOCK_TIMEOUT_MS>), session rotation
+(C<GPFORUM_SESSION_SECRET>, comma-separated
+C<GPFORUM_SESSION_SECRETS>), metrics scrape tokens
+(C<GPFORUM_METRICS_TOKEN>, comma-separated C<GPFORUM_METRICS_TOKENS>),
+and mail delivery (C<GPFORUM_MAIL_TRANSPORT>, C<GPFORUM_MAIL_FROM>,
 and optional SMTP host, port, credentials, and TLS). Development and test
 default to the C<test> transport; staging and production default to
-C<sendmail>.
+C<sendmail>. Staging and production reject the development session secret
+in both the current secret and C<GPFORUM_SESSION_SECRETS>.
 
 =head1 DEPENDENCIES
 

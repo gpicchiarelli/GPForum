@@ -15,4 +15,15 @@ sub get_column {
     return $self->data->{$column};
 }
 
+sub update {
+    my ( $self, $changes ) = @_;
+
+    my $data = $self->data;
+    for my $column ( keys %{$changes} ) {
+        $data->{$column} = $changes->{$column};
+    }
+
+    return $self;
+}
+
 1;

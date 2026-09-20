@@ -30,6 +30,7 @@ sub sitemap {
 
     my $builder = $input{builder};
     my @entries = (
+        @{ $builder->legal_entries },
         @{
             $builder->category_entries(
                 $input{presenter}->resources( $input{categories} )

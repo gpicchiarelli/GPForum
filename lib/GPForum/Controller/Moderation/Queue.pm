@@ -20,6 +20,7 @@ sub assign_report {
         $self->gp_moderation_workflow->assign_report(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 report_id     => $self->param('report_id'),
             }
         ),
@@ -40,6 +41,7 @@ sub release_report {
         $self->gp_moderation_workflow->release_report(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 report_id     => $self->param('report_id'),
             }
         ),
@@ -60,6 +62,7 @@ sub resolve_report {
         $self->gp_moderation_workflow->resolve_report(
             {
                 actor_user_id => $user_id,
+                command_id    => $self->command_id_param,
                 report_id     => $self->param('report_id'),
                 resolution    => $self->param('resolution'),
             }
