@@ -4,6 +4,13 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Archive Cloud Agent VM post-Carton drills evidence under
+  `docs/ops/evidence/2026-09-20-cloud-agent-drills/` (completed
+  `bootstrap-deps --postgres --rebuild-local` / `carton_ok`; staging-host-verify,
+  staging-drill, staging-drill-attachments, mail-check dry-run pass JSON;
+  optional Hypnotoad + stress-load smoke `ok`). Extends the incomplete cut in
+  `2026-09-20-cloud-agent-complete/`. **PRIVATE BETA remains NOT YET.**
+
 - Archive Cloud Agent VM complete-sequence evidence under
   `docs/ops/evidence/2026-09-20-cloud-agent-complete/` (system Perl preflight,
   PostgreSQL role/DB ready, Carton bootstrap log tail; staging/mail drills

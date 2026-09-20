@@ -1,0 +1,10 @@
+captured_at_utc: 2026-09-20T20:43:24Z
+carton_ok: yes
+bootstrap_exit: 0
+distributions_installed: 158
+
+--- gpforum-carton check ---
+cpanfile's dependencies are satisfied.
+
+--- carton_ok probe ---
+carton_ok
