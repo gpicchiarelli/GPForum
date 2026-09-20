@@ -9,6 +9,8 @@ All notable changes to GPForum are recorded here.
   PostgreSQL role/DB ready, Carton bootstrap log tail; staging/mail drills
   skipped while `local/` incomplete). **PRIVATE BETA remains NOT YET.**
 
+- Ignore `local.rebuild.*` / `local.incomplete.*` Carton recovery trees in `.gitignore` (companions to `bootstrap-deps --rebuild-local`).
+
 - Wire `script/bootstrap-deps --rebuild-local` into the private-beta checklist script and docs so incomplete Carton `local/` trees are an explicit prep step.
 
 - Add `script/bootstrap-deps --rebuild-local` to rename an incomplete or
