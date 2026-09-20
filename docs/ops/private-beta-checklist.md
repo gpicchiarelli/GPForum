@@ -151,6 +151,7 @@ optimism.
 - [staging-host.md](staging-host.md)
 - [stress-load.md](stress-load.md)
 - [mail-check.md](mail-check.md)
+- [evidence/](evidence) (archived blobs; laptop vs staging — never a go decision)
 - [../release/readiness-review.md](../release/readiness-review.md)
 - [../PRODUCTION_READINESS.md](../PRODUCTION_READINESS.md)
 - [../../ROADMAP.md](../../ROADMAP.md)
