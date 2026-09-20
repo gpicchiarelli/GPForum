@@ -41,14 +41,21 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cpanminus libpq-dev postgresql-client
-          sudo cpanm --notest Carton
+          sudo apt-get install -y perl build-essential cpanminus libpq-dev postgresql-client
+          # Carton is a host tool for the OS system Perl, not a Carton-local binary.
+          sudo /usr/bin/perl /usr/bin/cpanm --notest Carton
+
+      - name: Verify system Perl
+        run: |
+          test "$(readlink -f "$(command -v perl)")" = /usr/bin/perl
+          script/gpforum-system-perl --preflight
+          script/gpforum-system-perl --require
 
       - name: Install Perl dependencies
         run: script/bootstrap-deps --postgres
 
       - name: Verify dependency lock
-        run: carton check
+        run: script/gpforum-carton check
 
       - name: Check CPAN license review
         run: script/cpan-license-check
@@ -57,7 +64,7 @@ jobs:
         run: git diff --check
 
       - name: Check Perl syntax
-        run: carton exec script/perl-syntax-check
+        run: script/gpforum-carton exec script/perl-syntax-check
 
       - name: Check Perl formatting
         run: script/perltidy-check
@@ -66,7 +73,7 @@ jobs:
         run: script/perlcritic
 
       - name: Apply database migrations
-        run: carton exec bin/gpforum-migrate --apply
+        run: script/gpforum-carton exec bin/gpforum-migrate --apply
 
       - name: Seed production evidence dataset
         run: script/seed-benchmark --profile small
@@ -87,13 +94,13 @@ jobs:
         run: script/gpforum-os-preflight --json
 
       - name: Run PostgreSQL integration test
-        run: carton exec prove -lv t/integration/postgres.t
+        run: script/gpforum-carton exec prove -lv t/integration/postgres.t
 
       - name: Run tests
-        run: carton exec prove -lr t
+        run: script/gpforum-carton exec prove -lr t
 
       - name: Run benchmark smoke
-        run: carton exec bin/gpforum-benchmark --fixture --check --iterations 2 --warmup 1 --route /health/live --route /categories
+        run: script/gpforum-carton exec bin/gpforum-benchmark --fixture --check --iterations 2 --warmup 1 --route /health/live --route /categories
 
       - name: Run query plan evidence
         run: script/query-plan-evidence --check
@@ -112,7 +119,7 @@ jobs:
         run: script/bench-hypnotoad --check --profile small --workers 2 --iterations 2 --warmup 1 --no-compare --route /categories --route /health/ready
 
       - name: Run platform check
-        run: carton exec bin/gpforum-platform-check --with-db
+        run: script/gpforum-carton exec bin/gpforum-platform-check --with-db
 
       - name: Run coverage gate
         run: script/coverage

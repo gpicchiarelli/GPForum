@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Require the OS system Perl (`/usr/bin/perl` / distro package) for bootstrap,
+  Carton, make, CI, and docs. Refuse version managers and custom PREFIX
+  installs via `script/gpforum-system-perl`; document distro packages and
+  `perl -V` preflight.
+
 - Plugin install remints `plugin_id` once when the unique primary key
   conflicts, and does not return another plugin.
 

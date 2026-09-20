@@ -56,9 +56,29 @@ counts through benchmark-only headers, and stops the server gracefully. See
 
 ## Perl dependencies
 
+GPForum runs on the **OS system Perl** only (`/usr/bin/perl` on
+Debian/Ubuntu with `Config{prefix}=/usr`, or FreeBSD ports/pkg perl under
+`/usr/local`). Perl 5.38+ is required (Ubuntu 24.04 provides 5.38.x).
+Version managers and custom PREFIX builds are unsupported.
+`script/gpforum-system-perl` and `script/bootstrap-deps` refuse them.
+Confirm the host with:
+
+```sh
+which perl
+perl -v
+make system-perl   # script/gpforum-system-perl --preflight
+```
+
+Host packages (before Carton):
+
+- Debian/Ubuntu: `perl`, `build-essential`, `cpanminus`, `libpq-dev`,
+  `postgresql-client`
+- FreeBSD: `perl5`, `p5-App-cpanminus`, `postgresql16-client`
+- Then: `cpanm -M https://cpan.metacpan.org/ Carton` for that system Perl
+
 GPForum recognizes runtime modules from `cpanfile`, PostgreSQL modules from
 `cpanfile.postgres` (Carton feature `postgres`), and exact distribution pins
-from `cpanfile.snapshot`. Install only through Carton:
+from `cpanfile.snapshot`. Install only through Carton under system Perl:
 
 ```sh
 make install-deps-postgres
@@ -74,16 +94,16 @@ cache (`--cached`). Carton itself runs module tests as `--notest` (Carton
 
 `carton install --deployment` populates `local/lib/perl5` and scripts such as
 `local/bin/hypnotoad`. It does **not** install `local/bin/carton`. Carton is a
-host tool. Locate it with `script/gpforum-carton` (same wrapper
-`script/bootstrap-deps` uses). If Carton is not next to `PATH` perl, set
-`GPFORUM_CARTON` in the environment file. The provided systemd, rc.d, and
+host tool for system Perl. Locate it with `script/gpforum-carton` (same
+wrapper `script/bootstrap-deps` uses). If Carton is not next to system perl,
+set `GPFORUM_CARTON` in the environment file. The provided systemd, rc.d, and
 launchd units start the app with `script/gpforum-carton exec`, not
 `local/bin/carton`.
 
 Reproduce an install:
 
-1. Use the same Perl major/minor that produced `local/` (do not delete
-   `local/` to paper over a 5.42/5.44 mismatch).
+1. Use the same system Perl major/minor that produced `local/` (do not delete
+   `local/` to paper over a mismatch after a distro Perl upgrade).
 2. Keep `cpanfile`, `cpanfile.postgres`, and `cpanfile.snapshot` from the
    same git commit.
 3. Run `script/bootstrap-deps --postgres` then `script/gpforum-carton check`.
@@ -101,7 +121,7 @@ deploy/nginx/gpforum.conf
 
 Recommended operator actions:
 
-- install Carton for the same Perl that will run the app, then install
+- install Carton for the OS system Perl that will run the app, then install
   dependencies with `make install-deps-postgres` (`script/bootstrap-deps --postgres`);
 - set `GPFORUM_SESSION_SECRET`;
 - set `GPFORUM_SESSION_SECRETS` to comma-separated previous secrets when

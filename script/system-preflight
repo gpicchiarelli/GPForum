@@ -15,7 +15,16 @@ need() {
     fi
 }
 
-need perl
+if ! script/gpforum-system-perl --preflight; then
+    echo "missing: system Perl 5.38+ (/usr/bin/perl or distro equivalent)"
+    echo "Debian/Ubuntu: apt install perl build-essential cpanminus libpq-dev"
+    echo "FreeBSD: pkg install perl5 p5-App-cpanminus postgresql16-client"
+    missing=1
+else
+    perl_bin=$(script/gpforum-system-perl --print)
+    PATH="$(dirname "$perl_bin"):$PATH"
+    export PATH
+fi
 
 if [ ! -f cpanfile ]; then
     echo "missing: cpanfile"
@@ -43,7 +52,7 @@ if script/gpforum-carton version >/dev/null 2>&1; then
     script/gpforum-carton exec perl -Ilib -MGPForum::Runtime -MGPForum::Service::Operations::OSPreflight -e 'my $runtime = GPForum::Runtime->new; my $os = $runtime->os_profile; my $preflight = GPForum::Service::Operations::OSPreflight->new(runtime => $runtime)->check; print "ok: gpforum_os -> ", $os->name, "\n"; print "ok: gpforum_event_backend -> ", $os->event_backend, "\n"; print "ok: gpforum_workers -> ", $os->recommended_worker_count, "\n"; print "ok: gpforum_os_preflight -> ", $preflight->{status}, "\n";'
 else
     echo "missing: carton"
-    echo "Install Carton for this Perl with: cpanm -M https://cpan.metacpan.org/ Carton"
+    echo "Install Carton for the system Perl with: cpanm -M https://cpan.metacpan.org/ Carton"
     missing=1
 fi
 

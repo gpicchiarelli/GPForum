@@ -1,13 +1,19 @@
 #!/bin/sh
 set -eu
 
-# Install locked CPAN distributions through Carton. Production and CI use
-# `carton install --deployment` against cpanfile.snapshot. This script does
-# not download from unsigned URLs, does not sideload with cpanm, and does
-# not delete local/.
+# Install locked CPAN distributions through Carton under the OS system Perl.
+# Production and CI use `carton install --deployment` against
+# cpanfile.snapshot. This script does not install or switch to a non-system
+# Perl; does not download from unsigned URLs; does not sideload application
+# dists with cpanm; and does not delete local/.
 
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
+
+perl_bin=$(script/gpforum-system-perl --require)
+PATH="$(dirname "$perl_bin"):$PATH"
+export PATH
+printf 'bootstrap-deps: system perl -> %s\n' "$perl_bin"
 
 with_postgres=0
 update=0
@@ -70,11 +76,11 @@ if [ "$with_postgres" -eq 1 ] && [ ! -f cpanfile.postgres ]; then
     exit 1
 fi
 
-current_perl=$(perl -MConfig -e 'print $Config{version}')
+current_perl=$("$perl_bin" -MConfig -e 'print $Config{version}')
 if [ -d local/lib/perl5 ]; then
-    if ! perl -Ilocal/lib/perl5 -e '1' >/dev/null 2>&1; then
-        echo "bootstrap-deps: local/ is not usable with Perl $current_perl." >&2
-        echo "Refusing to delete local/. Use the matching Perl or move local/ aside yourself." >&2
+    if ! "$perl_bin" -Ilocal/lib/perl5 -e '1' >/dev/null 2>&1; then
+        echo "bootstrap-deps: local/ is not usable with system Perl $current_perl ($perl_bin)." >&2
+        echo "Refusing to delete local/. Rebuild local/ with this system Perl or move it aside yourself." >&2
         exit 1
     fi
 fi

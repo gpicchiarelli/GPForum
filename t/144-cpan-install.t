@@ -9,13 +9,15 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $BOOTSTRAP => 'script/bootstrap-deps';
-const my $CARTON    => 'script/gpforum-carton';
-const my $MAKEFILE  => 'Makefile';
-const my $CPANFILE  => 'cpanfile';
+const my $BOOTSTRAP   => 'script/bootstrap-deps';
+const my $CARTON      => 'script/gpforum-carton';
+const my $SYSTEM_PERL => 'script/gpforum-system-perl';
+const my $MAKEFILE    => 'Makefile';
+const my $CPANFILE    => 'cpanfile';
 
 _assert_declared_sets();
 _assert_bootstrap_security();
+_assert_system_perl();
 _assert_operator_surface();
 
 done_testing();
@@ -114,6 +116,66 @@ sub _assert_bootstrap_security {
     return;
 }
 
+sub _assert_system_perl {
+    my $helper    = path($SYSTEM_PERL)->slurp;
+    my $bootstrap = path($BOOTSTRAP)->slurp;
+    my $locator   = path($CARTON)->slurp;
+    my $preflight = path('script/system-preflight')->slurp;
+    my $makefile  = path($MAKEFILE)->slurp;
+    my $readme    = path('README.md')->slurp;
+    my $ci        = path('.github/workflows/ci.yml')->slurp;
+
+    like(
+        $helper,
+        qr/perlbrew|\.plenv|asdf|custom PREFIX|Config\{prefix\}/msx,
+        'system-perl helper documents and rejects version managers'
+    );
+    like( $helper, qr/\/usr\/bin\/perl/msx,
+        'system-perl helper prefers /usr/bin/perl' );
+    like( $helper, qr/5[.]038/msx, 'system-perl helper requires Perl 5.38+' );
+    like(
+        $bootstrap,
+        qr/gpforum-system-perl [ ] --require/msx,
+        'bootstrap requires system Perl before Carton install'
+    );
+    unlike(
+        $bootstrap,
+        qr/(?:curl|wget).*perlbrew|plenv [ ]install|perlbrew [ ]install/msx,
+        'bootstrap does not install a non-system Perl'
+    );
+    like(
+        $locator,
+        qr/gpforum-system-perl"? [ ] --require/msx,
+        'carton locator binds to system Perl'
+    );
+    like(
+        $preflight,
+        qr/gpforum-system-perl [ ] --preflight/msx,
+        'system-preflight prints perl -V evidence'
+    );
+    like( $makefile, qr/^system-perl:/msx, 'Makefile has system-perl target' );
+    like(
+        $readme,
+        qr/system [ ] Perl|\/usr\/bin\/perl/msx,
+        'README documents system Perl'
+    );
+    unlike(
+        $readme,
+        qr/live [ ] next [ ] to [ ] `perl` [ ] [(]perlbrew[)]/msx,
+        'README no longer suggests perlbrew for Carton'
+    );
+    like(
+        $ci,
+        qr/script\/gpforum-system-perl [ ] --preflight/msx,
+        'CI runs system Perl preflight'
+    );
+    like( $ci, qr/\/usr\/bin\/perl/msx,
+        'CI installs Carton with /usr/bin/perl' );
+    ok( -x $SYSTEM_PERL, 'gpforum-system-perl is executable' );
+
+    return;
+}
+
 sub _assert_operator_surface {
     my $makefile   = path($MAKEFILE)->slurp;
     my $readme     = path('README.md')->slurp;
@@ -141,6 +203,16 @@ sub _assert_operator_surface {
         $deployment,
         qr/carton [ ] install [ ] --deployment/msx,
         'DEPLOYMENT documents carton --deployment'
+    );
+    like(
+        $deployment,
+        qr/system [ ] Perl|\/usr\/bin\/perl/msx,
+        'DEPLOYMENT documents system Perl'
+    );
+    unlike(
+        $deployment,
+        qr/live [ ] next [ ] to [ ] `perl` [ ] [(]perlbrew[)]|plenv [ ]install/msx,
+        'DEPLOYMENT has no version-manager install assumptions'
     );
     like(
         $readiness,
