@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use English qw(-no_match_vars);
 use Mojo::Base -base;
 
 use GPForum::Infrastructure::UniqueConflict;
@@ -64,12 +63,15 @@ sub _missing_source {
 sub _insert_or_reuse {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_event($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_event($input); },
+      );
     if ($created) {
         return $created;
     }
 
-    return $self->_reuse_after_conflict( $input, $EVAL_ERROR );
+    return $self->_reuse_after_conflict( $input, $error );
 }
 
 sub _reuse_after_conflict {
@@ -110,12 +112,15 @@ sub _event_after_id_conflict {
 sub _retry_event_id {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_event($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_event($input); },
+      );
     if ($created) {
         return $created;
     }
 
-    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
     return;
 }
 
@@ -177,13 +182,16 @@ sub _persist_snapshot {
 sub _insert_or_reuse_snapshot {
     my ( $self, $job ) = @_;
 
-    my $row     = $self->_snapshot_row( $job->{input}, $job->{created_at} );
-    my $created = eval { return $self->_create_snapshot($row); };
+    my $row = $self->_snapshot_row( $job->{input}, $job->{created_at} );
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_create_snapshot($row); },
+      );
     if ($created) {
         return $row;
     }
 
-    return $self->_snapshot_after_conflict( $job, $EVAL_ERROR );
+    return $self->_snapshot_after_conflict( $job, $error );
 }
 
 sub _snapshot_after_conflict {

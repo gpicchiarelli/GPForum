@@ -99,6 +99,9 @@ jobs:
       - name: Run PostgreSQL concurrency integration test
         run: carton exec prove -lv t/integration/postgres-concurrency.t
 
+      - name: Run PostgreSQL idempotency integration test
+        run: carton exec prove -lv t/integration/postgres-idempotency.t
+
       - name: Run tests
         run: script/gpforum-carton exec prove -lr t
 

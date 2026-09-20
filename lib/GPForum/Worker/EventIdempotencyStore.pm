@@ -3,7 +3,6 @@ package GPForum::Worker::EventIdempotencyStore;
 use strict;
 use warnings;
 
-use English qw(-no_match_vars);
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use Mojo::Base -base;
@@ -38,15 +37,19 @@ sub mark_failed {
 sub mark_done {
     my ( $self, $key, $result ) = @_;
 
-    my $ok = eval {
-        $self->_insert( $key, $result );
-        return 1;
-    };
-    if ($ok) {
+    my ( $inserted, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt(
+        $self->schema,
+        sub {
+            $self->_insert( $key, $result );
+            return 1;
+        }
+      );
+    if ($inserted) {
         return 1;
     }
 
-    return $self->_accept_conflict($EVAL_ERROR);
+    return $self->_accept_conflict($error);
 }
 
 sub _accept_conflict {
