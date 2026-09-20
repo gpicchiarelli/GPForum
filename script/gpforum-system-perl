@@ -68,13 +68,12 @@ is_denied_path() {
 
 is_system_prefix() {
     candidate=$1
+    # Distro system Perl uses Config prefix /usr (Linux, macOS) or
+    # /usr/local (FreeBSD packages). Accept both without OS probes so
+    # architecture OS rules stay behind lib/GPForum/OS*.pm.
     "$candidate" -MConfig -e '
         my $prefix = $Config{prefix} // q{};
-        my $ok = 0;
-        $ok = 1 if $prefix eq "/usr";
-        $ok = 1 if $^O eq "freebsd" && $prefix eq "/usr/local";
-        $ok = 1 if $^O eq "darwin"  && $prefix eq "/usr";
-        exit($ok ? 0 : 1);
+        exit(($prefix eq "/usr" || $prefix eq "/usr/local") ? 0 : 1);
     '
 }
 

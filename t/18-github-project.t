@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 124;
+const my $EXPECTED_TESTS => 127;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
