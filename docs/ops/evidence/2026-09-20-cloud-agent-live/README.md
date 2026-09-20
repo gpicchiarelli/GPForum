@@ -3,7 +3,10 @@
 **Date:** 2026-09-20  
 **Host:** Cursor Cloud Agent VM (Linux)  
 **Branch:** `cursor/cloud-agent-live-verify-baaa`  
-**Base commit:** `e5bc023`  
+**Checkout base:** `e5bc023` (main tip when the Cloud Agent started)  
+**Evidence revision:** `e964899` (same commit that archives this tree and fixes
+`StagingHostVerify` metrics header to `X-GPForum-Metrics-Token`)  
+**Merged on main:** `ef103e5`  
 **Extends:** [`../2026-09-20-cloud-agent-drills/`](../2026-09-20-cloud-agent-drills/)  
 **Verdict:** **PRIVATE BETA NOT YET** — live local Hypnotoad verify + stress
 profile `100` archived; staging TLS / SMTP `--send` / systemd install /
@@ -14,6 +17,12 @@ query-budget sync, Hypnotoad on `:8080`, `staging-host-verify` with
 `--env-file` + `--base-url` (metrics included), and `stress-load --profile 100`
 JSON. Secrets lived only in `/tmp/gpforum.env` (not committed). It does **not**
 claim private-beta readiness.
+
+**Reproducibility note:** `e5bc023` alone still used the wrong `X-Metrics-Token`
+scrape header. The authenticated `/metrics` pass in `staging-host-verify.json`
+was produced only after the in-tree header patch that landed in `e964899`
+together with this archive — reproduce from that revision (or later `main`),
+not from bare `e5bc023`.
 
 ## Environment notes
 
