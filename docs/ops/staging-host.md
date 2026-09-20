@@ -105,6 +105,10 @@ script/stress-load --json --profile smoke --base-url "$STAGING_BASE_URL" \
 script/stress-load --json --profile 100 --base-url "$STAGING_BASE_URL" \
   > /tmp/gpforum-stress-100.json
 # then 500 / 1000 when the host is sized for them
+
+# Or print the same live pack as one operator script (does not run anything):
+script/gpforum-evidence-live --commands
+# make evidence-live
 ```
 
 Until those blobs exist for a staging target, readiness stays **PRIVATE BETA

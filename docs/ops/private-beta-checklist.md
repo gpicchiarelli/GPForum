@@ -34,6 +34,7 @@ on a real target, and operator runbook evidence.
 | Staging host verify | `script/staging-host-verify` | `docs/ops/staging-host.md` | Repo artifacts; optional env-file keys, systemd `is-active`, HTTP health — **not** an install |
 | Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Profile evidence against a running Hypnotoad; staging 100/500/1000 still open |
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
+| Live evidence pack | `script/gpforum-evidence-live` | `docs/ops/staging-host.md` | Prints verify+stress+mail archive commands; does **not** run them or claim readiness |
 
 Print the same map as shell commands (without running drills):
 
@@ -41,6 +42,9 @@ Print the same map as shell commands (without running drills):
 script/gpforum-private-beta-checklist --commands
 script/gpforum-private-beta-checklist --status
 make private-beta-checklist
+# Live verify + stress + mail command pack only:
+script/gpforum-evidence-live --commands
+make evidence-live
 ```
 
 ## Ordered operator walk
@@ -126,6 +130,17 @@ script/gpforum-mail-check --send --to you@example.test --human
 ```
 
 See [mail-check.md](mail-check.md).
+
+### 8. Live evidence command pack
+
+```sh
+script/gpforum-evidence-live --commands
+# make evidence-live
+script/gpforum-evidence-live --status
+```
+
+Print-only helper that lists env-file + base-url verify, stress smoke/100, and
+mail dry-run archive commands. See [staging-host.md](staging-host.md).
 
 ## Go / no-go for private beta (operator)
 
