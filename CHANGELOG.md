@@ -4,6 +4,14 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/staging-drill` / `bin/gpforum-staging-drill` and
+  `docs/ops/staging-drills.md` so operators can rehearse fresh migrate,
+  upgrade-from-previous, and `pg_dump`/`pg_restore` on throwaway databases
+  with pasteable pass/fail evidence. Attachment files under
+  `var/attachments` remain outside the dump/restore scope; full
+  nginx/systemd deploy stays a manual runbook. Optional `make staging-drill`
+  is documented and is not part of default CI.
+
 - Plugin install remints `plugin_id` once when the unique primary key
   conflicts, and does not return another plugin.
 

@@ -1,4 +1,4 @@
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight syntax test tidy
+.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight staging-drill syntax test tidy
 
 syntax:
 	script/gpforum-carton exec script/perl-syntax-check
@@ -27,3 +27,8 @@ bootstrap: install-deps
 
 preflight:
 	script/system-preflight
+
+# Optional operator drill; requires GPFORUM_DATABASE_DSN and pg_dump/pg_restore.
+# Not part of `make check` or default CI.
+staging-drill:
+	script/staging-drill --json
