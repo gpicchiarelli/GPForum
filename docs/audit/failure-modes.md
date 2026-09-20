@@ -37,9 +37,9 @@ test fake.
 | FM-005 | Worker crash dopo dispatch prima di mark done | stale lock riclamabile; handler skip su replay | side effect duplicato se handler non idempotente | medium | coperto da `t/150-outbox-handler-idempotency.t` e reclaim in `t/84-outbox-concurrent-dispatcher.t` |
 | FM-006 | Minion non disponibile | fail-closed se abilitato; outbox-dispatch salta Minion | confusione deploy o worker assente | medium | coperto da `t/83-outbox-worker-wiring.t` |
 | FM-007 | Outbox retry esaurito | cancelled + dead-letter; permanent fail-fast; no re-claim | dead-letter non drenata in staging | medium | coperto da `t/13-outbox-dispatcher.t` e `docs/ops/dead-letters.md` |
-| FM-008 | Job duplicato privacy approval | mitigato da migration `024` e lock request | doppia erasure job | low residuo | test PostgreSQL concorrente con due connessioni reali |
-| FM-009 | Command log race | unique + catch replay/`in_progress` in `CommandIdempotency` | evidenza PG concorrente residua | low residuo | test PostgreSQL con due connessioni reali |
-| FM-010 | Audit hash-chain branching | `pg_advisory_xact_lock` prima del lookup; errori di chain non inghiottiti | evidenza PG concorrente residua | low residuo | test PostgreSQL con due append concorrenti |
+| FM-008 | Job duplicato privacy approval | mitigato da migration `024` e lock request; evidenza PG in `t/integration/postgres-concurrency.t` | doppia erasure job | closed | due approval concorrenti → un solo erasure job |
+| FM-009 | Command log race | unique + catch replay/`in_progress`; evidenza PG in `t/integration/postgres-concurrency.t` | 500 unique violation | closed | stesso `command_id` concorrente → un winner, replay/`in_progress` |
+| FM-010 | Audit hash-chain branching | `pg_advisory_xact_lock` + evidenza PG in `t/integration/postgres-concurrency.t` | chain branch | closed | due append concorrenti → catena lineare senza branch |
 
 ## Test già presenti utili
 
@@ -72,6 +72,6 @@ test fake.
 
 ## Prossimi failure test prioritari
 
-1. Evidenza PostgreSQL reale per `command_log`, report, bookmark, subscription
-   e audit chain (già chiusi in codice/fake).
-2. Staging: lock outbox `running` scaduto e reclaim su PostgreSQL reale.
+1. Staging: lock outbox `running` scaduto e reclaim su PostgreSQL reale.
+2. Evidenza PostgreSQL concorrente ancora aperta per `event_idempotency_keys` e
+   reputation source unique (non coperti da `postgres-concurrency.t`).

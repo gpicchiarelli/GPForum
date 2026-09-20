@@ -5,7 +5,6 @@ use warnings;
 
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
-use English     qw(-no_match_vars);
 use JSON::MaybeXS;
 use Mojo::Base -base;
 
@@ -64,8 +63,10 @@ sub _run_inside_txn {
 sub _create_and_execute {
     my ( $self, $job ) = @_;
 
-    my $row   = eval { return $self->_insert_command_row($job); };
-    my $error = $EVAL_ERROR;
+    my ( $row, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_command_row($job); },
+      );
     if ($row) {
         return $self->_finish_new_command( $job, $row );
     }
@@ -186,12 +187,15 @@ sub _retry_command_id {
     my ( $self, $job ) = @_;
 
     $job->{row} = { %{ $job->{row} }, command_id => $self->id_service->uuid, };
-    my $created = eval { return $self->_create_command( $job->{row} ); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_create_command( $job->{row} ); },
+      );
     if ($created) {
         return $self->_finish_new_command( $job, $created );
     }
 
-    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
     return;
 }
 
@@ -392,8 +396,11 @@ sub _update_hash_row {
 sub _column {
     my ( $row, $name ) = @_;
 
-    return                         if !$row;
-    return $row->{$name}           if ref $row eq 'HASH';
+    return               if !$row;
+    return $row->{$name} if ref $row eq 'HASH';
+    if ( $row->can($name) ) {
+        return $row->$name;
+    }
     return $row->get_column($name) if $row->can('get_column');
 
     return;

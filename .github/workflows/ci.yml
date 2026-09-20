@@ -89,6 +89,9 @@ jobs:
       - name: Run PostgreSQL integration test
         run: carton exec prove -lv t/integration/postgres.t
 
+      - name: Run PostgreSQL concurrency integration test
+        run: carton exec prove -lv t/integration/postgres-concurrency.t
+
       - name: Run tests
         run: carton exec prove -lr t
 

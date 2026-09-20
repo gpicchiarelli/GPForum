@@ -345,12 +345,15 @@ sub record_audit {
 sub _insert_or_retry_audit {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_audit($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_audit($input); },
+      );
     if ($created) {
         return $created;
     }
 
-    return $self->_audit_after_conflict( $input, $EVAL_ERROR );
+    return $self->_audit_after_conflict( $input, $error );
 }
 
 sub _insert_audit {
@@ -378,13 +381,16 @@ sub _audit_after_conflict {
 sub _retry_audit_id {
     my ( $self, $input ) = @_;
 
-    my %retry   = ( %{$input}, audit_id => $self->id_service->uuid );
-    my $created = eval { return $self->_insert_audit( \%retry ); };
+    my %retry = ( %{$input}, audit_id => $self->id_service->uuid );
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_audit( \%retry ); },
+      );
     if ($created) {
         return $created;
     }
 
-    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
     return;
 }
 

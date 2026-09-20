@@ -340,12 +340,18 @@ sub _session_needs_touch {
 sub _session_expired {
     my ( $self, $session, $now ) = @_;
 
-    my $expires_at = $self->support->column( $session, 'expires_at' );
-    if ( !$self->support->has_text($expires_at) ) {
+    my $expires_at    = $self->support->column( $session, 'expires_at' );
+    my $expires_epoch = $self->support->epoch_from_timestamp($expires_at);
+    if ( !defined $expires_epoch ) {
         return 1;
     }
 
-    return $expires_at le $now ? 1 : 0;
+    my $now_epoch = $self->support->epoch_from_timestamp($now);
+    if ( !defined $now_epoch ) {
+        $now_epoch = $self->clock->now_epoch;
+    }
+
+    return $expires_epoch <= $now_epoch ? 1 : 0;
 }
 
 sub _sessions {

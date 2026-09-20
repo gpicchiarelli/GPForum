@@ -432,12 +432,15 @@ sub _create_erasure_job {
 sub _insert_or_reuse_job {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_create_erasure_job($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_create_erasure_job($input); },
+      );
     if ($created) {
         return { job => $created, reused => 0 };
     }
 
-    return $self->_job_after_conflict( $input, $EVAL_ERROR );
+    return $self->_job_after_conflict( $input, $error );
 }
 
 sub _job_after_conflict {
@@ -478,12 +481,15 @@ sub _job_after_id_conflict {
 sub _retry_erasure_id {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_create_erasure_job($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_create_erasure_job($input); },
+      );
     if ($created) {
         return { job => $created, reused => 0 };
     }
 
-    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
     return;
 }
 

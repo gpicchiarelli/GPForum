@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use English qw(-no_match_vars);
 use Mojo::Base -base;
 
 use GPForum::Infrastructure::EventRecorder;
@@ -58,8 +57,10 @@ sub create_report {
 sub _insert_or_reuse {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_report($input); };
-    my $error   = $EVAL_ERROR;
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_report($input); },
+      );
     if ($created) {
         return $created;
     }
@@ -105,12 +106,15 @@ sub _report_after_id_conflict {
 sub _retry_report_id {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_report($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_report($input); },
+      );
     if ($created) {
         return $created;
     }
 
-    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
     return;
 }
 

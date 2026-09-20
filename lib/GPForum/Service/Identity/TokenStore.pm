@@ -350,8 +350,13 @@ sub _validate_token {
 sub _token_expired {
     my ( $self, $row ) = @_;
 
-    my $expires_at = $self->support->column( $row, 'expires_at' ) || q{};
-    return $expires_at le $self->clock->now_iso8601 ? 1 : 0;
+    my $expires_at    = $self->support->column( $row, 'expires_at' );
+    my $expires_epoch = $self->support->epoch_from_timestamp($expires_at);
+    if ( !defined $expires_epoch ) {
+        return 1;
+    }
+
+    return $expires_epoch <= $self->clock->now_epoch ? 1 : 0;
 }
 
 sub _lock_token_hash {

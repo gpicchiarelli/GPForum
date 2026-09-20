@@ -4,7 +4,6 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use English qw(-no_match_vars);
 use Mojo::Base -base;
 
 use GPForum::Infrastructure::EventRecorder;
@@ -382,8 +381,10 @@ sub _lock_target {
 sub _record_action {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_action($input); };
-    my $error   = $EVAL_ERROR;
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_action($input); },
+      );
     if ($created) {
         return $self->_recorded_action( $created, $input );
     }
@@ -499,12 +500,15 @@ sub _action_after_id_conflict {
 sub _retry_action_id {
     my ( $self, $input ) = @_;
 
-    my $created = eval { return $self->_insert_action($input); };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_insert_action($input); },
+      );
     if ($created) {
         return $self->_recorded_action( $created, $input );
     }
 
-    GPForum::Infrastructure::UniqueConflict->rethrow($EVAL_ERROR);
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
     return;
 }
 
