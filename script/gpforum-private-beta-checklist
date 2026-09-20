@@ -1,0 +1,123 @@
+#!/bin/sh
+set -eu
+
+# Print private-beta prep commands / entrypoint status only.
+# Does not run drills, stress, migrate, mail probes, or claim readiness.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-private-beta-checklist [--commands|--status|--help]
+
+  --commands  print operator commands for each prep phase (default)
+  --status    print whether known entrypoints exist (executable / missing)
+  --help      show this help
+
+Does not execute migrate, staging drills, stress-load, mail-check, or
+query-budget. Passing --status never means private beta is ready.
+See docs/ops/private-beta-checklist.md.
+EOF
+}
+
+mode=commands
+for argument in "$@"; do
+    case "$argument" in
+        --commands)
+            mode=commands
+            ;;
+        --status)
+            mode=status
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-private-beta-checklist: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+print_banner() {
+    printf '%s\n' \
+        'gpforum-private-beta-checklist: print-only orchestrator' \
+        'PRIVATE BETA: NOT CLAIMED (commands/status only; record evidence separately)' \
+        'Docs: docs/ops/private-beta-checklist.md' \
+        ''
+}
+
+print_commands() {
+    print_banner
+    cat <<'EOF'
+# 1. System Perl + MacPorts PATH (macOS)
+script/gpforum-system-perl --preflight
+eval "$(script/gpforum-macports-env)"
+script/gpforum-macports-env --check
+
+# 2. Migrate + query budget (requires GPFORUM_DATABASE_*)
+script/gpforum-carton exec bin/gpforum-migrate --apply
+script/query-budget --sync
+script/query-budget --check
+
+# 3. Staging DB drill (throwaway DBs)
+script/staging-drill --json
+
+# 4. Attachments + deploy checklist (static; host verify when tools exist)
+script/staging-drill-attachments --json
+
+# 5. Stress / load (requires running Hypnotoad --base-url)
+script/stress-load --dry-run --profile smoke --human
+script/stress-load --profile 100 --base-url http://127.0.0.1:8080 --check --json
+
+# 6. Mail probe
+script/gpforum-mail-check --human --dry-run
+# script/gpforum-mail-check --send --to you@example.test --human
+
+# Aggregate docs
+# docs/ops/private-beta-checklist.md
+# docs/release/readiness-review.md
+EOF
+}
+
+status_line() {
+    path=$1
+    label=$2
+    if [ -x "$path" ]; then
+        printf 'ok\t%s\t%s\n' "$label" "$path"
+    elif [ -e "$path" ]; then
+        printf 'present\t%s\t%s\n' "$label" "$path"
+    else
+        printf 'missing\t%s\t%s\n' "$label" "$path"
+    fi
+}
+
+print_status() {
+    print_banner
+    printf 'entrypoint\tlabel\tpath\n'
+    status_line script/gpforum-system-perl system-perl
+    status_line script/gpforum-macports-env macports-env
+    status_line bin/gpforum-migrate migrate
+    status_line script/query-budget query-budget
+    status_line script/staging-drill staging-drill
+    status_line script/staging-drill-attachments staging-drill-attachments
+    status_line script/stress-load stress-load
+    status_line script/gpforum-mail-check mail-check
+    status_line docs/ops/private-beta-checklist.md checklist-doc
+    printf '\n%s\n' \
+        'status=print-only residual_gaps=live-staging-smtp-stress-deploy private_beta=not-claimed'
+}
+
+case "$mode" in
+    commands)
+        print_commands
+        ;;
+    status)
+        print_status
+        ;;
+esac
+
+exit 0
