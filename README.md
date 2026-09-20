@@ -255,7 +255,7 @@ residual work is evidence and ops, not missing MVP code.
 | Target | Status | What stands in the way |
 | --- | --- | --- |
 | Local, personal use | Ready | — |
-| Private beta | Not yet | Live staging evidence for attachment restore + nginx/systemd deploy, SMTP — walk [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md); harnesses shipped |
+| Private beta | Not yet | Live staging evidence for attachment restore + nginx/systemd deploy, SMTP — walk [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md); harnesses incl. staging-host verify shipped |
 | Public production | Not yet | Record staging stress 100/500/1000 via `script/stress-load`; live attachment restore + deploy evidence via staging drills (harnesses shipped) |
 
 **Known MVP limits.** Domain realtime fanout uses PostgreSQL `LISTEN`/`NOTIFY`

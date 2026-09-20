@@ -2,7 +2,8 @@
 
 Operator-runnable rehearsal for private-beta *preparation*. Passing these drills
 does **not** mean GPForum is private-beta ready. A live Hypnotoad + TLS staging
-host deploy remains a separate operator runbook beyond the static checklist.
+host deploy is covered by the operator runbook in
+[`staging-host.md`](staging-host.md) (`script/staging-host-verify`).
 
 ## What this covers
 
@@ -24,7 +25,8 @@ host deploy remains a separate operator runbook beyond the static checklist.
   Hypnotoad process start, TLS termination, or env-file secret contents. The
   deploy drill may run `systemd-analyze verify` / `nginx -t` against
   **rendered sample** configs when those binaries are on `PATH`; that is not
-  a live host install.
+  a live host install. Use [`staging-host.md`](staging-host.md) for bring-up
+  and `script/staging-host-verify` for non-destructive observation.
 - Mail delivery, load tests, or private-beta product gates.
 
 ## Prerequisites

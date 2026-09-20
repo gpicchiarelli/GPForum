@@ -323,8 +323,10 @@ For a repeatable local/staging migrate + `pg_dump`/`pg_restore` rehearsal on
 throwaway databases, see `docs/ops/staging-drills.md`
 (`script/staging-drill`). For populated `var/attachments` filesystem
 backup/restore plus static and host-available nginx/systemd checks, use
-`script/staging-drill-attachments`. Live Hypnotoad/TLS host bring-up remains
-an operator runbook beyond those drills.
+`script/staging-drill-attachments`. Live Hypnotoad/TLS host bring-up is
+documented in `docs/ops/staging-host.md` with non-destructive
+`script/staging-host-verify` (env-file key presence, systemd activity, HTTP
+health). That verify does not install units or claim private-beta readiness.
 
 ## Tuning By OS
 

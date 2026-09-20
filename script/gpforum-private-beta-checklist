@@ -15,9 +15,9 @@ Usage: script/gpforum-private-beta-checklist [--commands|--status|--help]
   --status    print whether known entrypoints exist (executable / missing)
   --help      show this help
 
-Does not execute migrate, staging drills, stress-load, mail-check, or
-query-budget. Passing --status never means private beta is ready.
-See docs/ops/private-beta-checklist.md.
+Does not execute migrate, staging drills, staging-host-verify, stress-load,
+mail-check, or query-budget. Passing --status never means private beta is
+ready. See docs/ops/private-beta-checklist.md.
 EOF
 }
 
@@ -69,16 +69,21 @@ script/staging-drill --json
 # 4. Attachments + deploy checklist (static; host verify when tools exist)
 script/staging-drill-attachments --json
 
-# 5. Stress / load (requires running Hypnotoad --base-url)
+# 5. Staging host verify (non-destructive; live flags on the host)
+script/staging-host-verify --json
+# script/staging-host-verify --json --env-file /etc/gpforum/gpforum.env --systemd --base-url https://staging.example
+
+# 6. Stress / load (requires running Hypnotoad --base-url)
 script/stress-load --dry-run --profile smoke --human
 script/stress-load --profile 100 --base-url http://127.0.0.1:8080 --check --json
 
-# 6. Mail probe
+# 7. Mail probe
 script/gpforum-mail-check --human --dry-run
 # script/gpforum-mail-check --send --to you@example.test --human
 
 # Aggregate docs
 # docs/ops/private-beta-checklist.md
+# docs/ops/staging-host.md
 # docs/release/readiness-review.md
 EOF
 }
@@ -104,9 +109,11 @@ print_status() {
     status_line script/query-budget query-budget
     status_line script/staging-drill staging-drill
     status_line script/staging-drill-attachments staging-drill-attachments
+    status_line script/staging-host-verify staging-host-verify
     status_line script/stress-load stress-load
     status_line script/gpforum-mail-check mail-check
     status_line docs/ops/private-beta-checklist.md checklist-doc
+    status_line docs/ops/staging-host.md staging-host-doc
     printf '\n%s\n' \
         'status=print-only residual_gaps=live-staging-smtp-stress-deploy private_beta=not-claimed'
 }

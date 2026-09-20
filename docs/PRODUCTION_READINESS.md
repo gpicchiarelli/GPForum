@@ -360,8 +360,9 @@ Before production:
 - Prefer the automated throwaway drills in `docs/ops/staging-drills.md`
   (`script/staging-drill` for migrate + dump/restore;
   `script/staging-drill-attachments` for populated `var/attachments` restore
-  and static plus host-available nginx/systemd checks). Those drills do not
-  replace a live Hypnotoad/TLS staging host bring-up.
+  and static plus host-available nginx/systemd checks). For live Hypnotoad/TLS
+  staging bring-up and non-destructive verify, see `docs/ops/staging-host.md`
+  (`script/staging-host-verify`).
 
 Example logical backup:
 

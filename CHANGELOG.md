@@ -4,16 +4,24 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
-<<<<<<< HEAD
+- Add operator `script/staging-host-verify` / `bin/gpforum-staging-host-verify`
+  and `docs/ops/staging-host.md`: non-destructive staging bring-up verify
+  (in-repo deploy/runbook artifacts; optional `--env-file` key presence with
+  values redacted, `--systemd` `is-active`, `--base-url` health/metrics).
+  Documents the evidence archive commands for mail-check, stress-load, and
+  staging drills. Wired into `docs/ops/private-beta-checklist.md`. Optional
+  `make staging-host-verify`; not part of default CI. Does not install units
+  or claim private-beta readiness.
+
 - Add operator private-beta go/no-go checklist aggregating system-perl,
   macports-env, migrate, query-budget, staging-drill,
-  staging-drill-attachments, stress-load, and mail-check in
-  `docs/ops/private-beta-checklist.md`, plus print-only
+  staging-drill-attachments, staging-host-verify, stress-load, and mail-check
+  in `docs/ops/private-beta-checklist.md`, plus print-only
   `script/gpforum-private-beta-checklist` (`--commands` / `--status`; never
   claims readiness). Point ROADMAP / readiness review / README at it.
   Optional `make private-beta-checklist`. Does not change stress-load or
   deploy-checklist core logic.
-=======
+
 - Make deploy-drill `nginx -t` succeed on non-root distro nginx: wrapper
   configs now place client/proxy temp paths under the throwaway prefix and
   rewrite sample `listen 80` to `127.0.0.1:18080`. When `nginx` is on
@@ -24,7 +32,6 @@ All notable changes to GPForum are recorded here.
   improved vs 4 workers; still above default 2000 ms `--check` gate; 16
   workers worse on 4 vCPU) in `docs/ops/stress-load.md` /
   `docs/PERFORMANCE_EVIDENCE.md`.
->>>>>>> 6c51096 (Make deploy nginx -t work non-root; record tuned stress 1000.)
 
 - Strengthen `script/staging-drill-attachments` host validation: always keep
   static nginx/systemd template checks; when `systemd-analyze` / `nginx` are

@@ -30,6 +30,7 @@ on a real target, and operator runbook evidence.
 | Query budget | `script/query-budget --sync` then `--check` | `docs/QUERY_BUDGET_POLICY.md` | Catalog synced; readiness not 503 for empty budgets |
 | Staging DB drill | `script/staging-drill` | `docs/ops/staging-drills.md` | Fresh migrate, upgrade path, dump/restore on throwaway DBs |
 | Attachments + deploy checklist | `script/staging-drill-attachments` | `docs/ops/staging-drills.md` | Populated throwaway `var/attachments` restore + static (and optional host) nginx/systemd checks — **not** live install/reload |
+| Staging host verify | `script/staging-host-verify` | `docs/ops/staging-host.md` | Repo artifacts; optional env-file keys, systemd `is-active`, HTTP health — **not** an install |
 | Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Profile evidence against a running Hypnotoad; staging 100/500/1000 still open |
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
 
@@ -87,7 +88,21 @@ script/staging-drill-attachments --json
 Static templates always; `systemd-analyze verify` / `nginx -t` when on `PATH`.
 Missing host tools → `degraded` / `skipped`, not a live target install.
 
-### 5. Stress / load (needs running app)
+### 5. Staging host verify (after Hypnotoad + TLS bring-up)
+
+```sh
+script/staging-host-verify --json
+# on the live host:
+script/staging-host-verify --json \
+  --env-file /etc/gpforum/gpforum.env \
+  --systemd \
+  --base-url https://staging.example
+# or: make staging-host-verify
+```
+
+See [staging-host.md](staging-host.md). Does not install units or start Hypnotoad.
+
+### 6. Stress / load (needs running app)
 
 ```sh
 # Point at a live Hypnotoad (operator-started). Example smoke:
@@ -99,7 +114,7 @@ script/stress-load --profile 100 --base-url https://forum.example --check --json
 See [stress-load.md](stress-load.md). Elevating
 `GPFORUM_FORUM_READ_RATE_LIMIT` is for capacity windows only.
 
-### 6. Mail probe
+### 7. Mail probe
 
 ```sh
 script/gpforum-mail-check --human --dry-run
@@ -121,7 +136,7 @@ commit on the **staging** target (not only laptop smoke):
 | Migrate + query budget | `--apply`, `--sync`, `--check` on staging DB | Fresh install never applied; readiness 503 |
 | Staging DB drill | `script/staging-drill --json` `status=pass` | Fail or only local throwaway without notes |
 | Attachments + deploy | Attachments phase pass; deploy static pass; host verify noted | No attachment evidence; live systemd/nginx install never attempted |
-| Live deploy | Hypnotoad + TLS + env file on staging host healthy | Only rendered-sample `nginx -t` |
+| Live deploy | Hypnotoad + TLS + env file on staging host healthy; `staging-host-verify` archived | Only rendered-sample `nginx -t`; verify never run with live flags |
 | Stress | At least profile `100` `--check` on staging hardware archived | Only VM laptop smoke / dry-run |
 | Mail | Staging `--dry-run` and a controlled `--send` archived | Adapter unconfigured; no SMTP evidence |
 | Product ops | Moderation + dead-letter drill with seeded roles | Never exercised with humans |
@@ -133,6 +148,7 @@ optimism.
 ## Related
 
 - [staging-drills.md](staging-drills.md)
+- [staging-host.md](staging-host.md)
 - [stress-load.md](stress-load.md)
 - [mail-check.md](mail-check.md)
 - [../release/readiness-review.md](../release/readiness-review.md)
