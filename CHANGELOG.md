@@ -4,6 +4,9 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Cover `script/gpforum-evidence-live` in `t/165-evidence-live.t` and
+  `t/18-github-project.t` (executable, print-only, no private-beta claim).
+
 - Add print-only `script/gpforum-evidence-live` / `make evidence-live` to
   orchestrate live `staging-host-verify` + `stress-load` + mail-check archive
   commands (env-file / base-url). Does not start Hypnotoad or claim private-beta

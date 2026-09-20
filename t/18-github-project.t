@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 154;
+const my $EXPECTED_TESTS => 157;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -103,6 +103,7 @@ for my $required_file (
     script/staging-host-verify
     script/stress-load
     script/gpforum-private-beta-checklist
+    script/gpforum-evidence-live
     )
   )
 {
@@ -416,6 +417,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('script/gpforum-private-beta-checklist')->slurp,
         qr/not-claimed|NOT CLAIMED/msx,
         'private-beta checklist script does not claim readiness'
+    );
+    like(
+        path('docs/ops/staging-host.md')->slurp,
+        qr/gpforum-evidence-live|make evidence-live/msx,
+        'staging host docs cover live evidence command pack'
+    );
+    like(
+        path('script/gpforum-evidence-live')->slurp,
+        qr/not-claimed|NOT CLAIMED/msx,
+        'evidence-live script does not claim readiness'
     );
 
 1;
