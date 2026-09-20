@@ -1,0 +1,143 @@
+#!/bin/sh
+set -eu
+
+# Resolve and validate the OS / distro system Perl. GPForum does not support
+# version managers (perlbrew, plenv, asdf), perl-from-source, or other custom
+# PREFIX installs. Carton and local/ still install under this interpreter.
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-system-perl [--print|--require|--preflight]
+
+  --print      print the absolute path of the system Perl (default)
+  --require    require Perl 5.38+ and exit non-zero on failure
+  --preflight  print which/perl -v/-V evidence for operators and CI
+
+Environment:
+  GPFORUM_PERL  optional absolute path; must still pass system-Perl checks
+EOF
+}
+
+mode=print
+for argument in "$@"; do
+    case "$argument" in
+        --print)
+            mode=print
+            ;;
+        --require)
+            mode=require
+            ;;
+        --preflight)
+            mode=preflight
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-system-perl: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+reject() {
+    echo "gpforum-system-perl: $*" >&2
+    exit 1
+}
+
+is_denied_path() {
+    perl_path=$1
+    case "$perl_path" in
+        */perlbrew/*|*/.perlbrew/*|*/perl5/perlbrew/*)
+            return 0
+            ;;
+        */.plenv/*|*/plenv/versions/*)
+            return 0
+            ;;
+        */.asdf/installs/perl/*|*/asdf/installs/perl/*)
+            return 0
+            ;;
+        */.local/perl/*|*/perl-from-source/*|*/opt/perl/*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+is_system_prefix() {
+    candidate=$1
+    "$candidate" -MConfig -e '
+        my $prefix = $Config{prefix} // q{};
+        my $ok = 0;
+        $ok = 1 if $prefix eq "/usr";
+        $ok = 1 if $^O eq "freebsd" && $prefix eq "/usr/local";
+        $ok = 1 if $^O eq "darwin"  && $prefix eq "/usr";
+        exit($ok ? 0 : 1);
+    '
+}
+
+resolve_candidate() {
+    if [ -n "${GPFORUM_PERL:-}" ]; then
+        if [ ! -x "${GPFORUM_PERL}" ]; then
+            reject "GPFORUM_PERL is not executable: ${GPFORUM_PERL}"
+        fi
+        printf '%s\n' "${GPFORUM_PERL}"
+        return 0
+    fi
+
+    for candidate in /usr/bin/perl /usr/local/bin/perl; do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+
+    if command -v perl >/dev/null 2>&1; then
+        command -v perl
+        return 0
+    fi
+
+    return 1
+}
+
+perl_bin=$(resolve_candidate) || reject "no system Perl found (/usr/bin/perl or /usr/local/bin/perl)"
+
+# Prefer a canonical absolute path when available.
+if command -v readlink >/dev/null 2>&1; then
+    resolved=$(readlink -f "$perl_bin" 2>/dev/null || true)
+    if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+        perl_bin=$resolved
+    fi
+fi
+
+if is_denied_path "$perl_bin"; then
+    reject "refusing version-manager or custom Perl at $perl_bin (use distro /usr/bin/perl)"
+fi
+
+if ! is_system_prefix "$perl_bin"; then
+    prefix=$("$perl_bin" -MConfig -e 'print $Config{prefix}')
+    reject "refusing non-system Perl at $perl_bin (Config prefix=$prefix); install distro perl"
+fi
+
+if ! "$perl_bin" -e 'exit($] < 5.038 ? 1 : 0)'; then
+    version=$("$perl_bin" -e 'print $]')
+    reject "Perl 5.38+ required (got $version at $perl_bin)"
+fi
+
+case "$mode" in
+    print)
+        printf '%s\n' "$perl_bin"
+        ;;
+    require)
+        printf '%s\n' "$perl_bin"
+        ;;
+    preflight)
+        printf 'ok: system_perl -> %s\n' "$perl_bin"
+        printf 'ok: which_perl -> %s\n' "$(command -v perl 2>/dev/null || echo missing)"
+        "$perl_bin" -v
+        echo "--- perl -V (summary) ---"
+        "$perl_bin" -V | sed -n '1,25p'
+        ;;
+esac

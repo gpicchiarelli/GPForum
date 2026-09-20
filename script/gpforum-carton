@@ -1,8 +1,11 @@
 #!/bin/sh
 set -eu
 
-# Locate Carton for the current `perl` and exec it. Carton is the only
-# supported installer for GPForum CPAN distributions.
+# Locate Carton for the OS system Perl and exec it. Carton is the only
+# supported installer for GPForum CPAN distributions. Non-system Perl
+# installs are rejected by script/gpforum-system-perl.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 
 if [ -n "${GPFORUM_CARTON:-}" ]; then
     if [ ! -x "${GPFORUM_CARTON}" ]; then
@@ -12,21 +15,21 @@ if [ -n "${GPFORUM_CARTON:-}" ]; then
     exec "${GPFORUM_CARTON}" "$@"
 fi
 
-perl_bin=$(command -v perl)
-if [ -z "$perl_bin" ]; then
-    echo "gpforum-carton: perl is required on PATH" >&2
-    exit 1
-fi
-
+perl_bin=$("$root/script/gpforum-system-perl" --require)
 perl_dir=$(dirname "$perl_bin")
+
+# Keep PATH lookups on the same interpreter for `perl -S carton`.
+PATH="$perl_dir:$PATH"
+export PATH
+
 if [ -x "$perl_dir/carton" ]; then
     exec "$perl_dir/carton" "$@"
 fi
 
-if perl -S carton version >/dev/null 2>&1; then
-    exec perl -S carton "$@"
+if "$perl_bin" -S carton version >/dev/null 2>&1; then
+    exec "$perl_bin" -S carton "$@"
 fi
 
-echo "gpforum-carton: Carton was not found for $perl_bin." >&2
-echo "Install it for this Perl with: cpanm -M https://cpan.metacpan.org/ Carton" >&2
+echo "gpforum-carton: Carton was not found for system Perl $perl_bin." >&2
+echo "Install it for this Perl with: $perl_bin -S cpanm -M https://cpan.metacpan.org/ Carton" >&2
 exit 1

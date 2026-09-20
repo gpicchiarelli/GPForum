@@ -1,4 +1,10 @@
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight syntax test tidy
+.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight syntax system-perl test tidy
+
+# All targets use the OS system Perl via script/gpforum-carton /
+# script/gpforum-system-perl (not version managers or custom PREFIX builds).
+
+system-perl:
+	script/gpforum-system-perl --preflight
 
 syntax:
 	script/gpforum-carton exec script/perl-syntax-check
@@ -15,7 +21,7 @@ tidy:
 architecture:
 	script/architecture-check
 
-check: syntax test critic tidy architecture
+check: system-perl syntax test critic tidy architecture
 
 install-deps:
 	script/bootstrap-deps

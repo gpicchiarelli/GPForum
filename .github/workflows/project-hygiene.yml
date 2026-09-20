@@ -56,6 +56,7 @@ jobs:
           test -x script/bench-hypnotoad
           test -x script/bench-hypnotoad-scaling
           test -x script/cpan-license-check
+          test -x script/gpforum-system-perl
           test -x script/perltidy-check
           test -x script/gpforum-os-preflight
           test -x script/query-plan-check

@@ -157,18 +157,32 @@ engine requires an ADR and stays an optional, derived accelerator.
 
 ## Quick start
 
-You need Perl 5.38+, Carton, and PostgreSQL with its client development files
-(`libpq-dev` on Debian/Ubuntu, `postgresql16-client` on FreeBSD). Carton may
-live next to `perl` (perlbrew) rather than on a generic PATH; install scripts
-look it up with `script/gpforum-carton`.
+GPForum runs on the **OS system Perl** only (`/usr/bin/perl` on
+Debian/Ubuntu, distro `perl5` on FreeBSD). Version managers and custom
+PREFIX builds are unsupported. You need Perl 5.38+ (Ubuntu 24.04 ships
+5.38.x), Carton for that interpreter, and PostgreSQL client development files.
 
 ```sh
-make install-deps-postgres         # carton install --deployment from the lock
+# Debian/Ubuntu
+sudo apt install perl build-essential cpanminus libpq-dev postgresql-client
+sudo cpanm -M https://cpan.metacpan.org/ Carton
+
+# FreeBSD
+# sudo pkg install perl5 p5-App-cpanminus postgresql16-client
+# sudo cpanm -M https://cpan.metacpan.org/ Carton
+
+which perl; perl -v                 # expect /usr/bin/perl (or FreeBSD pkg perl)
+make system-perl                    # script/gpforum-system-perl --preflight
+make install-deps-postgres          # carton install --deployment from the lock
 # or: script/bootstrap-deps --postgres
-script/system-preflight            # check the host
+script/system-preflight             # check the host
 script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --plan
 script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --apply
 ```
+
+Carton is a host tool for system Perl; `script/gpforum-carton` locates it next
+to that interpreter (or via `GPFORUM_CARTON`). CPAN app deps still live under
+`local/` via Carton.
 
 Production and CI install only the pinned `cpanfile.snapshot` tree over the
 official MetaCPAN HTTPS mirror (`PERL_CARTON_MIRROR=https://cpan.metacpan.org/`).

@@ -5,15 +5,21 @@ PostgreSQL-authoritative, operable, and explicit.
 
 ## Development loop
 
-1. Install dependencies with `make install-deps` (`script/bootstrap-deps`).
+1. Use the OS **system Perl** (`/usr/bin/perl` / distro package). Version
+   managers and custom PREFIX builds are unsupported. On Debian/Ubuntu install
+   `perl`, `build-essential`, `cpanminus`, and `libpq-dev`; then
+   `cpanm -M https://cpan.metacpan.org/ Carton`. Confirm with
+   `make system-perl` (`which perl`, `perl -v`, `perl -V`).
+2. Install dependencies with `make install-deps` (`script/bootstrap-deps`).
    That runs `carton install --deployment` from `cpanfile.snapshot` over
-   HTTPS MetaCPAN. Use `script/bootstrap-deps --update` only when refreshing
-   the lock after a `cpanfile` change, then commit `cpanfile.snapshot`.
-2. Run `script/system-preflight` before enabling PostgreSQL-specific modules
+   HTTPS MetaCPAN under system Perl. Use `script/bootstrap-deps --update`
+   only when refreshing the lock after a `cpanfile` change, then commit
+   `cpanfile.snapshot`.
+3. Run `script/system-preflight` before enabling PostgreSQL-specific modules
    (`make install-deps-postgres`).
-3. Make small changes around one bounded context.
-4. Update prompts or ADRs for architecture-changing work.
-5. Run the quality gate before opening a pull request:
+4. Make small changes around one bounded context.
+5. Update prompts or ADRs for architecture-changing work.
+6. Run the quality gate before opening a pull request:
 
 ```sh
 make check

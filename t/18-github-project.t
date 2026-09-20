@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 121;
+const my $EXPECTED_TESTS => 124;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -74,6 +74,7 @@ for my $required_file (
     script/benchmark-http
     script/cpan-license-check
     script/gpforum-carton
+    script/gpforum-system-perl
     script/perl-syntax-check
     script/perltidy-check
     script/gpforum-os-preflight
@@ -111,20 +112,34 @@ my $caddy         = path('deploy/caddy/Caddyfile')->slurp;
 
 like(
     $ci,
+    qr/script\/gpforum-system-perl [ ] --preflight/msx,
+    'CI verifies OS system Perl before installing Carton deps'
+);
+like(
+    $ci,
+    qr/readlink [ ]+-f.*\/usr\/bin\/perl|test .*\/usr\/bin\/perl/msx,
+    'CI asserts PATH perl is /usr/bin/perl'
+);
+like(
+    $ci,
     qr/run: [ ] script\/perlcritic/msx,
     'CI runs Perl::Critic through the repository baseline gate'
 );
 like(
     $ci,
-    qr/carton [ ] exec [ ] script\/perl-syntax-check/msx,
-    'CI runs Perl syntax check'
+    qr/script\/gpforum-carton [ ] exec [ ] script\/perl-syntax-check/msx,
+    'CI runs Perl syntax check through system-Perl Carton'
 );
 like(
     $ci,
     qr/script\/bootstrap-deps [ ] --postgres/msx,
     'CI installs optional PostgreSQL dependencies for DB gates'
 );
-like( $ci, qr/prove [ ] -lr [ ] t/msx, 'CI runs prove -lr t' );
+like(
+    $ci,
+    qr/script\/gpforum-carton [ ] exec [ ] prove [ ] -lr [ ] t/msx,
+    'CI runs prove -lr t through system-Perl Carton'
+);
 like( $ci, qr/script\/coverage/msx,    'CI runs coverage' );
 like( $ci, qr/gpforum-benchmark/msx,   'CI runs benchmark smoke' );
 like( $ci, qr/script\/bench-hypnotoad/msx,
