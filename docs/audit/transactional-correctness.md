@@ -29,12 +29,13 @@ Punti già chiusi:
 
 Punti ancora da chiudere prima del go-live:
 
-- failure test con database PostgreSQL reale e worker crash (reclaim outbox su
-  lock `running` scaduto). L'evidenza concorrente per `event_idempotency_keys` e
-  reputation source unique è coperta da `t/integration/postgres-idempotency.t`
-  (command_log, bookmark, subscription, report, moderation hide, privacy
-  approval, audit chain e token consume restano in
-  `t/integration/postgres-concurrency.t`).
+- residuali di staging operativo (deploy/nginx/systemd end-to-end) restano
+  fuori da questi gate di evidenza DB. Reclaim outbox su lock `running`
+  scaduto è coperto da `t/integration/postgres-outbox-reclaim.t`;
+  `event_idempotency_keys` e reputation source unique da
+  `t/integration/postgres-idempotency.t` (command_log, bookmark, subscription,
+  report, moderation hide, privacy approval, audit chain e token consume
+  restano in `t/integration/postgres-concurrency.t`).
 
 ## Rubrica severità
 
@@ -441,10 +442,13 @@ Comportamento attuale: `claim_ready_batch` marca la riga `running` con
 consegna il payload. Un altro worker non prende un lock ancora fresco. Dopo
 la scadenza del lock la riga è riclamata e consegnata una sola volta.
 
-Rischio residuo: evidenza PostgreSQL reale del reclaim su lock scaduto.
+Rischio residuo: nessuno sul reclaim del lock scaduto; resta evidenza
+concorrente aperta su idempotency/reputation (fuori slice).
 
 Patch applicata: test claim-then-crash-then-reclaim in
-`t/84-outbox-concurrent-dispatcher.t`.
+`t/84-outbox-concurrent-dispatcher.t`; evidenza PostgreSQL a due connessioni
+in `t/integration/postgres-outbox-reclaim.t` (race reclaim su lock scaduto,
+fresh lock non preso, crash-claim-then-reclaim).
 
 ### REP-001: reputation event duplicabile sotto race
 
@@ -572,7 +576,7 @@ dei rischi `critical/high`, partendo da `WriteBoundary` o `ActionResponse` per
 | DB timeout in transazione write | timeout su insert EventLog, outbox e audit con rollback | `t/86-engineering-correctness.t` |
 | Minion unavailable | fail-closed se `GPFORUM_MINION_ENABLED=1` e backend assente; `gpforum-outbox-dispatch` salta Minion | `t/83-outbox-worker-wiring.t` |
 | Outbox retry/dead letter | cancelled + dead-letter; permanent fail-fast; no re-claim | `t/13-outbox-dispatcher.t`, `docs/ops/dead-letters.md` |
-| Worker crash | crash tra claim e dispatch, o tra dispatch e mark done | `t/84-outbox-concurrent-dispatcher.t`, `t/150-outbox-handler-idempotency.t`; staging reclaim su lock scaduto |
+| Worker crash | crash tra claim e dispatch, o tra dispatch e mark done | `t/84-outbox-concurrent-dispatcher.t`, `t/150-outbox-handler-idempotency.t`, `t/integration/postgres-outbox-reclaim.t` |
 | Transaction rollback dopo event/outbox/audit | coperto su thread, report, hide e approval outbox failure | `t/86-engineering-correctness.t` |
 | Unique conflict su retry | non coperto | test PostgreSQL concorrenti per command_log, bookmark, subscription, report |
 | Errore dopo commit HTTP | retry identico create_reply, thread, report, hide, export | `t/153-lost-response-retry.t` |
@@ -649,6 +653,9 @@ duplicato reply/report/job, nessuna crescita outbox non drenata dopo test.
 
 ## Prossime patch prioritarie
 
-1. Staging: reclaim outbox su lock `running` scaduto con PostgreSQL reale
-   (claim-then-crash reclaim resta coperto in `t/84-outbox-concurrent-dispatcher.t`;
-   manca evidenza su PostgreSQL reale oltre al mock).
+1. Staging operativo end-to-end (nginx/systemd) oltre ai drill DB: reclaim
+   outbox su lock `running` scaduto è coperto da
+   `t/integration/postgres-outbox-reclaim.t` (claim-then-crash mock resta in
+   `t/84-outbox-concurrent-dispatcher.t`); `event_idempotency_keys` e reputation
+   source unique da `t/integration/postgres-idempotency.t`; le altre race in
+   `t/integration/postgres-concurrency.t`.

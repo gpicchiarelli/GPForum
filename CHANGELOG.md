@@ -4,6 +4,13 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `t/integration/postgres-outbox-reclaim.t`: skippable-unless-DSN evidence
+  with two real PostgreSQL connections for expired `running` lock reclaim
+  (concurrent SKIP LOCKED race), fresh-lock hold, and claim-crash-then-reclaim;
+  wire it into CI beside the other PostgreSQL integration tests. Close the
+  residual OUT-002 / FM-005 reclaim evidence gap in the transactional and
+  failure-mode audits.
+
 - Add `t/integration/postgres-idempotency.t`: skippable-unless-DSN two-connection
   evidence for concurrent `event_idempotency_keys` `mark_done` and reputation
   source unique races inside open `txn_do`. `EventIdempotencyStore` and
