@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 146;
+const my $EXPECTED_TESTS => 149;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -52,6 +52,8 @@ for my $required_file (
     docs/ops/mail-check.md
     docs/ops/private-beta-checklist.md
     docs/ops/evidence/2026-09-20-macos-laptop-prep/README.md
+    docs/ops/evidence/2026-09-20-cloud-agent/README.md
+    docs/ops/evidence/README.md
     docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
     deploy/systemd/gpforum-outbox.service
@@ -387,6 +389,11 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('docs/ops/evidence/2026-09-20-macos-laptop-prep/README.md')->slurp,
         qr/NOT [ ] CLAIMED|not [ ] staging/msxi,
         'laptop prep evidence refuses private-beta claim'
+    );
+    like(
+        path('docs/ops/evidence/2026-09-20-cloud-agent/README.md')->slurp,
+        qr/PRIVATE [ ] BETA [ ] NOT [ ] YET/msx,
+        'cloud-agent evidence refuses private-beta claim'
     );
     like(
         path('script/gpforum-private-beta-checklist')->slurp,

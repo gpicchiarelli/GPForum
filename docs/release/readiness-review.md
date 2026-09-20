@@ -12,7 +12,7 @@ privata e produzione pubblica.
 | Target | Verdetto | Motivazione tecnica |
 | --- | --- | --- |
 | LOCAL READY | sì | Suite completa, coverage, migrazioni fresh/upgrade, backup/restore locale, query budget, benchmark smoke/stress locali e security/failure suite sono verdi. |
-| PRIVATE BETA READY | no | Mail/moderation/idempotenza e evidenza PG a due connessioni (concurrency, idempotency, outbox reclaim) sono in codice; staging-drill DB + attachment/deploy checklist + stress-load harness + staging-host verify/runbook sono shippati. Restano evidenza live su staging (SMTP, stress 100+, deploy target). Può reggere solo una alpha privata operator-assisted. |
+| PRIVATE BETA READY | no | Mail/moderation/idempotenza e evidenza PG a due connessioni (concurrency, idempotency, outbox reclaim) sono in codice; staging-drill DB + attachment/deploy checklist + stress-load harness + staging-host verify/runbook sono shippati. Evidenza prep Cloud Agent VM parziale archiviata in `docs/ops/evidence/2026-09-20-cloud-agent/` (checklist/system-perl; drills/Hypnotoad/mail/stress skipped). Restano evidenza live su staging (SMTP, stress 100+, deploy target). **PRIVATE BETA NOT YET.** |
 | PUBLIC PRODUCTION READY | no | Mancano staging rappresentativo end-to-end, numeri stress 100/500/1000 su target, attachment restore drill live e runbook di rollback provato sul target (harness/drill in tree). |
 
 Raccomandazione finale: GPForum è pronto per uso locale personale e per

@@ -19,7 +19,7 @@ places it at:
 | Target | Status |
 | --- | --- |
 | Local, personal use | Ready |
-| Private beta | Not yet |
+| Private beta | Not yet (partial Cloud Agent prep evidence archived under `docs/ops/evidence/2026-09-20-cloud-agent/`; live staging still open) |
 | Public production | Not yet |
 
 ## Shipped

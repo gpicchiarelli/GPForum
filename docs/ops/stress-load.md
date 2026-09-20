@@ -147,6 +147,14 @@ behaviour.
 Also run `script/query-budget --sync` after migrate so `/health/ready` returns
 `200` (an empty budget catalog yields `503` and inflates error rate).
 
+## Prep evidence archive pointer (2026-09-20)
+
+Partial Cloud Agent VM preparation notes (checklist/system-perl; Hypnotoad and
+stress profiles **skipped** in that interrupt pass) live under
+[`docs/ops/evidence/2026-09-20-cloud-agent/`](../evidence/2026-09-20-cloud-agent/).
+**PRIVATE BETA NOT YET.** Earlier completed stress appendix rows below are
+unchanged.
+
 ## Live evidence appendix (Cloud Agent VM, 2026-09-20)
 
 Host: Linux 4 vCPU / ~15 GiB RAM, PostgreSQL 16, system Perl 5.38, Hypnotoad
