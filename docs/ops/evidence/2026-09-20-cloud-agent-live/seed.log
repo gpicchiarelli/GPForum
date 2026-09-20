@@ -1,0 +1,6 @@
+performance_seed status=seeded
+profile=medium
+users=25 categories=8 threads=120 posts=1800 sessions=25 read_states=75 notifications=75 bookmarks=25 subscriptions=25 reports=50 moderation_actions=25
+category_route=/c/018f1001-0001-7000-8000-000000000001
+thread_route=/t/018f1004-0001-7000-8000-000000000001
+search_route=/search?q=performance

@@ -149,9 +149,12 @@ Also run `script/query-budget --sync` after migrate so `/health/ready` returns
 
 ## Prep evidence archive pointer (2026-09-20)
 
-Partial Cloud Agent VM preparation notes (checklist/system-perl; Hypnotoad and
-stress profiles **skipped** in that interrupt pass) live under
-[`docs/ops/evidence/2026-09-20-cloud-agent/`](../evidence/2026-09-20-cloud-agent/).
+Live Cloud Agent Hypnotoad verify + stress profile `100` JSON:
+[`docs/ops/evidence/2026-09-20-cloud-agent-live/`](../evidence/2026-09-20-cloud-agent-live/).
+Partial prep / drills-only archives remain under
+[`docs/ops/evidence/2026-09-20-cloud-agent/`](../evidence/2026-09-20-cloud-agent/)
+and
+[`docs/ops/evidence/2026-09-20-cloud-agent-drills/`](../evidence/2026-09-20-cloud-agent-drills/).
 **PRIVATE BETA NOT YET.** Earlier completed stress appendix rows below are
 unchanged.
 

@@ -19,7 +19,7 @@ places it at:
 | Target | Status |
 | --- | --- |
 | Local, personal use | Ready |
-| Private beta | Not yet | Cloud Agent drills archived (`docs/ops/evidence/2026-09-20-cloud-agent-drills/`); staging TLS / SMTP `--send` / target install still open |
+| Private beta | Not yet | Cloud Agent live Hypnotoad verify + stress 100 archived (`docs/ops/evidence/2026-09-20-cloud-agent-live/`); staging TLS / SMTP `--send` / target install still open |
 | Public production | Not yet |
 
 ## Shipped
@@ -85,10 +85,11 @@ places it at:
 
 ## Next
 
-- Re-run stress 100/500/1000 and `staging-host-verify` with `--env-file` /
-  `--base-url` on a representative **staging TLS** host; Cloud Agent VM
-  drill archive (`docs/ops/evidence/2026-09-20-cloud-agent-drills/`) covers
-  Carton + throwaway PG drills + Hypnotoad smoke only — not a beta go.
+- Re-run stress 500/1000 and `staging-host-verify` with `--systemd` on a
+  representative **staging TLS** host; Cloud Agent live archive
+  (`docs/ops/evidence/2026-09-20-cloud-agent-live/`) covers Carton + local
+  Hypnotoad `--env-file`/`--base-url` verify + stress profile `100` — not a
+  beta go.
 - Live target attachment restore + nginx/systemd **install/reload** evidence
   (harness shipped; target install still open).
 - Walk

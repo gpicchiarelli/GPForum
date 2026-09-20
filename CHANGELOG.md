@@ -4,6 +4,13 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Archive Cloud Agent VM live Hypnotoad verify evidence under
+  `docs/ops/evidence/2026-09-20-cloud-agent-live/` (`carton_ok`, migrate +
+  query-budget, `staging-host-verify --env-file --base-url` pass including
+  `/metrics`, `stress-load --profile 100` ok JSON). Fix
+  `StagingHostVerify` metrics probe header to `X-GPForum-Metrics-Token`.
+  **PRIVATE BETA remains NOT YET.**
+
 - Refresh ROADMAP/README private-beta status rows to point at the Cloud Agent drills archive while keeping staging TLS / SMTP / target install open.
 
 - Sync inventory/readiness/ROADMAP after Cloud Agent drills archive

@@ -255,7 +255,7 @@ residual work is evidence and ops, not missing MVP code.
 | Target | Status | What stands in the way |
 | --- | --- | --- |
 | Local, personal use | Ready | — |
-| Private beta | Not yet | Staging TLS / SMTP `--send` / target install still open — Cloud Agent drills archived in [docs/ops/evidence/2026-09-20-cloud-agent-drills/](docs/ops/evidence/2026-09-20-cloud-agent-drills/); walk [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md) |
+| Private beta | Not yet | Staging TLS / SMTP `--send` / target install still open — Cloud Agent live Hypnotoad verify + stress 100 archived in [docs/ops/evidence/2026-09-20-cloud-agent-live/](docs/ops/evidence/2026-09-20-cloud-agent-live/); walk [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md) |
 | Public production | Not yet | Record staging stress 100/500/1000 via `script/stress-load`; live attachment restore + deploy evidence via staging drills (harnesses shipped) |
 
 **Known MVP limits.** Domain realtime fanout uses PostgreSQL `LISTEN`/`NOTIFY`
