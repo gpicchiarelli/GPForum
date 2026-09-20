@@ -77,7 +77,7 @@ sub _test_deploy_drill {
     );
 
     my $tools = $deploy->{deploy_checklist}{optional_tools} // {};
-    if ( $tools->{nginx}{available} ) {
+    if ( _json_true( $tools->{nginx}{available} ) ) {
         is( $host->{nginx}{status},
             'pass', 'nginx -t live when nginx is on PATH' );
         is( $host->{nginx}{mode},
@@ -164,6 +164,14 @@ sub _pass_or_skipped {
     return 1 if $status eq 'skipped';
 
     return 0;
+}
+
+sub _json_true {
+    my ($value) = @_;
+
+    return 0 if !defined $value;
+    return ${$value} ? 1 : 0 if ref $value eq 'SCALAR';
+    return $value ? 1 : 0;
 }
 
 1;
