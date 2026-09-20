@@ -300,7 +300,7 @@ sub _health_phase {
             $ua,
             $base . '/metrics',
             'metrics',
-            { 'X-Metrics-Token' => $metrics_token },
+            { 'X-GPForum-Metrics-Token' => $metrics_token },
           );
     }
     else {
