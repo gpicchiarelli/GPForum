@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Ignore `local.rebuild.*` / `local.incomplete.*` Carton recovery trees in `.gitignore` (companions to `bootstrap-deps --rebuild-local`).
+
 - Wire `script/bootstrap-deps --rebuild-local` into the private-beta checklist script and docs so incomplete Carton `local/` trees are an explicit prep step.
 
 - Add `script/bootstrap-deps --rebuild-local` to rename an incomplete or
