@@ -85,23 +85,18 @@ places it at:
 
 ## Next
 
-- Stress tests at 100, 500, and 1000 users on representative **staging**
-  hardware via `script/stress-load` (`docs/ops/stress-load.md`); Cloud Agent
-  VM evidence (smoke/100/500 pass; 1000 peak with p95 residual) is archived
-  in the ops appendix — staging/TLS target numbers remain open.
-- Attachment restore + full staging deploy drills via
-  `script/staging-drill-attachments` / `docs/ops/staging-drills.md` and live
-  bring-up via `docs/ops/staging-host.md` / `script/staging-host-verify`
-  (populated `var/attachments` + static/host nginx/systemd checks and verify
-  harness are shipped; live target install/reload evidence and private-beta
-  claim remain open).
+- Re-run stress 100/500/1000 and `staging-host-verify` with `--env-file` /
+  `--base-url` on a representative **staging TLS** host; Cloud Agent VM
+  drill archive (`docs/ops/evidence/2026-09-20-cloud-agent-drills/`) covers
+  Carton + throwaway PG drills + Hypnotoad smoke only — not a beta go.
+- Live target attachment restore + nginx/systemd **install/reload** evidence
+  (harness shipped; target install still open).
 - Walk
   [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md)
   on staging and close remaining blockers in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
-  (staging deploy evidence, attachment restore drill, SMTP/mail staging,
-  operator runbooks). Do not treat private beta as ready until that evidence
-  exists.
+  (SMTP `--send`, staging deploy, operator runbooks). Do not treat private
+  beta as ready until that evidence exists.
 
 ## Release readiness
 
