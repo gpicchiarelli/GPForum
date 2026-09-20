@@ -1,0 +1,80 @@
+Successfully installed Text-Unidecode-1.30
+Successfully installed Email-MIME-ContentType-1.028
+Successfully installed Email-Address-XS-1.05
+Successfully installed Email-MIME-Encodings-1.317
+Successfully installed MIME-Types-2.30
+Successfully installed Email-MessageID-1.408
+Successfully installed Email-MIME-1.954
+Successfully installed Test-Deep-1.205
+Successfully installed Class-Method-Modifiers-2.15
+Successfully installed Moo-2.005005
+Successfully installed Clone-Choose-0.010
+Successfully installed Hash-Merge-0.302
+Successfully installed SQL-Abstract-2.000001
+Successfully installed SQL-Abstract-Pg-1.0
+Successfully installed Mojo-SQL-0.02
+Successfully installed Mojo-Pg-5.0
+Successfully installed MooX-Types-MooseLike-0.29
+Successfully installed Sub-Install-0.929
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Successfully installed Params-SomeUtil-1.11
+Successfully installed Data-OptList-0.115
+Successfully installed Sub-Exporter-0.992
+Successfully installed Throwable-1.001
+Successfully installed Email-Abstract-3.010
+Successfully installed Email-Sender-2.601
+Successfully installed Log-Any-1.720
+Successfully installed ExtUtils-Builder-0.020
+Successfully installed ExtUtils-Builder-Compiler-0.037
+Successfully installed Dist-Build-0.028
+Successfully installed Crypt-Argon2-0.032
+Successfully installed Sub-Uplevel-0.2800
+Successfully installed Test-Exception-0.43
+Successfully installed ExtUtils-CChecker-0.12
+Successfully installed XS-Parse-Keyword-0.50
+Successfully installed Syntax-Keyword-Try-0.31
+Successfully installed Devel-Cover-1.52
+Successfully installed Devel-GlobalDestruction-0.14
+Successfully installed Path-Class-0.37
+Successfully installed Context-Preserve-0.03
+Successfully installed Test-Warn-0.37
+Successfully installed SQL-Abstract-Classic-1.91

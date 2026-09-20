@@ -55,6 +55,7 @@ for my $required_file (
     docs/ops/evidence/2026-09-20-cloud-agent/README.md
     docs/ops/evidence/2026-09-20-cloud-agent-complete/README.md
     docs/ops/evidence/2026-09-20-cloud-agent-drills/README.md
+    docs/ops/evidence/2026-09-20-cloud-agent-live/README.md
     docs/ops/evidence/README.md
     docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
@@ -411,6 +412,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('docs/ops/evidence/2026-09-20-cloud-agent-drills/README.md')->slurp,
         qr/PRIVATE [ ] BETA [ ] NOT [ ] YET/msx,
         'cloud-agent-drills evidence refuses private-beta claim'
+    );
+    like(
+        path('docs/ops/evidence/2026-09-20-cloud-agent-live/README.md')->slurp,
+        qr/PRIVATE [ ] BETA [ ] NOT [ ] YET/msx,
+        'cloud-agent-live evidence refuses private-beta claim'
+    );
+    like(
+        path('docs/ops/evidence/2026-09-20-cloud-agent-live/README.md')->slurp,
+        qr/residual_gaps/msx,
+        'cloud-agent-live evidence documents residual_gaps'
     );
     like(
         path('script/gpforum-private-beta-checklist')->slurp,

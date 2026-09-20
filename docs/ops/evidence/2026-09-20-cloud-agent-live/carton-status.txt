@@ -1,0 +1,9 @@
+captured_at_utc: 2026-09-20T20:50:06Z
+carton_ok: no
+bootstrap_status: in_progress
+note: Const::Fast not yet in local/; bootstrap-deps --postgres --rebuild-local still running
+distributions_installed_so_far: 137
+
+--- gpforum-carton probe ---
+Can't locate Const/Fast.pm in @INC (you may need to install the Const::Fast module) (@INC entries checked: /workspace/local/lib/perl5/5.38.2/x86_64-linux-gnu-thread-multi /workspace/local/lib/perl5/5.38.2 /workspace/local/lib/perl5/x86_64-linux-gnu-thread-multi /workspace/local/lib/perl5 /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.38.2 /usr/local/share/perl/5.38.2 /usr/lib/x86_64-linux-gnu/perl5/5.38 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.38 /usr/share/perl/5.38 /usr/local/lib/site_perl).
+BEGIN failed--compilation aborted.

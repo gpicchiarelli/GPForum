@@ -4,6 +4,13 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Archive partial Cloud Agent VM live Hypnotoad verify/stress prep under
+  `docs/ops/evidence/2026-09-20-cloud-agent-live/` (system Perl preflight,
+  PostgreSQL dedicated DB ready, Carton bootstrap still in progress /
+  `carton_ok` no; LIVE `--env-file`/`--base-url` staging-host-verify and
+  stress profiles smoke/100/500 not yet captured — `residual_gaps`). Extends
+  `2026-09-20-cloud-agent-drills/`. **PRIVATE BETA remains NOT YET.**
+
 - Sync inventory/readiness/ROADMAP after Cloud Agent drills archive
   (`docs/ops/evidence/2026-09-20-cloud-agent-drills/`): keep **PRIVATE BETA
   NOT YET**; Next is staging TLS / SMTP `--send` / target install evidence.
