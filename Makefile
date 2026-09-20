@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 .PHONY: architecture bootstrap check critic install-deps install-deps-postgres macports-env preflight staging-drill staging-drill-attachments stress-load stress-load-dry syntax system-perl test tidy
+=======
+.PHONY: architecture bootstrap check critic install-deps install-deps-postgres mail-check preflight staging-drill staging-drill-attachments stress-load stress-load-dry syntax system-perl test tidy
+>>>>>>> origin/cursor/mail-ops-verification-3549
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -57,3 +61,8 @@ stress-load:
 # Not part of `make check` or default CI.
 staging-drill-attachments:
 	script/staging-drill-attachments --json
+
+# Optional identity mail delivery probe; uses GPFORUM_MAIL_* / SMTP settings.
+# Not part of `make check` or default CI.
+mail-check:
+	script/gpforum-mail-check --json --dry-run

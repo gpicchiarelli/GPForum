@@ -4,6 +4,7 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+<<<<<<< HEAD
 - Add `script/gpforum-macports-env` for macOS MacPorts operators: detect
   `/opt/local` PostgreSQL client bins, print `export PATH=...` lines, and
   optionally verify `psql` / `pg_dump` / `pg_config`. No-op skip on Linux CI.
@@ -16,6 +17,13 @@ All notable changes to GPForum are recorded here.
   codes over Mojo transport-error buckets for HTTP 4xx/5xx; report `ok` without
   `--check`. Optional `GPFORUM_FORUM_READ_RATE_LIMIT` for single-IP capacity
   runs above the default 60/60s forum retrieval ceiling.
+=======
+- Add operator-runnable `script/gpforum-mail-check` / `bin/gpforum-mail-check`
+  to prove identity mail config for `test` / `smtp` / `sendmail` transports
+  (dry-run Test delivery, SMTP TCP probe without leaking passwords, sendmail
+  binary check, optional `--send`). Document in `docs/ops/mail-check.md` and
+  `docs/DEPLOYMENT.md`. Optional `make mail-check`; not part of default CI.
+>>>>>>> origin/cursor/mail-ops-verification-3549
 
 - Add operator-runnable `script/stress-load` / `bin/gpforum-stress-load` with
   profiles `smoke` / `100` / `500` / `1000` concurrent request slots against a

@@ -34,6 +34,21 @@ script/gpforum-os-preflight --strict --json
 `--strict` treats degraded OS/runtime posture as a deployment failure. This is
 appropriate for production once limits and worker counts have been tuned.
 
+## Identity mail delivery
+
+Before relying on password-reset / email-change / verification mail on staging,
+probe the configured transport (no CI wait):
+
+```sh
+script/gpforum-mail-check --human --dry-run
+script/gpforum-mail-check --send --to you@example.test --human
+```
+
+Dry-run reports `mail_transport` / `mail_from` and probes `test` (Test
+transport delivery), `smtp` (TCP connect only; password never printed), or
+`sendmail` (binary presence). `--send` delivers a real verification probe.
+See `docs/ops/mail-check.md`. Optional: `make mail-check`.
+
 ## Deployment Evidence
 
 Run the Hypnotoad evidence gate before treating a deployment profile as
