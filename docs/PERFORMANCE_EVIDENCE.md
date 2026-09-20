@@ -333,6 +333,13 @@ part of `make check` / default CI; optional `make stress-load` /
 `make stress-load-dry`. It complements `script/bench-hypnotoad-scaling` rather
 than replacing sequential Hypnotoad route benches.
 
+### Prep evidence archive pointer (2026-09-20)
+
+Partial Cloud Agent VM prep archive (checklist/system-perl; Hypnotoad/stress
+**skipped** in interrupt pass):
+[docs/ops/evidence/2026-09-20-cloud-agent/](ops/evidence/2026-09-20-cloud-agent/).
+**PRIVATE BETA NOT YET.**
+
 ### Live Hypnotoad + PostgreSQL evidence (2026-09-20)
 
 Recorded on a Cloud Agent VM (4 vCPU, PostgreSQL 16, system Perl 5.38,

@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Archive partial Cloud Agent VM private-beta *preparation* evidence under
+  `docs/ops/evidence/2026-09-20-cloud-agent/` (system Perl preflight +
+  private-beta checklist `--status`/`--commands`; carton deps / drills /
+  Hypnotoad / mail / stress marked skipped with `residual_gaps`). **PRIVATE
+  BETA remains NOT YET** — does not claim readiness.
+
 - Add operator `script/staging-host-verify` / `bin/gpforum-staging-host-verify`
   and `docs/ops/staging-host.md`: non-destructive staging bring-up verify
   (in-repo deploy/runbook artifacts; optional `--env-file` key presence with
