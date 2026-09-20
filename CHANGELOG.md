@@ -18,6 +18,12 @@ All notable changes to GPForum are recorded here.
   gaps in `docs/ops/staging-drills.md`. Optional `make staging-drill-attachments`
   is not part of default CI. Does not claim private-beta readiness.
 
+- Docs: mark system Perl, PG concurrency/idempotency/outbox-reclaim evidence,
+  staging-drill DB, stress-load harness, attachment/deploy drills, and
+  MacPorts notes as shipped in `ROADMAP.md` / readiness review / README
+  status; Next is recording staging evidence (stress 100/500/1000,
+  attachment restore + live deploy), not missing harness code.
+
 - Add `t/integration/postgres-outbox-reclaim.t`: skippable-unless-DSN evidence
   with two real PostgreSQL connections for expired `running` lock reclaim
   (concurrent SKIP LOCKED race), fresh-lock hold, and claim-crash-then-reclaim;

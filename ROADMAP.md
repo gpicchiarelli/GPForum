@@ -50,20 +50,41 @@ places it at:
 - Rate limits, feed/trust projections, and uniqueness migrations through
   `036`.
 - Web access, workflow, and event boundaries recorded in [ADRs](docs/adr).
+- OS system Perl gate for bootstrap, Carton, make, and CI
+  (`script/gpforum-system-perl`; distro `/usr/bin/perl` / FreeBSD path;
+  refuse version managers).
+- PostgreSQL two-connection integration evidence (skip unless
+  `GPFORUM_DATABASE_DSN`): concurrency races in
+  `t/integration/postgres-concurrency.t`, idempotency/reputation in
+  `t/integration/postgres-idempotency.t`, expired outbox `running` lock
+  reclaim in `t/integration/postgres-outbox-reclaim.t` (wired in CI beside
+  `postgres.t`). Audits treat those residuals as evidence-closed.
+- Operator staging DB drill: `script/staging-drill` /
+  `docs/ops/staging-drills.md` for fresh migrate, upgrade-from-previous, and
+  `pg_dump`/`pg_restore` on throwaway databases (MacPorts PostgreSQL path
+  notes included).
+- Attachment filesystem + static deploy checklist drill:
+  `script/staging-drill-attachments` (throwaway `FilesystemStorage`
+  backup/restore and nginx/systemd template checks). Live target deploy
+  evidence remains open.
+- Operator stress-load harness: `script/stress-load` /
+  `docs/ops/stress-load.md` with profiles `smoke` / `100` / `500` / `1000`
+  (staging numbers still open).
 
 ## Next
 
-- Real PostgreSQL concurrent evidence (two-connection integration tests) for
-  `command_log`, report uniqueness, bookmark/subscription, moderation
-  actions, and audit-chain locking — owned separately from this doc pass.
-- Staging drills: migrations from empty and restored databases,
-  backup/restore with attachments, and rehearsed rollback or forward-fix.
 - Stress tests at 100, 500, and 1000 users on representative hardware via
-  `script/stress-load` (`docs/ops/stress-load.md`); record staging evidence.
+  `script/stress-load` (`docs/ops/stress-load.md`); record staging evidence
+  (harness is on `main`; numbers on target still open).
+- Attachment restore + full staging deploy drills via
+  `script/staging-drill-attachments` / `docs/ops/staging-drills.md` (throwaway
+  filesystem + static nginx/systemd checks are shipped; live target evidence
+  and private-beta claim remain open).
 - Close remaining private-beta blockers listed in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
-  (staging deploy evidence, attachment restore drill, operator runbooks).
-  Do not treat private beta as ready until that evidence exists.
+  (staging deploy evidence, attachment restore drill, SMTP/mail staging,
+  operator runbooks). Do not treat private beta as ready until that evidence
+  exists.
 
 ## Release readiness
 

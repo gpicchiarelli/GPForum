@@ -1,6 +1,7 @@
 # GPForum release-readiness review
 
-Data: 2026-09-20 (refresh of 2026-06-02 review against current `main`).
+Data: 2026-09-20 (refresh post-merge through outbox reclaim / PG evidence
+on `main`; earlier baseline 2026-06-02).
 
 Scopo: valutare GPForum dopo le patch di stabilizzazione senza introdurre nuove
 funzionalità. Questa review distingue tre livelli: uso locale personale, beta
@@ -11,8 +12,8 @@ privata e produzione pubblica.
 | Target | Verdetto | Motivazione tecnica |
 | --- | --- | --- |
 | LOCAL READY | sì | Suite completa, coverage, migrazioni fresh/upgrade, backup/restore locale, query budget, benchmark smoke/stress locali e security/failure suite sono verdi. |
-| PRIVATE BETA READY | no | Mail delivery e idempotenza moderazione sono in codice; restano staging drill, evidenza PostgreSQL concorrente e chiusura operativa dei BLOCKER. Può reggere solo una alpha privata operator-assisted. |
-| PUBLIC PRODUCTION READY | no | Mancano staging rappresentativo, stress test 100/500/1000 utenti, evidenza concorrente PostgreSQL, audit chain evidence e runbook di rollback provato sul target. |
+| PRIVATE BETA READY | no | Mail/moderation/idempotenza e evidenza PG a due connessioni (concurrency, idempotency, outbox reclaim) sono in codice; staging-drill DB + attachment/deploy checklist + stress-load harness sono shippati. Restano evidenza live su staging (SMTP, stress 100+, deploy target). Può reggere solo una alpha privata operator-assisted. |
+| PUBLIC PRODUCTION READY | no | Mancano staging rappresentativo end-to-end, numeri stress 100/500/1000 su target, attachment restore drill live e runbook di rollback provato sul target (harness/drill in tree). |
 
 Raccomandazione finale: GPForum è pronto per uso locale personale e per
 ulteriore hardening su staging. Non è pronto per beta privata self-service né
@@ -38,18 +39,18 @@ per produzione pubblica.
 | Perltidy | GO | `script/perltidy-check`: PASS | Nessuno | Mantenere gate |
 | Coverage | GO | `script/coverage`: PASS (gate) | Alcuni moduli operativi hanno coverage basso, ma gate passa | Aumentare coverage su realtime/controller solo se toccati |
 | Benchmark smoke | GO | Fixture e configured benchmark verdi | Numeri locali, non staging | Ripetere con dataset rappresentativo |
-| Benchmark stress | PARTIAL | Harness: `script/stress-load` profiles 100/500/1000; Hypnotoad scaling hot-thread 2/4 worker PASS; outbox 1k/10k PASS | Staging 100/500/1000 evidence not yet recorded | Run `script/stress-load --profile 100|500|1000` on staging and archive JSON |
+| Benchmark stress | PARTIAL | Harness: `script/stress-load` profiles 100/500/1000 on `main`; Hypnotoad scaling hot-thread 2/4 worker PASS; outbox 1k/10k PASS | Staging 100/500/1000 evidence not yet recorded | Run `script/stress-load --profile 100|500|1000` on staging and archive JSON |
 | Query budget | GO | `script/query-budget --sync`, `--check`: PASS; route thread max 3 query, budget ok | Catalog deve essere sincronizzato in deploy | Eseguire sync/check dopo ogni migration deploy |
 | Query plan | GO | `script/query-plan-check`: `offset_violations=0`; `query-plan-evidence` PASS su small | Dataset locale piccolo | Medium/hot-thread staging evidence |
 | Security audit | PARTIAL GO | Security suite mirata PASS | Bot/device anomaly non avanzati | Estendere security tests prima beta |
-| Failure mode tests | PARTIAL GO | FM-001–FM-007 coperti in `docs/audit/failure-modes.md` (`t/152-write-unavailable.t`, `t/153-lost-response-retry.t`, `t/150-outbox-handler-idempotency.t`, `t/86-engineering-correctness.t`, outbox/dead-letter suite) | Gap residuo: evidenza PostgreSQL concorrente (due connessioni), non assenza di test failure | Completare test PG concorrenti; staging reclaim |
-| Backup/restore | GO locale | `pg_dump -Fc` e `pg_restore` storici; schema ora a 36 versioni | Non provato con attachment storage né staging RPO/RTO | Restore drill staging con allegati |
+| Failure mode tests | GO evidence | FM-001–FM-007 + FM-008–FM-010; reclaim OUT-002 chiuso in audit (`t/152`/`t/153`/`t/150`/`t/86`, `t/integration/postgres-{concurrency,idempotency,outbox-reclaim}.t`) | Skip senza DSN; staging reclaim end-to-end ancora manuale | Tenere suite verde con DSN in CI/ops |
+| Backup/restore | GO locale / PARTIAL staging | `pg_dump -Fc` / `pg_restore`; `script/staging-drill` per migrate + dump/restore throwaway (MacPorts notes in `docs/ops/staging-drills.md`) | Attachment blobs fuori dal dump; RPO/RTO staging incompleto | Restore drill staging con allegati + deploy |
 | Session security | GO | Sessioni server-side, revoca, scadenza, cookie flags e CSRF coperti da suite security | Revoca globale sessioni/device anomaly non avanzata | Accettabile per locale, estendere per beta |
 | Rate limiting | GO | PostgreSQL limiter, fallback telemetry e blocked audit coperti | Fallback local memory non cluster-wide | In beta usare PostgreSQL store e monitorare fallback |
 | Email lifecycle | GO codice | Reset/cambio password/email, token monouso, `Identity::Mailer`, `Worker::Handler::IdentityMail`, `docs/audit/email-lifecycle.md`, `t/146-identity-mailer.t`, `t/154-identity-mail.t` | Delivery adapter e SMTP staging non drillati | Configurare e drillare mail su staging prima beta self-service |
-| Moderation workflow | GO codice | Report, hide/restore, lock/unlock, assign/release/resolve/reverse, suspension PASS; `FOR UPDATE` + unique `command_id` su ActionStore; command idempotency su workflow | Evidenza PostgreSQL concorrente assente (gap evidence, non codice) | Test a due connessioni su staging/CI |
-| Privacy/export/deletion | PARTIAL GO | Privacy rights e web tests PASS; erasure job idempotency migration 024; uniqueness successive | Concorrenza reale su approval/holds non provata | Test PostgreSQL concorrenti e restore evidence |
-| Audit trail integrity | PARTIAL | `record_hash` canonico e `pg_advisory_xact_lock` sul lookup | Evidenza PostgreSQL concorrente ancora assente | Due append concorrenti su staging |
+| Moderation workflow | GO evidence | Report/hide/lock/workflow PASS; `FOR UPDATE` + unique `command_id`; race hide in `t/integration/postgres-concurrency.t` | Staging con utenti reali ancora da drillare | Drill moderazione su staging prima beta |
+| Privacy/export/deletion | GO evidence / PARTIAL ops | Privacy rights PASS; erasure idempotency `024`; approval race in `postgres-concurrency.t` | Restore evidence con allegati ancora aperto | Attachment restore drill |
+| Audit trail integrity | GO evidence | `record_hash` + `pg_advisory_xact_lock`; due append in `postgres-concurrency.t` | Nessun gap evidence residuo prioritario | Tenere verde con DSN |
 | Logging e metriche | PARTIAL GO | `/metrics` token app-level, DB query stats, outbox, readiness, OS runtime evidence | Metriche process-local non aggregate, alerting esterno assente | Scrape/alert staging, aggregazione o runbook |
 | Deployment Hypnotoad | PARTIAL GO | Hypnotoad smoke PASS, systemd/nginx template presenti, env file aggiunto | Non provato con systemd/nginx reali sul target | Staging deploy completo |
 | Reactor backend | PARTIAL | Local macOS actual reactor `Mojo::Reactor::Poll`, documentato in `docs/ops/reactor-backend.md` | Mismatch con backend dichiarato; EV non installato localmente | Verificare reactor su Linux/FreeBSD staging |
@@ -98,22 +99,22 @@ ora a 36 migrazioni (`001`–`036`).
 
 | Blocco | Impatto | Azione richiesta |
 | --- | --- | --- |
-| Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Non esiste evidenza che il runbook reale funzioni sul target | Eseguire deploy staging da commit CI verde, includendo env file, migrate, query-budget sync, worker e health checks |
-| Stress test rappresentativo non eseguito | Local hot-thread smoke non prova 100/500/1000 utenti | Eseguire load test staging con p50/p95/p99, error rate, worker distribution, DB latency |
-| Backup/restore non provato su staging con attachment storage | RPO/RTO non dimostrati | Drill restore completo DB + allegati + readiness |
+| Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Drill DB throwaway shippato; manca nginx/systemd end-to-end sul target | Eseguire deploy staging da commit CI verde, env file, migrate, query-budget sync, worker e health checks |
+| Stress test rappresentativo non eseguito | Harness `script/stress-load` shippato (100/500/1000); manca evidenza su staging target | Eseguire load test staging con p50/p95/p99, error rate, worker distribution, DB latency |
+| Backup/restore non provato su staging con attachment storage | DB dump/restore + `script/staging-drill-attachments` shippati; manca evidenza live target | Drill restore completo DB + allegati + readiness su staging |
 | Mail delivery su staging non drillata | Adapter in codice; SMTP/staging non verificato | Drillare `Identity::Mailer` / worker su staging (non più “codice assente”) |
 
 ### HIGH
 
 | Rischio | Stato | Azione richiesta |
 | --- | --- | --- |
-| `command_log` race concorrente | Chiuso in codice (catch unique → replay); gap evidence | Evidenza PostgreSQL con due connessioni |
-| Bookmark/subscription check-then-insert | Chiuso in codice (unique + restore); gap evidence | Evidenza PostgreSQL concorrente |
-| Report duplicati aperti | Chiuso: unique parziale `026` + catch; gap evidence | Evidenza PostgreSQL concorrente |
-| Moderation actions senza command-id/row lock uniforme | Chiuso in codice (`FOR UPDATE` + unique `command_id` su hide/restore/lock/unlock; `command_log` su assign/release/resolve/reverse/suspend/revoke); gap evidence | Evidenza PostgreSQL concorrente |
-| Failure mode DB down/timeout/write after commit | Chiuso nei test fake/DB-backed elencati in `docs/audit/failure-modes.md`; residuo evidence PG concorrente | Tenere FM suite verde; aggiungere test a due connessioni |
-| Audit chain non serializzata | Chiuso in codice (`pg_advisory_xact_lock`); gap evidence | Due append concorrenti su staging |
-| Privacy deletion/hold/export duplicabili | Chiuso in codice (`command_id` HTTP + replay richiesta/hold/export aperti) | Unique index e evidenza PostgreSQL concorrente |
+| `command_log` race concorrente | Chiuso codice + evidenza PG (`postgres-concurrency.t`) | Tenere verde con DSN |
+| Bookmark/subscription check-then-insert | Chiuso codice + evidenza PG | Tenere verde con DSN |
+| Report duplicati aperti | Chiuso: unique `026` + catch + evidenza PG | Tenere verde con DSN |
+| Moderation actions senza command-id/row lock uniforme | Chiuso codice + evidenza hide PG; command_log su assign/release/resolve/… | Tenere verde con DSN |
+| Failure mode DB down/timeout/write after commit | Chiuso fake/DB-backed + PG concurrency/idempotency/reclaim | Tenere FM + integration suite verde |
+| Audit chain non serializzata | Chiuso codice + evidenza PG due append | Tenere verde con DSN |
+| Privacy deletion/hold/export duplicabili | Chiuso codice + approval race PG; hold/export HTTP replay | Tenere verde; restore con allegati resta BLOCKER |
 
 ### MEDIUM
 
@@ -143,8 +144,9 @@ Prima di una beta privata self-service:
 - `/health/live`, `/health/ready`, `/metrics` con token verdi su staging.
 - Mail delivery configurato e drillato per reset password e cambio email.
 - Backup/restore DB + attachment storage provato.
-- Failure suite FM-001–FM-007 verde; evidenza PostgreSQL concorrente per
-  idempotenza o runbook di supporto manuale accettato.
+- Failure suite FM-001–FM-010 verde; integration PG
+  (`postgres-concurrency` / `postgres-idempotency` / `postgres-outbox-reclaim`)
+  verde con DSN, o runbook di supporto manuale accettato.
 - Moderation base provata con utenti reali e ruoli seeded.
 - Dead-letter outbox osservata con un failure controllato.
 - Stress test almeno 100 utenti concorrenti su `/categories`, thread view,
@@ -158,9 +160,8 @@ Prima del go-live pubblico:
 - Tutti gli HIGH chiusi o formalmente accettati con mitigazione e rollback.
 - Stress 100/500/1000 utenti su staging con p50/p95/p99, error rate, DB latency
   e worker distribution.
-- Test PostgreSQL concorrenti per `command_log`, report, bookmark,
-  subscription, moderation e audit chain.
-- Backup/restore con RPO/RTO misurati.
+- Integration PG già in tree; ripetere su staging target con DSN reale.
+- Backup/restore con RPO/RTO misurati (inclusi attachment blob).
 - Rollback/forward-fix provato con lo stesso systemd/nginx shape.
 - `/metrics` protetto da token app-level e allowlist/private network.
 - Secret gestiti fuori repo con rotazione documentata.
@@ -170,9 +171,8 @@ Prima del go-live pubblico:
 
 ## Raccomandazione finale
 
-Non aggiungere funzionalità di prodotto. Il prossimo lavoro deve chiudere i
-BLOCKER/HIGH di evidenza: staging, concorrenza PostgreSQL reale e stress.
-Diversi gap HIGH sono passati da “codice assente” a “evidence-missing”
-(mail delivery, moderation locks/idempotency, failure-mode suite). GPForum
-resta una codebase locale verificabile, ma la beta privata self-service e la
-produzione pubblica richiedono ancora prove operative.
+Non aggiungere funzionalità di prodotto. I gap HIGH di concorrenza/idempotency
+PG e reclaim outbox sono evidence-closed in tree. Il prossimo lavoro chiude i
+BLOCKER operativi residui: stress 100/500/1000, attachment restore + deploy
+nginx/systemd, SMTP staging. GPForum resta locale-ready; beta privata
+self-service e produzione pubblica richiedono ancora quelle prove.
