@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Refresh ROADMAP/README private-beta status rows to point at the Cloud Agent drills archive while keeping staging TLS / SMTP / target install open.
+
 - Sync inventory/readiness/ROADMAP after Cloud Agent drills archive
   (`docs/ops/evidence/2026-09-20-cloud-agent-drills/`): keep **PRIVATE BETA
   NOT YET**; Next is staging TLS / SMTP `--send` / target install evidence.
