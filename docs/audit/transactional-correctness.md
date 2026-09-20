@@ -29,8 +29,10 @@ Punti già chiusi:
 
 Punti ancora da chiudere prima del go-live:
 
-- evidenza PostgreSQL concorrente (due connessioni reali) per i replay
-  già chiusi in codice;
+- evidenza PostgreSQL concorrente residua per `event_idempotency_keys` e
+  reputation source unique (command_log, bookmark, subscription, report,
+  moderation hide, privacy approval, audit chain e token consume sono
+  coperti da `t/integration/postgres-concurrency.t`);
 - failure test con database PostgreSQL reale e worker crash.
 
 ## Rubrica severità
@@ -85,13 +87,15 @@ ma due richieste concorrenti con lo stesso `command_id` possono entrambe vedere
 assenza; una vince, l'altra può fallire con violazione unique invece di ricevere
 replay o `in_progress`.
 
-Rischio residuo: basso in codice. Resta evidenza PostgreSQL con due
-connessioni reali.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
+esegue due connessioni reali sullo stesso `command_id`.
 
 Patch applicata: `CommandIdempotency::run` cerca e inserisce `command_log`
 dentro `txn_do`. Una unique violation su `idempotency_key` ricarica la riga e
-restituisce replay o `in_progress` invece di 500. Test fake in
-`t/87-command-idempotency.t`.
+restituisce replay o `in_progress` invece di 500. `UniqueConflict->attempt`
+usa un savepoint PostgreSQL così il catch non abortisce la `txn_do` esterna.
+Test fake in `t/87-command-idempotency.t`; evidenza PG in
+`t/integration/postgres-concurrency.t`.
 
 ### CM-001: bookmark non atomico
 
@@ -107,7 +111,8 @@ Comportamento attuale: `save_bookmark` fa `find_for_user_target`, poi
 `create_bookmark` o restore. Il vincolo `bookmarks_user_target_key` impedisce
 righe duplicate, ma la sequenza check-then-insert non è retry-safe.
 
-Rischio residuo: basso in codice. Resta evidenza PostgreSQL concorrente.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
+prova due `save_bookmark` concorrenti → una riga.
 Remove su una riga già soft-deleted non riscrive `deleted_at`.
 
 Patch applicata: `save_bookmark` cattura unique su `bookmarks_user_target_key`,
@@ -115,7 +120,8 @@ ricarica la riga vincente e la restore. `remove_bookmark` e
 `remove_for_user_target` saltano l'update se `deleted_at` è già valorizzato.
 Un secondo save su una riga già attiva con la stessa nota non riscrive
 `deleted_at` né `note`.
-Test fake in `t/146-concurrency-correctness.t` e `t/24-advanced-community.t`.
+Test fake in `t/146-concurrency-correctness.t` e `t/24-advanced-community.t`;
+evidenza PG in `t/integration/postgres-concurrency.t`.
 
 ### CM-002: subscription non atomica
 
@@ -131,7 +137,8 @@ Comportamento attuale: `save_subscription` fa find poi insert/restore. Il
 vincolo `subscriptions_unique_target` impedisce duplicati, ma non protegge la
 risposta applicativa sotto concorrenza.
 
-Rischio residuo: basso in codice. Resta evidenza PostgreSQL concorrente.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
+prova due `save_subscription` concorrenti → una riga.
 HTTP `command_id` replay evita un secondo mute/unsubscribe con lo stesso
 comando; uno store retry senza comando nuovo non riscrive `muted_at` o
 `revoked_at` se il valore è già presente.
@@ -141,7 +148,8 @@ Patch applicata: `save_subscription` cattura unique su
 saltano l'update quando il timestamp è già valorizzato. Un secondo save
 su una riga già attiva con la stessa preference non riscrive
 `muted_at`, `revoked_at` né `preference`. Test fake in
-`t/146-concurrency-correctness.t` e `t/17-notifications.t`.
+`t/146-concurrency-correctness.t` e `t/17-notifications.t`; evidenza PG in
+`t/integration/postgres-concurrency.t`.
 
 ### MOD-001: report duplicati aperti
 
@@ -160,12 +168,14 @@ transazione, poi inserisce. HTTP mint e richiede `command_id` in
 riprole da `command_log` e non inserisce una seconda riga. La migrazione
 `016` aggiunge un indice parziale su report aperti/triaged, ma non è unique.
 
-Rischio residuo: basso in codice. Resta evidenza PostgreSQL concorrente.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
+prova due `create_report` concorrenti → un solo report open.
 
 Patch applicata: `migrations/026_concurrency_uniqueness.sql` aggiunge
 `idx_reports_reporter_target_open_unique`. `create_report` cattura il conflitto,
 ricarica il report aperto e registra un audit `duplicate_blocked`. Test fake in
-`t/146-concurrency-correctness.t`.
+`t/146-concurrency-correctness.t`; evidenza PG in
+`t/integration/postgres-concurrency.t`.
 
 ### MOD-002: transizioni report senza lock riga
 
@@ -197,9 +207,11 @@ Comportamento attuale: hide/restore/lock/unlock sono dentro `txn_do` e, se lo
 stato era già quello atteso, restituiscono l'action esistente senza un
 secondo insert. I target sono letti con `FOR UPDATE`.
 
-Rischio residuo: evidenza PostgreSQL concorrente resta da eseguire. Un
-secondo hide con `command_id` diverso non inserisce action, evento, audit
-né outbox se lo stato è già quello atteso.
+Rischio residuo: chiuso per evidenza PG sullo stesso `command_id`.
+`t/integration/postgres-concurrency.t` prova due hide concorrenti → una
+action e post `hidden`. Un secondo hide con `command_id` diverso non
+inserisce action, evento, audit né outbox se lo stato è già quello atteso
+(coperto dai test fake; non rieseguito nel suite PG).
 
 Patch applicata: hide/restore/lock/unlock bloccano il target con `FOR UPDATE`.
 Lo stesso `command_id` replay la `moderation_actions` esistente senza nuovo
@@ -208,7 +220,8 @@ evento/audit/outbox. Unique parziale `idx_moderation_actions_command_id` in
 atteso, lo store restituisce l'action non reversed più recente senza un
 secondo insert. Le form HTTP mintano e passano `command_id`. Test fake in
 `t/146-concurrency-correctness.t`, `t/25-moderation-review.t` e
-`t/86-engineering-correctness.t`.
+`t/86-engineering-correctness.t`; evidenza PG stesso `command_id` in
+`t/integration/postgres-concurrency.t`.
 
 ### PRIV-001: deletion request duplicabile
 
@@ -255,17 +268,12 @@ del job manca e l'insert viola `idx_erasure_jobs_request_unique`,
 `DeletionWorkflow` cattura il conflitto, ricarica il job e non inserisce
 una seconda action. Test fake in `t/29-privacy-rights.t`.
 
-Rischio residuo: basso. Resta necessario eseguire evidenza PostgreSQL con due
-connessioni reali in staging, perché i test unitari verificano lock SQL,
-vincolo di migrazione, replay sequenziale e unique race fake, non il
-scheduling del kernel/DB.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
+esegue due approval concorrenti sullo stesso request id → un solo erasure job.
 
 Patch applicata: migration `024`, vincolo DBIC, lock esplicito su approval,
 catch UniqueConflict su insert job e test di replay/race in
-`t/29-privacy-rights.t`.
-
-Test residuo da aggiungere: due approval concorrenti dello stesso request id su
-PostgreSQL reale; atteso un solo job e seconda risposta idempotente.
+`t/29-privacy-rights.t`; evidenza PG in `t/integration/postgres-concurrency.t`.
 
 ### PRIV-003: retention hold e stato held ripetibili senza replay
 
@@ -370,13 +378,15 @@ e il record canonico include `previous_hash`. Se `previous_hash` non arriva in
 input, il recorder legge l'ultimo hash disponibile. Questo rende il singolo
 record tamper-evident e verificabile con `verify_audit_record`.
 
-Rischio residuo: evidenza PostgreSQL concorrente ancora da eseguire. Errori di
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
+esegue due `record_audit` concorrenti → catena lineare senza branch. Errori di
 lookup non vengono più inghiottiti.
 
 Patch applicata: `EventRecorder::record_audit` prende
 `pg_advisory_xact_lock` prima del lookup. `AuditRecord` hashing è invariato.
 Un fallimento di `AuditLog` search si propaga. Test fake in
-`t/146-concurrency-correctness.t`.
+`t/146-concurrency-correctness.t`; evidenza PG in
+`t/integration/postgres-concurrency.t`.
 
 ### OUT-001: worker crash dopo dispatch e prima di mark done
 
@@ -633,7 +643,8 @@ duplicato reply/report/job, nessuna crescita outbox non drenata dopo test.
 
 ## Prossime patch prioritarie
 
-1. Evidenza PostgreSQL concorrente in staging per command_log, report,
-   bookmark, subscription, moderation, privacy replay, audit chain,
-   `event_idempotency_keys` e reputation source unique.
-2. `PRIV-002`: evidenza concorrente PostgreSQL reale in staging.
+1. Evidenza PostgreSQL concorrente ancora aperta per `event_idempotency_keys` e
+   reputation source unique (command_log, report, bookmark, subscription,
+   moderation hide stesso `command_id`, privacy approval, audit chain e token
+   consume sono coperti da `t/integration/postgres-concurrency.t`).
+2. Staging: reclaim outbox su lock `running` scaduto con PostgreSQL reale.

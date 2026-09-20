@@ -9,6 +9,15 @@ All notable changes to GPForum are recorded here.
   installs via `script/gpforum-system-perl`; document distro packages and
   `perl -V` preflight.
 
+- Add `t/integration/postgres-concurrency.t`: skippable-unless-DSN evidence
+  with two real PostgreSQL connections for command_log, bookmark,
+  subscription, open report, moderation hide, audit chain, privacy approval,
+  and identity token consume races; wire it into CI beside `postgres.t`.
+  `UniqueConflict->attempt` wraps inserts in a savepoint so unique races can
+  replay inside an open `txn_do` on real PostgreSQL. Command-log payload
+  updates read inflated JSON accessors, and identity token/session expiry
+  compares parsed epochs so PostgreSQL timestamptz text does not false-expire.
+
 - Plugin install remints `plugin_id` once when the unique primary key
   conflicts, and does not return another plugin.
 

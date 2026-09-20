@@ -96,8 +96,9 @@ scollegata: i token venivano emessi e poi scartati.
 - Identity mail resta at-least-once: un retry dopo send e prima di
   `mark_done` reinvia. EventLog non contiene il token raw, quindi il
   retry legge solo la payload outbox.
-- Manca test concorrente PostgreSQL reale con due conferme simultanee dello
-  stesso token. Il contratto SQL `FOR UPDATE` è testato, ma non lo scheduling DB.
+- Consume concorrente dello stesso token: chiuso da
+  `t/integration/postgres-concurrency.t` (due `consume_token` su
+  `password_reset` → un ok e un `token_used`, `used_at` valorizzato).
 - Un `command_id` diverso sulla stessa emissione ruota il token unused
   esistente per `(user_id, token_type)` invece di inserirne un secondo.
   `identity_tokens_hash_key` e `used_at` restano la protezione sul consume.
