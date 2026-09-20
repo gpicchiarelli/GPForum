@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Document optional MacPorts user-space PostgreSQL (`initdb` under `$HOME`, non-default port) in `docs/ops/staging-drills.md` for throwaway drills when `sudo port load postgresql*-server` is unavailable. Still requires OS system Perl 5.38+ and Carton deps.
+
 - Add operator `script/staging-host-verify` / `bin/gpforum-staging-host-verify`
   and `docs/ops/staging-host.md`: non-destructive staging bring-up verify
   (in-repo deploy/runbook artifacts; optional `--env-file` key presence with
