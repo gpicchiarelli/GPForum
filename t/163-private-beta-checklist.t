@@ -25,7 +25,7 @@ like(
 );
 like(
     $src,
-    qr/staging-drill|staging-host-verify|stress-load|mail-check|query-budget/msx,
+    qr/staging-drill|staging-host-verify|stress-load|mail-check|query-budget|rebuild-local/msx,
     'helper lists aggregated operator tools'
 );
 unlike(

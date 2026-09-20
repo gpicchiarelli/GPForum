@@ -25,6 +25,7 @@ on a real target, and operator runbook evidence.
 | Phase | Tool | Docs | What PASS means here |
 | --- | --- | --- | --- |
 | System Perl | `script/gpforum-system-perl --preflight` | `CONTRIBUTING.md`, `Makefile` | Interpreter is OS/distro (or MacPorts) Perl 5.38+, not a version manager |
+| Carton deps | `script/bootstrap-deps --postgres` (`--rebuild-local` if `local/` incomplete) | `script/bootstrap-deps`, `Makefile` | `script/gpforum-carton exec perl -MConst::Fast -e 1` succeeds |
 | MacPorts PATH | `script/gpforum-macports-env` | `docs/ops/staging-drills.md` | On macOS, `psql` / `pg_dump` / `pg_config` resolve under `/opt/local` (no-op skip on Linux) |
 | Migrations | `carton exec bin/gpforum-migrate --apply` via `script/gpforum-carton` | `docs/DEPLOYMENT.md` | Target DB schema at current migration head (`001`–`036` on `main`) |
 | Query budget | `script/query-budget --sync` then `--check` | `docs/QUERY_BUDGET_POLICY.md` | Catalog synced; readiness not 503 for empty budgets |
@@ -56,6 +57,8 @@ make system-perl
 # macOS MacPorts PostgreSQL clients (safe no-op elsewhere):
 eval "$(script/gpforum-macports-env)"
 script/gpforum-macports-env --check
+# Carton tree (rename broken local/ aside if modules are missing):
+script/bootstrap-deps --postgres --rebuild-local
 ```
 
 ### 2. Schema + query budget

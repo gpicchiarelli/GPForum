@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Wire `script/bootstrap-deps --rebuild-local` into the private-beta checklist script and docs so incomplete Carton `local/` trees are an explicit prep step.
+
 - Add `script/bootstrap-deps --rebuild-local` to rename an incomplete or
   foreign-Perl `local/` to `local.rebuild.<epoch>` before Carton reinstall
   (still never `rm -rf local/`). Helps Cloud Agent / operator hosts where a
