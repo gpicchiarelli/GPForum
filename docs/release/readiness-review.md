@@ -47,7 +47,7 @@ per produzione pubblica.
 | Backup/restore | GO locale / PARTIAL staging | `pg_dump -Fc` / `pg_restore`; `script/staging-drill` + `script/staging-drill-attachments` (MacPorts notes in `docs/ops/staging-drills.md`) | Live staging RPO/RTO incompleto | Restore drill staging con allegati + deploy target |
 | Session security | GO | Sessioni server-side, revoca, scadenza, cookie flags e CSRF coperti da suite security | Revoca globale sessioni/device anomaly non avanzata | Accettabile per locale, estendere per beta |
 | Rate limiting | GO | PostgreSQL limiter, fallback telemetry e blocked audit coperti | Fallback local memory non cluster-wide | In beta usare PostgreSQL store e monitorare fallback |
-| Email lifecycle | GO codice | Reset/cambio password/email, token monouso, `Identity::Mailer`, `Worker::Handler::IdentityMail`, `docs/audit/email-lifecycle.md`, `t/146-identity-mailer.t`, `t/154-identity-mail.t` | Delivery adapter e SMTP staging non drillati | Configurare e drillare mail su staging prima beta self-service |
+| Email lifecycle | GO codice | Reset/cambio password/email, token monouso, `Identity::Mailer`, `Worker::Handler::IdentityMail`, `docs/audit/email-lifecycle.md`, `t/146-identity-mailer.t`, `t/154-identity-mail.t`, operator `script/gpforum-mail-check` (`docs/ops/mail-check.md`) | Staging SMTP/sendmail evidence not yet recorded | Run `script/gpforum-mail-check --dry-run` / `--send` on staging before beta self-service |
 | Moderation workflow | GO evidence | Report/hide/lock/workflow PASS; `FOR UPDATE` + unique `command_id`; race hide in `t/integration/postgres-concurrency.t` | Staging con utenti reali ancora da drillare | Drill moderazione su staging prima beta |
 | Privacy/export/deletion | GO evidence / PARTIAL ops | Privacy rights PASS; erasure idempotency `024`; approval race in `postgres-concurrency.t` | Restore evidence con allegati ancora aperto | Attachment restore drill |
 | Audit trail integrity | GO evidence | `record_hash` + `pg_advisory_xact_lock`; due append in `postgres-concurrency.t` | Nessun gap evidence residuo prioritario | Tenere verde con DSN |
@@ -102,7 +102,7 @@ ora a 36 migrazioni (`001`–`036`).
 | Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Drill DB throwaway shippato; manca nginx/systemd end-to-end sul target | Eseguire deploy staging da commit CI verde, env file, migrate, query-budget sync, worker e health checks |
 | Stress test rappresentativo non eseguito | Harness `script/stress-load` shippato (100/500/1000); manca evidenza su staging target | Eseguire load test staging con p50/p95/p99, error rate, worker distribution, DB latency |
 | Backup/restore non provato su staging con attachment storage | DB dump/restore + `script/staging-drill-attachments` shippati; manca evidenza live target | Drill restore completo DB + allegati + readiness su staging |
-| Mail delivery su staging non drillata | Adapter in codice; SMTP/staging non verificato | Drillare `Identity::Mailer` / worker su staging (non più “codice assente”) |
+| Mail delivery su staging non drillata | Adapter + `script/gpforum-mail-check` in codice; staging evidence non ancora archiviata | Eseguire `script/gpforum-mail-check --dry-run` / `--send` su staging |
 
 ### HIGH
 

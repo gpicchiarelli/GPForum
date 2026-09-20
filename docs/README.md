@@ -35,6 +35,7 @@ below go deeper, grouped by what you are trying to do.
 | [ops/reactor-backend.md](ops/reactor-backend.md) | Declared versus actual event-loop reactor |
 | [ops/scheduled-jobs.md](ops/scheduled-jobs.md) | Hourly retention/orphan cleanup command |
 | [ops/dead-letters.md](ops/dead-letters.md) | Inspect, keep, or purge exhausted outbox messages |
+| [ops/mail-check.md](ops/mail-check.md) | Identity mail transport dry-run / SMTP probe |
 | [release/readiness-review.md](release/readiness-review.md) | Latest go / no-go review |
 
 ## Performance

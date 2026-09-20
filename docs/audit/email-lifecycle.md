@@ -89,6 +89,8 @@ scollegata: i token venivano emessi e poi scartati.
 - `t/154-identity-mail.t`: EventLog omits the raw token; outbox and handler
   deliver it. `t/150-outbox-handler-idempotency.t` proves a send-before-ack
   crash resends from the outbox payload.
+- `t/162-mail-check.t`: operator mail-check dry-run for test/smtp/sendmail
+  without leaking SMTP passwords.
 - `t/05-database.t`: schema DBIC, migration `025`, unique token hash e indici.
 
 ## Limiti residui
@@ -112,7 +114,8 @@ scollegata: i token venivano emessi e poi scartati.
 carton exec prove -lr t/05-database.t t/06-identity-web.t t/08-identity-store.t \
   t/103-identity-workflow.t t/146-identity-mailer.t \
   t/147-identity-email-verification.t t/152-write-unavailable.t \
-  t/153-lost-response-retry.t
+  t/153-lost-response-retry.t t/154-identity-mail.t t/162-mail-check.t
+script/gpforum-mail-check --human --dry-run
 script/perltidy-check
 script/perlcritic
 ```

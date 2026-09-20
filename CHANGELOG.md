@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add operator-runnable `script/gpforum-mail-check` / `bin/gpforum-mail-check`
+  to prove identity mail config for `test` / `smtp` / `sendmail` transports
+  (dry-run Test delivery, SMTP TCP probe without leaking passwords, sendmail
+  binary check, optional `--send`). Document in `docs/ops/mail-check.md` and
+  `docs/DEPLOYMENT.md`. Optional `make mail-check`; not part of default CI.
+
 - Add operator-runnable `script/stress-load` / `bin/gpforum-stress-load` with
   profiles `smoke` / `100` / `500` / `1000` concurrent request slots against a
   running Hypnotoad/GPForum `--base-url`, JSON/human evidence, and
