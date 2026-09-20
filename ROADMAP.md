@@ -50,19 +50,34 @@ places it at:
 - Rate limits, feed/trust projections, and uniqueness migrations through
   `036`.
 - Web access, workflow, and event boundaries recorded in [ADRs](docs/adr).
+- OS system Perl gate for bootstrap, Carton, make, and CI
+  (`script/gpforum-system-perl`; distro `/usr/bin/perl` / FreeBSD path;
+  refuse version managers).
+- PostgreSQL two-connection integration evidence (skip unless
+  `GPFORUM_DATABASE_DSN`): concurrency races in
+  `t/integration/postgres-concurrency.t`, idempotency/reputation in
+  `t/integration/postgres-idempotency.t`, expired outbox `running` lock
+  reclaim in `t/integration/postgres-outbox-reclaim.t` (wired in CI beside
+  `postgres.t`). Audits treat those residuals as evidence-closed.
+- Operator staging DB drill: `script/staging-drill` /
+  `docs/ops/staging-drills.md` for fresh migrate, upgrade-from-previous, and
+  `pg_dump`/`pg_restore` on throwaway databases (MacPorts PostgreSQL path
+  notes included). Attachment blobs and full nginx/systemd deploy remain
+  outside this drill.
 
 ## Next
 
-- Real PostgreSQL concurrent evidence (two-connection integration tests) for
-  `command_log`, report uniqueness, bookmark/subscription, moderation
-  actions, and audit-chain locking — owned separately from this doc pass.
-- Staging drills: migrations from empty and restored databases,
-  backup/restore with attachments, and rehearsed rollback or forward-fix.
-- Stress tests at 100, 500, and 1000 users on representative hardware.
+- Stress tests at 100, 500, and 1000 concurrent users on representative
+  hardware (operator harness in progress on a sibling branch; not yet on
+  `main`).
+- Attachment restore + full staging deploy drills (DB drill is shipped;
+  attachment/`var/attachments` and nginx/systemd end-to-end remain residual /
+  in progress on sibling work — do not treat as done until on `main`).
 - Close remaining private-beta blockers listed in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
-  (staging deploy evidence, attachment restore drill, operator runbooks).
-  Do not treat private beta as ready until that evidence exists.
+  (staging deploy evidence, attachment restore drill, SMTP/mail staging,
+  operator runbooks). Do not treat private beta as ready until that evidence
+  exists.
 
 ## Release readiness
 

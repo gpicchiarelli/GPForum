@@ -249,8 +249,8 @@ residual work is evidence and ops, not missing MVP code.
 | Target | Status | What stands in the way |
 | --- | --- | --- |
 | Local, personal use | Ready | — |
-| Private beta | Not yet | Staging drills, real PostgreSQL concurrent evidence, operator runbooks — mail delivery and moderation idempotency are in code |
-| Public production | Not yet | Load tests at 100/500/1000 users, staging restore/rollback drills, concurrent PostgreSQL evidence |
+| Private beta | Not yet | Attachment restore + full nginx/systemd deploy, SMTP staging, operator runbooks — PG concurrency/idempotency/outbox reclaim evidence and DB staging-drill are shipped |
+| Public production | Not yet | Load tests at 100/500/1000 users; attachment restore and staging deploy/rollback drills (sibling work in progress) |
 
 **Known MVP limits.** Domain realtime fanout uses PostgreSQL `LISTEN`/`NOTIFY`
 across processes; the websocket registry remains process-local by design.
