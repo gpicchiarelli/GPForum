@@ -297,8 +297,10 @@ Minimum recommended posture:
 
 For a repeatable local/staging migrate + `pg_dump`/`pg_restore` rehearsal on
 throwaway databases, see `docs/ops/staging-drills.md`
-(`script/staging-drill`). Attachment files under `var/attachments` and full
-nginx/systemd deploy are out of scope for that script.
+(`script/staging-drill`). For throwaway attachment filesystem backup/restore
+and static nginx/systemd template checks, use
+`script/staging-drill-attachments`. Live Hypnotoad/TLS host bring-up remains
+an operator runbook beyond those drills.
 
 ## Tuning By OS
 

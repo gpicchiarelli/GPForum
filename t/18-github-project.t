@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 130;
+const my $EXPECTED_TESTS => 133;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -70,6 +70,7 @@ for my $required_file (
     bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
     bin/gpforum-staging-drill
+    bin/gpforum-staging-drill-attachments
     bin/gpforum-stress-load
     script/bench-http
     script/bench-hotpaths
@@ -88,6 +89,7 @@ for my $required_file (
     script/seed-benchmark
     script/seed-performance-data
     script/staging-drill
+    script/staging-drill-attachments
     script/stress-load
     )
   )
@@ -353,5 +355,10 @@ like( $launchd_jobs, qr/StartInterval/msx,
     'scheduled jobs launchd repeats on an interval' );
 like( $deployment, qr/gpforum-scheduled-jobs/msx,
     'deployment docs name the scheduled jobs timer' );
+like(
+    path('docs/ops/staging-drills.md')->slurp,
+    qr/script\/staging-drill-attachments/msx,
+    'staging drills docs cover attachment/deploy rehearsal entrypoint'
+);
 
 1;

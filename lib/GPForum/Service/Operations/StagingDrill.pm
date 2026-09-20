@@ -29,9 +29,9 @@ const my $EXIT_FAILURE       => 1;
 const my $PREVIOUS_INDEX_GAP => 1;
 const my @SANITY_TABLES      => qw(schema_versions users threads);
 const my $ATTACHMENTS_LIMITATION =>
-'pg_dump/pg_restore covers PostgreSQL only. Attachment blobs under var/attachments (FilesystemStorage) are not dumped or restored by this drill. Back up and restore that tree separately for a complete RPO/RTO rehearsal.';
+'pg_dump/pg_restore covers PostgreSQL only. Attachment blobs under var/attachments (FilesystemStorage) are not dumped or restored by this drill. Rehearse throwaway blob restore with script/staging-drill-attachments; back up live trees separately.';
 const my $RESIDUAL_DEPLOY_GAP =>
-'Full nginx/systemd/Hypnotoad staging deploy remains a manual operator runbook.';
+'Live Hypnotoad/TLS host bring-up remains manual; run script/staging-drill-attachments for static nginx/systemd template checks and throwaway attachment restore.';
 const my $RESIDUAL_BETA_GAP =>
   'This drill does not claim private-beta readiness.';
 

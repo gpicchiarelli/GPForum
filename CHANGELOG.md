@@ -10,6 +10,14 @@ All notable changes to GPForum are recorded here.
   `docs/ops/stress-load.md`. Optional `make stress-load` /
   `make stress-load-dry`; not part of `make check` or default CI.
 
+- Add `script/staging-drill-attachments` / `bin/gpforum-staging-drill-attachments`
+  for throwaway `FilesystemStorage` backup/restore round-trip and static
+  nginx/systemd deploy template checks (`User`, `EnvironmentFile`,
+  `ExecStart` via `script/gpforum-carton`, nginx upstream). Document MacPorts
+  PostgreSQL `PATH` notes alongside attachment-path and live-deploy residual
+  gaps in `docs/ops/staging-drills.md`. Optional `make staging-drill-attachments`
+  is not part of default CI. Does not claim private-beta readiness.
+
 - Add `t/integration/postgres-outbox-reclaim.t`: skippable-unless-DSN evidence
   with two real PostgreSQL connections for expired `running` lock reclaim
   (concurrent SKIP LOCKED race), fresh-lock hold, and claim-crash-then-reclaim;

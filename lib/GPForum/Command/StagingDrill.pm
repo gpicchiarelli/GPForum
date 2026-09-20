@@ -218,7 +218,9 @@ prints evidence, then drops throwaways.
   --keep-databases       leave throwaway databases after the run
   --help                 show this help
 
-Attachment blobs under var/attachments are not covered by dump/restore.
+Attachment blobs under var/attachments are not covered by dump/restore;
+use script/staging-drill-attachments for throwaway filesystem restore and
+static nginx/systemd template checks.
 USAGE
 }
 

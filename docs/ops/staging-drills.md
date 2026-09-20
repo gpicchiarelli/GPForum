@@ -1,21 +1,26 @@
-# Staging drills (migrate / dump / restore)
+# Staging drills (migrate / dump / restore / attachments / deploy checklist)
 
 Operator-runnable rehearsal for private-beta *preparation*. Passing these drills
-does **not** mean GPForum is private-beta ready. Full nginx/systemd/Hypnotoad
-deploy on a staging host remains a separate manual runbook.
+does **not** mean GPForum is private-beta ready. A live Hypnotoad + TLS staging
+host deploy remains a separate operator runbook beyond the static checklist.
 
 ## What this covers
 
-| Phase | PASS means |
-| --- | --- |
-| Fresh migrate | Throwaway empty DB applies every migration; `schema_versions` count matches `migrations/`; a second `--apply` adds zero versions |
-| Upgrade path | Throwaway DB applies all but the latest migration, then `bin/gpforum-migrate --apply` reaches the full count |
-| Dump / restore | `pg_dump -Fc` of a migrated (optionally seeded) DB restores into a second throwaway DB with matching `schema_versions`, `users`, and `threads` counts |
+| Phase | PASS means | Entrypoint |
+| --- | --- | --- |
+| Fresh migrate | Throwaway empty DB applies every migration; `schema_versions` count matches `migrations/`; a second `--apply` adds zero versions | `script/staging-drill` |
+| Upgrade path | Throwaway DB applies all but the latest migration, then `bin/gpforum-migrate --apply` reaches the full count | `script/staging-drill` |
+| Dump / restore | `pg_dump -Fc` of a migrated (optionally seeded) DB restores into a second throwaway DB with matching `schema_versions`, `users`, and `threads` counts | `script/staging-drill` |
+| Attachment filesystem | Throwaway sample tree under a temp root is written via `FilesystemStorage`, copied to a backup tree, wiped, restored, and SHA-256 / byte verified | `script/staging-drill-attachments` |
+| Deploy checklist | `deploy/systemd/*.service` and `deploy/nginx/*.conf` templates exist and include `User`, `EnvironmentFile`, `ExecStart` via `script/gpforum-carton`, and nginx `upstream gpforum_backend` | `script/staging-drill-attachments` |
 
 ## What this does not cover
 
-- Attachment **blob** storage under `var/attachments` (`FilesystemStorage`). Metadata rows in PostgreSQL are restored; files on disk are not. Back up and restore that tree separately for a complete RPO/RTO drill.
-- nginx / Caddy reverse proxy, systemd / rc.d / launchd units, Hypnotoad process management.
+- Live production (or long-lived staging) trees under `var/attachments` or an
+  operator path such as `/srv/gpforum/attachments`. The attachment drill uses a
+  throwaway temp tree only; object-storage backends are out of scope.
+- Loading units into a real systemd, `nginx -t` against installed host configs,
+  Hypnotoad process start, TLS termination, or env-file secret contents.
 - Mail delivery, load tests, or private-beta product gates.
 
 ## Prerequisites
@@ -79,19 +84,58 @@ Make target (optional; not part of `make check` / default CI):
 make staging-drill
 ```
 
+## Attachment filesystem + deploy checklist
+
+No PostgreSQL required. Default JSON evidence:
+
+```sh
+script/gpforum-carton exec bin/gpforum-staging-drill-attachments --json
+# equivalent wrapper:
+script/staging-drill-attachments --json
+```
+
+Human summary / phase filters:
+
+```sh
+script/staging-drill-attachments --human
+script/staging-drill-attachments --attachments-only --json
+script/staging-drill-attachments --deploy-only --human
+```
+
+Make target (optional; not part of `make check` / default CI):
+
+```sh
+make staging-drill-attachments
+```
+
+The deploy phase is a **static** template rehearsal. If `systemd-analyze` or
+`nginx` happen to be on `PATH`, evidence notes they are available; the drill
+still does not install units or run `nginx -t` against a host config root.
+
 ## Evidence shape
 
-JSON includes at least:
+PostgreSQL drill JSON includes at least:
 
 - `status`: `pass` or `fail` (process exit is non-zero on fail)
 - `fresh_migrate`, `upgrade_path`, `dump_restore` phase objects
-- `attachments.covered=false` with the filesystem storage limitation text
-- `residual_gaps` noting full deploy remains manual
+- `attachments.covered=false` for the DB dump/restore scope (blobs are a
+  separate entrypoint)
+- `residual_gaps` noting live Hypnotoad/TLS deploy and private-beta remain open
 - `databases_dropped` listing cleaned throwaways
+
+Attachments/deploy drill JSON includes at least:
+
+- `status`: `pass` or `fail`
+- `attachments_phase` with throwaway backup/restore file count and digests
+- `deploy_phase.deploy_checklist` with per-unit / per-nginx match results
+- `residual_gaps` for live systemd/nginx/Hypnotoad and private-beta
 
 ## Recording a run
 
 1. Run `script/staging-drill --json` against a staging-like PostgreSQL major version.
-2. Paste the JSON (or `--human` lines) into the staging ops notes for that commit.
-3. Separately note whether `var/attachments` (or production object storage) was backed up/restored outside this script.
-4. Do not mark private beta ready from this drill alone.
+2. Run `script/staging-drill-attachments --json` (no DB needed) and paste both
+   evidence blobs into the staging ops notes for that commit.
+3. Separately note whether a live `var/attachments` (or production object
+   storage) tree was backed up/restored outside the throwaway drill.
+4. Separately note any host `systemctl` / `nginx -t` / Hypnotoad bring-up.
+5. Do not mark private beta ready from these drills alone.
