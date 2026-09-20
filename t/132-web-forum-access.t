@@ -50,6 +50,20 @@ is_deeply(
     'read_rate_input uses the forum retrieval window'
 );
 
+{
+    local $ENV{GPFORUM_FORUM_READ_RATE_LIMIT} = '100000';
+    is(
+        $access->read_rate_input(
+            {
+                action   => 'search',
+                actor_id => '198.51.100.10',
+            }
+        )->{limit},
+        100_000,
+        'read_rate_input honors GPFORUM_FORUM_READ_RATE_LIMIT for stress/capacity'
+    );
+}
+
 is_deeply(
     $access->write_rate_input(
         {

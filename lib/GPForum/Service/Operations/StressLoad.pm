@@ -175,18 +175,20 @@ sub _execute {
                     $inflight--;
                     $completed++;
                     push @latencies, $elapsed_ms;
-                    my $code = 0;
-                    my $err  = $tx->error;
-                    if ($err) {
-                        $errors++;
-                        $statuses{error}++;
-                    }
-                    else {
-                        $code = $tx->res->code || 0;
+
+                    # Mojo sets $tx->error for HTTP 4xx/5xx as well as
+                    # transport failures. Prefer the response code when present
+                    # so evidence records 503/etc instead of a bare "error".
+                    my $code = $tx->res->code;
+                    if ( defined $code && $code > 0 ) {
                         $statuses{$code}++;
                         if ( $code < $HTTP_OK_MIN || $code > $HTTP_OK_MAX ) {
                             $errors++;
                         }
+                    }
+                    else {
+                        $errors++;
+                        $statuses{error}++;
                     }
                     if ( $completed >= $total ) {
                         Mojo::IOLoop->stop;
@@ -263,7 +265,7 @@ sub _prerequisites {
 sub _check_status {
     my ( $summary, $error_rate, $plan, $options ) = @_;
 
-    return 'pass' if !$options->{check};
+    return 'ok' if !$options->{check};
 
     return 'fail' if $error_rate > $plan->{max_error_rate_pct};
     return 'fail' if $summary->{p95_ms} > $plan->{p95_limit_ms};

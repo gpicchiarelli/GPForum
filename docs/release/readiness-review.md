@@ -39,7 +39,7 @@ per produzione pubblica.
 | Perltidy | GO | `script/perltidy-check`: PASS | Nessuno | Mantenere gate |
 | Coverage | GO | `script/coverage`: PASS (gate) | Alcuni moduli operativi hanno coverage basso, ma gate passa | Aumentare coverage su realtime/controller solo se toccati |
 | Benchmark smoke | GO | Fixture e configured benchmark verdi | Numeri locali, non staging | Ripetere con dataset rappresentativo |
-| Benchmark stress | PARTIAL | Harness: `script/stress-load` profiles 100/500/1000 on `main`; Hypnotoad scaling hot-thread 2/4 worker PASS; outbox 1k/10k PASS | Staging 100/500/1000 evidence not yet recorded | Run `script/stress-load --profile 100|500|1000` on staging and archive JSON |
+| Benchmark stress | PARTIAL | Harness + live VM evidence: smoke/100/500 `--check` pass (peak 500, ~587 req/s); 1000 peak sustained with 0 HTTP errors but p95 residual; see `docs/ops/stress-load.md` | Staging/TLS target 100/500/1000 not yet recorded; 1000 p95 on 4 vCPU | Re-run on staging hardware; archive JSON beside VM appendix |
 | Query budget | GO | `script/query-budget --sync`, `--check`: PASS; route thread max 3 query, budget ok | Catalog deve essere sincronizzato in deploy | Eseguire sync/check dopo ogni migration deploy |
 | Query plan | GO | `script/query-plan-check`: `offset_violations=0`; `query-plan-evidence` PASS su small | Dataset locale piccolo | Medium/hot-thread staging evidence |
 | Security audit | PARTIAL GO | Security suite mirata PASS | Bot/device anomaly non avanzati | Estendere security tests prima beta |
@@ -100,7 +100,7 @@ ora a 36 migrazioni (`001`–`036`).
 | Blocco | Impatto | Azione richiesta |
 | --- | --- | --- |
 | Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Drill DB throwaway shippato; manca nginx/systemd end-to-end sul target | Eseguire deploy staging da commit CI verde, env file, migrate, query-budget sync, worker e health checks |
-| Stress test rappresentativo non eseguito | Harness `script/stress-load` shippato (100/500/1000); manca evidenza su staging target | Eseguire load test staging con p50/p95/p99, error rate, worker distribution, DB latency |
+| Stress test rappresentativo non eseguito | Live Hypnotoad+PG evidence on Cloud Agent VM archived in `docs/ops/stress-load.md` (smoke/100/500 pass; 1000 peak ok, p95 residual); manca staging target | Re-run load test on staging with p50/p95/p99, error rate, worker distribution, DB latency |
 | Backup/restore non provato su staging con attachment storage | DB dump/restore + `script/staging-drill-attachments` shippati; manca evidenza live target | Drill restore completo DB + allegati + readiness su staging |
 | Mail delivery su staging non drillata | Adapter in codice; SMTP/staging non verificato | Drillare `Identity::Mailer` / worker su staging (non più “codice assente”) |
 

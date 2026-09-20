@@ -78,10 +78,22 @@ sub read_rate_input {
     return {
         action         => $input->{action},
         actor_id       => $input->{actor_id},
-        limit          => $READ_RATE_LIMIT,
+        limit          => _read_rate_limit(),
         scope          => 'forum_retrieval',
         window_seconds => $READ_RATE_WINDOW,
     };
+}
+
+sub _read_rate_limit {
+
+    # Ops/stress override: single-IP capacity runs exceed the default 60/60s
+    # forum_retrieval ceiling. Unset keeps the product default.
+    my $override = $ENV{GPFORUM_FORUM_READ_RATE_LIMIT};
+    if ( defined $override && $override =~ /\A[1-9][0-9]*\z/msx ) {
+        return 0 + $override;
+    }
+
+    return $READ_RATE_LIMIT;
 }
 
 sub write_rate_input {

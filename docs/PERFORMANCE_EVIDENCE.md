@@ -333,6 +333,25 @@ part of `make check` / default CI; optional `make stress-load` /
 `make stress-load-dry`. It complements `script/bench-hypnotoad-scaling` rather
 than replacing sequential Hypnotoad route benches.
 
+### Live Hypnotoad + PostgreSQL evidence (2026-09-20)
+
+Recorded on a Cloud Agent VM (4 vCPU, PostgreSQL 16, system Perl 5.38,
+Hypnotoad 4 workers, seed `medium`) against `http://127.0.0.1:8080`, base
+commit `1d16c69`. Full table and JSON notes:
+[docs/ops/stress-load.md](ops/stress-load.md) live evidence appendix.
+
+| Profile | Peak in-flight | req/s | p95 ms | Err % | `--check` |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `smoke` | 4 | 137 | 49 | 0 | pass |
+| `100` (with `GPFORUM_FORUM_READ_RATE_LIMIT=100000`) | 100 | 572 | 605 | 0 | pass |
+| `500` (elevated read limit) | 500 | 587 | 1113 | 0 | pass |
+| `1000` (elevated read limit) | 1000 | 531 | 4739 | 0 | fail (p95 > 2000 ms) |
+
+Without the read-limit override, profile `100` hits the default
+`forum_retrieval` 60/60s ceiling (`429`, ~8% errors). Profile `1000` opened
+1000 concurrent slots with zero HTTP errors on this host; latency under the
+default p95 gate remains a residual for larger/staging hardware.
+
 ## Hypnotoad Worker Scaling
 
 `script/bench-hypnotoad-scaling` is the local evidence gate for worker-count

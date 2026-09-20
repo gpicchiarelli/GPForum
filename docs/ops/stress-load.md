@@ -126,3 +126,62 @@ With `--check`, exit status is non-zero when `error_rate_pct` exceeds
 3. Keep `script/bench-hypnotoad-scaling` worker evidence alongside this external
    concurrency evidence.
 4. Do not mark private beta ready from a smoke profile alone.
+
+## Rate limit note for single-IP capacity runs
+
+Anonymous forum reads use `forum_retrieval` at **60 requests / 60 seconds** per
+client address by default. A single load-generator IP will therefore see HTTP
+`429` under profile `100+` unless the operator raises the ceiling for the
+capacity window:
+
+```sh
+export GPFORUM_FORUM_READ_RATE_LIMIT=100000   # Hypnotoad/process env
+```
+
+Unset the variable (or restart without it) to restore the product default.
+Health routes are not subject to that forum retrieval limit; the default
+stress route set includes seeded forum pages, so capacity profiles should set
+the override when measuring stack throughput rather than abuse-protection
+behaviour.
+
+Also run `script/query-budget --sync` after migrate so `/health/ready` returns
+`200` (an empty budget catalog yields `503` and inflates error rate).
+
+## Live evidence appendix (Cloud Agent VM, 2026-09-20)
+
+Host: Linux 4 vCPU / ~15 GiB RAM, PostgreSQL 16, system Perl 5.38, Hypnotoad
+`GPFORUM_WEB_PROCESSES=4`, seed profile `medium`, base
+`http://127.0.0.1:8080`, commit base `1d16c69`. Harness:
+`script/stress-load --check --json`. Capacity rows used
+`GPFORUM_FORUM_READ_RATE_LIMIT=100000` unless noted.
+
+| Profile | Status | Peak in-flight | Completed | Errors | Err % | req/s | p50 ms | p95 ms | p99 ms | max ms | Wall s |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `smoke` | pass | 4 | 20 | 0 | 0.000 | 137.344 | 26.845 | 48.809 | 48.809 | 95.230 | 0.146 |
+| `100` (elevated read limit) | pass | 100 | 1 000 | 0 | 0.000 | 572.060 | 89.792 | 604.892 | 713.722 | 865.432 | 1.748 |
+| `100` (default 60/60s limit) | fail | 100 | 1 000 | 83 | 8.300 | 538.634 | — | 458.798 | — | — | — |
+| `500` (elevated) | pass | 500 | 5 000 | 0 | 0.000 | 587.128 | 803.277 | 1112.640 | 1265.341 | 1512.191 | 8.516 |
+| `1000` (elevated) | fail\* | 1000 | 10 000 | 0 | 0.000 | 530.567 | 1671.467 | 4738.720 | 4878.393 | 8471.037 | 18.848 |
+
+\*Profile `1000` sustained peak in-flight **1000** with **zero** HTTP errors on
+this VM; `--check` failed solely because p95 (4738 ms) exceeded the default
+`--p95-limit-ms 2000`. Treat as **attempted / latency residual** on 4 vCPU,
+not as an inability to open 1000 concurrent slots.
+
+Default-limit `100` status codes included `429` (83) + `200` (917): the
+product abuse ceiling, not a harness failure.
+
+### Harness fix under live load
+
+Mojo::UserAgent sets `$tx->error` for HTTP 4xx/5xx as well as transport
+failures. The harness now prefers `$tx->res->code` when present so evidence
+records `503`/`429` instead of a bare `error` bucket. Live runs without
+`--check` report `status=ok` (with `--check`: `pass`/`fail`).
+
+### Residuals
+
+- Private-beta / staging multicore gate still open (representative staging
+  host, TLS front door, SMTP, deploy target).
+- Profile `1000` p95 under default `--check` thresholds on this 4-vCPU VM.
+- Single-IP default rate limit remains the correct production behaviour;
+  capacity evidence requires an explicit `GPFORUM_FORUM_READ_RATE_LIMIT`.
