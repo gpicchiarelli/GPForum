@@ -94,6 +94,64 @@ Adopted write paths:
 The service layer no longer writes `EventLog`, `OutboxMessage`, or `AuditLog`
 rows directly; those writes route through the infrastructure recorder.
 
+## Catalogued Domain Events (emitted)
+
+Payload fields below match the emitting store/`*::Event` modules. Envelope
+fields follow `GPForum::Domain::EventEnvelope` (`schema_version` 1 unless
+noted). The formal ADR catalog also lives in
+[ADR 0091](docs/adr/0091-executable-architecture-contract.md) and
+[ADR 0071](docs/adr/0071-event-catalog-workflow-contracts.md).
+
+### Attachment
+
+- `attachment.uploaded`
+  - producer: `GPForum::Service::Attachment::Store` via
+    `Attachment::Event`
+  - aggregate_type: `attachment`; aggregate_id: `attachment_id`
+  - idempotency_key: `attachment.uploaded:{attachment_id}`
+  - payload: `attachment_id`, `byte_size`, `media_type`, `object_key`,
+    `owner_user_id`
+- `attachment.deleted`
+  - producer: `GPForum::Service::Attachment::Store` via
+    `Attachment::Event`
+  - aggregate_type: `attachment`; aggregate_id: `attachment_id`
+  - idempotency_key: `attachment.deleted:{attachment_id}`
+  - payload: `attachment_id`, `reason`
+- `attachment.scanned` / `attachment.quarantined`
+  - producer: scan path in `Attachment::Store` via
+    `Attachment::Event::scan_event_type`
+  - payload: `attachment_id`, `reason`, `scan_status`
+
+### Moderation reports
+
+- `report.created`
+  - producer: `GPForum::Service::Moderation::ReportStore` via
+    `Moderation::Event::report_created_envelope`
+  - aggregate_type: `report`; aggregate_id: `report_id`
+  - idempotency_key: `report.created:{report_id}`
+  - payload: `reason`, `report_id`, `target_id`, `target_type`
+- `report.assigned`
+  - producer: `ReportStore::assign_report` via
+    `Moderation::Event::report_transition_envelope`
+  - aggregate_type: `report`; aggregate_id: `report_id`
+  - idempotency_key: `report.assigned:{report_id}:{event_id}`
+  - payload: `report_id`, `target_id`, `target_type`,
+    `assigned_moderator_user_id`
+- `report.released`
+  - producer: `ReportStore::release_report` via
+    `report_transition_envelope`
+  - aggregate_type: `report`; aggregate_id: `report_id`
+  - idempotency_key: `report.released:{report_id}:{event_id}`
+  - payload: `report_id`, `target_id`, `target_type`,
+    `assigned_moderator_user_id` (set to undef / null on release)
+- `report.resolved`
+  - producer: `ReportStore::resolve_report` via
+    `report_transition_envelope`
+  - aggregate_type: `report`; aggregate_id: `report_id`
+  - idempotency_key: `report.resolved:{report_id}:{event_id}`
+  - payload: `report_id`, `target_id`, `target_type`, `resolution`,
+    `resolved_at`
+
 ## Realtime Propagation
 
 `GPForum::Service::Outbox::DomainEventTransport` can map domain events to

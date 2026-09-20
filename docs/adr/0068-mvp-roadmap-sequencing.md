@@ -132,14 +132,13 @@ context in the order they become available.
   but keeps canonical writes simple.
 - Milestone sign-off needs mechanical evidence (tests, checks, release
   gates) per ADR 0093, not only a feature list.
-- Open conflict: `README.md` and `ROADMAP.md` state that GPForum "has
-  reached Milestone 17 — Forum HTTP MVP" under this roadmap, but this ADR
-  defines only Milestones 0 to 10. Either the later milestone numbering
-  needs its own ADR or the status text should be mapped back to
-  Milestones 0 to 10.
-- Open conflict: `ROADMAP.md` and `README.md` link `prompt/20.txt` (and
-  `prompt/43.txt`) as the roadmap source; they must point to this ADR (and
-  ADR 0091) once the prompt files are deleted.
+- Resolved (2026-09-20): `README.md` and `ROADMAP.md` now state completion
+  of Milestones 0–10 under this ADR; the former “Milestone 17” wording is
+  documented as historical HTTP MVP surface language, not a separate
+  milestone set.
+- Resolved (2026-09-20): `ROADMAP.md` and `README.md` point to this ADR and
+  ADR 0091 as binding sources; `prompt/20.txt` and `prompt/43.txt` remain
+  as historical constitutions only.
 
 ## Alignment
 
