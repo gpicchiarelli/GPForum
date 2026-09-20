@@ -29,11 +29,12 @@ Punti già chiusi:
 
 Punti ancora da chiudere prima del go-live:
 
-- evidenza PostgreSQL concorrente residua per `event_idempotency_keys` e
-  reputation source unique (command_log, bookmark, subscription, report,
+- evidenza PostgreSQL concorrente residua per reputation source unique
+  (`event_idempotency_keys`, command_log, bookmark, subscription, report,
   moderation hide, privacy approval, audit chain e token consume sono
   coperti da `t/integration/postgres-concurrency.t`);
-- failure test con database PostgreSQL reale e worker crash.
+- failure test con database PostgreSQL reale e worker crash
+  (outbox reclaim su lock `running` scaduto).
 
 ## Rubrica severità
 
@@ -643,8 +644,8 @@ duplicato reply/report/job, nessuna crescita outbox non drenata dopo test.
 
 ## Prossime patch prioritarie
 
-1. Evidenza PostgreSQL concorrente ancora aperta per `event_idempotency_keys` e
-   reputation source unique (command_log, report, bookmark, subscription,
-   moderation hide stesso `command_id`, privacy approval, audit chain e token
-   consume sono coperti da `t/integration/postgres-concurrency.t`).
-2. Staging: reclaim outbox su lock `running` scaduto con PostgreSQL reale.
+1. Staging: reclaim outbox su lock `running` scaduto con PostgreSQL reale
+   (claim-then-crash reclaim resta coperto in `t/84-outbox-concurrent-dispatcher.t`;
+   manca evidenza su PostgreSQL reale oltre al mock).
+2. Reputation source unique: evidenza PostgreSQL concorrente ancora aperta
+   (`event_idempotency_keys` è coperto da `t/integration/postgres-concurrency.t`).
