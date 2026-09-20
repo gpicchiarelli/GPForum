@@ -1,0 +1,3 @@
+status=fail
+reason=Class::XSAccessor native bundle built for a different Perl; local/ deps not usable with system Perl 5.34.1
+action=install MacPorts perl5.38+, reinstall deps with make install-deps-postgres, re-run script/gpforum-mail-check --json --dry-run
