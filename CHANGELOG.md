@@ -4,6 +4,10 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Sync inventory/readiness/ROADMAP after Cloud Agent drills archive
+  (`docs/ops/evidence/2026-09-20-cloud-agent-drills/`): keep **PRIVATE BETA
+  NOT YET**; Next is staging TLS / SMTP `--send` / target install evidence.
+
 - Archive Cloud Agent VM post-Carton drills evidence under
   `docs/ops/evidence/2026-09-20-cloud-agent-drills/` (completed
   `bootstrap-deps --postgres --rebuild-local` / `carton_ok`; staging-host-verify,
