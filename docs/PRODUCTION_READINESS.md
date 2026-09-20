@@ -359,9 +359,9 @@ Before production:
 - Run migrations and readiness after restore.
 - Prefer the automated throwaway drills in `docs/ops/staging-drills.md`
   (`script/staging-drill` for migrate + dump/restore;
-  `script/staging-drill-attachments` for filesystem blob restore and static
-  nginx/systemd template checks). Those drills do not replace a live
-  Hypnotoad/TLS staging host bring-up.
+  `script/staging-drill-attachments` for populated `var/attachments` restore
+  and static plus host-available nginx/systemd checks). Those drills do not
+  replace a live Hypnotoad/TLS staging host bring-up.
 
 Example logical backup:
 

@@ -3,16 +3,16 @@ package GPForum::Service::Operations::AttachmentFilesystemDrill;
 use strict;
 use warnings;
 
-use Carp           qw(croak);
+use Carp qw(croak);
 use Const::Fast;
-use Digest::SHA    qw(sha256_hex);
-use English        qw(-no_match_vars);
-use File::Copy     qw(copy);
-use File::Find     qw(find);
-use File::Path     qw(make_path remove_tree);
+use Digest::SHA qw(sha256_hex);
+use English     qw(-no_match_vars);
+use File::Copy  qw(copy);
+use File::Find  qw(find);
+use File::Path  qw(make_path remove_tree);
 use File::Spec;
-use File::Temp     qw(tempdir);
-use JSON::MaybeXS  qw(encode_json);
+use File::Temp    qw(tempdir);
+use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base;
 use Mojo::File qw(path);
 
@@ -20,15 +20,15 @@ use GPForum::Service::Attachment::FilesystemStorage;
 
 our $VERSION = '0.001';
 
-const my $EXIT_FAILURE     => 1;
-const my $DEFAULT_ROOT     => 'var/attachments';
-const my $SAMPLE_KEY_A     => 'drill/aa/bb/sample-one.bin';
-const my $SAMPLE_KEY_B     => 'drill/cc/nested/sample-two.txt';
-const my $SAMPLE_BYTES_A   => "\x00\x01GPForum-attachment-drill-a\xff";
-const my $SAMPLE_BYTES_B   => "attachment drill sample b\nline2\n";
-const my $RESIDUAL_BETA    => 'This drill does not claim private-beta readiness.';
-const my $RESIDUAL_LIVE    =>
-'Live production attachment trees and object-storage backends are outside this throwaway filesystem rehearsal.';
+const my $EXIT_FAILURE   => 1;
+const my $DEFAULT_ROOT   => 'var/attachments';
+const my $SAMPLE_KEY_A   => 'drill/aa/bb/sample-one.bin';
+const my $SAMPLE_KEY_B   => 'drill/cc/nested/sample-two.txt';
+const my $SAMPLE_BYTES_A => "\x00\x01GPForum-attachment-drill-a\xff";
+const my $SAMPLE_BYTES_B => "attachment drill sample b\nline2\n";
+const my $RESIDUAL_BETA  => 'This drill does not claim private-beta readiness.';
+const my $RESIDUAL_LIVE =>
+'Live production attachment trees and object-storage backends remain outside this rehearsal; the drill populates a throwaway var/attachments layout only.';
 
 has root_name => $DEFAULT_ROOT;
 
@@ -70,12 +70,11 @@ sub _execute {
     my ( $self, $evidence, $options ) = @_;
 
     my $workspace = tempdir( 'gpforum-attach-drill-XXXXXX', TMPDIR => 1 );
-    $evidence->{_workspace} = $workspace;
+    $evidence->{_workspace}      = $workspace;
+    $evidence->{_keep_workspace} = $options->{keep_workspace} ? 1 : 0;
 
-    my $source_root = path( $workspace, 'source' )->to_string;
-    my $backup_root = path( $workspace, 'backup' )->to_string;
-    my $restore_root =
-      path( $workspace, 'restore' )->to_string;
+    my $source_root = path( $workspace, $DEFAULT_ROOT )->to_string;
+    my $backup_root = path( $workspace, 'backup', $DEFAULT_ROOT )->to_string;
     make_path($source_root);
 
     my $storage =
@@ -93,28 +92,30 @@ sub _execute {
     remove_tree( $source_root, { keep_root => 1 } );
     _assert_empty($source_root);
 
-    _copy_tree( $backup_root, $restore_root );
-    my $after = _inventory($restore_root);
+    _copy_tree( $backup_root, $source_root );
+    my $after = _inventory($source_root);
     _assert_inventories_match( $before, $after, 'restore' );
 
     my $restored =
       GPForum::Service::Attachment::FilesystemStorage->new(
-        root => $restore_root );
+        root => $source_root );
     croak 'restored object A content mismatch'
       if $restored->read_object($SAMPLE_KEY_A) ne $SAMPLE_BYTES_A;
     croak 'restored object B content mismatch'
       if $restored->read_object($SAMPLE_KEY_B) ne $SAMPLE_BYTES_B;
 
     $evidence->{attachments} = {
-        covered         => \1,
-        mode            => 'throwaway_tree',
-        storage_backend => 'filesystem',
-        storage_root    => $self->root_name,
-        files            => scalar keys %{$after},
-        sha256_match     => \1,
-        sample_object_keys => [ $SAMPLE_KEY_A, $SAMPLE_KEY_B ],
-        backup_path        => $backup_root,
-        restore_path       => $restore_root,
+        covered              => \1,
+        mode                 => 'populated_var_attachments',
+        storage_backend      => 'filesystem',
+        storage_root         => $DEFAULT_ROOT,
+        workspace_layout     => $DEFAULT_ROOT,
+        files                => scalar keys %{$after},
+        sha256_match         => \1,
+        sample_object_keys   => [ $SAMPLE_KEY_A, $SAMPLE_KEY_B ],
+        backup_path          => $backup_root,
+        restore_path         => $source_root,
+        wiped_before_restore => \1,
     };
 
     return;
@@ -124,7 +125,9 @@ sub _cleanup {
     my ( $self, $evidence ) = @_;
 
     my $workspace = delete $evidence->{_workspace};
+    my $keep      = delete $evidence->{_keep_workspace};
     return if !_has_text($workspace);
+    return if $keep;
     remove_tree($workspace);
 
     return;
@@ -138,8 +141,7 @@ sub _inventory {
         {
             wanted => sub {
                 return if !-f $File::Find::name;
-                my $relative =
-                  File::Spec->abs2rel( $File::Find::name, $root );
+                my $relative = File::Spec->abs2rel( $File::Find::name, $root );
                 $relative =~ s{\\}{/}gmsx;
                 open my $handle, '<:raw', $File::Find::name
                   or croak "failed to read $File::Find::name: $ERRNO";
@@ -224,9 +226,9 @@ sub _base_evidence {
     my ($options) = @_;
 
     return {
-        status        => undef,
-        drill         => 'attachment_filesystem',
-        residual_gaps => [ $RESIDUAL_LIVE, $RESIDUAL_BETA ],
+        status         => undef,
+        drill          => 'attachment_filesystem',
+        residual_gaps  => [ $RESIDUAL_LIVE, $RESIDUAL_BETA ],
         keep_workspace => $options->{keep_workspace} ? \1 : \0,
     };
 }
@@ -235,15 +237,15 @@ sub _human_evidence {
     my ($evidence) = @_;
 
     my $attachments = $evidence->{attachments} // {};
-    my @lines = (
-        'staging-drill-attachments status='
-          . ( $evidence->{status} // 'fail' )
-    );
+    my @lines       = ( 'staging-drill-attachments status='
+          . ( $evidence->{status} // 'fail' ) );
     push @lines,
         'attachments covered='
       . ( $attachments->{covered} ? 'true' : 'false' )
       . ' files='
-      . ( $attachments->{files} // 0 );
+      . ( $attachments->{files} // 0 )
+      . ' layout='
+      . ( $attachments->{workspace_layout} // $DEFAULT_ROOT );
     if ( _has_text( $evidence->{error} ) ) {
         push @lines, 'error=' . $evidence->{error};
     }
@@ -272,7 +274,7 @@ __END__
 
 =head1 NAME
 
-GPForum::Service::Operations::AttachmentFilesystemDrill - Throwaway attachment tree backup/restore.
+GPForum::Service::Operations::AttachmentFilesystemDrill - Populated var/attachments backup/restore.
 
 =head1 VERSION
 
@@ -285,11 +287,11 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Writes sample objects through
-L<GPForum::Service::Attachment::FilesystemStorage>, copies the tree to a
-backup location, empties the source, restores into a second tree, and verifies
-SHA-256 digests and object bytes. Does not touch a live C<var/attachments>
-tree and does not claim private-beta readiness.
+Creates a throwaway workspace with a populated C<var/attachments> tree via
+L<GPForum::Service::Attachment::FilesystemStorage>, copies it to a backup
+tree, wipes the source, restores into the same C<var/attachments> path, and
+verifies SHA-256 digests and object bytes. Does not mutate a live operator
+attachment root and does not claim private-beta readiness.
 
 =head1 AUTHOR
 

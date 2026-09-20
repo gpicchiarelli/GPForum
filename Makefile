@@ -1,8 +1,4 @@
-<<<<<<< HEAD
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres macports-env preflight staging-drill staging-drill-attachments stress-load stress-load-dry syntax system-perl test tidy
-=======
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres mail-check preflight staging-drill staging-drill-attachments stress-load stress-load-dry syntax system-perl test tidy
->>>>>>> origin/cursor/mail-ops-verification-3549
+.PHONY: architecture bootstrap check critic install-deps install-deps-postgres macports-env mail-check preflight staging-drill staging-drill-attachments stress-load stress-load-dry syntax system-perl test tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -57,7 +53,7 @@ stress-load:
 	@test -n "$(BASE_URL)" || (echo 'make stress-load requires BASE_URL=...' >&2; exit 2)
 	script/stress-load --profile "$(PROFILE)" --base-url "$(BASE_URL)" --$(FORMAT)
 
-# Optional attachment filesystem + static deploy checklist; no PostgreSQL.
+# Optional attachment filesystem + deploy checklist (static + host when available).
 # Not part of `make check` or default CI.
 staging-drill-attachments:
 	script/staging-drill-attachments --json

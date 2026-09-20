@@ -15,13 +15,13 @@ our $VERSION = '0.001';
 
 const my $EXIT_USAGE => 2;
 const my %FLAG_OPTIONS => (
-    '--help'              => 'help',
-    '--json'              => 'format_json',
-    '--human'             => 'format_human',
-    '--attachments-only'  => 'attachments_only',
-    '--deploy-only'       => 'deploy_only',
-    '--skip-attachments'  => 'skip_attachments',
-    '--skip-deploy'       => 'skip_deploy',
+    '--help'             => 'help',
+    '--json'             => 'format_json',
+    '--human'            => 'format_human',
+    '--attachments-only' => 'attachments_only',
+    '--deploy-only'      => 'deploy_only',
+    '--skip-attachments' => 'skip_attachments',
+    '--skip-deploy'      => 'skip_deploy',
 );
 
 has attachment_drill => undef;
@@ -70,8 +70,7 @@ sub _run_phases {
     if ( $options->{run_deploy} ) {
         my $deploy = $self->_deploy_service->run($options);
         $evidence{deploy_phase} = $deploy;
-        push @{ $evidence{residual_gaps} },
-          @{ $deploy->{residual_gaps} // [] };
+        push @{ $evidence{residual_gaps} }, @{ $deploy->{residual_gaps} // [] };
     }
     else {
         $evidence{deploy_phase} = {
@@ -95,11 +94,10 @@ sub _format {
     }
 
     my @lines =
-      ( 'staging-drill-attachments status=' . ( $evidence->{status} // 'fail' )
-      );
-    push @lines,
-      _phase_line( 'attachments', $evidence->{attachments_phase} );
-    push @lines, _phase_line( 'deploy', $evidence->{deploy_phase} );
+      ( 'staging-drill-attachments status='
+          . ( $evidence->{status} // 'fail' ) );
+    push @lines, _phase_line( 'attachments', $evidence->{attachments_phase} );
+    push @lines, _phase_line( 'deploy',      $evidence->{deploy_phase} );
     if ( _has_text( $evidence->{error} ) ) {
         push @lines, 'error=' . $evidence->{error};
     }
@@ -114,21 +112,33 @@ sub _phase_line {
 
     my $status = $phase->{status} // 'fail';
     if ( $name eq 'attachments' && $phase->{attachments} ) {
-        return
-            "$name status=$status files="
+        return "$name status=$status files="
           . ( $phase->{attachments}{files} // 0 );
     }
     if ( $name eq 'deploy' && $phase->{deploy_checklist} ) {
-        return "$name status=$status mode=static_template";
+        return _deploy_phase_line( $status, $phase->{deploy_checklist} );
     }
 
     return "$name status=$status";
 }
 
+sub _deploy_phase_line {
+    my ( $status, $checklist ) = @_;
+
+    my $host = $checklist->{host_validation} // {};
+    return
+        "deploy status=$status mode="
+      . ( $checklist->{mode} // 'static_plus_host' )
+      . ' host='
+      . ( $host->{status} // 'missing' );
+}
+
 sub _exit_status {
     my ( $self, $evidence ) = @_;
 
-    return 0 if ( $evidence->{status} // q{} ) eq 'pass';
+    my $status = $evidence->{status} // q{};
+    return 0 if $status eq 'pass';
+    return 0 if $status eq 'degraded';
 
     return 1;
 }
@@ -136,13 +146,44 @@ sub _exit_status {
 sub _combined_status {
     my ($evidence) = @_;
 
+    my @statuses;
     for my $phase (qw(attachments_phase deploy_phase)) {
         my $status = $evidence->{$phase}{status} // q{};
         next if $status eq 'skipped';
-        return 'fail' if $status ne 'pass';
+        push @statuses, $status;
     }
 
+    return _status_from_list( \@statuses );
+}
+
+sub _status_from_list {
+    my ($statuses) = @_;
+
+    return 'fail'     if _list_has_fail($statuses);
+    return 'degraded' if _list_has_degraded($statuses);
+
     return 'pass';
+}
+
+sub _list_has_fail {
+    my ($statuses) = @_;
+
+    for my $status ( @{$statuses} ) {
+        return 1 if $status eq 'fail';
+        return 1 if $status ne 'pass' && $status ne 'degraded';
+    }
+
+    return 0;
+}
+
+sub _list_has_degraded {
+    my ($statuses) = @_;
+
+    for my $status ( @{$statuses} ) {
+        return 1 if $status eq 'degraded';
+    }
+
+    return 0;
 }
 
 sub _unique_gaps {
@@ -263,9 +304,12 @@ sub _usage {
     return <<'USAGE';
 Usage: bin/gpforum-staging-drill-attachments [options]
 
-Rehearses attachment filesystem backup/restore on a throwaway tree and
-statically validates nginx/systemd deploy templates. Does not require
-PostgreSQL. Does not claim private-beta readiness.
+Rehearses attachment filesystem backup/restore on a populated throwaway
+var/attachments tree and validates nginx/systemd deploy templates
+(static text always; systemd-analyze verify / nginx -t when those tools
+are on PATH, otherwise host checks are skipped and status may be
+degraded). Does not require PostgreSQL. Does not claim private-beta
+readiness.
 
   --json                 evidence as JSON (default)
   --human                short plain-text evidence
@@ -310,8 +354,9 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Operator CLI for throwaway attachment filesystem backup/restore and static
-nginx/systemd template validation.
+Operator CLI for populated C<var/attachments> filesystem backup/restore and
+nginx/systemd template validation (static plus optional host
+C<systemd-analyze verify> / C<nginx -t>).
 
 =head1 AUTHOR
 

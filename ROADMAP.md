@@ -65,10 +65,11 @@ places it at:
   `docs/ops/staging-drills.md` for fresh migrate, upgrade-from-previous, and
   `pg_dump`/`pg_restore` on throwaway databases (MacPorts PostgreSQL path
   notes included).
-- Attachment filesystem + static deploy checklist drill:
-  `script/staging-drill-attachments` (throwaway `FilesystemStorage`
-  backup/restore and nginx/systemd template checks). Live target deploy
-  evidence remains open.
+- Attachment filesystem + deploy checklist drill:
+  `script/staging-drill-attachments` (populated throwaway `var/attachments`
+  backup/restore; static nginx/systemd checks plus host `systemd-analyze
+  verify` / `nginx -t` when tools are on `PATH`). Live target install/
+  reload evidence remains open.
 - Operator stress-load harness: `script/stress-load` /
   `docs/ops/stress-load.md` with profiles `smoke` / `100` / `500` / `1000`
   (live Hypnotoad+PG VM appendix recorded; staging target numbers still open).
@@ -80,9 +81,9 @@ places it at:
   VM evidence (smoke/100/500 pass; 1000 peak with p95 residual) is archived
   in the ops appendix — staging/TLS target numbers remain open.
 - Attachment restore + full staging deploy drills via
-  `script/staging-drill-attachments` / `docs/ops/staging-drills.md` (throwaway
-  filesystem + static nginx/systemd checks are shipped; live target evidence
-  and private-beta claim remain open).
+  `script/staging-drill-attachments` / `docs/ops/staging-drills.md` (populated
+  `var/attachments` + static/host nginx/systemd checks are shipped; live
+  target install/reload evidence and private-beta claim remain open).
 - Close remaining private-beta blockers listed in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
   (staging deploy evidence, attachment restore drill, SMTP/mail staging,
