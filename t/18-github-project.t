@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 133;
+const my $EXPECTED_TESTS => 135;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -79,6 +79,7 @@ for my $required_file (
     script/benchmark-http
     script/cpan-license-check
     script/gpforum-carton
+    script/gpforum-macports-env
     script/gpforum-system-perl
     script/perl-syntax-check
     script/perltidy-check
@@ -355,10 +356,15 @@ like( $launchd_jobs, qr/StartInterval/msx,
     'scheduled jobs launchd repeats on an interval' );
 like( $deployment, qr/gpforum-scheduled-jobs/msx,
     'deployment docs name the scheduled jobs timer' );
-like(
-    path('docs/ops/staging-drills.md')->slurp,
-    qr/script\/staging-drill-attachments/msx,
-    'staging drills docs cover attachment/deploy rehearsal entrypoint'
-);
+    like(
+        path('docs/ops/staging-drills.md')->slurp,
+        qr/script\/staging-drill-attachments/msx,
+        'staging drills docs cover attachment/deploy rehearsal entrypoint'
+    );
+    like(
+        path('docs/ops/staging-drills.md')->slurp,
+        qr/gpforum-macports-env/msx,
+        'staging drills docs cover MacPorts PATH helper'
+    );
 
 1;

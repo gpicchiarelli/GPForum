@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/gpforum-macports-env` for macOS MacPorts operators: detect
+  `/opt/local` PostgreSQL client bins, print `export PATH=...` lines, and
+  optionally verify `psql` / `pg_dump` / `pg_config`. No-op skip on Linux CI.
+  Accept MacPorts `/opt/local` perl as system Perl in
+  `script/gpforum-system-perl` (still refuse perlbrew / plenv / asdf).
+
 - Add operator-runnable `script/stress-load` / `bin/gpforum-stress-load` with
   profiles `smoke` / `100` / `500` / `1000` concurrent request slots against a
   running Hypnotoad/GPForum `--base-url`, JSON/human evidence, and

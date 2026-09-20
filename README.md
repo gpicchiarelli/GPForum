@@ -158,9 +158,10 @@ engine requires an ADR and stays an optional, derived accelerator.
 ## Quick start
 
 GPForum runs on the **OS system Perl** only (`/usr/bin/perl` on
-Debian/Ubuntu, distro `perl5` on FreeBSD). Version managers and custom
-PREFIX builds are unsupported. You need Perl 5.38+ (Ubuntu 24.04 ships
-5.38.x), Carton for that interpreter, and PostgreSQL client development files.
+Debian/Ubuntu, distro `perl5` on FreeBSD, or MacPorts
+`/opt/local/bin/perl`). Version managers and custom PREFIX builds are
+unsupported. You need Perl 5.38+ (Ubuntu 24.04 ships 5.38.x), Carton for
+that interpreter, and PostgreSQL client development files.
 
 ```sh
 # Debian/Ubuntu
@@ -171,7 +172,12 @@ sudo cpanm -M https://cpan.metacpan.org/ Carton
 # sudo pkg install perl5 p5-App-cpanminus postgresql16-client
 # sudo cpanm -M https://cpan.metacpan.org/ Carton
 
-which perl; perl -v                 # expect /usr/bin/perl (or FreeBSD pkg perl)
+# macOS (MacPorts)
+# sudo port install perl5.38 p5.38-app-cpanminus postgresql16 postgresql16-server
+# eval "$(script/gpforum-macports-env)"
+# sudo cpanm -M https://cpan.metacpan.org/ Carton
+
+which perl; perl -v                 # expect system / MacPorts perl (not perlbrew)
 make system-perl                    # script/gpforum-system-perl --preflight
 make install-deps-postgres          # carton install --deployment from the lock
 # or: script/bootstrap-deps --postgres
