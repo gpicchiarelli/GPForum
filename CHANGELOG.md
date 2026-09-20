@@ -4,6 +4,15 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add operator private-beta go/no-go checklist aggregating system-perl,
+  macports-env, migrate, query-budget, staging-drill,
+  staging-drill-attachments, stress-load, and mail-check in
+  `docs/ops/private-beta-checklist.md`, plus print-only
+  `script/gpforum-private-beta-checklist` (`--commands` / `--status`; never
+  claims readiness). Point ROADMAP / readiness review / README at it.
+  Optional `make private-beta-checklist`. Does not change stress-load or
+  deploy-checklist core logic.
+
 - Strengthen `script/staging-drill-attachments` host validation: always keep
   static nginx/systemd template checks; when `systemd-analyze` / `nginx` are
   on `PATH`, run `systemd-analyze verify` and `nginx -t` against rendered

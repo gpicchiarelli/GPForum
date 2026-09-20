@@ -36,6 +36,9 @@ below go deeper, grouped by what you are trying to do.
 | [ops/scheduled-jobs.md](ops/scheduled-jobs.md) | Hourly retention/orphan cleanup command |
 | [ops/dead-letters.md](ops/dead-letters.md) | Inspect, keep, or purge exhausted outbox messages |
 | [ops/mail-check.md](ops/mail-check.md) | Identity mail transport dry-run / SMTP probe |
+| [ops/staging-drills.md](ops/staging-drills.md) | Staging migrate / dump-restore / attachment + deploy drills |
+| [ops/stress-load.md](ops/stress-load.md) | HTTP stress harness (smoke / 100 / 500 / 1000) |
+| [ops/private-beta-checklist.md](ops/private-beta-checklist.md) | Operator private-beta go/no-go aggregate (print-only) |
 | [release/readiness-review.md](release/readiness-review.md) | Latest go / no-go review |
 
 ## Performance

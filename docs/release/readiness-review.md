@@ -56,7 +56,7 @@ per produzione pubblica.
 | Reactor backend | PARTIAL | Local macOS actual reactor `Mojo::Reactor::Poll`, documentato in `docs/ops/reactor-backend.md` | Mismatch con backend dichiarato; EV non installato localmente | Verificare reactor su Linux/FreeBSD staging |
 | Config dev/staging/prod | GO | Production rifiuta secret default; prod/staging leggono profilo professionale | systemd env file deve essere creato fuori repo | Gestire `/etc/gpforum/gpforum.env` con secret manager |
 | Gestione secret | PARTIAL GO | Secret default bloccato in production, nessun secret production in repo | Nessuna rotazione automatica/documentata | Definire rotazione secret e DB password |
-| Documentazione operativa | PARTIAL GO | Production readiness, deployment, observability, reactor docs presenti | Checklist pubblica non ancora provata su staging | Eseguire runbook e registrare evidenza |
+| Documentazione operativa | PARTIAL GO | Production readiness, deployment, observability, reactor docs, `docs/ops/private-beta-checklist.md` presenti | Checklist pubblica non ancora provata su staging | Eseguire runbook e registrare evidenza |
 
 ## Comandi eseguiti
 
@@ -136,21 +136,27 @@ ora a 36 migrazioni (`001`–`036`).
 
 ## Checklist beta privata
 
+Operator aggregate (comandi + go/no-go, **senza** claim di readiness):
+[docs/ops/private-beta-checklist.md](../ops/private-beta-checklist.md) e
+`script/gpforum-private-beta-checklist --commands` / `--status`.
+
 Prima di una beta privata self-service:
 
 - CI verde sul commit candidato.
 - Fresh install e upgrade applicati a staging (attraverso migrazione `036`).
 - `script/query-budget --sync` e `--check` verdi su staging.
 - `/health/live`, `/health/ready`, `/metrics` con token verdi su staging.
-- Mail delivery configurato e drillato per reset password e cambio email.
-- Backup/restore DB + attachment storage provato.
+- Mail delivery configurato e drillato per reset password e cambio email
+  (`script/gpforum-mail-check`).
+- Backup/restore DB + attachment storage provato
+  (`script/staging-drill`, `script/staging-drill-attachments`).
 - Failure suite FM-001–FM-010 verde; integration PG
   (`postgres-concurrency` / `postgres-idempotency` / `postgres-outbox-reclaim`)
   verde con DSN, o runbook di supporto manuale accettato.
 - Moderation base provata con utenti reali e ruoli seeded.
 - Dead-letter outbox osservata con un failure controllato.
 - Stress test almeno 100 utenti concorrenti su `/categories`, thread view,
-  search e reply.
+  search e reply (`script/stress-load`).
 
 ## Checklist produzione pubblica
 
