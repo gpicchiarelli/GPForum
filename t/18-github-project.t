@@ -46,6 +46,7 @@ for my $required_file (
     docs/DEPLOYMENT.md
     docs/DEPLOYMENT_EVIDENCE.md
     docs/ops/scheduled-jobs.md
+    docs/ops/staging-drills.md
     docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
     deploy/systemd/gpforum-outbox.service
@@ -67,6 +68,7 @@ for my $required_file (
     bin/gpforum-query-plan-evidence
     bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
+    bin/gpforum-staging-drill
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
@@ -83,6 +85,7 @@ for my $required_file (
     script/query-plan-evidence
     script/seed-benchmark
     script/seed-performance-data
+    script/staging-drill
     )
   )
 {

@@ -291,6 +291,11 @@ Minimum recommended posture:
 - `application_name=gpforum` is set on connect;
 - backups and restore tests exist before production launch.
 
+For a repeatable local/staging migrate + `pg_dump`/`pg_restore` rehearsal on
+throwaway databases, see `docs/ops/staging-drills.md`
+(`script/staging-drill`). Attachment files under `var/attachments` and full
+nginx/systemd deploy are out of scope for that script.
+
 ## Tuning By OS
 
 Linux:
