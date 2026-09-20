@@ -58,6 +58,26 @@ The helper is a no-op on Linux (and when MacPorts is absent), so it is safe to
 document in shared runbooks. Prefer MacPorts `/opt/local` over Homebrew when
 both are present on the operator Mac.
 
+If the MacPorts `postgresql*-server` launchd job is not loaded (no sudo), a
+**user-space** instance is enough for throwaway drills: `initdb` a data
+directory under `$HOME`, start on a non-default port, and point the DSN at it.
+Example with the MacPorts 18 client tools already on `PATH`:
+
+```sh
+eval "$(script/gpforum-macports-env)"
+mkdir -p "$HOME/gpforum-pgdata"
+initdb -D "$HOME/gpforum-pgdata" --auth-local=trust --auth-host=trust
+pg_ctl -D "$HOME/gpforum-pgdata" -l "$HOME/gpforum-pgdata/logfile" \
+  -o '-p 55432' start
+export GPFORUM_DATABASE_DSN='dbi:Pg:dbname=postgres;host=127.0.0.1;port=55432'
+export GPFORUM_DATABASE_USER="$USER"
+# password empty when using trust on localhost
+```
+
+You still need OS system Perl 5.38+ (MacPorts `/opt/local/bin/perl` or distro
+`/usr/bin/perl`) and `make install-deps-postgres` before `script/staging-drill`.
+Stop with `pg_ctl -D "$HOME/gpforum-pgdata" stop` when finished.
+
 The DSN database name is only the admin/maintenance connection target. The drill
 creates throwaways such as `gpforum_drill_<pid>_<time>_fresh` and does not
 modify the named database’s schema.
