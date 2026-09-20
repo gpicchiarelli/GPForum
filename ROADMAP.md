@@ -58,7 +58,8 @@ places it at:
   actions, and audit-chain locking — owned separately from this doc pass.
 - Staging drills: migrations from empty and restored databases,
   backup/restore with attachments, and rehearsed rollback or forward-fix.
-- Stress tests at 100, 500, and 1000 users on representative hardware.
+- Stress tests at 100, 500, and 1000 users on representative hardware via
+  `script/stress-load` (`docs/ops/stress-load.md`); record staging evidence.
 - Close remaining private-beta blockers listed in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
   (staging deploy evidence, attachment restore drill, operator runbooks).

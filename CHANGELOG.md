@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add operator-runnable `script/stress-load` / `bin/gpforum-stress-load` with
+  profiles `smoke` / `100` / `500` / `1000` concurrent request slots against a
+  running Hypnotoad/GPForum `--base-url`, JSON/human evidence, and
+  `docs/ops/stress-load.md`. Optional `make stress-load` /
+  `make stress-load-dry`; not part of `make check` or default CI.
+
 - Add `t/integration/postgres-outbox-reclaim.t`: skippable-unless-DSN evidence
   with two real PostgreSQL connections for expired `running` lock reclaim
   (concurrent SKIP LOCKED race), fresh-lock hold, and claim-crash-then-reclaim;

@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 127;
+const my $EXPECTED_TESTS => 130;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -47,6 +47,7 @@ for my $required_file (
     docs/DEPLOYMENT_EVIDENCE.md
     docs/ops/scheduled-jobs.md
     docs/ops/staging-drills.md
+    docs/ops/stress-load.md
     docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
     deploy/systemd/gpforum-outbox.service
@@ -69,6 +70,7 @@ for my $required_file (
     bin/gpforum-seed-benchmark
     bin/gpforum-seed-performance-data
     bin/gpforum-staging-drill
+    bin/gpforum-stress-load
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
@@ -86,6 +88,7 @@ for my $required_file (
     script/seed-benchmark
     script/seed-performance-data
     script/staging-drill
+    script/stress-load
     )
   )
 {

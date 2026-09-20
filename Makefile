@@ -1,4 +1,4 @@
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight staging-drill syntax system-perl test tidy
+.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight staging-drill stress-load stress-load-dry syntax system-perl test tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -38,3 +38,14 @@ preflight:
 # Not part of `make check` or default CI.
 staging-drill:
 	script/staging-drill --json
+
+# Optional HTTP stress/load harness against a running Hypnotoad/GPForum.
+# Not part of `make check` or default CI. PROFILE=smoke|100|500|1000.
+PROFILE ?= smoke
+FORMAT ?= human
+stress-load-dry:
+	script/stress-load --dry-run --profile "$(PROFILE)" --$(FORMAT)
+
+stress-load:
+	@test -n "$(BASE_URL)" || (echo 'make stress-load requires BASE_URL=...' >&2; exit 2)
+	script/stress-load --profile "$(PROFILE)" --base-url "$(BASE_URL)" --$(FORMAT)
