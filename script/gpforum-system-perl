@@ -68,13 +68,66 @@ is_denied_path() {
 
 is_system_prefix() {
     candidate=$1
-    # Distro system Perl uses Config prefix /usr (Linux, macOS) or
-    # /usr/local (FreeBSD packages). Accept both without OS probes so
-    # architecture OS rules stay behind lib/GPForum/OS*.pm.
+    # Distro system Perl uses Config prefix /usr (Linux, macOS),
+    # /usr/local (FreeBSD packages), or /opt/local (MacPorts). Accept
+    # those without broader OS probes so architecture OS rules stay
+    # behind lib/GPForum/OS*.pm.
     "$candidate" -MConfig -e '
         my $prefix = $Config{prefix} // q{};
-        exit(($prefix eq "/usr" || $prefix eq "/usr/local") ? 0 : 1);
+        exit(
+            (   $prefix eq "/usr"
+                || $prefix eq "/usr/local"
+                || $prefix eq "/opt/local"
+            ) ? 0 : 1
+        );
     '
+}
+
+meets_version() {
+    candidate=$1
+    "$candidate" -e 'exit($] < 5.038 ? 1 : 0)'
+}
+
+canonicalize() {
+    candidate=$1
+    if command -v readlink >/dev/null 2>&1; then
+        resolved=$(readlink -f "$candidate" 2>/dev/null || true)
+        if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+            printf '%s\n' "$resolved"
+            return 0
+        fi
+    fi
+    printf '%s\n' "$candidate"
+}
+
+# Return 0 when $1 is an acceptable system Perl (path, prefix, version).
+validate_system_perl() {
+    candidate=$1
+    if is_denied_path "$candidate"; then
+        return 1
+    fi
+    if ! is_system_prefix "$candidate"; then
+        return 1
+    fi
+    if ! meets_version "$candidate"; then
+        return 1
+    fi
+    return 0
+}
+
+reject_invalid() {
+    candidate=$1
+    if is_denied_path "$candidate"; then
+        reject "refusing version-manager or custom Perl at $candidate (use distro /usr/bin/perl or MacPorts /opt/local/bin/perl)"
+    fi
+    if ! is_system_prefix "$candidate"; then
+        prefix=$("$candidate" -MConfig -e 'print $Config{prefix}')
+        reject "refusing non-system Perl at $candidate (Config prefix=$prefix); install distro or MacPorts perl"
+    fi
+    if ! meets_version "$candidate"; then
+        version=$("$candidate" -e 'print $]')
+        reject "Perl 5.38+ required (got $version at $candidate)"
+    fi
 }
 
 resolve_candidate() {
@@ -86,10 +139,15 @@ resolve_candidate() {
         return 0
     fi
 
-    for candidate in /usr/bin/perl /usr/local/bin/perl; do
+    # Prefer distro paths; fall through so an old Apple /usr/bin/perl does
+    # not block MacPorts /opt/local/bin/perl when that meets 5.38+.
+    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/local/bin/perl; do
         if [ -x "$candidate" ]; then
-            printf '%s\n' "$candidate"
-            return 0
+            canonical=$(canonicalize "$candidate")
+            if validate_system_perl "$canonical"; then
+                printf '%s\n' "$canonical"
+                return 0
+            fi
         fi
     done
 
@@ -101,29 +159,11 @@ resolve_candidate() {
     return 1
 }
 
-perl_bin=$(resolve_candidate) || reject "no system Perl found (/usr/bin/perl or /usr/local/bin/perl)"
+perl_bin=$(resolve_candidate) || reject "no system Perl found (/usr/bin/perl, /usr/local/bin/perl, or MacPorts /opt/local/bin/perl)"
+perl_bin=$(canonicalize "$perl_bin")
 
-# Prefer a canonical absolute path when available.
-if command -v readlink >/dev/null 2>&1; then
-    resolved=$(readlink -f "$perl_bin" 2>/dev/null || true)
-    if [ -n "$resolved" ] && [ -x "$resolved" ]; then
-        perl_bin=$resolved
-    fi
-fi
-
-if is_denied_path "$perl_bin"; then
-    reject "refusing version-manager or custom Perl at $perl_bin (use distro /usr/bin/perl)"
-fi
-
-if ! is_system_prefix "$perl_bin"; then
-    prefix=$("$perl_bin" -MConfig -e 'print $Config{prefix}')
-    reject "refusing non-system Perl at $perl_bin (Config prefix=$prefix); install distro perl"
-fi
-
-if ! "$perl_bin" -e 'exit($] < 5.038 ? 1 : 0)'; then
-    version=$("$perl_bin" -e 'print $]')
-    reject "Perl 5.38+ required (got $version at $perl_bin)"
-fi
+# GPFORUM_PERL and PATH fallbacks still need hard rejection messages.
+reject_invalid "$perl_bin"
 
 case "$mode" in
     print)

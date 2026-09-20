@@ -132,6 +132,8 @@ sub _assert_system_perl {
     );
     like( $helper, qr/\/usr\/bin\/perl/msx,
         'system-perl helper prefers /usr/bin/perl' );
+    like( $helper, qr/\/opt\/local/msx,
+        'system-perl helper accepts MacPorts /opt/local prefix' );
     like( $helper, qr/5[.]038/msx, 'system-perl helper requires Perl 5.38+' );
     like(
         $bootstrap,
@@ -208,6 +210,11 @@ sub _assert_operator_surface {
         $deployment,
         qr/system [ ] Perl|\/usr\/bin\/perl/msx,
         'DEPLOYMENT documents system Perl'
+    );
+    like(
+        $deployment,
+        qr/gpforum-macports-env/msx,
+        'DEPLOYMENT documents MacPorts PATH helper'
     );
     unlike(
         $deployment,

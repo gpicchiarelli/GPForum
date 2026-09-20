@@ -51,8 +51,10 @@ places it at:
   `036`.
 - Web access, workflow, and event boundaries recorded in [ADRs](docs/adr).
 - OS system Perl gate for bootstrap, Carton, make, and CI
-  (`script/gpforum-system-perl`; distro `/usr/bin/perl` / FreeBSD path;
-  refuse version managers).
+  (`script/gpforum-system-perl`; distro `/usr/bin/perl` / FreeBSD path /
+  MacPorts `/opt/local/bin/perl`; refuse version managers).
+- macOS MacPorts PATH helper for PostgreSQL client tools
+  (`script/gpforum-macports-env`; no-op on Linux).
 - PostgreSQL two-connection integration evidence (skip unless
   `GPFORUM_DATABASE_DSN`): concurrency races in
   `t/integration/postgres-concurrency.t`, idempotency/reputation in

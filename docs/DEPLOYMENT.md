@@ -57,10 +57,11 @@ counts through benchmark-only headers, and stops the server gracefully. See
 ## Perl dependencies
 
 GPForum runs on the **OS system Perl** only (`/usr/bin/perl` on
-Debian/Ubuntu with `Config{prefix}=/usr`, or FreeBSD ports/pkg perl under
-`/usr/local`). Perl 5.38+ is required (Ubuntu 24.04 provides 5.38.x).
-Version managers and custom PREFIX builds are unsupported.
-`script/gpforum-system-perl` and `script/bootstrap-deps` refuse them.
+Debian/Ubuntu with `Config{prefix}=/usr`, FreeBSD ports/pkg perl under
+`/usr/local`, or MacPorts perl under `/opt/local`). Perl 5.38+ is required
+(Ubuntu 24.04 provides 5.38.x). Version managers and custom PREFIX builds are
+unsupported. `script/gpforum-system-perl` and `script/bootstrap-deps` refuse
+them (including perlbrew / plenv / asdf).
 Confirm the host with:
 
 ```sh
@@ -74,10 +75,18 @@ Host packages (before Carton):
 - Debian/Ubuntu: `perl`, `build-essential`, `cpanminus`, `libpq-dev`,
   `postgresql-client`
 - FreeBSD: `perl5`, `p5-App-cpanminus`, `postgresql16-client`
-- macOS (MacPorts): system/MacPorts `perl5.38+`, `cpanminus`, and a matching
-  PostgreSQL port such as `postgresql16-server` / `postgresql16`; keep
-  `/opt/local/lib/postgresql16/bin` and `/opt/local/bin` on `PATH` so
-  `pg_config`, `psql`, `pg_dump`, and `pg_restore` resolve from MacPorts
+- macOS (MacPorts): MacPorts `perl5.38+` (`/opt/local/bin/perl`),
+  `cpanminus`, and a matching PostgreSQL port such as
+  `postgresql16-server` / `postgresql16`. Put client tools on `PATH` with:
+
+  ```sh
+  eval "$(script/gpforum-macports-env)"
+  script/gpforum-macports-env --check
+  ```
+
+  That prepends `/opt/local/lib/postgresqlNN/bin` and `/opt/local/bin` so
+  `pg_config`, `psql`, `pg_dump`, and `pg_restore` resolve from MacPorts.
+  The helper no-ops on Linux CI.
 - Then: `cpanm -M https://cpan.metacpan.org/ Carton` for that system Perl
 
 GPForum recognizes runtime modules from `cpanfile`, PostgreSQL modules from
