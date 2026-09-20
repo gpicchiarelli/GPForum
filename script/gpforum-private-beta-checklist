@@ -58,6 +58,10 @@ script/gpforum-system-perl --preflight
 eval "$(script/gpforum-macports-env)"
 script/gpforum-macports-env --check
 
+# 1b. Carton local/ (use --rebuild-local if Const::Fast / deps missing)
+script/bootstrap-deps --postgres --rebuild-local
+# or: make install-deps-postgres
+
 # 2. Migrate + query budget (requires GPFORUM_DATABASE_*)
 script/gpforum-carton exec bin/gpforum-migrate --apply
 script/query-budget --sync
