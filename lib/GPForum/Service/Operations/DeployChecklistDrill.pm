@@ -321,6 +321,10 @@ sub _render_nginx_site {
     my $attach = path( $workspace, 'attachments' )->to_string;
     $text =~ s{root\s+/opt/gpforum;}{root $assets;}gmsx;
     $text =~ s{alias\s+/srv/gpforum/attachments/;}{alias $attach/;}gmsx;
+
+    # Sample templates listen on 80. Distro nginx -t still opens listen
+    # sockets, so non-root hosts need an unprivileged port for the probe.
+    $text =~ s{listen\s+80;}{listen 127.0.0.1:18080;}gmsx;
     path($destination)->spew($text);
 
     return;
@@ -331,6 +335,20 @@ sub _write_nginx_main {
 
     my $pid   = path( $prefix, 'nginx.pid' )->to_string;
     my $error = path( $prefix, 'error.log' )->to_string;
+    my $tmp   = path( $prefix, 'tmp' )->to_string;
+    path($tmp)->make_path;
+    for my $subdir (qw(body proxy fastcgi uwsgi scgi)) {
+        path( $tmp, $subdir )->make_path;
+    }
+
+    # Distro nginx binaries often compile --http-*-temp-path under
+    # /var/lib/nginx (root-owned). Override them into the throwaway
+    # prefix so non-root `nginx -t -p` succeeds on developer/CI hosts.
+    my $body    = path( $tmp, 'body' )->to_string;
+    my $proxy   = path( $tmp, 'proxy' )->to_string;
+    my $fastcgi = path( $tmp, 'fastcgi' )->to_string;
+    my $uwsgi   = path( $tmp, 'uwsgi' )->to_string;
+    my $scgi    = path( $tmp, 'scgi' )->to_string;
     path($main)->spew(<<"CONF");
 worker_processes 1;
 error_log $error;
@@ -340,6 +358,11 @@ events {
 }
 http {
     access_log off;
+    client_body_temp_path $body;
+    proxy_temp_path $proxy;
+    fastcgi_temp_path $fastcgi;
+    uwsgi_temp_path $uwsgi;
+    scgi_temp_path $scgi;
     include $included;
 }
 CONF
@@ -619,10 +642,11 @@ Always verifies deploy unit and nginx templates exist and contain key
 directives. When C<systemd-analyze> is on C<PATH>, also renders sample units
 into a temp tree (stub ExecStart paths, current user) and runs
 C<systemd-analyze verify>. When C<nginx> is on C<PATH>, renders a wrapper
-config around the sample site snippets and runs C<nginx -t>. Missing host
-tools mark those phases C<skipped> and the overall evidence C<degraded>
-while static checks still pass. Does not start Hypnotoad or claim
-private-beta readiness.
+config around the sample site snippets (with client/proxy temp paths under
+the throwaway prefix so non-root distro nginx binaries can run C<nginx -t>)
+and runs C<nginx -t>. Missing host tools mark those phases C<skipped> and
+the overall evidence C<degraded> while static checks still pass. Does not
+start Hypnotoad or claim private-beta readiness.
 
 =head1 AUTHOR
 

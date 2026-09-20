@@ -185,3 +185,24 @@ records `503`/`429` instead of a bare `error` bucket. Live runs without
 - Profile `1000` p95 under default `--check` thresholds on this 4-vCPU VM.
 - Single-IP default rate limit remains the correct production behaviour;
   capacity evidence requires an explicit `GPFORUM_FORUM_READ_RATE_LIMIT`.
+
+## Tuned re-run (Cloud Agent VM, 2026-09-20, workers=8)
+
+Same host class (Linux 4 vCPU / ~15 GiB RAM, PostgreSQL 16, system Perl 5.38,
+seed `medium`, `GPFORUM_FORUM_READ_RATE_LIMIT=100000`, base
+`http://127.0.0.1:8080`), but Hypnotoad restarted with
+`GPFORUM_WEB_PROCESSES=8` and `GPFORUM_RUNTIME_WORKER_POLICY=configured`
+(eight live workers confirmed). Commit base `603f0c7` plus this branch’s
+deploy-drill nginx `-t` fixes. Harness:
+`script/stress-load --profile 1000 --check --json`.
+
+| Profile | Workers | Status | Peak | Completed | Errors | Err % | req/s | p50 ms | p95 ms | p99 ms | max ms | Wall s |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `1000` (elevated) | 8 | fail\* | 1000 | 10 000 | 0 | 0.000 | 589.564 | 1382.150 | 3495.282 | 4290.943 | 4522.971 | 16.962 |
+| `1000` (elevated, probe) | 16 | fail | 1000 | 10 000 | 0 | 0.000 | 544.596 | 607.802 | 5163.724 | 5352.445 | 5586.727 | 18.362 |
+
+\*Still fails default `--p95-limit-ms 2000` only. Versus the earlier 4-worker
+row (p95 4739 ms / ~531 req/s), **8 workers** improved throughput and p95 on
+this VM; **16 workers** raised p95 again (oversubscription on 4 vCPU). Peak
+in-flight **1000** and zero HTTP errors held in both tuned runs. Residual:
+default p95 gate on larger/staging hardware remains open.

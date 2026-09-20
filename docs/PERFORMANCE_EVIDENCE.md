@@ -352,6 +352,22 @@ Without the read-limit override, profile `100` hits the default
 1000 concurrent slots with zero HTTP errors on this host; latency under the
 default p95 gate remains a residual for larger/staging hardware.
 
+### Tuned `1000` re-run (workers=8, same VM class)
+
+Same Cloud Agent VM with `GPFORUM_WEB_PROCESSES=8` (confirmed 8 workers),
+elevated `GPFORUM_FORUM_READ_RATE_LIMIT=100000`, seed `medium`, base commit
+`603f0c7` lineage. Full numbers:
+[docs/ops/stress-load.md](ops/stress-load.md) tuned re-run section.
+
+| Profile | Workers | Peak | req/s | p95 ms | Err % | `--check` |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `1000` (elevated) | 8 | 1000 | 590 | 3495 | 0 | fail (p95 > 2000 ms) |
+| `1000` (elevated, probe) | 16 | 1000 | 545 | 5164 | 0 | fail (p95 worse than 8) |
+
+Eight workers improved p95 versus the 4-worker row above; sixteen workers
+oversubscribed this 4-vCPU host. Still not a private-beta pass under the
+default p95 gate.
+
 ## Hypnotoad Worker Scaling
 
 `script/bench-hypnotoad-scaling` is the local evidence gate for worker-count
