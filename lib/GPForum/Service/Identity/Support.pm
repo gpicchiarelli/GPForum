@@ -73,11 +73,12 @@ sub normalize_identifier {
 sub hash_value {
     my ( $self, $value ) = @_;
 
-    if ( !$self->has_text($value) ) {
-        return;
+    my $digest;
+    if ( $self->has_text($value) ) {
+        $digest = sha256_hex($value);
     }
 
-    return sha256_hex($value);
+    return $digest;
 }
 
 sub iso8601_from_epoch {

@@ -18,6 +18,7 @@ use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Operations::CommandIdempotency;
 use GPForum::Service::Privacy::DeletionWorkflow;
 use GPForum::Test::PostgresHarness;
+use GPForum::Worker::EventIdempotencyStore;
 
 our $VERSION = '0.001';
 
@@ -32,6 +33,8 @@ const my $RACE_TARGET_ID   => '018f9999-0001-7000-8000-00000000c001';
 const my $REPORT_TARGET_ID => '018f9999-0001-7000-8000-00000000c002';
 const my $COMMAND_KEY      => '018f9999-0001-7000-8000-00000000c010';
 const my $HIDE_COMMAND     => '018f9999-0001-7000-8000-00000000c011';
+const my $EVENT_IDEM_KEY   => 'worker.notify:018f9999-0001-7000-8000-00000000c020';
+const my $EVENT_IDEM_EVENT => '018f9999-0001-7000-8000-00000000c020';
 const my $AUDIT_CORR_BASE  => 0xc100;
 
 if ( !$ENV{GPFORUM_DATABASE_DSN} ) {
@@ -61,6 +64,7 @@ _report_open_unique_race($case);
 _moderation_hide_race($case);
 _privacy_approval_race($case);
 _identity_token_consume_race($case);
+_event_idempotency_race($case);
 
 GPForum::Test::PostgresHarness::drop_database($database);
 
@@ -556,6 +560,43 @@ sub _assert_token_consume_outcomes {
         'SELECT used_at FROM identity_tokens WHERE token_id = ?',
         undef, $token_id, );
     ok( defined $used_at, 'identity token consume race marks used_at' );
+
+    return;
+}
+
+sub _event_idempotency_race {
+    my ($ctx) = @_;
+
+    my @outcomes = GPForum::Test::PostgresHarness::race(
+        sub {
+            my $store = GPForum::Worker::EventIdempotencyStore->new(
+                schema => GPForum::Test::PostgresHarness::connect_schema(), );
+            my $ok = $store->mark_done(
+                $EVENT_IDEM_KEY,
+                { event_id => $EVENT_IDEM_EVENT },
+            );
+            return {
+                done => $store->is_done($EVENT_IDEM_KEY) ? 1 : 0,
+                ok   => $ok ? 1 : 0,
+            };
+        }
+    );
+    _assert_workers_ok( \@outcomes, 'event_idempotency_keys race' );
+    my $accepted =
+      grep { $_->{result}{ok} && $_->{result}{done} } @outcomes;
+    is(
+        $accepted,
+        GPForum::Test::PostgresHarness::worker_count(),
+        'event_idempotency_keys race accepts both mark_done calls'
+    );
+    is(
+        GPForum::Test::PostgresHarness::count_rows(
+            $ctx->{dbh}, 'event_idempotency_keys',
+            { idempotency_key => $EVENT_IDEM_KEY },
+        ),
+        1,
+        'event_idempotency_keys race keeps one row'
+    );
 
     return;
 }

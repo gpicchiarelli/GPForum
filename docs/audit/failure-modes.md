@@ -73,5 +73,5 @@ test fake.
 ## Prossimi failure test prioritari
 
 1. Staging: lock outbox `running` scaduto e reclaim su PostgreSQL reale.
-2. Evidenza PostgreSQL concorrente ancora aperta per `event_idempotency_keys` e
-   reputation source unique (non coperti da `postgres-concurrency.t`).
+2. Evidenza PostgreSQL concorrente ancora aperta per reputation source unique
+   (`event_idempotency_keys` è coperto da `postgres-concurrency.t`).

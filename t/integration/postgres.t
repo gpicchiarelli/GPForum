@@ -173,6 +173,7 @@ sub _register_accounts {
     for my $username ( $MODERATOR, $MEMBER ) {
         my $client = Test::Mojo->new($app);
         _register( $client, $username );
+        _verify_registered_email( $client, $database_info, $username );
         _login( $client, $username );
     }
 
@@ -209,6 +210,43 @@ sub _register {
     $client->status_is($HTTP_ACCEPTED);
 
     return;
+}
+
+sub _verify_registered_email {
+    my ( $client, $database_info, $username ) = @_;
+
+    my $token = _verification_token( $database_info, $username );
+    ok( $token, "verification token issued for $username" );
+
+    $client->get_ok("/email/verify/$token");
+    $client->status_is($HTTP_OK);
+    $client->post_ok(
+        '/email/verify/complete' => form => {
+            command_id => _form_value( $client, 'command_id' ),
+            csrf_token => _form_value( $client, 'csrf_token' ),
+            token      => $token,
+        }
+    );
+    $client->status_is($HTTP_ACCEPTED);
+
+    return;
+}
+
+sub _verification_token {
+    my ( $database_info, $username ) = @_;
+
+    my $email = "$username\@example.test";
+    my ($token) = $database_info->{dbh}->selectrow_array(
+        join( q{ },
+            q{SELECT payload->'mail'->>'token'},
+            'FROM outbox_messages',
+            q{WHERE payload->'mail'->>'kind' = 'email_verification'},
+            q{AND payload->'mail'->>'to' = ?},
+            'ORDER BY created_at DESC LIMIT 1' ),
+        undef, $email
+    );
+
+    return defined $token ? $token : q{};
 }
 
 sub _login {
@@ -437,9 +475,13 @@ sub _post_form {
     my ( $client, $form_page, $path, $fields ) = @_;
 
     $client->get_ok($form_page);
+    my $command_id = _form_command_id( $client, $path );
+    if ( !length $command_id ) {
+        $command_id = $client->app->gp_id->uuid;
+    }
     $client->post_ok(
         $path => form => {
-            command_id => _form_command_id( $client, $path ),
+            command_id => $command_id,
             csrf_token => _form_value( $client, 'csrf_token' ),
             %{$fields},
         }
@@ -537,7 +579,7 @@ sub _form_value {
     my $body = $client->tx->res->body;
     my ($value) = $body =~ /name="\Q$name\E" [^>]+ value="([^"]+)"/msx;
 
-    return $value;
+    return defined $value ? $value : q{};
 }
 
 sub _form_command_id {
@@ -549,13 +591,13 @@ sub _form_command_id {
     my $marker = 'action=' . $quote . $form_action . $quote;
     my $start  = index $body, $marker;
     if ( $start < 0 ) {
-        return;
+        return q{};
     }
 
     my $chunk        = substr $body, $start, $FORM_SNIPPET;
     my ($command_id) = $chunk =~ /name="command_id" [^>]+ value="([^"]+)"/msx;
 
-    return $command_id;
+    return defined $command_id ? $command_id : q{};
 }
 
 sub _quietly {

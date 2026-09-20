@@ -74,6 +74,10 @@ Host packages (before Carton):
 - Debian/Ubuntu: `perl`, `build-essential`, `cpanminus`, `libpq-dev`,
   `postgresql-client`
 - FreeBSD: `perl5`, `p5-App-cpanminus`, `postgresql16-client`
+- macOS (MacPorts): system/MacPorts `perl5.38+`, `cpanminus`, and a matching
+  PostgreSQL port such as `postgresql16-server` / `postgresql16`; keep
+  `/opt/local/lib/postgresql16/bin` and `/opt/local/bin` on `PATH` so
+  `pg_config`, `psql`, `pg_dump`, and `pg_restore` resolve from MacPorts
 - Then: `cpanm -M https://cpan.metacpan.org/ Carton` for that system Perl
 
 GPForum recognizes runtime modules from `cpanfile`, PostgreSQL modules from

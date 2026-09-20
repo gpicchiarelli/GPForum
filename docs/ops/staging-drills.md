@@ -31,6 +31,17 @@ export GPFORUM_DATABASE_USER='gpforum_migrator'
 export GPFORUM_DATABASE_PASSWORD='…'
 ```
 
+On macOS with MacPorts PostgreSQL, install a server port such as
+`postgresql16-server` (and matching client tools), then put MacPorts binaries
+ahead of other installs on `PATH`:
+
+```sh
+# example: PostgreSQL 16 from MacPorts
+sudo port install postgresql16-server postgresql16
+export PATH="/opt/local/lib/postgresql16/bin:/opt/local/bin:$PATH"
+# data directory is typically under /opt/local/var/db/postgresql16
+```
+
 The DSN database name is only the admin/maintenance connection target. The drill
 creates throwaways such as `gpforum_drill_<pid>_<time>_fresh` and does not
 modify the named database’s schema.

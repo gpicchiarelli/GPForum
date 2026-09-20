@@ -5,6 +5,7 @@ use warnings;
 
 use English qw(-no_match_vars);
 use Mojo::Base -base;
+use Scalar::Util qw(blessed);
 
 use GPForum::Service::Identity::Support;
 
@@ -588,9 +589,61 @@ sub _token_command_guard {
         sub { return $job->{run}->(); },
         sub {
             my ($result) = @_;
-            return $result;
+            return _command_log_response($result);
         },
     );
+}
+
+sub _command_log_response {
+    my ($result) = @_;
+
+    my $public = _public_write_result($result);
+    if ( ref $public ne 'HASH' ) {
+        return {};
+    }
+
+    my %response = %{$public};
+    if ( ref $response{stored} eq 'HASH' ) {
+        $response{stored} = _command_log_stored( $response{stored} );
+    }
+
+    return \%response;
+}
+
+sub _command_log_stored {
+    my ($stored) = @_;
+
+    my %copy = %{$stored};
+    if ( exists $copy{user} ) {
+        my $user = delete $copy{user};
+        if ( !exists $copy{user_id} && defined $user ) {
+            $copy{user_id} =
+              GPForum::Service::Identity::Support->new->column( $user, 'id' );
+        }
+    }
+
+    return _jsonable_value( \%copy );
+}
+
+sub _jsonable_value {
+    my ($value) = @_;
+
+    if ( !defined $value || !ref $value ) {
+        return $value;
+    }
+    if ( ref $value eq 'HASH' ) {
+        return { map { $_ => _jsonable_value( $value->{$_} ) } keys %{$value} };
+    }
+    if ( ref $value eq 'ARRAY' ) {
+        return [ map { _jsonable_value($_) } @{$value} ];
+    }
+    if ( blessed($value) ) {
+        my $omitted;
+        return $omitted;
+    }
+
+    my $unsupported;
+    return $unsupported;
 }
 
 sub _token_guard_result {
