@@ -92,8 +92,9 @@ esegue due connessioni reali sullo stesso `command_id`.
 
 Patch applicata: `CommandIdempotency::run` cerca e inserisce `command_log`
 dentro `txn_do`. Una unique violation su `idempotency_key` ricarica la riga e
-restituisce replay o `in_progress` invece di 500. Test fake in
-`t/87-command-idempotency.t`; evidenza PG in
+restituisce replay o `in_progress` invece di 500. `UniqueConflict->attempt`
+usa un savepoint PostgreSQL così il catch non abortisce la `txn_do` esterna.
+Test fake in `t/87-command-idempotency.t`; evidenza PG in
 `t/integration/postgres-concurrency.t`.
 
 ### CM-001: bookmark non atomico
