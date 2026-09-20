@@ -9,8 +9,18 @@ All notable changes to GPForum are recorded here.
   (in-repo deploy/runbook artifacts; optional `--env-file` key presence with
   values redacted, `--systemd` `is-active`, `--base-url` health/metrics).
   Documents the evidence archive commands for mail-check, stress-load, and
-  staging drills. Optional `make staging-host-verify`; not part of default CI.
-  Does not install units or claim private-beta readiness.
+  staging drills. Wired into `docs/ops/private-beta-checklist.md`. Optional
+  `make staging-host-verify`; not part of default CI. Does not install units
+  or claim private-beta readiness.
+
+- Add operator private-beta go/no-go checklist aggregating system-perl,
+  macports-env, migrate, query-budget, staging-drill,
+  staging-drill-attachments, staging-host-verify, stress-load, and mail-check
+  in `docs/ops/private-beta-checklist.md`, plus print-only
+  `script/gpforum-private-beta-checklist` (`--commands` / `--status`; never
+  claims readiness). Point ROADMAP / readiness review / README at it.
+  Optional `make private-beta-checklist`. Does not change stress-load or
+  deploy-checklist core logic.
 
 - Strengthen `script/staging-drill-attachments` host validation: always keep
   static nginx/systemd template checks; when `systemd-analyze` / `nginx` are

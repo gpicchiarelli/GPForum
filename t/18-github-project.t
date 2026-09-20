@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 140;
+const my $EXPECTED_TESTS => 144;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -50,6 +50,7 @@ for my $required_file (
     docs/ops/staging-host.md
     docs/ops/stress-load.md
     docs/ops/mail-check.md
+    docs/ops/private-beta-checklist.md
     docs/PRODUCTION_READINESS.md
     deploy/systemd/gpforum.service
     deploy/systemd/gpforum-outbox.service
@@ -96,6 +97,7 @@ for my $required_file (
     script/staging-drill-attachments
     script/staging-host-verify
     script/stress-load
+    script/gpforum-private-beta-checklist
     )
   )
 {
@@ -374,6 +376,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('docs/ops/staging-host.md')->slurp,
         qr/script\/staging-host-verify/msx,
         'staging host docs cover verify entrypoint'
+    );
+    like(
+        path('docs/ops/private-beta-checklist.md')->slurp,
+        qr/gpforum-private-beta-checklist|PRIVATE BETA/msx,
+        'private-beta checklist aggregates operator prep tools'
+    );
+    like(
+        path('script/gpforum-private-beta-checklist')->slurp,
+        qr/not-claimed|NOT CLAIMED/msx,
+        'private-beta checklist script does not claim readiness'
     );
 
 1;

@@ -39,6 +39,7 @@ below go deeper, grouped by what you are trying to do.
 | [ops/staging-drills.md](ops/staging-drills.md) | Throwaway migrate / dump / attachments / deploy checklist |
 | [ops/staging-host.md](ops/staging-host.md) | Live staging Hypnotoad+TLS bring-up and verify |
 | [ops/stress-load.md](ops/stress-load.md) | Concurrent HTTP stress profiles against a base URL |
+| [ops/private-beta-checklist.md](ops/private-beta-checklist.md) | Operator private-beta go/no-go aggregate (print-only) |
 | [release/readiness-review.md](release/readiness-review.md) | Latest go / no-go review |
 
 ## Performance

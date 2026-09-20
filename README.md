@@ -255,7 +255,7 @@ residual work is evidence and ops, not missing MVP code.
 | Target | Status | What stands in the way |
 | --- | --- | --- |
 | Local, personal use | Ready | — |
-| Private beta | Not yet | Live staging evidence for attachment restore + nginx/systemd deploy, SMTP — PG evidence, DB/attachment drills, stress-load harness, and staging-host verify/runbook are shipped |
+| Private beta | Not yet | Live staging evidence for attachment restore + nginx/systemd deploy, SMTP — walk [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md); harnesses incl. staging-host verify shipped |
 | Public production | Not yet | Record staging stress 100/500/1000 via `script/stress-load`; live attachment restore + deploy evidence via staging drills (harnesses shipped) |
 
 **Known MVP limits.** Domain realtime fanout uses PostgreSQL `LISTEN`/`NOTIFY`
@@ -266,9 +266,12 @@ thread-row `FOR UPDATE` lock plus the uniqueness constraint on
 `(thread_id, position)`.
 
 [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) is the release
-contract, [ROADMAP.md](ROADMAP.md) tracks what comes next, and the latest
+contract, [ROADMAP.md](ROADMAP.md) tracks what comes next, the latest
 go / no-go assessment is in
-[docs/release/readiness-review.md](docs/release/readiness-review.md).
+[docs/release/readiness-review.md](docs/release/readiness-review.md), and the
+operator private-beta walk is
+[docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md)
+(`script/gpforum-private-beta-checklist`).
 
 ## Repository layout
 

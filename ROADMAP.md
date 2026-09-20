@@ -77,6 +77,11 @@ places it at:
 - Operator stress-load harness: `script/stress-load` /
   `docs/ops/stress-load.md` with profiles `smoke` / `100` / `500` / `1000`
   (live Hypnotoad+PG VM appendix recorded; staging target numbers still open).
+- Operator private-beta go/no-go checklist aggregating system-perl,
+  macports-env, migrate, query-budget, staging-drill,
+  staging-drill-attachments, stress-load, and mail-check:
+  `docs/ops/private-beta-checklist.md` plus print-only
+  `script/gpforum-private-beta-checklist` (does not claim readiness).
 
 ## Next
 
@@ -90,7 +95,9 @@ places it at:
   (populated `var/attachments` + static/host nginx/systemd checks and verify
   harness are shipped; live target install/reload evidence and private-beta
   claim remain open).
-- Close remaining private-beta blockers listed in
+- Walk
+  [docs/ops/private-beta-checklist.md](docs/ops/private-beta-checklist.md)
+  on staging and close remaining blockers in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
   (staging deploy evidence, attachment restore drill, SMTP/mail staging,
   operator runbooks). Do not treat private beta as ready until that evidence
