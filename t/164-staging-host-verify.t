@@ -17,12 +17,13 @@ use GPForum::Service::Operations::StagingHostVerify;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 17;
+const my $EXPECTED_TESTS => 19;
 
 plan tests => $EXPECTED_TESTS;
 
 _test_prerequisites_only();
 _test_env_file_keys();
+_test_metrics_header();
 _test_command_help();
 _test_command_unknown();
 _test_command_json();
@@ -71,6 +72,22 @@ ENV
         { env_file => $bad } );
     is( $fail->{env_file}{status}, 'fail', 'incomplete env file fails phase' );
     is( $fail->{status},           'fail', 'incomplete env fails overall' );
+
+    return;
+}
+
+sub _test_metrics_header {
+    my $src = path('lib/GPForum/Service/Operations/StagingHostVerify.pm')->slurp;
+    like(
+        $src,
+        qr/X-GPForum-Metrics-Token/msx,
+        'metrics probe uses X-GPForum-Metrics-Token'
+    );
+    unlike(
+        $src,
+        qr/X-Metrics-Token(?![A-Za-z-])/msx,
+        'metrics probe does not use the wrong X-Metrics-Token header'
+    );
 
     return;
 }

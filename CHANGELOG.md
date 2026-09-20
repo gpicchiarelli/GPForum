@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Lock `StagingHostVerify` metrics probe header to `X-GPForum-Metrics-Token` in `t/164-staging-host-verify.t`.
+
 - Archive Cloud Agent VM live Hypnotoad verify evidence under
   `docs/ops/evidence/2026-09-20-cloud-agent-live/` (`carton_ok`, migrate +
   query-budget, `staging-host-verify --env-file --base-url` pass including
