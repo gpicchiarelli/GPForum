@@ -255,7 +255,7 @@ residual work is evidence and ops, not missing MVP code.
 | Target | Status | What stands in the way |
 | --- | --- | --- |
 | Local, personal use | Ready | — |
-| Private beta | Not yet | Live staging evidence for attachment restore + nginx/systemd deploy, SMTP, operator runbooks — PG evidence, DB/attachment drills, and stress-load harness are shipped |
+| Private beta | Not yet | Live staging evidence for attachment restore + nginx/systemd deploy, SMTP — PG evidence, DB/attachment drills, stress-load harness, and staging-host verify/runbook are shipped |
 | Public production | Not yet | Record staging stress 100/500/1000 via `script/stress-load`; live attachment restore + deploy evidence via staging drills (harnesses shipped) |
 
 **Known MVP limits.** Domain realtime fanout uses PostgreSQL `LISTEN`/`NOTIFY`

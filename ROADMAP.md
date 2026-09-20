@@ -70,6 +70,10 @@ places it at:
   backup/restore; static nginx/systemd checks plus host `systemd-analyze
   verify` / `nginx -t` when tools are on `PATH`). Live target install/
   reload evidence remains open.
+- Staging host bring-up runbook + non-destructive verify:
+  `docs/ops/staging-host.md` / `script/staging-host-verify` (repo artifacts;
+  optional env-file key presence, systemd `is-active`, HTTP health/metrics).
+  Does not install units; live staging evidence archive remains open.
 - Operator stress-load harness: `script/stress-load` /
   `docs/ops/stress-load.md` with profiles `smoke` / `100` / `500` / `1000`
   (live Hypnotoad+PG VM appendix recorded; staging target numbers still open).
@@ -81,9 +85,11 @@ places it at:
   VM evidence (smoke/100/500 pass; 1000 peak with p95 residual) is archived
   in the ops appendix — staging/TLS target numbers remain open.
 - Attachment restore + full staging deploy drills via
-  `script/staging-drill-attachments` / `docs/ops/staging-drills.md` (populated
-  `var/attachments` + static/host nginx/systemd checks are shipped; live
-  target install/reload evidence and private-beta claim remain open).
+  `script/staging-drill-attachments` / `docs/ops/staging-drills.md` and live
+  bring-up via `docs/ops/staging-host.md` / `script/staging-host-verify`
+  (populated `var/attachments` + static/host nginx/systemd checks and verify
+  harness are shipped; live target install/reload evidence and private-beta
+  claim remain open).
 - Close remaining private-beta blockers listed in
   [docs/release/readiness-review.md](docs/release/readiness-review.md)
   (staging deploy evidence, attachment restore drill, SMTP/mail staging,

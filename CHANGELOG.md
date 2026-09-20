@@ -4,6 +4,14 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add operator `script/staging-host-verify` / `bin/gpforum-staging-host-verify`
+  and `docs/ops/staging-host.md`: non-destructive staging bring-up verify
+  (in-repo deploy/runbook artifacts; optional `--env-file` key presence with
+  values redacted, `--systemd` `is-active`, `--base-url` health/metrics).
+  Documents the evidence archive commands for mail-check, stress-load, and
+  staging drills. Optional `make staging-host-verify`; not part of default CI.
+  Does not install units or claim private-beta readiness.
+
 - Strengthen `script/staging-drill-attachments` host validation: always keep
   static nginx/systemd template checks; when `systemd-analyze` / `nginx` are
   on `PATH`, run `systemd-analyze verify` and `nginx -t` against rendered

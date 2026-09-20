@@ -12,7 +12,7 @@ privata e produzione pubblica.
 | Target | Verdetto | Motivazione tecnica |
 | --- | --- | --- |
 | LOCAL READY | sì | Suite completa, coverage, migrazioni fresh/upgrade, backup/restore locale, query budget, benchmark smoke/stress locali e security/failure suite sono verdi. |
-| PRIVATE BETA READY | no | Mail/moderation/idempotenza e evidenza PG a due connessioni (concurrency, idempotency, outbox reclaim) sono in codice; staging-drill DB + attachment/deploy checklist + stress-load harness sono shippati. Restano evidenza live su staging (SMTP, stress 100+, deploy target). Può reggere solo una alpha privata operator-assisted. |
+| PRIVATE BETA READY | no | Mail/moderation/idempotenza e evidenza PG a due connessioni (concurrency, idempotency, outbox reclaim) sono in codice; staging-drill DB + attachment/deploy checklist + stress-load harness + staging-host verify/runbook sono shippati. Restano evidenza live su staging (SMTP, stress 100+, deploy target). Può reggere solo una alpha privata operator-assisted. |
 | PUBLIC PRODUCTION READY | no | Mancano staging rappresentativo end-to-end, numeri stress 100/500/1000 su target, attachment restore drill live e runbook di rollback provato sul target (harness/drill in tree). |
 
 Raccomandazione finale: GPForum è pronto per uso locale personale e per
@@ -99,7 +99,7 @@ ora a 36 migrazioni (`001`–`036`).
 
 | Blocco | Impatto | Azione richiesta |
 | --- | --- | --- |
-| Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Drill DB throwaway shippato; manca nginx/systemd end-to-end sul target | Eseguire deploy staging da commit CI verde, env file, migrate, query-budget sync, worker e health checks |
+| Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Drill DB throwaway + `script/staging-host-verify` / `docs/ops/staging-host.md` shippati; manca nginx/systemd end-to-end sul target | Eseguire bring-up da `docs/ops/staging-host.md`, poi `script/staging-host-verify --env-file … --systemd --base-url …` e archiviare JSON |
 | Stress test rappresentativo non eseguito | Live Hypnotoad+PG evidence on Cloud Agent VM archived in `docs/ops/stress-load.md` (smoke/100/500 pass; 1000 peak ok, p95 residual); manca staging target | Re-run load test on staging with p50/p95/p99, error rate, worker distribution, DB latency |
 | Backup/restore non provato su staging con attachment storage | DB dump/restore + `script/staging-drill-attachments` shippati; manca evidenza live target | Drill restore completo DB + allegati + readiness su staging |
 | Mail delivery su staging non drillata | Adapter + `script/gpforum-mail-check` in codice; staging evidence non ancora archiviata | Eseguire `script/gpforum-mail-check --dry-run` / `--send` su staging |
