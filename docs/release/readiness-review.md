@@ -38,7 +38,7 @@ per produzione pubblica.
 | Perltidy | GO | `script/perltidy-check`: PASS | Nessuno | Mantenere gate |
 | Coverage | GO | `script/coverage`: PASS (gate) | Alcuni moduli operativi hanno coverage basso, ma gate passa | Aumentare coverage su realtime/controller solo se toccati |
 | Benchmark smoke | GO | Fixture e configured benchmark verdi | Numeri locali, non staging | Ripetere con dataset rappresentativo |
-| Benchmark stress | PARTIAL | Hypnotoad scaling hot-thread 2/4 worker PASS; outbox 1k/10k messaggi PASS | Non prova 100/500/1000 utenti né multicore reale | Stress esterno con 100/500/1000 utenti su staging |
+| Benchmark stress | PARTIAL | Harness: `script/stress-load` profiles 100/500/1000; Hypnotoad scaling hot-thread 2/4 worker PASS; outbox 1k/10k PASS | Staging 100/500/1000 evidence not yet recorded | Run `script/stress-load --profile 100|500|1000` on staging and archive JSON |
 | Query budget | GO | `script/query-budget --sync`, `--check`: PASS; route thread max 3 query, budget ok | Catalog deve essere sincronizzato in deploy | Eseguire sync/check dopo ogni migration deploy |
 | Query plan | GO | `script/query-plan-check`: `offset_violations=0`; `query-plan-evidence` PASS su small | Dataset locale piccolo | Medium/hot-thread staging evidence |
 | Security audit | PARTIAL GO | Security suite mirata PASS | Bot/device anomaly non avanzati | Estendere security tests prima beta |

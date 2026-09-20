@@ -317,6 +317,22 @@ This keeps the evidence gate small enough for CI while proving that migrations,
 seed data, DB plans, configured HTTP paths, and a minimal Hypnotoad prefork
 runtime work together.
 
+## Concurrent stress / load (operator)
+
+For external concurrency targets of **100 / 500 / 1000** in-flight request
+slots against a **running** Hypnotoad or reverse-proxy front end, use:
+
+```sh
+script/stress-load --dry-run --profile 100 --human
+script/stress-load --profile smoke --base-url http://127.0.0.1:8080 --human
+script/stress-load --profile 1000 --base-url https://forum.example --check --json
+```
+
+See [docs/ops/stress-load.md](ops/stress-load.md). This is intentionally **not**
+part of `make check` / default CI; optional `make stress-load` /
+`make stress-load-dry`. It complements `script/bench-hypnotoad-scaling` rather
+than replacing sequential Hypnotoad route benches.
+
 ## Hypnotoad Worker Scaling
 
 `script/bench-hypnotoad-scaling` is the local evidence gate for worker-count
