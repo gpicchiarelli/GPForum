@@ -1,4 +1,4 @@
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres macports-env mail-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test tidy
+.PHONY: architecture bootstrap check critic evidence-live install-deps install-deps-postgres macports-env mail-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -72,3 +72,8 @@ staging-host-verify:
 # readiness. See docs/ops/private-beta-checklist.md.
 private-beta-checklist:
 	script/gpforum-private-beta-checklist --commands
+
+# Print-only live staging-host-verify + stress-load + mail evidence commands.
+# Does not start Hypnotoad or claim readiness. See docs/ops/staging-host.md.
+evidence-live:
+	script/gpforum-evidence-live --commands

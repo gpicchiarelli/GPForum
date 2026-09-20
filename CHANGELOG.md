@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add print-only `script/gpforum-evidence-live` / `make evidence-live` to
+  orchestrate live `staging-host-verify` + `stress-load` + mail-check archive
+  commands (env-file / base-url). Does not start Hypnotoad or claim private-beta
+  readiness. Wired into private-beta checklist and `docs/ops/staging-host.md`.
+
 - Refresh ROADMAP/README private-beta status rows to point at the Cloud Agent drills archive while keeping staging TLS / SMTP / target install open.
 
 - Sync inventory/readiness/ROADMAP after Cloud Agent drills archive

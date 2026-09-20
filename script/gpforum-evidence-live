@@ -1,0 +1,136 @@
+#!/bin/sh
+set -eu
+
+# Print (or optionally run) live staging-host-verify + stress-load evidence
+# commands. Never claims private-beta readiness. Secrets must stay out of git.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-evidence-live [--commands|--status|--help]
+
+  --commands  print live verify + stress evidence commands (default)
+  --status    print whether entrypoints exist
+  --help      show this help
+
+Does not start Hypnotoad, write env files, or claim private beta is ready.
+Requires an already-running app URL and (for verify) an env-file path.
+See docs/ops/staging-host.md and docs/ops/stress-load.md.
+
+Environment used by the printed commands (operator-supplied):
+  STAGING_BASE_URL   e.g. http://127.0.0.1:8080 or https://staging.example
+  GPFORUM_EVIDENCE_ENV_FILE  path to env file (never commit)
+  GPFORUM_METRICS_TOKEN      optional metrics probe token
+  GPFORUM_EVIDENCE_DIR       output directory (default /tmp/gpforum-evidence-live)
+EOF
+}
+
+mode=commands
+for argument in "$@"; do
+    case "$argument" in
+        --commands)
+            mode=commands
+            ;;
+        --status)
+            mode=status
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-evidence-live: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+print_banner() {
+    printf '%s\n' \
+        'gpforum-evidence-live: print-only live evidence helpers' \
+        'PRIVATE BETA: NOT CLAIMED (archive JSON separately; TLS/SMTP send still open)' \
+        'Docs: docs/ops/staging-host.md docs/ops/stress-load.md' \
+        ''
+}
+
+print_commands() {
+    print_banner
+    cat <<'EOF'
+# Prerequisites (operator): Carton local/ OK, app listening, env file ready
+# script/bootstrap-deps --postgres --rebuild-local
+# script/gpforum-carton exec perl -MConst::Fast -e 1
+
+export STAGING_BASE_URL="${STAGING_BASE_URL:-http://127.0.0.1:8080}"
+export GPFORUM_EVIDENCE_ENV_FILE="${GPFORUM_EVIDENCE_ENV_FILE:-/tmp/gpforum-evidence.env}"
+export GPFORUM_EVIDENCE_DIR="${GPFORUM_EVIDENCE_DIR:-/tmp/gpforum-evidence-live}"
+mkdir -p "$GPFORUM_EVIDENCE_DIR"
+
+# 1) Live staging-host-verify (values in env file are never printed by the tool)
+script/staging-host-verify --json \
+  --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
+  --base-url "$STAGING_BASE_URL" \
+  ${GPFORUM_METRICS_TOKEN:+--metrics-token "$GPFORUM_METRICS_TOKEN"} \
+  > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-live.json"
+
+# Optional on systemd hosts:
+# script/staging-host-verify --json --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
+#   --systemd --base-url "$STAGING_BASE_URL" \
+#   > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-live-systemd.json"
+
+# 2) Stress profiles (raise GPFORUM_FORUM_READ_RATE_LIMIT for single-IP capacity windows)
+script/stress-load --json --profile smoke --base-url "$STAGING_BASE_URL" \
+  > "$GPFORUM_EVIDENCE_DIR/stress-smoke.json"
+script/stress-load --json --profile 100 --base-url "$STAGING_BASE_URL" \
+  > "$GPFORUM_EVIDENCE_DIR/stress-100.json"
+# script/stress-load --json --profile 500 --base-url "$STAGING_BASE_URL" \
+#   > "$GPFORUM_EVIDENCE_DIR/stress-500.json"
+
+# 3) Mail (dry-run always; --send only on a mailbox you control)
+script/gpforum-mail-check --json --dry-run \
+  > "$GPFORUM_EVIDENCE_DIR/mail-check-dry.json"
+# script/gpforum-mail-check --json --send --to you@example.test \
+#   > "$GPFORUM_EVIDENCE_DIR/mail-check-send.json"
+
+# Copy JSON into docs/ops/evidence/<date>-*/ only after redacting secrets.
+# PRIVATE BETA remains NOT YET until staging TLS + SMTP send + target install exist.
+EOF
+}
+
+status_line() {
+    path=$1
+    label=$2
+    if [ -x "$path" ]; then
+        printf 'ok\t%s\t%s\n' "$label" "$path"
+    elif [ -e "$path" ]; then
+        printf 'present\t%s\t%s\n' "$label" "$path"
+    else
+        printf 'missing\t%s\t%s\n' "$label" "$path"
+    fi
+}
+
+print_status() {
+    print_banner
+    printf 'entrypoint\tlabel\tpath\n'
+    status_line script/staging-host-verify staging-host-verify
+    status_line script/stress-load stress-load
+    status_line script/gpforum-mail-check mail-check
+    status_line script/bootstrap-deps bootstrap-deps
+    status_line docs/ops/staging-host.md staging-host-doc
+    status_line docs/ops/stress-load.md stress-load-doc
+    printf '\n%s\n' \
+        'status=print-only residual_gaps=staging-tls-smtp-send-target-install private_beta=not-claimed'
+}
+
+case "$mode" in
+    commands)
+        print_commands
+        ;;
+    status)
+        print_status
+        ;;
+esac
+
+exit 0
