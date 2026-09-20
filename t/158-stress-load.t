@@ -16,7 +16,7 @@ use GPForum::Service::Operations::StressLoad;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 16;
+const my $EXPECTED_TESTS => 17;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -107,6 +107,20 @@ throws_ok(
     },
     qr/base-url/msx,
     'live run without base-url croaks'
+);
+
+is(
+    GPForum::Service::Operations::StressLoad::_check_status(
+        { p95_ms => 10 },
+        0,
+        {
+            max_error_rate_pct => 1,
+            p95_limit_ms       => 2_000,
+        },
+        { check => 0 },
+    ),
+    'ok',
+    'without --check live status is ok not pass'
 );
 
 1;

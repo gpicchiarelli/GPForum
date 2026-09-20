@@ -71,13 +71,14 @@ places it at:
   evidence remains open.
 - Operator stress-load harness: `script/stress-load` /
   `docs/ops/stress-load.md` with profiles `smoke` / `100` / `500` / `1000`
-  (staging numbers still open).
+  (live Hypnotoad+PG VM appendix recorded; staging target numbers still open).
 
 ## Next
 
-- Stress tests at 100, 500, and 1000 users on representative hardware via
-  `script/stress-load` (`docs/ops/stress-load.md`); record staging evidence
-  (harness is on `main`; numbers on target still open).
+- Stress tests at 100, 500, and 1000 users on representative **staging**
+  hardware via `script/stress-load` (`docs/ops/stress-load.md`); Cloud Agent
+  VM evidence (smoke/100/500 pass; 1000 peak with p95 residual) is archived
+  in the ops appendix — staging/TLS target numbers remain open.
 - Attachment restore + full staging deploy drills via
   `script/staging-drill-attachments` / `docs/ops/staging-drills.md` (throwaway
   filesystem + static nginx/systemd checks are shipped; live target evidence

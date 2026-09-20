@@ -10,6 +10,13 @@ All notable changes to GPForum are recorded here.
   Accept MacPorts `/opt/local` perl as system Perl in
   `script/gpforum-system-perl` (still refuse perlbrew / plenv / asdf).
 
+- Record live `script/stress-load` evidence against Hypnotoad + seeded
+  PostgreSQL (smoke / 100 / 500 pass; 1000 peak sustained with p95 residual) in
+  `docs/ops/stress-load.md` and `docs/PERFORMANCE_EVIDENCE.md`. Prefer response
+  codes over Mojo transport-error buckets for HTTP 4xx/5xx; report `ok` without
+  `--check`. Optional `GPFORUM_FORUM_READ_RATE_LIMIT` for single-IP capacity
+  runs above the default 60/60s forum retrieval ceiling.
+
 - Add operator-runnable `script/stress-load` / `bin/gpforum-stress-load` with
   profiles `smoke` / `100` / `500` / `1000` concurrent request slots against a
   running Hypnotoad/GPForum `--base-url`, JSON/human evidence, and
