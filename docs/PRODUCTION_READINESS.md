@@ -355,10 +355,11 @@ Before production:
   production storage root.
 - Restore into a staging database at least once before launch.
 - Run migrations and readiness after restore.
-- Prefer the automated throwaway drill in `docs/ops/staging-drills.md`
-  (`script/staging-drill`) for repeatable migrate + dump/restore evidence.
-  That drill does not restore attachment files and does not replace a full
-  nginx/systemd staging deploy.
+- Prefer the automated throwaway drills in `docs/ops/staging-drills.md`
+  (`script/staging-drill` for migrate + dump/restore;
+  `script/staging-drill-attachments` for filesystem blob restore and static
+  nginx/systemd template checks). Those drills do not replace a live
+  Hypnotoad/TLS staging host bring-up.
 
 Example logical backup:
 

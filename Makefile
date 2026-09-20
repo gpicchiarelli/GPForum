@@ -1,4 +1,4 @@
-.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight staging-drill syntax system-perl test tidy
+.PHONY: architecture bootstrap check critic install-deps install-deps-postgres preflight staging-drill staging-drill-attachments syntax system-perl test tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -38,3 +38,8 @@ preflight:
 # Not part of `make check` or default CI.
 staging-drill:
 	script/staging-drill --json
+
+# Optional attachment filesystem + static deploy checklist; no PostgreSQL.
+# Not part of `make check` or default CI.
+staging-drill-attachments:
+	script/staging-drill-attachments --json
