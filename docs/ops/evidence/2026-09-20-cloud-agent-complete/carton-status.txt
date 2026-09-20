@@ -1,0 +1,12 @@
+captured_at_utc: 2026-09-20T20:23:29Z
+bootstrap_started_log_mtime: 2026-09-20 20:23:27.540996530 +0000
+carton_ok: no
+Can't locate Const/Fast.pm in @INC (you may need to install the Const::Fast module) (@INC entries checked: /workspace/local/lib/perl5/5.38.2/x86_64-linux-gnu-thread-multi /workspace/local/lib/perl5/5.38.2 /workspace/local/lib/perl5/x86_64-linux-gnu-thread-multi /workspace/local/lib/perl5 /etc/perl /usr/local/lib/x86_64-linux-gnu/perl/5.38.2 /usr/local/share/perl/5.38.2 /usr/lib/x86_64-linux-gnu/perl5/5.38 /usr/share/perl5 /usr/lib/x86_64-linux-gnu/perl-base /usr/lib/x86_64-linux-gnu/perl/5.38 /usr/share/perl/5.38 /usr/local/lib/site_perl).
+BEGIN failed--compilation aborted.
+---
+6066 /exec-daemon/tmux-root/bin/tmux -f /exec-daemon/tmux.portal.conf new-session -d -s bootstrap-deps -c /workspace -- /bin/bash -l
+6327 /bin/sh script/bootstrap-deps --postgres --rebuild-local
+6328 tee /tmp/bootstrap-deps.log
+6349 /usr/bin/carton
+--- local/ present: yes
+--- log lines: 152
