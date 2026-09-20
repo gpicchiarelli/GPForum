@@ -14,23 +14,23 @@ use Time::HiRes qw(time);
 
 our $VERSION = '0.001';
 
-const my $EXIT_FAILURE     => 1;
-const my $MILLISECONDS     => 1_000;
-const my $PERCENT          => 100;
-const my $P50              => 50;
-const my $P95              => 95;
-const my $P99              => 99;
-const my $MIN_ELAPSED      => 0.000_001;
-const my $HTTP_OK_MIN      => 200;
-const my $HTTP_OK_MAX      => 399;
-const my $DEFAULT_TIMEOUT  => 30;
+const my $EXIT_FAILURE           => 1;
+const my $MILLISECONDS           => 1_000;
+const my $PERCENT                => 100;
+const my $P50                    => 50;
+const my $P95                    => 95;
+const my $P99                    => 99;
+const my $MIN_ELAPSED            => 0.000_001;
+const my $HTTP_OK_MIN            => 200;
+const my $HTTP_OK_MAX            => 399;
+const my $DEFAULT_TIMEOUT        => 30;
 const my $DEFAULT_MAX_ERROR_RATE => 1;
 const my $DEFAULT_P95_LIMIT_MS   => 2_000;
 const my %PROFILES => (
     smoke => {
-        concurrency          => 4,
-        requests_per_client  => 5,
-        description          => 'local smoke; not a capacity claim',
+        concurrency         => 4,
+        requests_per_client => 5,
+        description         => 'local smoke; not a capacity claim',
     },
     100 => {
         concurrency         => 100,
@@ -74,10 +74,10 @@ sub run {
     my $evidence = eval { return $self->_execute( $plan, $options ) };
     if ( !$evidence ) {
         return {
-            status      => 'fail',
-            mode        => 'stress-load',
-            error       => _trim_error($EVAL_ERROR),
-            plan        => $plan,
+            status        => 'fail',
+            mode          => 'stress-load',
+            error         => _trim_error($EVAL_ERROR),
+            plan          => $plan,
             prerequisites => _prerequisites($options),
         };
     }
@@ -93,8 +93,8 @@ sub plan {
       or croak "Unsupported stress profile: $profile_name";
 
     my $concurrency = $options->{concurrency} // $profile->{concurrency};
-    my $requests_per_client =
-      $options->{requests_per_client} // $profile->{requests_per_client};
+    my $requests_per_client = $options->{requests_per_client}
+      // $profile->{requests_per_client};
     my $routes =
       @{ $options->{routes} // [] }
       ? [ @{ $options->{routes} } ]
@@ -108,12 +108,10 @@ sub plan {
         total_requests      => $concurrency * $requests_per_client,
         routes              => $routes,
         base_url            => $options->{base_url},
-        request_timeout_s   => $options->{request_timeout}
-          // $DEFAULT_TIMEOUT,
+        request_timeout_s   => $options->{request_timeout} // $DEFAULT_TIMEOUT,
         max_error_rate_pct  => $options->{max_error_rate}
           // $DEFAULT_MAX_ERROR_RATE,
-        p95_limit_ms        => $options->{p95_limit_ms}
-          // $DEFAULT_P95_LIMIT_MS,
+        p95_limit_ms => $options->{p95_limit_ms} // $DEFAULT_P95_LIMIT_MS,
     };
 }
 
@@ -150,14 +148,14 @@ sub _execute {
 
     my @latencies;
     my %statuses;
-    my $errors       = 0;
-    my $completed    = 0;
-    my $inflight     = 0;
-    my $next_index   = 0;
-    my $total        = $plan->{total_requests};
-    my $routes       = $plan->{routes};
-    my $route_count  = scalar @{$routes};
-    my $started_at   = time;
+    my $errors        = 0;
+    my $completed     = 0;
+    my $inflight      = 0;
+    my $next_index    = 0;
+    my $total         = $plan->{total_requests};
+    my $routes        = $plan->{routes};
+    my $route_count   = scalar @{$routes};
+    my $started_at    = time;
     my $peak_inflight = 0;
 
     my $pump;
@@ -205,29 +203,28 @@ sub _execute {
     $pump->();
     Mojo::IOLoop->start if $inflight > 0;
 
-    my $elapsed = time - $started_at;
-    my $summary = _latency_summary( \@latencies, \%statuses, $elapsed );
-    my $error_rate =
-      $total > 0 ? ( $errors * $PERCENT ) / $total : 0;
-    my $status = _check_status( $summary, $error_rate, $plan, $options );
+    my $elapsed    = time - $started_at;
+    my $summary    = _latency_summary( \@latencies, \%statuses, $elapsed );
+    my $error_rate = $total > 0 ? ( $errors * $PERCENT ) / $total : 0;
+    my $status     = _check_status( $summary, $error_rate, $plan, $options );
 
     return {
-        status          => $status,
-        mode            => 'stress-load',
-        plan            => $plan,
-        prerequisites   => _prerequisites($options),
-        wall_seconds    => _rounded($elapsed),
-        completed       => $completed,
-        errors          => $errors,
-        error_rate_pct  => _rounded($error_rate),
-        peak_inflight   => $peak_inflight,
-        req_per_sec     => $summary->{req_per_sec},
-        p50_ms          => $summary->{p50_ms},
-        p95_ms          => $summary->{p95_ms},
-        p99_ms          => $summary->{p99_ms},
-        max_ms          => $summary->{max_ms},
-        status_codes    => \%statuses,
-        residual_gaps   => [
+        status         => $status,
+        mode           => 'stress-load',
+        plan           => $plan,
+        prerequisites  => _prerequisites($options),
+        wall_seconds   => _rounded($elapsed),
+        completed      => $completed,
+        errors         => $errors,
+        error_rate_pct => _rounded($error_rate),
+        peak_inflight  => $peak_inflight,
+        req_per_sec    => $summary->{req_per_sec},
+        p50_ms         => $summary->{p50_ms},
+        p95_ms         => $summary->{p95_ms},
+        p99_ms         => $summary->{p99_ms},
+        max_ms         => $summary->{max_ms},
+        status_codes   => \%statuses,
+        residual_gaps  => [
 'Harness proves request concurrency against a running instance; it does not alone prove private-beta readiness or staging multicore capacity.'
         ],
     };
@@ -254,7 +251,7 @@ sub _prerequisites {
         base_url_required => 1,
         base_url          => $options->{base_url},
         database_dsn      => $ENV{GPFORUM_DATABASE_DSN} ? 'set' : 'unset',
-        seeded_db_hint =>
+        seeded_db_hint    =>
 'Seed with script/seed-performance-data (or --seed on bench-hypnotoad) so forum routes return 200.',
         running_app_hint =>
 'Point --base-url at a running Hypnotoad (or reverse-proxy fronting it). This harness does not start the server.',
@@ -282,11 +279,11 @@ sub _latency_summary {
     my $rps    = $count / ( $elapsed > 0 ? $elapsed : $MIN_ELAPSED );
 
     return {
-        req_per_sec => _rounded($rps),
-        p50_ms      => _rounded( _percentile( \@sorted, $P50 ) ),
-        p95_ms      => _rounded( _percentile( \@sorted, $P95 ) ),
-        p99_ms      => _rounded( _percentile( \@sorted, $P99 ) ),
-        max_ms      => _rounded( $sorted[-1] || 0 ),
+        req_per_sec  => _rounded($rps),
+        p50_ms       => _rounded( _percentile( \@sorted, $P50 ) ),
+        p95_ms       => _rounded( _percentile( \@sorted, $P95 ) ),
+        p99_ms       => _rounded( _percentile( \@sorted, $P99 ) ),
+        max_ms       => _rounded( $sorted[-1] || 0 ),
         status_codes => $statuses,
     };
 }
@@ -312,7 +309,8 @@ sub _human_evidence {
       . " total_requests=$plan->{total_requests}\n";
 
     if ( $evidence->{status} eq 'dry-run' ) {
-        $text .= 'base_url='
+        $text .=
+            'base_url='
           . ( $plan->{base_url} // 'unset' )
           . ' routes='
           . join( q{,}, @{ $plan->{routes} // [] } ) . "\n";
@@ -320,7 +318,8 @@ sub _human_evidence {
         return $text;
     }
 
-    $text .= 'wall_seconds='
+    $text .=
+        'wall_seconds='
       . ( $evidence->{wall_seconds} // 'n/a' )
       . ' completed='
       . ( $evidence->{completed} // 0 )
@@ -330,7 +329,8 @@ sub _human_evidence {
       . ( $evidence->{error_rate_pct} // 'n/a' )
       . ' peak_inflight='
       . ( $evidence->{peak_inflight} // 0 ) . "\n";
-    $text .= 'req_per_sec='
+    $text .=
+        'req_per_sec='
       . ( $evidence->{req_per_sec} // 'n/a' )
       . ' p50_ms='
       . ( $evidence->{p50_ms} // 'n/a' )

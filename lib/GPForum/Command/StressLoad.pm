@@ -21,14 +21,14 @@ const my %FLAG_OPTIONS => (
     '--check'   => 'check',
 );
 const my %VALUE_OPTIONS => (
-    '--profile'              => 'profile',
-    '--concurrency'          => 'concurrency',
-    '--requests-per-client'  => 'requests_per_client',
-    '--base-url'             => 'base_url',
-    '--route'                => 'route',
-    '--request-timeout'      => 'request_timeout',
-    '--max-error-rate'       => 'max_error_rate',
-    '--p95-limit-ms'         => 'p95_limit_ms',
+    '--profile'             => 'profile',
+    '--concurrency'         => 'concurrency',
+    '--requests-per-client' => 'requests_per_client',
+    '--base-url'            => 'base_url',
+    '--route'               => 'route',
+    '--request-timeout'     => 'request_timeout',
+    '--max-error-rate'      => 'max_error_rate',
+    '--p95-limit-ms'        => 'p95_limit_ms',
 );
 const my %ALLOWED_PROFILES => map { $_ => 1 } qw(smoke 100 500 1000);
 
@@ -65,18 +65,18 @@ sub _options {
     my (@arguments) = @_;
 
     my %options = (
-        format               => 'json',
-        profile              => 'smoke',
-        dry_run              => 0,
-        check                => 0,
-        help                 => 0,
-        base_url             => $ENV{GPFORUM_STRESS_BASE_URL},
-        concurrency          => undef,
-        requests_per_client  => undef,
-        request_timeout      => undef,
-        max_error_rate       => undef,
-        p95_limit_ms         => undef,
-        routes               => [],
+        format              => 'json',
+        profile             => 'smoke',
+        dry_run             => 0,
+        check               => 0,
+        help                => 0,
+        base_url            => $ENV{GPFORUM_STRESS_BASE_URL},
+        concurrency         => undef,
+        requests_per_client => undef,
+        request_timeout     => undef,
+        max_error_rate      => undef,
+        p95_limit_ms        => undef,
+        routes              => [],
     );
 
     while (@arguments) {

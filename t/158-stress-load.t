@@ -20,13 +20,13 @@ const my $EXPECTED_TESTS => 16;
 
 plan tests => $EXPECTED_TESTS;
 
-my $service = GPForum::Service::Operations::StressLoad->new;
+my $service  = GPForum::Service::Operations::StressLoad->new;
 my $profiles = $service->profiles;
 
-is( $profiles->{100}{concurrency},  100,  'profile 100 concurrency' );
-is( $profiles->{500}{concurrency},  500,  'profile 500 concurrency' );
-is( $profiles->{1000}{concurrency}, 1_000, 'profile 1000 concurrency' );
-is( $profiles->{smoke}{concurrency}, 4, 'smoke profile stays tiny' );
+is( $profiles->{100}{concurrency},   100,   'profile 100 concurrency' );
+is( $profiles->{500}{concurrency},   500,   'profile 500 concurrency' );
+is( $profiles->{1000}{concurrency},  1_000, 'profile 1000 concurrency' );
+is( $profiles->{smoke}{concurrency}, 4,     'smoke profile stays tiny' );
 
 my $plan = $service->plan(
     {
@@ -37,8 +37,8 @@ my $plan = $service->plan(
         requests_per_client => undef,
     }
 );
-is( $plan->{total_requests}, 1_000, 'profile 100 total requests' );
-is( $plan->{routes}[0], '/health/live', 'custom route preserved' );
+is( $plan->{total_requests}, 1_000,          'profile 100 total requests' );
+is( $plan->{routes}[0],      '/health/live', 'custom route preserved' );
 
 my $command = GPForum::Command::StressLoad->new;
 my $usage   = q{};
@@ -49,8 +49,11 @@ my $usage   = q{};
     close $stdout or croak 'close stdout';
 }
 like( $usage, qr/gpforum-stress-load/msx, 'help names the command' );
-like( $usage, qr/100 [ ]\/ [ ]500 [ ]\/ [ ]1000/msx,
-    'help names concurrency targets' );
+like(
+    $usage,
+    qr/100 [ ]\/ [ ]500 [ ]\/ [ ]1000/msx,
+    'help names concurrency targets'
+);
 
 my $stderr = q{};
 {
@@ -59,8 +62,11 @@ my $stderr = q{};
     is( $command->run( '--profile', 'nope' ), 2, 'bad profile exits usage' );
     close $err or croak 'close stderr';
 }
-like( $stderr, qr/Unsupported [ ] stress [ ] profile/msx,
-    'bad profile message' );
+like(
+    $stderr,
+    qr/Unsupported [ ] stress [ ] profile/msx,
+    'bad profile message'
+);
 
 my $dry_json = q{};
 {
@@ -68,7 +74,8 @@ my $dry_json = q{};
     local *STDOUT = $stdout;
     is(
         $command->run(
-            '--dry-run', '--json', '--profile', '500',
+            '--dry-run',  '--json',
+            '--profile',  '500',
             '--base-url', 'http://127.0.0.1:9',
         ),
         0,
@@ -77,10 +84,10 @@ my $dry_json = q{};
     close $stdout or croak 'close stdout';
 }
 my $dry = decode_json($dry_json);
-is( $dry->{status}, 'dry-run', 'dry-run status' );
-is( $dry->{plan}{concurrency}, 500, 'dry-run concurrency from profile' );
+is( $dry->{status},            'dry-run', 'dry-run status' );
+is( $dry->{plan}{concurrency}, 500,       'dry-run concurrency from profile' );
 
-my $human = $service->format_evidence($dry, 'human');
+my $human = $service->format_evidence( $dry, 'human' );
 like(
     $human,
     qr/stress-load [ ] status=dry-run/msx,
