@@ -1,6 +1,8 @@
 .DS_Store
 /.carton/
 /local/
+/local.rebuild.*/
+/local.incomplete.*/
 /cover_db/
 /artifacts/
 nytprof.out*
