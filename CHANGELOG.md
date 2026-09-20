@@ -10,6 +10,13 @@ All notable changes to GPForum are recorded here.
   Hypnotoad / mail / stress marked skipped with `residual_gaps`). **PRIVATE
   BETA remains NOT YET** — does not claim readiness.
 
+- Archive macOS laptop prep evidence under
+  `docs/ops/evidence/2026-09-20-macos-laptop-prep/` (checklist print-only,
+  repo-only `staging-host-verify` pass, degraded attachments drill). Explicitly
+  **not** staging/private-beta evidence; residuals documented in the README.
+
+- Document optional MacPorts user-space PostgreSQL (`initdb` under `$HOME`, non-default port) in `docs/ops/staging-drills.md` for throwaway drills when `sudo port load postgresql*-server` is unavailable. Still requires OS system Perl 5.38+ and Carton deps.
+
 - Add operator `script/staging-host-verify` / `bin/gpforum-staging-host-verify`
   and `docs/ops/staging-host.md`: non-destructive staging bring-up verify
   (in-repo deploy/runbook artifacts; optional `--env-file` key presence with
