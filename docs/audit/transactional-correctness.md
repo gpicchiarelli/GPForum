@@ -29,12 +29,12 @@ Punti già chiusi:
 
 Punti ancora da chiudere prima del go-live:
 
-- evidenza PostgreSQL concorrente residua per reputation source unique
-  (`event_idempotency_keys`, command_log, bookmark, subscription, report,
-  moderation hide, privacy approval, audit chain e token consume sono
-  coperti da `t/integration/postgres-concurrency.t`);
-- failure test con database PostgreSQL reale e worker crash
-  (outbox reclaim su lock `running` scaduto).
+- failure test con database PostgreSQL reale e worker crash (reclaim outbox su
+  lock `running` scaduto). L'evidenza concorrente per `event_idempotency_keys` e
+  reputation source unique è coperta da `t/integration/postgres-idempotency.t`
+  (command_log, bookmark, subscription, report, moderation hide, privacy
+  approval, audit chain e token consume restano in
+  `t/integration/postgres-concurrency.t`).
 
 ## Rubrica severità
 
@@ -418,13 +418,14 @@ prima di `handle` non salta il retry. Un crash tra `transport->dispatch` e
 `mark_done` reinvia dalla payload outbox, perché EventLog non ha il token
 raw.
 
-Rischio residuo: evidenza PostgreSQL concorrente sullo store chiavi ancora da
-eseguire. Notification fanout resta coperto anche da
-`notification.reply:{event_id}`.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-idempotency.t`
+prova due `mark_done` concorrenti dentro `txn_do` → una sola riga chiave.
 
 Patch applicata: catalogo `HandlerIdempotency`, store insert-on-done, wrap
 transport/bootstrap, replay e crash test in
-`t/150-outbox-handler-idempotency.t`.
+`t/150-outbox-handler-idempotency.t`; evidenza PG in
+`t/integration/postgres-idempotency.t`. `UniqueConflict->attempt` sulla
+insert dello store.
 
 ### OUT-002: worker crash tra claim e dispatch
 
@@ -464,11 +465,15 @@ NULL`. Eventi senza `source_id` non applicano il delta. Il worker usa
 `aggregate_id` o, se manca, `event_id`. Una unique violation ricarica
 l'evento e non applica di nuovo il delta allo snapshot.
 
-Rischio residuo: evidenza PostgreSQL a due connessioni resta da eseguire.
+Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-idempotency.t`
+prova due `record_event` concorrenti sulla stessa source → una riga evento e
+delta applicato una sola volta.
 
 Patch applicata: migration `028` e `029`, vincolo DBIC, skip senza source,
 fallback `event_id` e test fake in `t/24-advanced-community.t` e
-`t/149-reputation-update-handler.t`.
+`t/149-reputation-update-handler.t`; evidenza PG in
+`t/integration/postgres-idempotency.t`. `UniqueConflict->attempt` su insert
+evento e snapshot.
 
 ## Matrice idempotenza scritture
 
@@ -647,5 +652,3 @@ duplicato reply/report/job, nessuna crescita outbox non drenata dopo test.
 1. Staging: reclaim outbox su lock `running` scaduto con PostgreSQL reale
    (claim-then-crash reclaim resta coperto in `t/84-outbox-concurrent-dispatcher.t`;
    manca evidenza su PostgreSQL reale oltre al mock).
-2. Reputation source unique: evidenza PostgreSQL concorrente ancora aperta
-   (`event_idempotency_keys` è coperto da `t/integration/postgres-concurrency.t`).

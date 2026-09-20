@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `t/integration/postgres-idempotency.t`: skippable-unless-DSN two-connection
+  evidence for concurrent `event_idempotency_keys` `mark_done` and reputation
+  source unique races inside open `txn_do`. `EventIdempotencyStore` and
+  `ReputationLedger` wrap inserts with `UniqueConflict->attempt` so unique
+  violations do not abort the outer transaction on live PostgreSQL.
+
 - Require the OS system Perl (`/usr/bin/perl` / distro package) for bootstrap,
   Carton, make, CI, and docs. Refuse version managers and custom PREFIX
   installs via `script/gpforum-system-perl`; document distro packages and
