@@ -18,16 +18,20 @@ printf 'bootstrap-deps: system perl -> %s\n' "$perl_bin"
 with_postgres=0
 update=0
 cached=0
+rebuild_local=0
 
 usage() {
     cat <<'EOF'
-Usage: script/bootstrap-deps [--postgres] [--update] [--cached]
+Usage: script/bootstrap-deps [--postgres] [--update] [--cached] [--rebuild-local]
 
-  --postgres  include the cpanfile postgres feature (DBD::Pg, Mojo::Pg,
-              Test::PostgreSQL). Requires pg_config / libpq.
-  --update    refresh cpanfile.snapshot (development lock update). Do not
-              use this on production hosts.
-  --cached    install from vendor/cache after `carton bundle`.
+  --postgres       include the cpanfile postgres feature (DBD::Pg, Mojo::Pg,
+                   Test::PostgreSQL). Requires pg_config / libpq.
+  --update         refresh cpanfile.snapshot (development lock update). Do not
+                   use this on production hosts.
+  --cached         install from vendor/cache after `carton bundle`.
+  --rebuild-local  rename an existing local/ to local.rebuild.<epoch> then
+                   reinstall (does not delete). Use when local/ is incomplete
+                   or built for another Perl.
 
 Default production/CI path: carton install --deployment
 HTTPS mirror: PERL_CARTON_MIRROR=https://cpan.metacpan.org/
@@ -44,6 +48,9 @@ for argument in "$@"; do
             ;;
         --cached)
             cached=1
+            ;;
+        --rebuild-local)
+            rebuild_local=1
             ;;
         --help|-h)
             usage
@@ -77,10 +84,17 @@ if [ "$with_postgres" -eq 1 ] && [ ! -f cpanfile.postgres ]; then
 fi
 
 current_perl=$("$perl_bin" -MConfig -e 'print $Config{version}')
+if [ "$rebuild_local" -eq 1 ] && [ -e local ]; then
+    stamp=$(date +%s)
+    backup="local.rebuild.${stamp}"
+    echo "bootstrap-deps: --rebuild-local moving local/ -> ${backup}"
+    mv local "$backup"
+fi
 if [ -d local/lib/perl5 ]; then
     if ! "$perl_bin" -Ilocal/lib/perl5 -e '1' >/dev/null 2>&1; then
         echo "bootstrap-deps: local/ is not usable with system Perl $current_perl ($perl_bin)." >&2
-        echo "Refusing to delete local/. Rebuild local/ with this system Perl or move it aside yourself." >&2
+        echo "Refusing to delete local/. Rebuild with: script/bootstrap-deps --postgres --rebuild-local" >&2
+        echo "Or move local/ aside yourself." >&2
         exit 1
     fi
 fi

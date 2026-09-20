@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/bootstrap-deps --rebuild-local` to rename an incomplete or
+  foreign-Perl `local/` to `local.rebuild.<epoch>` before Carton reinstall
+  (still never `rm -rf local/`). Helps Cloud Agent / operator hosts where a
+  partial `local/` leaves modules like `Const::Fast` missing.
+
 - Archive partial Cloud Agent VM private-beta *preparation* evidence under
   `docs/ops/evidence/2026-09-20-cloud-agent/` (system Perl preflight +
   private-beta checklist `--status`/`--commands`; carton deps / drills /
