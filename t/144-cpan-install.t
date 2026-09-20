@@ -102,6 +102,16 @@ sub _assert_bootstrap_security {
         qr/rm [ ]+-rf [ ]+local/msx,
         'bootstrap does not destroy local/'
     );
+    like(
+        $bootstrap,
+        qr/--rebuild-local/msx,
+        'bootstrap documents --rebuild-local for incomplete local/'
+    );
+    like(
+        $bootstrap,
+        qr/mv [ ]+local [ ]+"/msx,
+        'rebuild-local renames local/ aside instead of deleting'
+    );
     unlike(
         $locator,
         qr/curl |wget /msx,
