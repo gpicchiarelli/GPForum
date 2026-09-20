@@ -85,8 +85,11 @@ script/stress-load --json --profile smoke --base-url "$STAGING_BASE_URL" \
   > "$GPFORUM_EVIDENCE_DIR/stress-smoke.json"
 script/stress-load --json --profile 100 --base-url "$STAGING_BASE_URL" \
   > "$GPFORUM_EVIDENCE_DIR/stress-100.json"
-# script/stress-load --json --profile 500 --base-url "$STAGING_BASE_URL" \
-#   > "$GPFORUM_EVIDENCE_DIR/stress-500.json"
+# Profile 100 archived on Cloud Agent VM (2026-09-20-cloud-agent-live); next capacity step:
+script/stress-load --json --profile 500 --base-url "$STAGING_BASE_URL" \
+  > "$GPFORUM_EVIDENCE_DIR/stress-500.json"
+# script/stress-load --json --profile 1000 --base-url "$STAGING_BASE_URL" \
+#   > "$GPFORUM_EVIDENCE_DIR/stress-1000.json"
 
 # 3) Mail (dry-run always; --send only on a mailbox you control)
 script/gpforum-mail-check --json --dry-run \
