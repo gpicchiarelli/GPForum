@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Clarify Cloud Agent live evidence reproducibility: metrics pass requires `e964899` (header fix), not bare checkout base `e5bc023`.
+
 - Point `script/gpforum-evidence-live` at stress profile `500` as the next capacity step after archived profile `100`.
 
 - Lock `StagingHostVerify` metrics probe header to `X-GPForum-Metrics-Token` in `t/164-staging-host-verify.t`.
