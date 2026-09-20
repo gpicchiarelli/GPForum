@@ -50,7 +50,7 @@ stress-load:
 	@test -n "$(BASE_URL)" || (echo 'make stress-load requires BASE_URL=...' >&2; exit 2)
 	script/stress-load --profile "$(PROFILE)" --base-url "$(BASE_URL)" --$(FORMAT)
 
-# Optional attachment filesystem + static deploy checklist; no PostgreSQL.
+# Optional attachment filesystem + deploy checklist (static + host when available).
 # Not part of `make check` or default CI.
 staging-drill-attachments:
 	script/staging-drill-attachments --json

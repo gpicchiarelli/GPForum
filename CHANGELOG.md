@@ -4,6 +4,15 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Strengthen `script/staging-drill-attachments` host validation: always keep
+  static nginx/systemd template checks; when `systemd-analyze` / `nginx` are
+  on `PATH`, run `systemd-analyze verify` and `nginx -t` against rendered
+  sample configs (stub ExecStart paths / wrapper nginx.conf); missing tools
+  skip those phases and may mark evidence `degraded`. Attachment drill now
+  populates a throwaway `var/attachments` tree, wipes it, restores, and
+  asserts digests. Docs/CHANGELOG/tests updated; stress-load harness
+  untouched. Does not claim private-beta readiness.
+
 - Add operator-runnable `script/stress-load` / `bin/gpforum-stress-load` with
   profiles `smoke` / `100` / `500` / `1000` concurrent request slots against a
   running Hypnotoad/GPForum `--base-url`, JSON/human evidence, and
