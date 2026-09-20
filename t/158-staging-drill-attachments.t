@@ -16,7 +16,7 @@ use GPForum::Service::Operations::DeployChecklistDrill;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 23;
+const my $EXPECTED_TESTS    => 25;
 const my $MIN_SYSTEMD_UNITS => 4;
 const my $MIN_NGINX_CONFIGS => 2;
 
@@ -75,6 +75,20 @@ sub _test_deploy_drill {
         _pass_or_skipped( $host->{nginx}{status} ),
         'nginx host check pass or skipped'
     );
+
+    my $tools = $deploy->{deploy_checklist}{optional_tools} // {};
+    if ( $tools->{nginx}{available} ) {
+        is( $host->{nginx}{status},
+            'pass', 'nginx -t live when nginx is on PATH' );
+        is( $host->{nginx}{mode},
+            'rendered_sample_nginx_t',
+            'nginx host mode is rendered_sample_nginx_t' );
+    }
+    else {
+        is( $host->{nginx}{status},
+            'skipped', 'nginx host check skipped when nginx absent' );
+        ok( 1, 'nginx mode not asserted when skipped' );
+    }
 
     return;
 }

@@ -12,7 +12,7 @@ host deploy remains a separate operator runbook beyond the static checklist.
 | Upgrade path | Throwaway DB applies all but the latest migration, then `bin/gpforum-migrate --apply` reaches the full count | `script/staging-drill` |
 | Dump / restore | `pg_dump -Fc` of a migrated (optionally seeded) DB restores into a second throwaway DB with matching `schema_versions`, `users`, and `threads` counts | `script/staging-drill` |
 | Attachment filesystem | Throwaway workspace with a populated `var/attachments` tree is written via `FilesystemStorage`, copied to a backup tree, wiped, restored into the same layout, and SHA-256 / byte verified | `script/staging-drill-attachments` |
-| Deploy checklist | Static: `deploy/systemd/*.service` and `deploy/nginx/*.conf` templates include `User`, `EnvironmentFile`, `ExecStart` via `script/gpforum-carton`, and nginx `upstream`. Host (when available): `systemd-analyze verify` on rendered sample units and `nginx -t` on rendered sample configs; missing tools → phase `skipped`, overall may be `degraded` | `script/staging-drill-attachments` |
+| Deploy checklist | Static: `deploy/systemd/*.service` and `deploy/nginx/*.conf` templates include `User`, `EnvironmentFile`, `ExecStart` via `script/gpforum-carton`, and nginx `upstream`. Host (when available): `systemd-analyze verify` on rendered sample units and `nginx -t` on rendered sample configs (temp paths + unprivileged listen rewrite for non-root distro nginx); missing tools → phase `skipped`, overall may be `degraded` | `script/staging-drill-attachments` |
 
 ## What this does not cover
 
@@ -121,7 +121,9 @@ The deploy phase always runs **static** template checks. When
 `systemd-analyze` is on `PATH`, it also renders sample units (stub
 `ExecStart` paths, current user, throwaway `EnvironmentFile`) and runs
 `systemd-analyze verify`. When `nginx` is on `PATH`, it wraps each sample
-site snippet in a minimal `nginx.conf` and runs `nginx -t`. Missing tools
+site snippet in a minimal `nginx.conf` (temp paths under the throwaway
+prefix; `listen 80` rewritten to `127.0.0.1:18080` so non-root distro
+`nginx -t` can open the probe socket) and runs `nginx -t`. Missing tools
 mark that host phase `skipped` and the deploy/combined evidence may be
 `degraded` (exit 0) while static checks still pass. The drill does not
 install units or reload a live host vhost.

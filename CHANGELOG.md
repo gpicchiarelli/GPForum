@@ -4,6 +4,7 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+<<<<<<< HEAD
 - Add operator private-beta go/no-go checklist aggregating system-perl,
   macports-env, migrate, query-budget, staging-drill,
   staging-drill-attachments, stress-load, and mail-check in
@@ -12,6 +13,18 @@ All notable changes to GPForum are recorded here.
   claims readiness). Point ROADMAP / readiness review / README at it.
   Optional `make private-beta-checklist`. Does not change stress-load or
   deploy-checklist core logic.
+=======
+- Make deploy-drill `nginx -t` succeed on non-root distro nginx: wrapper
+  configs now place client/proxy temp paths under the throwaway prefix and
+  rewrite sample `listen 80` to `127.0.0.1:18080`. When `nginx` is on
+  `PATH`, host validation can reach `pass` instead of failing or staying
+  skipped; missing nginx still skips/degrades. Record live `nginx -t` pass
+  on a Cloud Agent VM after installing nginx via apt. Document a tuned
+  stress-load profile `1000` re-run with `GPFORUM_WEB_PROCESSES=8` (p95
+  improved vs 4 workers; still above default 2000 ms `--check` gate; 16
+  workers worse on 4 vCPU) in `docs/ops/stress-load.md` /
+  `docs/PERFORMANCE_EVIDENCE.md`.
+>>>>>>> 6c51096 (Make deploy nginx -t work non-root; record tuned stress 1000.)
 
 - Strengthen `script/staging-drill-attachments` host validation: always keep
   static nginx/systemd template checks; when `systemd-analyze` / `nginx` are
