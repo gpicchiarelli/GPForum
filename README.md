@@ -239,20 +239,25 @@ Deployment units for systemd, FreeBSD rc, Nginx, Caddy, and launchd live in
 
 ## Status
 
-GPForum has reached **Milestone 17 — Forum HTTP MVP** under
-[prompt/20.txt](prompt/20.txt). Everything under [What works today](#what-works-today)
-is implemented and tested; everything below is planned.
+GPForum has completed **Milestones 0–10** under
+[ADR 0068](docs/adr/0068-mvp-roadmap-sequencing.md) (Forum HTTP MVP through
+advanced community features). Architecture and catalog discipline follow
+[ADR 0091](docs/adr/0091-executable-architecture-contract.md). Everything
+under [What works today](#what-works-today) is implemented and tested;
+residual work is evidence and ops, not missing MVP code.
 
 | Target | Status | What stands in the way |
 | --- | --- | --- |
 | Local, personal use | Ready | — |
-| Private beta | Not yet | Mail delivery for reset and email-change tokens, staging drills, concurrent moderation idempotency |
-| Public production | Not yet | Load tests at 100/500/1000 users, database-backed failure-mode tests, rehearsed rollback |
+| Private beta | Not yet | Staging drills, real PostgreSQL concurrent evidence, operator runbooks — mail delivery and moderation idempotency are in code |
+| Public production | Not yet | Load tests at 100/500/1000 users, staging restore/rollback drills, concurrent PostgreSQL evidence |
 
-**Known MVP limits.** Realtime fanout is process-local. Rate limiting is
-PostgreSQL-backed with a local degraded fallback. Search depends on PostgreSQL
-projection rows. Reply positions are allocated under a thread-row `FOR UPDATE`
-lock plus the uniqueness constraint on `(thread_id, position)`.
+**Known MVP limits.** Domain realtime fanout uses PostgreSQL `LISTEN`/`NOTIFY`
+across processes; the websocket registry remains process-local by design.
+Rate limiting is PostgreSQL-backed with a local degraded fallback. Search
+depends on PostgreSQL projection rows. Reply positions are allocated under a
+thread-row `FOR UPDATE` lock plus the uniqueness constraint on
+`(thread_id, position)`.
 
 [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) is the release
 contract, [ROADMAP.md](ROADMAP.md) tracks what comes next, and the latest
@@ -341,12 +346,12 @@ When documents conflict:
 | --- | --- | --- | --- |
 | [17](prompt/17.txt) | Community operations | [36](prompt/36.txt) | Test strategy |
 | [19](prompt/19.txt) | Cache and Redis decision | [37](prompt/37.txt) | API contracts |
-| [20](prompt/20.txt) | MVP roadmap | [38](prompt/38.txt) | Packaging and deployment |
+| [20](prompt/20.txt) | MVP roadmap (historical; binding: [ADR 0068](docs/adr/0068-mvp-roadmap-sequencing.md)) | [38](prompt/38.txt) | Packaging and deployment |
 | [21](prompt/21.txt) | Initial schema | [39](prompt/39.txt) | Prompt governance |
 | [22](prompt/22.txt) | Permission matrix | [40](prompt/40.txt) | Perl multi-process scaling |
 | [23](prompt/23.txt) | Event catalog | [41](prompt/41.txt) | Profiling and coverage automation |
 | [24](prompt/24.txt) | HTTP workflows | [42](prompt/42.txt) | PostgreSQL-native search |
-| [25](prompt/25.txt) | UX | [43](prompt/43.txt) | Executable architecture contract |
+| [25](prompt/25.txt) | UX | [43](prompt/43.txt) | Executable architecture contract (historical; binding: [ADR 0091](docs/adr/0091-executable-architecture-contract.md)) |
 | [26](prompt/26.txt) | Privacy | [44](prompt/44.txt) | GitHub project success contract |
 | [27](prompt/27.txt) | Runbooks | [45](prompt/45.txt) | Verifiable engineering invariants |
 | [28](prompt/28.txt) | Bootstrap implementation | [46](prompt/46.txt) | Accessibility engineering |

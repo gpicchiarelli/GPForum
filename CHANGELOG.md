@@ -26,6 +26,15 @@ All notable changes to GPForum are recorded here.
   nginx/systemd deploy stays a manual runbook. Optional `make staging-drill`
   is documented and is not part of default CI.
 
+- Docs: align `ROADMAP.md` / release readiness with shipped mail delivery,
+  moderation locks/idempotency, failure-mode coverage, and LISTEN/NOTIFY
+  realtime; residual “Next” is evidence and staging, not missing MVP code.
+- Docs: catalogue `attachment.uploaded`, `attachment.deleted`,
+  `report.assigned`, `report.released`, and `report.resolved` in
+  `EVENTS.md`, ADR 0091, and ADR 0071 from emitting store payloads.
+- Docs: point roadmap/status at ADR 0068 and ADR 0091; keep prompt files as
+  historical constitutions.
+
 - Plugin install remints `plugin_id` once when the unique primary key
   conflicts, and does not return another plugin.
 

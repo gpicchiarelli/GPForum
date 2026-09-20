@@ -360,6 +360,33 @@ Every catalog event has `schema_version` 1.
 - `search.index_requested`: aggregate_type `search_document`; aggregate_id
   source resource id; actor_id nullable `user_id`; idempotency_key source
   resource version key; payload `source_type`, `source_id`, `reason`.
+- `attachment.uploaded`: aggregate_type `attachment`; aggregate_id
+  `attachment_id`; actor_id `owner_user_id`; idempotency_key
+  `attachment.uploaded:{attachment_id}`; payload `attachment_id`,
+  `byte_size`, `media_type`, `object_key`, `owner_user_id`
+  (`Attachment::Event::uploaded_payload` /
+  `Attachment::Store`).
+- `attachment.deleted`: aggregate_type `attachment`; aggregate_id
+  `attachment_id`; actor_id owner or deleting actor; idempotency_key
+  `attachment.deleted:{attachment_id}`; payload `attachment_id`,
+  `reason` (`Attachment::Event::deleted_payload` /
+  `Attachment::Store`).
+- `report.assigned`: aggregate_type `report`; aggregate_id `report_id`;
+  actor_id `moderator_user_id`; idempotency_key
+  `report.assigned:{report_id}:{event_id}`; payload `report_id`,
+  `target_id`, `target_type`, `assigned_moderator_user_id`
+  (`Moderation::Event::report_transition_envelope` /
+  `ReportStore::assign_report`).
+- `report.released`: aggregate_type `report`; aggregate_id `report_id`;
+  actor_id releasing actor; idempotency_key
+  `report.released:{report_id}:{event_id}`; payload `report_id`,
+  `target_id`, `target_type`, `assigned_moderator_user_id` (null)
+  (`ReportStore::release_report`).
+- `report.resolved`: aggregate_type `report`; aggregate_id `report_id`;
+  actor_id resolving actor; idempotency_key
+  `report.resolved:{report_id}:{event_id}`; payload `report_id`,
+  `target_id`, `target_type`, `resolution`, `resolved_at`
+  (`ReportStore::resolve_report`).
 
 Catalog rules:
 
@@ -698,12 +725,11 @@ invariants. This contract is mandatory.
     `policies_for`; `Notification::Dispatcher` has no `dispatch_pending` or
     `suppress_for_policy`. Either the code gains these contracts or an ADR
     records the removal, as this contract requires.
-  - The Formal Event Catalog is behind the code: at least
-    `attachment.uploaded`, `attachment.deleted`, `report.assigned`,
-    `report.released`, and `report.resolved` are emitted
-    (`Service::Attachment::Store`, `Service::Moderation::ReportStore`) but
-    are not catalogued here or in `EVENTS.md`, although every new event
-    MUST be catalogued before implementation.
+  - Formal Event Catalog catch-up (2026-09-20): `attachment.uploaded`,
+    `attachment.deleted`, `report.assigned`, `report.released`, and
+    `report.resolved` are now catalogued here and in `EVENTS.md` from the
+    emitting store/`*::Event` payloads. Residual catalog drift elsewhere
+    (for example naming differences called out in ADR 0071) is unchanged.
   - ADR files MUST include options considered, operational impact, security
     impact, rollback strategy, test impact, owner, and date, but
     `docs/adr/0000-template.md` and the existing ADRs (including the

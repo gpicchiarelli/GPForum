@@ -111,13 +111,25 @@ plus every asynchronous consumer.
 ### Moderation Events
 
 - `report.created`
-  - producer: reporting workflow
+  - producer: reporting workflow (`Moderation::ReportStore` /
+    `Moderation::Event`)
   - consumers: moderation queue, notification, audit
-  - payload: `report_id`, `target_type`, `target_id`
+  - payload: `reason`, `report_id`, `target_id`, `target_type`
+- `report.assigned`
+  - producer: moderation workflow (`ReportStore::assign_report`)
+  - consumers: moderation queue, notification, audit
+  - payload: `report_id`, `target_id`, `target_type`,
+    `assigned_moderator_user_id`
+- `report.released`
+  - producer: moderation workflow (`ReportStore::release_report`)
+  - consumers: moderation queue, notification, audit
+  - payload: `report_id`, `target_id`, `target_type`,
+    `assigned_moderator_user_id` (null)
 - `report.resolved`
-  - producer: moderation workflow
+  - producer: moderation workflow (`ReportStore::resolve_report`)
   - consumers: notification, audit, analytics
-  - payload: `report_id`, `resolution`
+  - payload: `report_id`, `target_id`, `target_type`, `resolution`,
+    `resolved_at`
 - `moderation.action.created`
   - producer: moderation workflow
   - consumers: audit, notification, projections
@@ -146,17 +158,24 @@ plus every asynchronous consumer.
 ### Attachment Events
 
 - `attachment.uploaded`
-  - producer: upload workflow
+  - producer: upload workflow (`Attachment::Store` /
+    `Attachment::Event`)
   - consumers: scanning worker, media processing worker, audit
-  - payload: `attachment_id`, `owner_user_id`
+  - payload: `attachment_id`, `byte_size`, `media_type`, `object_key`,
+    `owner_user_id`
+- `attachment.deleted`
+  - producer: attachment lifecycle (`Attachment::Store` /
+    `Attachment::Event`)
+  - consumers: audit, cache invalidation, storage cleanup workers
+  - payload: `attachment_id`, `reason`
 - `attachment.scanned`
   - producer: scanning worker
   - consumers: moderation, attachment projection
-  - payload: `attachment_id`, `scan_status`
+  - payload: `attachment_id`, `reason`, `scan_status`
 - `attachment.quarantined`
   - producer: scanning or moderation workflow
   - consumers: notification, audit, cache invalidation
-  - payload: `attachment_id`, `reason`
+  - payload: `attachment_id`, `reason`, `scan_status`
 
 ### Idempotency
 
