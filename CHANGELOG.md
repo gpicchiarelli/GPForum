@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Archive Cloud Agent VM Hypnotoad stress-load capacity evidence under
+  `docs/ops/evidence/2026-09-20-cloud-agent-stress500/` (`carton_ok`, migrate +
+  query-budget, medium seed, profile **500** `ok` / `--check` `pass`, profile
+  **1000** `ok` with p95 residual under `--check`). Extends
+  `2026-09-20-cloud-agent-live/`. **PRIVATE BETA remains NOT YET.**
+
 - Archive Cloud Agent VM live Hypnotoad verify evidence under
   `docs/ops/evidence/2026-09-20-cloud-agent-live/` (`carton_ok`, migrate +
   query-budget, `staging-host-verify --env-file --base-url` pass including

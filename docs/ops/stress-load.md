@@ -162,22 +162,28 @@ unchanged.
 
 Host: Linux 4 vCPU / ~15 GiB RAM, PostgreSQL 16, system Perl 5.38, Hypnotoad
 `GPFORUM_WEB_PROCESSES=4`, seed profile `medium`, base
-`http://127.0.0.1:8080`, commit base `1d16c69`. Harness:
-`script/stress-load --check --json`. Capacity rows used
+`http://127.0.0.1:8080`. Harness: `script/stress-load --check --json` (or
+`--json` without check). Capacity rows used
 `GPFORUM_FORUM_READ_RATE_LIMIT=100000` unless noted.
+
+Archived JSON: smoke/100 in
+[`docs/ops/evidence/2026-09-20-cloud-agent-live/`](evidence/2026-09-20-cloud-agent-live/);
+500/1000 in
+[`docs/ops/evidence/2026-09-20-cloud-agent-stress500/`](evidence/2026-09-20-cloud-agent-stress500/).
 
 | Profile | Status | Peak in-flight | Completed | Errors | Err % | req/s | p50 ms | p95 ms | p99 ms | max ms | Wall s |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
 | `smoke` | pass | 4 | 20 | 0 | 0.000 | 137.344 | 26.845 | 48.809 | 48.809 | 95.230 | 0.146 |
 | `100` (elevated read limit) | pass | 100 | 1 000 | 0 | 0.000 | 572.060 | 89.792 | 604.892 | 713.722 | 865.432 | 1.748 |
 | `100` (default 60/60s limit) | fail | 100 | 1 000 | 83 | 8.300 | 538.634 | — | 458.798 | — | — | — |
-| `500` (elevated) | pass | 500 | 5 000 | 0 | 0.000 | 587.128 | 803.277 | 1112.640 | 1265.341 | 1512.191 | 8.516 |
-| `1000` (elevated) | fail\* | 1000 | 10 000 | 0 | 0.000 | 530.567 | 1671.467 | 4738.720 | 4878.393 | 8471.037 | 18.848 |
+| `500` (elevated, archive) | ok / `--check` pass | 500 | 5 000 | 0 | 0.000 | 573.594 | 851.762 | 1621.145 | 2384.845 | 2686.178 | 8.717 |
+| `1000` (elevated, archive) | ok / `--check` fail\* | 1000 | 10 000 | 0 | 0.000 | 576.663 | 1678.325 | 2478.208 | 2823.726 | 3304.456 | 17.341 |
 
 \*Profile `1000` sustained peak in-flight **1000** with **zero** HTTP errors on
-this VM; `--check` failed solely because p95 (4738 ms) exceeded the default
-`--p95-limit-ms 2000`. Treat as **attempted / latency residual** on 4 vCPU,
-not as an inability to open 1000 concurrent slots.
+this VM; `--check` failed solely because p95 exceeded the default
+`--p95-limit-ms 2000` (archive check row ~2122 ms). Treat as **attempted /
+latency residual** on 4 vCPU, not as an inability to open 1000 concurrent
+slots.
 
 Default-limit `100` status codes included `429` (83) + `200` (917): the
 product abuse ceiling, not a harness failure.
