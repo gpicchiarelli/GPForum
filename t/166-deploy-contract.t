@@ -18,14 +18,18 @@ use GPForum::Service::Operations::DeployContract qw(
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 10;
+const my $EXPECTED_TESTS => 11;
 
 plan tests => $EXPECTED_TESTS;
 
 ok( scalar( deploy_unit_checks() ) >= 4, 'unit contracts cover core units' );
 ok( scalar( deploy_nginx_checks() ) >= 2, 'nginx contracts cover tcp+unix' );
 is( scalar( deploy_host_unit_checks() ),
-    2, 'host unit observe covers web+outbox' );
+    3, 'host unit observe covers web+outbox+scheduled-jobs' );
+
+my @host_names = map { $_->{name} } deploy_host_unit_checks();
+ok( ( grep { $_ eq 'gpforum-scheduled-jobs.service' } @host_names ),
+    'host observe includes scheduled-jobs service contract' );
 
 my $web = path('deploy/systemd/gpforum.service')->slurp;
 my $web_match =

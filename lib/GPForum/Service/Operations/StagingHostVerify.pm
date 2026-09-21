@@ -38,10 +38,13 @@ const my @REQUIRED_ENV_KEYS => qw(
 const my @SYSTEMD_UNITS => qw(
   gpforum.service
   gpforum-outbox.service
+  gpforum-scheduled-jobs.timer
 );
 const my @REPO_ARTIFACTS => (
     'deploy/systemd/gpforum.service',
     'deploy/systemd/gpforum-outbox.service',
+    'deploy/systemd/gpforum-scheduled-jobs.service',
+    'deploy/systemd/gpforum-scheduled-jobs.timer',
     'deploy/nginx/gpforum.conf',
     'script/gpforum-carton',
     'bin/gpforum',
@@ -49,6 +52,7 @@ const my @REPO_ARTIFACTS => (
     'docs/ops/staging-drills.md',
     'docs/ops/mail-check.md',
     'docs/ops/stress-load.md',
+    'docs/ops/dead-letters.md',
 );
 const my $RESIDUAL_LIVE =>
 'Live systemd install, nginx reload, Hypnotoad start, and TLS termination remain operator steps; archive verify JSON from the staging host.';
