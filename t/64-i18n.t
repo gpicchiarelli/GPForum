@@ -288,7 +288,9 @@ sub _has_italian_ascii_accent_placeholder {
     }
 
     for my $phrase (@phrases) {
-        if ( index( $normalized, $phrase ) >= 0 ) {
+        if ( $normalized =~
+            /(?:\A|[^[:alpha:]])\Q$phrase\E(?:[^[:alpha:]]|\z)/msx )
+        {
             return 1;
         }
     }
