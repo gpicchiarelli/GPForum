@@ -5,24 +5,52 @@ It is intentionally narrower than the full architectural contract.
 
 ## Available Routes
 
+Every route below is registered in `lib/GPForum/Bootstrap/Routes.pm`. Read
+routes render SSR by default and return JSON on request; every state-changing
+route requires an authenticated session and a CSRF token unless stated
+otherwise.
+
+### Home and discovery
+
 * `GET /` renders the public forum home index with visible categories and latest public discussions.
-* `GET /admin` renders the authorized admin dashboard.
-* `GET /admin/roles` renders role and permission catalogs.
-* `POST /admin/roles` creates a role through `Admin::Workflow` and `RoleCatalog`.
-* `POST /admin/permissions` creates a permission through `Admin::Workflow` and `RoleCatalog`.
-* `POST /admin/roles/:role_id/permissions` attaches a permission to a role.
-* `GET /admin/users/:user_id/roles` reviews active role bindings for one user.
-* `POST /admin/users/:user_id/roles` creates a scoped role binding.
-* `POST /admin/role-bindings/:binding_id/revoke` revokes a role binding.
-* `GET /admin/audit` renders bounded admin audit review.
+* `GET /robots.txt` renders crawler policy.
+* `GET /sitemap.xml` renders public category/thread sitemap XML.
+* `GET /feed.atom` renders a public Atom feed.
+* `GET /search?q=...` renders PostgreSQL-native search results.
+* `GET /search/autocomplete?q=...` returns bounded PostgreSQL-native autocomplete suggestions.
+* `GET /legal/terms` renders the terms document.
+* `GET /legal/privacy` renders the privacy document.
+* `GET /legal/cookies` renders the cookie document.
+
+### Forum reading
+
 * `GET /categories` renders visible categories.
 * `GET /c/:category_id` renders one category and a keyset-paginated thread list.
 * `GET /t/:thread_id` renders one visible thread and keyset-paginated posts.
 * `GET /t/:thread_id/:slug` renders the same visible thread through its canonical public URL.
 * `GET /new-thread` renders the thread form with a CSRF token.
+
+### Forum writing
+
 * `POST /threads` creates a thread for an authenticated session user.
+* `POST /t/:thread_id/edit` edits a thread title and slug through `Forum::Write`.
+* `POST /t/:thread_id/delete` soft-deletes a thread through `Forum::Write`.
+* `POST /t/:thread_id/restore` restores a soft-deleted thread through `Forum::Write`.
+* `POST /t/:thread_id/move` moves a thread to another category through `Forum::Write`.
 * `POST /t/:thread_id/replies` creates a reply for an authenticated session user.
+* `POST /p/:post_id` edits a post body and records a revision.
+* `POST /p/:post_id/delete` soft-deletes a post through `Forum::Write`.
+* `POST /p/:post_id/restore` restores a soft-deleted post through `Forum::Write`.
 * `POST /t/:thread_id/read` records per-user thread reading progress.
+
+### Attachments
+
+* `POST /p/:post_id/attachments` uploads an attachment against a post through the upload pipeline.
+* `POST /p/:post_id/attachments/:attachment_id/delete` deletes a post attachment through the attachment lifecycle.
+* `GET /attachments/:attachment_id/download` serves an attachment after a `DownloadAccess` permission check.
+
+### Community
+
 * `GET /feed` renders the authenticated user's derived personal feed.
 * `GET /bookmarks` renders the authenticated user's saved thread bookmarks.
 * `POST /t/:thread_id/bookmark` saves or restores a bookmark for a thread.
@@ -30,29 +58,105 @@ It is intentionally narrower than the full architectural contract.
 * `POST /t/:thread_id/subscribe` follows a thread for notifications.
 * `POST /t/:thread_id/subscribe/mute` mutes a followed thread.
 * `POST /t/:thread_id/subscribe/remove` unfollows a thread.
+* `GET /u/:username` renders a public-safe contributor profile.
+
+### Reports
+
 * `POST /t/:thread_id/report` creates a moderation report for a visible thread.
 * `POST /p/:post_id/report` creates a moderation report for a visible post.
+* `POST /u/:username/report` creates a moderation report for a public profile.
+
+### Notifications
+
+* `GET /notifications` renders the authenticated user's notification inbox.
+* `POST /notifications/:notification_id/read` marks one notification as read.
+* `POST /notifications/read-all` marks every unread notification as read.
+* `GET /mentions` renders the authenticated user's mention history.
+
+### Realtime
+
+* `WEBSOCKET /realtime` opens the process-local realtime stream; clients fall back to polling when it is unavailable.
+
+### Identity
+
+* `GET /register` renders the registration form with a CSRF token.
+* `POST /register` creates a pending account and issues an email verification token.
+* `GET /login` renders the login form with a CSRF token.
+* `POST /login` opens a server-side session for a verified account.
+* `POST /logout` revokes the current session.
+* `GET /password/reset` renders the forgot-password form.
+* `POST /password/reset` issues a single-use password reset token.
+* `GET /password/reset/:token` renders the reset form for a valid token.
+* `POST /password/reset/complete` consumes the token, rotates the credential, and revokes sessions.
+* `GET /email/verify` renders the verification resend form.
+* `POST /email/verify/request` issues a single-use email verification token.
+* `GET /email/verify/:token` renders the verification confirmation form.
+* `POST /email/verify/complete` consumes the token and activates the account.
+* `GET /email/confirm/:token` renders the email-change confirmation form.
+* `POST /email/confirm` consumes the token and applies the pending email change.
+
+### Settings
+
+* `GET /settings` renders account, locale, theme, and notification preferences.
+* `POST /settings` updates notification preferences.
+* `POST /settings/password` changes the password after verifying the current one.
+* `POST /settings/email` requests an email change and issues a confirmation token.
+* `POST /locale` sets the active locale; guests keep it in a cookie only.
+* `POST /theme` sets the active theme; guests keep it in a cookie only.
+
+### Privacy
+
+* `GET /privacy` renders the member privacy dashboard.
+* `POST /privacy/export` requests a personal data export bundle.
+* `GET /privacy/export/:export_request_id` downloads a completed export bundle.
+* `POST /privacy/deletion` requests account or resource deletion.
+
+### Moderation
+
 * `GET /moderation/reports` renders the authorized moderation report queue.
 * `GET /moderation/actions` renders keyset-paginated moderation action history.
 * `GET /moderation/suspensions` renders active or historical suspension rows.
 * `POST /moderation/reports/:report_id/assign` assigns a report to the current moderator.
+* `POST /moderation/reports/:report_id/release` releases an assigned report back to the queue.
 * `POST /moderation/reports/:report_id/resolve` resolves a report with an explicit resolution.
 * `POST /moderation/posts/:post_id/hide` hides a post through `ActionStore`.
 * `POST /moderation/posts/:post_id/restore` restores a hidden post through `ActionStore`.
+* `POST /moderation/threads/:thread_id/hide` hides a thread through `ActionStore`.
+* `POST /moderation/threads/:thread_id/restore` restores a hidden thread through `ActionStore`.
 * `POST /moderation/threads/:thread_id/lock` locks a thread through `ActionStore`.
 * `POST /moderation/threads/:thread_id/unlock` unlocks a thread through `ActionStore`.
 * `POST /moderation/actions/:action_id/reverse` records reversal of a moderation action.
 * `POST /moderation/users/:user_id/suspend` suspends a user through `SuspensionStore`.
 * `POST /moderation/suspensions/:suspension_id/revoke` revokes a user suspension.
-* `GET /notifications` renders the authenticated user's notification inbox.
-* `POST /notifications/:notification_id/read` marks one notification as read.
-* `GET /mentions` renders the authenticated user's mention history.
-* `GET /u/:username` renders a public-safe contributor profile.
-* `GET /search?q=...` renders PostgreSQL-native search results.
-* `GET /search/autocomplete?q=...` returns bounded PostgreSQL-native autocomplete suggestions.
-* `GET /robots.txt` renders crawler policy.
-* `GET /sitemap.xml` renders public category/thread sitemap XML.
-* `GET /feed.atom` renders a public Atom feed.
+
+### Administration
+
+* `GET /admin` renders the authorized admin dashboard.
+* `GET /admin/users` renders a bounded, status-filterable member list.
+* `GET /admin/roles` renders role and permission catalogs.
+* `POST /admin/roles` creates a role through `Admin::Workflow` and `RoleCatalog`.
+* `POST /admin/permissions` creates a permission through `Admin::Workflow` and `RoleCatalog`.
+* `POST /admin/roles/:role_id/permissions` attaches a permission to a role.
+* `GET /admin/users/:user_id/roles` reviews active role bindings for one user.
+* `POST /admin/users/:user_id/roles` creates a scoped role binding.
+* `POST /admin/role-bindings/:binding_id/revoke` revokes a role binding.
+* `GET /admin/categories` renders the category catalog.
+* `POST /admin/categories` creates a category through `Admin::Workflow` and `CategoryStore`.
+* `POST /admin/categories/:category_id` updates a category through `Admin::Workflow` and `CategoryStore`.
+* `GET /admin/audit` renders bounded admin audit review.
+* `GET /admin/jobs` renders bounded asynchronous job state with an optional status filter.
+* `GET /admin/status` renders the operations status snapshot from `ConsoleReader`.
+* `GET /admin/privacy` renders the staff data-rights review queue.
+* `POST /admin/privacy/deletions/:request_id/approve` approves a deletion request and enqueues the erasure job.
+* `POST /admin/privacy/deletions/:request_id/hold` places a retention legal hold on a deletion request.
+* `POST /admin/privacy/erasure/:job_id/run` runs an approved erasure job.
+
+### Operations
+
+* `GET /health` returns a config/runtime health summary as JSON.
+* `GET /health/live` returns liveness as JSON, with no dependency checks.
+* `GET /health/ready` returns readiness as JSON and a non-`200` status when a dependency check fails.
+* `GET /metrics` returns the metrics snapshot, gated by an application-level token.
 
 Read endpoints render semantic SSR by default. They also return JSON when the
 client sends `Accept: application/json` or `?format=json`, using the same

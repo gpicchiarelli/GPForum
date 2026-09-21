@@ -109,13 +109,19 @@ described in [docs/MVP.md](docs/MVP.md).
 
 | Area | Routes |
 | --- | --- |
-| Forum | `GET /` · `GET /categories` · `GET /c/:category_id` · `GET /t/:thread_id` · `GET /t/:thread_id/:slug` · `GET /new-thread` · `POST /threads` · `POST /t/:thread_id/replies` · `POST /t/:thread_id/read` |
+| Forum | `GET /` · `GET /categories` · `GET /c/:category_id` · `GET /t/:thread_id` · `GET /t/:thread_id/:slug` · `GET /new-thread` · `POST /threads` · `POST /t/:thread_id/edit` · `POST /t/:thread_id/delete` · `POST /t/:thread_id/restore` · `POST /t/:thread_id/move` · `POST /t/:thread_id/replies` · `POST /p/:post_id` · `POST /p/:post_id/delete` · `POST /p/:post_id/restore` · `POST /t/:thread_id/read` |
+| Attachments | `POST /p/:post_id/attachments` · `POST /p/:post_id/attachments/:attachment_id/delete` · `GET /attachments/:attachment_id/download` |
 | Community | `GET /feed` · `GET /bookmarks` · `POST /t/:thread_id/bookmark` · `POST /t/:thread_id/bookmark/remove` · `POST /t/:thread_id/subscribe` · `POST /t/:thread_id/subscribe/mute` · `POST /t/:thread_id/subscribe/remove` · `GET /u/:username` |
-| Notifications | `GET /notifications` · `POST /notifications/:notification_id/read` · `GET /mentions` |
-| Reports | `POST /t/:thread_id/report` · `POST /p/:post_id/report` |
-| Moderation | `GET /moderation/reports` · `GET /moderation/actions` · `GET /moderation/suspensions` · `POST /moderation/reports/:report_id/assign` · `POST /moderation/reports/:report_id/resolve` · `POST /moderation/posts/:post_id/hide` · `POST /moderation/posts/:post_id/restore` · `POST /moderation/threads/:thread_id/lock` · `POST /moderation/threads/:thread_id/unlock` · `POST /moderation/actions/:action_id/reverse` · `POST /moderation/users/:user_id/suspend` · `POST /moderation/suspensions/:suspension_id/revoke` |
-| Administration | `GET /admin` · `GET /admin/roles` · `POST /admin/roles` · `POST /admin/permissions` · `POST /admin/roles/:role_id/permissions` · `GET /admin/users/:user_id/roles` · `POST /admin/users/:user_id/roles` · `POST /admin/role-bindings/:binding_id/revoke` · `GET /admin/audit` |
-| Search and discovery | `GET /search?q=...` · `GET /search/autocomplete?q=...` · `GET /robots.txt` · `GET /sitemap.xml` · `GET /feed.atom` |
+| Notifications | `GET /notifications` · `POST /notifications/:notification_id/read` · `POST /notifications/read-all` · `GET /mentions` |
+| Realtime | `WEBSOCKET /realtime` |
+| Reports | `POST /t/:thread_id/report` · `POST /p/:post_id/report` · `POST /u/:username/report` |
+| Identity | `GET /register` · `POST /register` · `GET /login` · `POST /login` · `POST /logout` · `GET /password/reset` · `POST /password/reset` · `GET /password/reset/:token` · `POST /password/reset/complete` · `GET /email/verify` · `POST /email/verify/request` · `GET /email/verify/:token` · `POST /email/verify/complete` · `GET /email/confirm/:token` · `POST /email/confirm` |
+| Settings | `GET /settings` · `POST /settings` · `POST /settings/password` · `POST /settings/email` · `POST /locale` · `POST /theme` |
+| Privacy | `GET /privacy` · `POST /privacy/export` · `GET /privacy/export/:export_request_id` · `POST /privacy/deletion` |
+| Moderation | `GET /moderation/reports` · `GET /moderation/actions` · `GET /moderation/suspensions` · `POST /moderation/reports/:report_id/assign` · `POST /moderation/reports/:report_id/release` · `POST /moderation/reports/:report_id/resolve` · `POST /moderation/posts/:post_id/hide` · `POST /moderation/posts/:post_id/restore` · `POST /moderation/threads/:thread_id/hide` · `POST /moderation/threads/:thread_id/restore` · `POST /moderation/threads/:thread_id/lock` · `POST /moderation/threads/:thread_id/unlock` · `POST /moderation/actions/:action_id/reverse` · `POST /moderation/users/:user_id/suspend` · `POST /moderation/suspensions/:suspension_id/revoke` |
+| Administration | `GET /admin` · `GET /admin/users` · `GET /admin/roles` · `POST /admin/roles` · `POST /admin/permissions` · `POST /admin/roles/:role_id/permissions` · `GET /admin/users/:user_id/roles` · `POST /admin/users/:user_id/roles` · `POST /admin/role-bindings/:binding_id/revoke` · `GET /admin/categories` · `POST /admin/categories` · `POST /admin/categories/:category_id` · `GET /admin/audit` · `GET /admin/jobs` · `GET /admin/status` · `GET /admin/privacy` · `POST /admin/privacy/deletions/:request_id/approve` · `POST /admin/privacy/deletions/:request_id/hold` · `POST /admin/privacy/erasure/:job_id/run` |
+| Search and discovery | `GET /search?q=...` · `GET /search/autocomplete?q=...` · `GET /robots.txt` · `GET /sitemap.xml` · `GET /feed.atom` · `GET /legal/terms` · `GET /legal/privacy` · `GET /legal/cookies` |
+| Operations | `GET /health` · `GET /health/live` · `GET /health/ready` · `GET /metrics` |
 
 The admin console is available to operators holding `admin_console.view` or
 `admin_console.manage`. Grant initial access outside HTTP with

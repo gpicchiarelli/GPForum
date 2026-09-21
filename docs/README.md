@@ -8,7 +8,7 @@ below go deeper, grouped by what you are trying to do.
 | Document | What it covers |
 | --- | --- |
 | [ARCHITECTURE.md](../ARCHITECTURE.md) | The SSR-first modular monolith and its boundaries |
-| [architecture/](architecture) | Bootstrap, presentation, web access, and per-area workflow boundaries |
+| [architecture/](architecture) | Bootstrap, presentation, web access, per-area workflow boundaries, operational profiles, partition lifecycle, and the longevity review |
 | [EVENTS.md](../EVENTS.md) | Event envelope and delivery contracts |
 | [OUTBOX_LIFECYCLE.md](OUTBOX_LIFECYCLE.md) | Transactional outbox, retries, and dead letters |
 | [realtime.md](realtime.md) | Realtime as an enhancement boundary |
@@ -41,6 +41,7 @@ below go deeper, grouped by what you are trying to do.
 | [ops/stress-load.md](ops/stress-load.md) | Concurrent HTTP stress profiles against a base URL |
 | [ops/private-beta-checklist.md](ops/private-beta-checklist.md) | Operator private-beta go/no-go aggregate (print-only) |
 | [ops/evidence/](ops/evidence) | Archived operator evidence blobs (laptop vs staging; never a beta claim) |
+| [ops/evidence-validate.md](ops/evidence-validate.md) | Validate operator-captured evidence JSON before archiving it |
 | [release/readiness-review.md](release/readiness-review.md) | Latest go / no-go review |
 
 ## Performance
