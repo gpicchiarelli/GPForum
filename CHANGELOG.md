@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/gpforum-dead-letter-check` to automate the
+  `docs/ops/dead-letters.md` staging check (`--simulate` permanent failure →
+  dead-letter → redispatch → retention hold) with EvidenceMeta JSON. Live
+  `/admin/jobs` confirmation remains open. Does not claim private-beta
+  readiness.
+
 - Extend EvidenceMeta / evidence-validate to staging drills
   (`staging_drill`, `attachment_filesystem`, `deploy_checklist`,
   `staging_ops_extensions`) so prep archives can be `--strict`-checked offline.

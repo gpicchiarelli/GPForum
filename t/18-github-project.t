@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 176;
+const my $EXPECTED_TESTS => 181;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -50,6 +50,7 @@ for my $required_file (
     docs/ops/staging-host.md
     docs/ops/stress-load.md
     docs/ops/mail-check.md
+    docs/ops/dead-letters.md
     docs/ops/private-beta-checklist.md
     docs/ops/evidence-validate.md
     docs/ops/evidence/2026-09-20-macos-laptop-prep/README.md
@@ -90,6 +91,7 @@ for my $required_file (
     bin/gpforum-stress-load
     bin/gpforum-evidence-validate
     bin/gpforum-evidence-meta
+    bin/gpforum-dead-letter-check
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
@@ -115,6 +117,7 @@ for my $required_file (
     script/gpforum-evidence-live
     script/gpforum-evidence-validate
     script/gpforum-evidence-meta
+    script/gpforum-dead-letter-check
     )
   )
 {
@@ -478,6 +481,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('script/gpforum-evidence-meta')->slurp,
         qr/gpforum-evidence-meta/msx,
         'evidence-meta wrapper invokes bin entrypoint'
+    );
+    like(
+        path('docs/ops/dead-letters.md')->slurp,
+        qr/gpforum-dead-letter-check|PRIVATE BETA|private-beta/msx,
+        'dead-letters docs cover check entrypoint'
+    );
+    like(
+        path('script/gpforum-dead-letter-check')->slurp,
+        qr/gpforum-dead-letter-check/msx,
+        'dead-letter-check wrapper invokes bin entrypoint'
     );
 
 1;

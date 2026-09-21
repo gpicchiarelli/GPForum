@@ -34,6 +34,7 @@ on a real target, and operator runbook evidence.
 | Staging host verify | `script/staging-host-verify` | `docs/ops/staging-host.md` | Repo artifacts; optional env-file keys, systemd `is-active`, HTTP health — **not** an install |
 | Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Cloud Agent VM 100/500/1000 archived (`evidence/2026-09-20-cloud-agent-live/`, `…-stress500/`); staging TLS 100/500/1000 still open |
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
+| Dead letters | `script/gpforum-dead-letter-check` | `docs/ops/dead-letters.md` | Simulate permanent→dead-letter→redispatch; live `/admin/jobs` still open |
 | Live evidence pack | `script/gpforum-evidence-live` | `docs/ops/staging-host.md` | Prints verify+stress+mail archive commands; does **not** run them or claim readiness |
 | Evidence validate | `script/gpforum-evidence-validate` | `docs/ops/evidence-validate.md` | Validates archived JSON shape/secrets/claims; does **not** claim readiness |
 | Evidence meta stamp | `script/gpforum-evidence-meta` | `docs/ops/evidence/README.md` | Stamps shared meta markers on legacy archives; does **not** claim readiness |
@@ -161,6 +162,7 @@ commit on the **staging** target (not only laptop smoke):
 | Live deploy | Hypnotoad + TLS + env file on staging host healthy; `staging-host-verify` archived | Only rendered-sample `nginx -t`; verify never run with live flags |
 | Stress | At least profile `100` `--check` on staging hardware archived | Only VM laptop smoke / dry-run |
 | Mail | Staging `--dry-run` and a controlled `--send` archived | Adapter unconfigured; no SMTP evidence |
+| Dead letters | `gpforum-dead-letter-check --simulate` archived + `/admin/jobs` walk | Never simulated; no live review confirmation |
 | Product ops | Moderation + dead-letter drill with seeded roles | Never exercised with humans |
 
 Until then the verdict remains **PRIVATE BETA: NO-GO**. Prefer
@@ -173,6 +175,7 @@ optimism.
 - [staging-host.md](staging-host.md)
 - [stress-load.md](stress-load.md)
 - [mail-check.md](mail-check.md)
+- [dead-letters.md](dead-letters.md)
 - [evidence/](evidence) (archived blobs; laptop vs staging — never a go decision)
 - [../release/readiness-review.md](../release/readiness-review.md)
 - [../PRODUCTION_READINESS.md](../PRODUCTION_READINESS.md)

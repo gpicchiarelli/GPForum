@@ -66,6 +66,16 @@ It does not revive cancelled outbox rows.
 
 ## Staging check
 
+Automate the rehearsal (in-memory dispatcher stack; EvidenceMeta JSON):
+
+```sh
+script/gpforum-dead-letter-check --simulate --human
+script/gpforum-dead-letter-check --dry-run --json
+# Archive: script/gpforum-dead-letter-check --json > /tmp/dead-letter-check.json
+```
+
+Manual confirmation on staging still required:
+
 1. Force a handler failure classified `permanent` (or exhaust retries).
 2. Confirm `/admin/jobs` shows one dead-letter row and the outbox row is
    `cancelled`.
@@ -73,3 +83,6 @@ It does not revive cancelled outbox rows.
    that id.
 4. Confirm scheduled-jobs does not delete a fresh dead-letter before the
    retention window.
+
+`--simulate` covers steps 1–4 against production `Dispatcher` code with an
+in-memory outbox. It does **not** replace the live `/admin/jobs` walk.
