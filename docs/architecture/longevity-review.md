@@ -1,475 +1,474 @@
 # GPForum longevity architecture review
 
-Data: 2026-06-02.
+Date: 2026-06-02.
 
-Ruolo: Principal Engineer incaricato di valutare mantenibilità, evolvibilità,
-costo futuro, complessità architetturale e debito tecnico su un orizzonte di
-5-10 anni.
+Role: Principal Engineer tasked with assessing maintainability, evolvability,
+future cost, architectural complexity, and technical debt over a 5-10 year
+horizon.
 
-Non è una security review e non propone nuove funzionalità. Le valutazioni
-derivano dal codice ispezionato in `lib`, `t`, `migrations`, `deploy`,
-`.github/workflows` e dagli script di gate architetturale.
+This is not a security review and it proposes no new features. The assessments
+derive from the code inspected in `lib`, `t`, `migrations`, `deploy`, and
+`.github/workflows`, and from the architectural gate scripts.
 
-## Evidenze principali dal codice
+## Main evidence from the code
 
-- `lib` contiene 248 moduli Perl.
-- I layer più grandi sono `Service` con 102 moduli e 18.741 righe,
-  `Controller` con 12 moduli e 5.444 righe, `Command` con 10 moduli e 5.177
-  righe, `Schema::Result` con 58 result class e 3.146 righe.
-- I controller più grandi sono `Controller::Forum` con 1.360 righe,
-  `Controller::Identity` con 1.157 righe, `Controller::Moderation` con 651
-  righe e `Controller::Admin` con 622 righe.
-- I servizi più grandi sono `Service::Attachment::Store` come facade di
-  persistenza sopra `Record`, `DownloadAccess`, `Lifecycle` e `Event`,
-  `Service::Privacy::DeletionWorkflow` come facade sopra `Record`, `Erasure`,
-  `Completion` e `Event`, `RetentionHoldStore` come persistenza hold sopra
-  `Event`,
-  e `Service::Outbox::Dispatcher` come facade sopra `FailureType`, `Retry` e
-  `ClaimQuery`. `Identity::Store` è un facade
-  di 317 righe sopra store dedicati, con `Identity::Event` sotto `Audit`.
-- `Domain` oggi contiene sostanzialmente solo `EventEnvelope`; il dominio reale
-  è espresso soprattutto in service, store, workflow e schema DBIC.
-- Le migrazioni sono 25; le più dense sono `004_platform_governance.sql`,
-  `003_forum_projection.sql`, `001_core_identity.sql` e
+- `lib` contains 248 Perl modules.
+- The largest layers are `Service` with 102 modules and 18,741 lines,
+  `Controller` with 12 modules and 5,444 lines, `Command` with 10 modules and
+  5,177 lines, and `Schema::Result` with 58 result classes and 3,146 lines.
+- The largest controllers are `Controller::Forum` with 1,360 lines,
+  `Controller::Identity` with 1,157 lines, `Controller::Moderation` with 651
+  lines, and `Controller::Admin` with 622 lines.
+- The largest services are `Service::Attachment::Store` as a persistence facade
+  over `Record`, `DownloadAccess`, `Lifecycle`, and `Event`;
+  `Service::Privacy::DeletionWorkflow` as a facade over `Record`, `Erasure`,
+  `Completion`, and `Event`; `RetentionHoldStore` as hold persistence over
+  `Event`; and `Service::Outbox::Dispatcher` as a facade over `FailureType`,
+  `Retry`, and `ClaimQuery`. `Identity::Store` is a 317-line facade over
+  dedicated stores, with `Identity::Event` under `Audit`.
+- `Domain` today contains essentially only `EventEnvelope`; the real domain is
+  expressed mostly in services, stores, workflows, and the DBIC schema.
+- There are 25 migrations; the densest are `004_platform_governance.sql`,
+  `003_forum_projection.sql`, `001_core_identity.sql`, and
   `002_event_audit.sql`.
-- `t` contiene 87 test file top-level e 106 helper sotto `t/lib`, per circa
-  30.115 righe di test/helper.
-- `script/architecture-check` e i test `t/34-architecture-discipline.t`,
-  `t/75-architecture-foundation.t`, `t/86-engineering-correctness.t` passano.
-- Non ho trovato dipendenze dirette dai servizi verso controller/view/web o
-  accesso DBIC diretto nei controller; questa è una proprietà positiva reale.
+- `t` contains 87 top-level test files and 106 helpers under `t/lib`, for about
+  30,115 lines of tests and helpers.
+- `script/architecture-check` and the tests `t/34-architecture-discipline.t`,
+  `t/75-architecture-foundation.t`, and `t/86-engineering-correctness.t` pass.
+- I found no direct dependencies from services toward controllers/views/web and
+  no direct DBIC access in controllers; this is a real, positive property.
 
-## Sintesi
+## Summary
 
-GPForum è un modular monolith molto più ordinato della media: composition root
-esplicita, DBIC schema ricco, service layer ampio, outbox, audit/event log,
-query budget, test estesi e deploy templates. Questo gli dà una base concreta
-per durare.
+GPForum is a modular monolith that is far tidier than average: an explicit
+composition root, a rich DBIC schema, a broad service layer, an outbox,
+audit/event logs, query budgets, extensive tests, and deploy templates. That
+gives it a concrete base for lasting.
 
-Il rischio principale non è la mancanza di architettura, ma l'eccesso di
-superficie già presente rispetto al nucleo forum: identity avanzata, privacy,
-moderation, realtime, plugin, portability, OS runtime, benchmark e governance
-sono tutti nel monolite. Se questa superficie cresce senza estrarre boundary
-applicativi più stabili, il costo futuro salirà in modo non lineare.
+The main risk is not a lack of architecture but the amount of surface already
+present relative to the forum core: advanced identity, privacy, moderation,
+realtime, plugins, portability, OS runtime, benchmarks, and governance all live
+in the monolith. If that surface grows without extracting more stable
+application boundaries, future cost will rise non-linearly.
 
-La stima onesta: GPForum può restare mantenibile 5 anni senza riscrittura se
-resta un modular monolith e se nei prossimi 12 mesi si riducono controller
-grandi, identity store e workflow troppo larghi. Se invece si aggiungono
-federazione, API pubbliche, mobile, plugin esterni e multi-site senza questi
-refactor, il rischio di riscrittura parziale diventa alto.
+An honest estimate: GPForum can stay maintainable for 5 years without a rewrite
+if it remains a modular monolith and if the next 12 months shrink the large
+controllers, the identity store, and the overly wide workflows. If instead
+federation, public APIs, mobile, external plugins, and multi-site are added
+without those refactors, the risk of a partial rewrite becomes high.
 
-## Valutazione per area
+## Assessment by area
 
-| Area | Punteggio | Debito | Motivazione | Rischio | Costo futuro |
+| Area | Score | Debt | Rationale | Risk | Future cost |
 | --- | ---: | --- | --- | --- | --- |
-| Architettura | 8.0/10 | ARCHITECTURAL | `GPForum.pm` delega a bootstrap mirati; `Service`, `Web`, `ViewModel`, `Worker`, `Schema` sono separati; i controller non usano DBIC direttamente. | Composition manuale via helper Mojolicious e bootstrap molto larghi possono diventare un service locator difficile da governare. | Medio: cresce con ogni nuovo workflow. |
-| Dominio | 7.0/10 | STRATEGIC | Concetti di forum, identity, moderation, privacy, event/outbox sono riconoscibili e coerenti. | Il dominio è implicito in store/schema/stringhe di stato; `Domain` è sottile e non contiene aggregate/workflow semantics. | Medio-alto se arrivano federation/API/plugin. |
-| Database | 8.0/10 | OPERATIONAL | Schema PostgreSQL forte: vincoli, indici, unique key, partizioni per event/audit/notifications, read model e query budgets. | Crescita dati richiede lifecycle di partizioni, archiviazione, retention e restore operativi più espliciti; alcune migrazioni iniziali sono molto dense. | Medio fino a 10k utenti, alto a 100k. |
-| Controller | 5.5/10 | CODE QUALITY | I controller rispettano abbastanza il boundary DB, ma `Forum` e `Identity` sono troppo grandi e duplicano error/render/auth/CSRF/HTML-JSON. | Ogni variazione di UX/API può toccare file grandi, aumentare branching e rendere fragili i test web. | Alto nei prossimi 12 mesi. |
-| Workflow | 7.0/10 | ARCHITECTURAL | `PostingWorkflow`, outbox dispatcher e idempotency service sono buoni segnali; transazioni sono concentrate negli store. | Identity, privacy e moderation mescolano troppi casi in store/workflow larghi; alcuni workflow restano orchestrati nei controller. | Medio-alto. |
-| Testing | 8.0/10 | OPERATIONAL | Suite ampia, CI severa, coverage, architecture gates, query budget, benchmark smoke e molte regressioni business. | Molti test sono fixture/test-double e contratti testuali; il costo manutentivo cresce e può mancare evidenza DB reale su nuove concorrenze. | Medio. |
-| Performance architecture | 7.0/10 | ARCHITECTURAL | Keyset pagination, query budget, indici hot path, FTS/trigram search, cache locale TTL/tagged. | Cache process-local, invalidazione limitata e search dentro PostgreSQL possono diventare colli di bottiglia a scala alta. | Medio a 10k, alto a 100k. |
-| Operazioni | 7.5/10 | OPERATIONAL | Config validata, request id, metrics/readiness, systemd/nginx/freebsd/launchd, preflight e CI con PostgreSQL. | Profili ambiente e rollback sono più contratti/runbook che automazione completa; debug multi-process richiederà disciplina operativa. | Medio. |
-| Evoluzione futura | 6.5/10 | STRATEGIC | Modular monolith adatto a evoluzione graduale; plugin registry e bootstrap boundaries esistono. | OAuth/OIDC, API pubbliche, mobile, multi-site e federation chiedono boundary più stabili di quelli attuali. | Alto se si cresce senza refactor. |
+| Architecture | 8.0/10 | ARCHITECTURAL | `GPForum.pm` delegates to targeted bootstraps; `Service`, `Web`, `ViewModel`, `Worker`, and `Schema` are separate; controllers do not use DBIC directly. | Manual composition through Mojolicious helpers and very wide bootstraps can turn into a service locator that is hard to govern. | Medium: grows with every new workflow. |
+| Domain | 7.0/10 | STRATEGIC | Forum, identity, moderation, privacy, and event/outbox concepts are recognizable and coherent. | The domain is implicit in stores/schema/state strings; `Domain` is thin and holds no aggregate or workflow semantics. | Medium-high once federation/API/plugins arrive. |
+| Database | 8.0/10 | OPERATIONAL | Strong PostgreSQL schema: constraints, indexes, unique keys, partitions for event/audit/notifications, read models, and query budgets. | Data growth calls for more explicit partition lifecycle, archiving, retention, and operational restore; some early migrations are very dense. | Medium up to 10k users, high at 100k. |
+| Controllers | 5.5/10 | CODE QUALITY | Controllers respect the DB boundary reasonably well, but `Forum` and `Identity` are too large and duplicate error/render/auth/CSRF/HTML-JSON handling. | Any UX/API change can touch large files, increase branching, and make the web tests fragile. | High over the next 12 months. |
+| Workflows | 7.0/10 | ARCHITECTURAL | `PostingWorkflow`, the outbox dispatcher, and the idempotency service are good signals; transactions are concentrated in the stores. | Identity, privacy, and moderation mix too many cases into wide stores/workflows; some workflows are still orchestrated in the controllers. | Medium-high. |
+| Testing | 8.0/10 | OPERATIONAL | Broad suite, strict CI, coverage, architecture gates, query budgets, smoke benchmarks, and many business regressions. | Many tests are fixtures/test doubles and textual contracts; maintenance cost grows and real-DB evidence for new concurrency can be missing. | Medium. |
+| Performance architecture | 7.0/10 | ARCHITECTURAL | Keyset pagination, query budgets, hot-path indexes, FTS/trigram search, local TTL/tagged cache. | A process-local cache, limited invalidation, and search inside PostgreSQL can become bottlenecks at high scale. | Medium at 10k, high at 100k. |
+| Operations | 7.5/10 | OPERATIONAL | Validated config, request id, metrics/readiness, systemd/nginx/freebsd/launchd, preflight, and CI with PostgreSQL. | Environment profiles and rollback are contracts/runbooks more than full automation; multi-process debugging will require operational discipline. | Medium. |
+| Future evolution | 6.5/10 | STRATEGIC | A modular monolith suits gradual evolution; a plugin registry and bootstrap boundaries exist. | OAuth/OIDC, public APIs, mobile, multi-site, and federation demand more stable boundaries than the current ones. | High if it grows without refactoring. |
 
-## Architettura
+## Architecture
 
-### Cosa funziona
+### What works
 
-- `GPForum.pm` è un composition root leggibile: costruisce config/runtime e
-  registra bootstrap specifici.
-- I bootstrap separano le famiglie principali: Core, Security, Operations,
+- `GPForum.pm` is a readable composition root: it builds config/runtime and
+  registers specific bootstraps.
+- The bootstraps separate the main families: Core, Security, Operations,
   Identity, Discovery, Forum, Workers, Admin, Moderation, Privacy, Routes.
-- I controller non accedono direttamente a `DBIx::Class` resultset; passano da
-  helper/service.
-- I service non dipendono dai controller o dalle view.
-- I gate architetturali sono eseguibili e passano.
+- Controllers do not access `DBIx::Class` resultsets directly; they go through
+  helpers/services.
+- Services do not depend on controllers or views.
+- The architectural gates are executable and they pass.
 
-### Costo futuro
+### Future cost
 
-Il sistema usa helper Mojolicious come contenitore di dipendenze. Oggi è
-pragmatico; tra 5 anni può diventare opaco, perché dipendenze e lifetime sono
-distribuiti fra `Bootstrap::*` e i controller. Il file
-`Bootstrap::Forum` registra molte dipendenze eterogenee: forum, attachment,
-community, notification e search. Questa scelta resta accettabile finché il
-prodotto rimane monolite SSR, ma diventa costosa se arrivano API/mobile o
-multi-site.
+The system uses Mojolicious helpers as a dependency container. Today that is
+pragmatic; in 5 years it can become opaque, because dependencies and lifetimes
+are spread between `Bootstrap::*` and the controllers. `Bootstrap::Forum`
+registers many heterogeneous dependencies: forum, attachment, community,
+notification, and search. That choice stays acceptable while the product remains
+an SSR monolith, but it becomes costly once API/mobile or multi-site arrive.
 
-### Debito
+### Debt
 
-ARCHITECTURAL: introdurre un boundary applicativo più esplicito per workflow
-write/read critici prima di estendere le capability esterne.
+ARCHITECTURAL: introduce a more explicit application boundary for critical
+write/read workflows before extending the external capabilities.
 
-## Dominio
+## Domain
 
-### Cosa funziona
+### What works
 
-- Nomi principali coerenti: `Thread`, `Post`, `PostBody`, `PostRevision`,
-  `Report`, `ModerationAction`, `DeletionRequest`, `ErasureJob`,
-  `OutboxMessage`, `EventLog`, `AuditLog`.
-- Il concetto di event/outbox è consistente nei writer principali.
-- `PostingWorkflow` è un buon confine applicativo per thread/reply.
-- I read model sono separati dai writer in diversi casi.
+- Coherent main names: `Thread`, `Post`, `PostBody`, `PostRevision`, `Report`,
+  `ModerationAction`, `DeletionRequest`, `ErasureJob`, `OutboxMessage`,
+  `EventLog`, `AuditLog`.
+- The event/outbox concept is consistent across the main writers.
+- `PostingWorkflow` is a good application boundary for threads/replies.
+- Read models are separate from writers in several cases.
 
-### Costo futuro
+### Future cost
 
-Il dominio non è ancora espresso come modello di aggregate stabile. Le regole
-vivono in store e controller, spesso come stringhe di stato:
-`visible`, `hidden`, `locked`, `pending`, `approved`, `held`, `done`.
-Questo non è sbagliato per un MVP, ma rende più costoso aggiungere varianti di
-workflow senza rompere casi esistenti.
+The domain is not yet expressed as a stable aggregate model. The rules live in
+stores and controllers, often as state strings: `visible`, `hidden`, `locked`,
+`pending`, `approved`, `held`, `done`. That is not wrong for an MVP, but it
+makes it more expensive to add workflow variants without breaking existing
+cases.
 
-Il modulo `Domain` è troppo piccolo rispetto alla quantità di semantica reale.
-Non serve creare oggetti domain ovunque, ma i comandi principali dovrebbero
-diventare contratti applicativi chiari e testabili.
+The `Domain` module is too small relative to the amount of real semantics. There
+is no need to create domain objects everywhere, but the main commands should
+become clear, testable application contracts.
 
-### Debito
+### Debt
 
-STRATEGIC: formalizzare command/result/event contracts dei workflow principali
-prima di introdurre integrazioni esterne.
+STRATEGIC: formalize the command/result/event contracts of the main workflows
+before introducing external integrations.
 
 ## Database
 
-### Cosa funziona
+### What works
 
-- DBIC schema ampio e nominato in modo comprensibile.
-- Vincoli importanti presenti: unique su utenti, session hash, post position,
-  revision number, bookmark/subscription target, outbox idempotency, command log
-  idempotency.
-- Indici hot path presenti per thread, post, search, outbox, report, sessioni.
-- Event, audit e notifications sono predisposti a partizioni range su
+- A broad DBIC schema with understandable names.
+- Important constraints are present: unique on users, session hash, post
+  position, revision number, bookmark/subscription target, outbox idempotency,
+  command log idempotency.
+- Hot-path indexes exist for threads, posts, search, outbox, reports, and
+  sessions.
+- Event, audit, and notifications are prepared for range partitions on
   `created_at`.
-- `query-plan-check` e `query-plan-evidence` esistono come strumenti di
-  controllo.
+- `query-plan-check` and `query-plan-evidence` exist as control tools.
 
-### Costo futuro
+### Future cost
 
-Le tabelle append-only e semi-append-only diventeranno il punto operativo più
-costoso: `event_log`, `audit_log`, `notifications`, `outbox_messages`,
-`dead_letters`, `search_documents`, `post_revisions`, `rate_limit_buckets`.
-Il codice ha già i concetti, ma non vedo nel codice una gestione completa del
-partition lifecycle, archiviazione, retention per ogni tabella o rotazione dei
-dati freddi.
+The append-only and semi-append-only tables will become the most expensive
+operational point: `event_log`, `audit_log`, `notifications`, `outbox_messages`,
+`dead_letters`, `search_documents`, `post_revisions`, `rate_limit_buckets`. The
+code already has the concepts, but I do not see in the code a complete
+management of partition lifecycle, archiving, per-table retention, or cold data
+rotation.
 
-A 100.000 utenti, PostgreSQL può ancora essere il centro del sistema, ma solo
-con partizioni attive, vacuum/retention misurati, search dimensionata e
-separazione chiara dei job.
+At 100,000 users PostgreSQL can still be the center of the system, but only with
+active partitions, measured vacuum/retention, sized search, and a clear
+separation of jobs.
 
-### Debito
+### Debt
 
-OPERATIONAL: creare lifecycle operativo di partizioni/retention/archiviazione
-prima che il volume lo imponga.
+OPERATIONAL: create an operational partition/retention/archiving lifecycle
+before the volume forces it.
 
-## Controller
+## Controllers
 
-### Cosa funziona
+### What works
 
-- I controller delegano molto a service/view model.
-- Non ho trovato accesso diretto a resultset DBIC nei controller.
-- `Forum` usa `PostingWorkflow` per create_thread/create_reply/edit_post/delete_post/restore_post/edit_thread/delete_thread/restore_thread/move_thread invece di
-  inserire direttamente.
+- Controllers delegate heavily to services and view models.
+- I found no direct DBIC resultset access in the controllers.
+- `Forum` uses `PostingWorkflow` for
+  create_thread/create_reply/edit_post/delete_post/restore_post/edit_thread/delete_thread/restore_thread/move_thread
+  instead of inserting directly.
 
-### Costo futuro
+### Future cost
 
-`Controller::Forum` e `Controller::Identity` sono il debito più evidente.
-Esempi dal codice:
+`Controller::Forum` and `Controller::Identity` are the most visible debt.
+Examples from the code:
 
-- `Controller::Forum` ha 1.360 righe e gestisce read pages, writes, feed,
-  bookmark, subscription, report, search, autocomplete, cache rendering, error
-  payload, CSRF, rate limit e suspension checks.
-- `Controller::Identity` ha 1.157 righe e include login, register, reset,
-  settings, email confirmation, profile e molti helper di rendering/route.
+- `Controller::Forum` has 1,360 lines and handles read pages, writes, feed,
+  bookmarks, subscriptions, reports, search, autocomplete, cache rendering,
+  error payloads, CSRF, rate limits, and suspension checks.
+- `Controller::Identity` has 1,157 lines and covers login, register, reset,
+  settings, email confirmation, profile, and many rendering/route helpers.
 - `_render_payload`, `_render_error`, `_csrf_failure`, `_forbidden`,
-  `_bad_request`, `_current_user_id` e pattern simili sono duplicati in più
-  controller.
+  `_bad_request`, `_current_user_id`, and similar patterns are duplicated across
+  several controllers.
 
-Questo non richiede un mega-refactor. Richiede una sequenza controllata:
-estrarre prima helper HTTP comuni e command adapters, poi ridurre i metodi più
-lunghi.
+This does not require a mega-refactor. It requires a controlled sequence:
+extract the common HTTP helpers and command adapters first, then shorten the
+longest methods.
 
-### Debito
+### Debt
 
-CODE QUALITY: refactor entro 12 mesi. Non per estetica, ma per ridurre costo di
-nuove route/API e regressioni sui flussi esistenti.
+CODE QUALITY: refactor within 12 months. Not for aesthetics, but to reduce the
+cost of new routes/APIs and regressions in the existing flows.
 
-## Workflow
+## Workflows
 
-### Cosa funziona
+### What works
 
-- `PostingWorkflow` è una buona evoluzione rispetto a controller business logic.
-- `CommandIdempotency` rende esplicito il concetto di comando/replay.
-- `PostStore` alloca posizione dentro transazione e blocca il thread via
-  `FOR UPDATE`.
-- `Outbox::Dispatcher` usa claim batch PostgreSQL con `FOR UPDATE SKIP LOCKED`.
-- `DeletionWorkflow` contiene idempotenza su approval/job e controllo hold.
+- `PostingWorkflow` is a good step forward from business logic in controllers.
+- `CommandIdempotency` makes the command/replay concept explicit.
+- `PostStore` allocates the position inside a transaction and locks the thread
+  with `FOR UPDATE`.
+- `Outbox::Dispatcher` uses a PostgreSQL batch claim with
+  `FOR UPDATE SKIP LOCKED`.
+- `DeletionWorkflow` contains idempotency on approval/job and a hold check.
 
-### Costo futuro
+### Future cost
 
-La qualità non è uniforme:
+The quality is not uniform:
 
-- forum posting ha workflow applicativo;
-- moderation è ancora principalmente `ActionStore`;
-- identity è un unico store largo per credenziali, sessioni, token, preferenze
-  e audit;
-- privacy deletion è un workflow dedicato ma già complesso;
-- bookmark/subscription sono store semplici con logica check-then-write.
+- forum posting has an application workflow;
+- moderation is still mainly `ActionStore`;
+- identity is a single wide store for credentials, sessions, tokens,
+  preferences, and audit;
+- privacy deletion is a dedicated workflow but already complex;
+- bookmarks/subscriptions are simple stores with check-then-write logic.
 
-Per mantenibilità a 5 anni, i write workflow devono convergere verso una forma
-comune: command object, authorization decision, idempotency, transaction,
+For 5-year maintainability, the write workflows must converge on a common shape:
+command object, authorization decision, idempotency, transaction,
 event/audit/outbox, response.
 
-### Debito
+### Debt
 
-ARCHITECTURAL: uniformare i write workflow critici senza creare framework.
+ARCHITECTURAL: unify the critical write workflows without building a framework.
 
 ## Testing
 
-### Cosa funziona
+### What works
 
-- Suite ampia: 87 file top-level e 106 helper.
-- CI include syntax, perltidy, perlcritic, migrations, seed, query budget,
-  architecture check, query plan, tests, benchmark smoke, Hypnotoad e coverage.
-- Esistono test di architettura e engineering correctness, non solo unit test.
-- Molti moduli hanno test mirati e fixture helper riusabili.
+- Broad suite: 87 top-level files and 106 helpers.
+- CI covers syntax, perltidy, perlcritic, migrations, seed, query budget,
+  architecture check, query plan, tests, smoke benchmarks, Hypnotoad, and
+  coverage.
+- Architecture and engineering-correctness tests exist, not just unit tests.
+- Many modules have targeted tests and reusable fixture helpers.
 
-### Costo futuro
+### Future cost
 
-Il costo di manutenzione della suite è già significativo. Alcuni test sono
-molto lunghi (`t/05-database.t`, `t/09-prompt-alignment.t`,
-`t/72-forum-bootstrap-workflow.t`) e alcuni verificano contratti tramite testo
-o regex. Questi gate sono utili, ma possono diventare fragili quando il design
-cambia legittimamente.
+The suite's maintenance cost is already significant. Some tests are very long
+(`t/05-database.t`, `t/09-prompt-alignment.t`,
+`t/72-forum-bootstrap-workflow.t`) and some verify contracts through text or
+regexes. Those gates are useful, but they can become fragile when the design
+changes legitimately.
 
-Il rischio principale è falso comfort: test doubles e fixture rapide non
-sostituiscono test PostgreSQL concorrenti o prove operative reali quando si
-toccano command log, audit chain, outbox, privacy e moderation.
+The main risk is false comfort: test doubles and fast fixtures do not replace
+concurrent PostgreSQL tests or real operational evidence when command log, audit
+chain, outbox, privacy, and moderation are touched.
 
-### Debito
+### Debt
 
-OPERATIONAL: mantenere i test veloci, ma aggiungere test DB-backed solo sui
-punti dove il rischio reale lo giustifica.
+OPERATIONAL: keep the tests fast, but add DB-backed tests only where the real
+risk justifies them.
 
 ## Performance architecture
 
-### Cosa funziona
+### What works
 
-- Paginazione keyset in lettori forum/bookmark.
-- Query budget catalog e osservazione DB request-level.
-- Search usa PostgreSQL FTS/trigram e limiti bounded.
-- Cache locale con TTL, tag, LRU-like eviction.
-- Public HTTP cache solo per GET/HEAD guest e `Vary: Accept, Cookie`.
+- Keyset pagination in the forum/bookmark readers.
+- A query budget catalog and request-level DB observation.
+- Search uses PostgreSQL FTS/trigram with bounded limits.
+- A local cache with TTL, tags, and LRU-like eviction.
+- Public HTTP cache only for guest GET/HEAD and `Vary: Accept, Cookie`.
 
-### Costo futuro
+### Future cost
 
-La cache è per-processo. Con più worker/processi, ogni processo ha una vista
-separata e l'invalidazione non è distribuita. Oggi questo va bene perché la
-cache è trattata come acceleratore deperibile. A 10k utenti può ancora andare
-se TTL e query sono sani. A 100k utenti, serve decidere se rimanere con cache
-locale prudente o introdurre una cache condivisa solo per letture ben definite.
+The cache is per-process. With more workers/processes, each process has its own
+view and invalidation is not distributed. Today this is fine because the cache
+is treated as a perishable accelerator. At 10k users it can still hold if TTLs
+and queries are sane. At 100k users, the project needs to decide between staying
+with a conservative local cache and introducing a shared cache only for
+well-defined reads.
 
-Search dentro PostgreSQL è una scelta giusta all'inizio. A scala alta può
-restare valida, ma solo con budget, indici e dataset evidence; non va
-sostituita preventivamente.
+Search inside PostgreSQL is the right early choice. At high scale it can remain
+valid, but only with budgets, indexes, and dataset evidence; it should not be
+replaced preemptively.
 
-### Debito
+### Debt
 
-ARCHITECTURAL: mantenere cache locale finché basta; preparare un adapter cache
-solo quando metriche reali lo richiedono.
+ARCHITECTURAL: keep the local cache while it suffices; prepare a cache adapter
+only when real metrics require it.
 
-## Operazioni
+## Operations
 
-### Cosa funziona
+### What works
 
-- `Config` valida runtime, OS, secret production e profili Hypnotoad.
-- `Bootstrap::Operations` installa request id, DB query stats, budget headers,
-  metrics snapshot, readiness e rate limiter.
-- Deploy templates per systemd/nginx/freebsd/launchd esistono.
-- CI usa PostgreSQL service e applica migrazioni.
+- `Config` validates the runtime, OS, production secrets, and Hypnotoad
+  profiles.
+- `Bootstrap::Operations` installs the request id, DB query stats, budget
+  headers, metrics snapshot, readiness, and rate limiter.
+- Deploy templates for systemd/nginx/freebsd/launchd exist.
+- CI uses a PostgreSQL service and applies the migrations.
 
-### Costo futuro
+### Future cost
 
-Operations è abbastanza buono per un team piccolo. Il costo futuro nasce da:
+Operations is good enough for a small team. Future cost comes from:
 
-- profili ambiente non ancora separati come oggetti versionati;
-- rollback/restore ancora più runbook che automazione;
-- query budget endpoint mapping manuale in `Bootstrap::Operations`;
-- readiness che dipende anche da cataloghi applicativi da sincronizzare;
-- deployment cross-platform che aumenta superficie di supporto.
+- environment profiles that are not yet separated as versioned objects;
+- rollback/restore that is still more runbook than automation;
+- manual query budget endpoint mapping in `Bootstrap::Operations`;
+- readiness that also depends on application catalogs that must be synchronized;
+- cross-platform deployment that widens the support surface.
 
-### Debito
+### Debt
 
-OPERATIONAL: ridurre drift tra dev/staging/prod con profili espliciti e
-evidence automatizzata.
+OPERATIONAL: reduce drift between dev/staging/prod with explicit profiles and
+automated evidence.
 
-## Evoluzione futura
+## Future evolution
 
-### 1.000 utenti
+### 1,000 users
 
-Probabilità di restare mantenibile: alta.
+Probability of staying maintainable: high.
 
-Il monolite SSR, PostgreSQL, DBIC, query budget e cache locale sono coerenti.
-Il costo principale sarà operativo: backup, mail, staging, metriche e piccole
-regressioni controller.
+The SSR monolith, PostgreSQL, DBIC, query budgets, and the local cache are
+coherent. The main cost will be operational: backups, mail, staging, metrics,
+and small controller regressions.
 
-### 10.000 utenti
+### 10,000 users
 
-Probabilità di restare mantenibile: medio-alta.
+Probability of staying maintainable: medium-high.
 
-Servono disciplina su:
+Discipline is needed on:
 
-- indici e query plan su dataset reale;
+- indexes and query plans on a real dataset;
 - outbox throughput;
 - search projection;
-- cache TTL;
-- moderation e privacy workflow;
-- riduzione controller.
+- cache TTLs;
+- moderation and privacy workflows;
+- controller reduction.
 
-Non serve una riscrittura. Serve evitare feature spread.
+No rewrite is needed. What is needed is avoiding feature spread.
 
-### 100.000 utenti
+### 100,000 users
 
-Probabilità di restare mantenibile senza refactor sostanziali: media-bassa.
+Probability of staying maintainable without substantial refactors: medium-low.
 
-Il sistema può ancora essere un modular monolith, ma richiede:
+The system can still be a modular monolith, but it requires:
 
-- lifecycle partizioni/retention;
-- search e feed più misurati;
-- API/read model più espliciti;
-- cache/invalidation strategy più formale;
-- outbox/worker topology controllata;
-- profili deploy e observability multi-process/multi-host.
+- partition/retention lifecycle;
+- more measured search and feeds;
+- more explicit APIs/read models;
+- a more formal cache/invalidation strategy;
+- a controlled outbox/worker topology;
+- multi-process/multi-host deploy profiles and observability.
 
-Non è il numero utenti in sé a rompere il progetto; è la combinazione di volume
-dati, workflow privacy/moderation e integrazioni esterne.
+It is not the user count itself that breaks the project; it is the combination
+of data volume, privacy/moderation workflows, and external integrations.
 
-## Impatto di evoluzioni strategiche
+## Impact of strategic evolutions
 
-| Evoluzione | Impatto sulla codebase | Rischio se fatta ora | Nota tecnica |
+| Evolution | Impact on the codebase | Risk if done now | Technical note |
 | --- | --- | --- | --- |
-| Federazione | Molto alto | Alto | Richiede event contracts, identity mapping, moderation propagation e retry semantics molto più rigidi. |
-| OAuth/OIDC | Medio | Medio | Integrabile, ma `Identity::Store` va separato in credenziali/sessioni/token/profile. |
-| API pubbliche | Alto | Alto | I controller SSR non sono un buon boundary API stabile; serve adapter API su service/workflow. |
-| Mobile app | Alto | Medio-alto | Simile alle API pubbliche; richiede payload/versioning e auth/session contracts più espliciti. |
-| Multi-site | Molto alto | Alto | Lo schema non mostra tenancy globale; aggiungerla tardi è costoso. |
-| Plugin system | Alto | Alto | Registry/hook dispatcher sono piccoli; farli diventare ecosistema prima di stabilizzare contratti core sarebbe rischioso. |
+| Federation | Very high | High | Requires far stricter event contracts, identity mapping, moderation propagation, and retry semantics. |
+| OAuth/OIDC | Medium | Medium | Integrable, but `Identity::Store` must be split into credentials/sessions/tokens/profile. |
+| Public APIs | High | High | SSR controllers are not a good stable API boundary; an API adapter over services/workflows is needed. |
+| Mobile app | High | Medium-high | Similar to public APIs; requires payload/versioning and more explicit auth/session contracts. |
+| Multi-site | Very high | High | The schema shows no global tenancy; adding it late is expensive. |
+| Plugin system | High | High | The registry/hook dispatcher are small; turning them into an ecosystem before the core contracts stabilize would be risky. |
 
-## Debiti prioritari
+## Priority debts
 
-| Debito | Tipo | Orizzonte | Costo se ignorato |
+| Debt | Type | Horizon | Cost if ignored |
 | --- | --- | --- | --- |
-| Controller grandi e helper HTTP duplicati | CODE QUALITY | 0-12 mesi | Alto |
-| `Identity::Store` troppo largo | ARCHITECTURAL | fatto: facade su store dedicati | Basso |
-| Workflow write non uniformi | ARCHITECTURAL | 0-12 mesi | Medio-alto |
-| Domain model troppo implicito | STRATEGIC | 12-24 mesi | Medio-alto |
-| Partition/retention lifecycle | OPERATIONAL | prima di crescita dati | Alto |
-| Cache/invalidation process-local | ARCHITECTURAL | solo se scala | Medio |
-| Plugin/federation/API contracts prematuri | STRATEGIC | solo se roadmap conferma | Alto |
-| Test lunghi/fragili a regex | OPERATIONAL | continuo | Medio |
+| Large controllers and duplicated HTTP helpers | CODE QUALITY | 0-12 months | High |
+| `Identity::Store` too wide | ARCHITECTURAL | done: facade over dedicated stores | Low |
+| Non-uniform write workflows | ARCHITECTURAL | 0-12 months | Medium-high |
+| Domain model too implicit | STRATEGIC | 12-24 months | Medium-high |
+| Partition/retention lifecycle | OPERATIONAL | before data growth | High |
+| Process-local cache/invalidation | ARCHITECTURAL | only if it scales | Medium |
+| Premature plugin/federation/API contracts | STRATEGIC | only if the roadmap confirms | High |
+| Long tests that are fragile against regexes | OPERATIONAL | ongoing | Medium |
 
-## Cosa NON cambiare
+## What NOT to change
 
-- Non sostituire Mojolicious/SSR: è coerente col prodotto e mantiene il sistema
-  semplice.
-- Non introdurre microservizi: la codebase beneficia ancora del modular
+- Do not replace Mojolicious/SSR: it fits the product and keeps the system
+  simple.
+- Do not introduce microservices: the codebase still benefits from the modular
   monolith.
-- Non sostituire PostgreSQL/DBIC senza evidenza: lo schema è una forza, non un
-  limite immediato.
-- Non aggiungere cache distribuita, Redis o search engine esterno senza
-  saturazione misurata.
-- Non trasformare i bootstrap in un framework DI complesso; basta rendere più
-  espliciti i workflow principali.
-- Non espandere plugin/federazione/API pubbliche prima di stabilizzare i
-  boundary applicativi.
+- Do not replace PostgreSQL/DBIC without evidence: the schema is a strength, not
+  an immediate limit.
+- Do not add a distributed cache, Redis, or an external search engine without
+  measured saturation.
+- Do not turn the bootstraps into a complex DI framework; making the main
+  workflows more explicit is enough.
+- Do not expand plugins/federation/public APIs before the application boundaries
+  stabilize.
 
-## Cosa rifattorizzare entro 12 mesi
+## What to refactor within 12 months
 
-1. Estrarre helper HTTP comuni in `GPForum::Web::*`:
-   auth required, CSRF failure, JSON/HTML error payload, redirect helpers,
-   permission denial e current user.
+1. Extract the common HTTP helpers into `GPForum::Web::*`: auth required, CSRF
+   failure, JSON/HTML error payload, redirect helpers, permission denial, and
+   current user.
    `Web::Guard`, `Web::Access`, `Web::RealtimeAccess`, `Web::CookieSession`,
    `Web::PublicCacheAccess`, `Web::HomeAccess`, `Web::IdentityAccess`,
    `Web::DiscoveryAccess`, `Web::ForumAccess`, `Web::AttachmentAccess`,
    `Web::NotificationAccess`, `Web::ModerationAccess`, `Web::PrivacyAccess`,
-   `Web::AdminAccess` e `Web::OperationsAccess` coprono i contratti
-   condivisi, la home `home_unavailable`, gli errori testuali di identity, i
-   limiti/render dei documenti crawler, i limiti/validazioni HTTP del forum,
-   i limiti/filename HTTP degli attachment, i limiti HTTP delle notifiche, i
-   limiti/filtri HTTP della moderation, i limiti/conflict HTTP della privacy,
-   i limiti HTTP admin, gli hash realtime connect/subscribe e il token
-   `/metrics`. Gli status di successo delle write HTTP (admin catalog/binding,
-   moderation content/queue/suspension, privacy review, community
-   bookmark/subscription) vivono sugli stessi oggetti `Web::*Access`.
-2. Ridurre `Controller::Forum`:
-   separare read pages, write commands, community actions e search handlers.
-3. Ridurre `Controller::Identity`:
-   separare login/session, password lifecycle, email lifecycle, settings e
-   profile rendering.
-4. Separare `Identity::Store`:
-   fatto. Il facade delega a `CredentialStore`, `SessionStore`, `TokenStore`,
-   `Audit`, `PreferenceStore`, `AccountStore`, `AuthStore` e
-   `RegistrationStore`, con `Identity::Workflow` sopra. `Password`,
-   `SessionToken` e `Service::Id` caricano `Crypt::URandom` in modo lazy;
-   lo store e i collaboratori credential/session/token caricano
-   `Service::Id` in modo lazy.
-5. Uniformare write workflow:
-   command input, idempotency, transaction, event/audit/outbox, response.
-   Hashing audit è in `Infrastructure::AuditRecord`; `EventRecorder`
-   resta persistenza EventLog/Outbox/AuditLog e lookup della chain, e
-   carica `Service::Id` in modo lazy insieme a `Outbox::MessageBuilder` e
-   agli store event-backed che lo usavano solo per il default.
-   Classificazione, retry e SQL di claim outbox sono in `FailureType`,
-   `Retry` e `ClaimQuery`. Envelope e payload attachment sono in
-   `Attachment::Event`. Policy di orphan cleanup attachment è in
-   `Attachment::Lifecycle`, inclusi i cap di fetch dei link. Envelope e payload privacy sono in `Privacy::Event`,
-   inclusi i retention hold. Envelope e audit identity sono in
-   `Identity::Event`, inclusi login e logout. Envelope e audit delle
-   moderation action sono in
-   `Moderation::Event`, inclusi report e suspension. Audit admin di catalog
-   e binding sono in `Admin::Event`.
-6. Rendere espliciti i profili operativi:
-   dev, staging, production-small, production-medium.
-7. Versionare il lifecycle DB:
-   partizioni, retention, archiviazione, restore evidence.
+   `Web::AdminAccess`, and `Web::OperationsAccess` cover the shared contracts,
+   the home `home_unavailable`, the identity text errors, the crawler document
+   limits/rendering, the forum HTTP limits/validations, the attachment HTTP
+   limits/filenames, the notification HTTP limits, the moderation HTTP
+   limits/filters, the privacy HTTP limits/conflicts, the admin HTTP limits, the
+   realtime connect/subscribe hashes, and the `/metrics` token. The success
+   statuses of HTTP writes (admin catalog/binding, moderation
+   content/queue/suspension, privacy review, community bookmark/subscription)
+   live on the same `Web::*Access` objects.
+2. Shrink `Controller::Forum`: separate read pages, write commands, community
+   actions, and search handlers.
+3. Shrink `Controller::Identity`: separate login/session, password lifecycle,
+   email lifecycle, settings, and profile rendering.
+4. Split `Identity::Store`: done. The facade delegates to `CredentialStore`,
+   `SessionStore`, `TokenStore`, `Audit`, `PreferenceStore`, `AccountStore`,
+   `AuthStore`, and `RegistrationStore`, with `Identity::Workflow` on top.
+   `Password`, `SessionToken`, and `Service::Id` load `Crypt::URandom` lazily;
+   the store and the credential/session/token collaborators load `Service::Id`
+   lazily.
+5. Unify the write workflows: command input, idempotency, transaction,
+   event/audit/outbox, response.
+   Audit hashing lives in `Infrastructure::AuditRecord`; `EventRecorder` remains
+   EventLog/Outbox/AuditLog persistence and chain lookup, and loads
+   `Service::Id` lazily together with `Outbox::MessageBuilder` and the
+   event-backed stores that used it only for the default. Outbox
+   classification, retry, and claim SQL live in `FailureType`, `Retry`, and
+   `ClaimQuery`. Attachment envelopes and payloads live in
+   `Attachment::Event`. The attachment orphan cleanup policy lives in
+   `Attachment::Lifecycle`, including the link fetch caps. Privacy envelopes and
+   payloads live in `Privacy::Event`, including retention holds. Identity
+   envelopes and audit live in `Identity::Event`, including login and logout.
+   Moderation action envelopes and audit live in `Moderation::Event`, including
+   reports and suspensions. Admin catalog and binding audit live in
+   `Admin::Event`.
+6. Make the operational profiles explicit: dev, staging, production-small,
+   production-medium.
+7. Version the DB lifecycle: partitions, retention, archiving, restore evidence.
 
-## Cosa rifattorizzare solo se il progetto cresce
+## What to refactor only if the project grows
 
-- Adapter cache condivisa oltre `LocalCache`.
-- Search backend esterno o search service separato.
-- API versioning layer per mobile/pubblico.
+- A shared cache adapter beyond `LocalCache`.
+- An external search backend or a separate search service.
+- An API versioning layer for mobile/public clients.
 - Multi-site tenancy.
-- Plugin runtime isolato.
-- Federazione/event bridge.
-- Sharding o separazione worker/read model.
+- An isolated plugin runtime.
+- Federation / an event bridge.
+- Sharding or worker/read-model separation.
 
-Questi lavori sono costosi e non vanno anticipati senza pressione reale.
+This work is expensive and should not be anticipated without real pressure.
 
-## Cosa è già sufficientemente buono
+## What is already good enough
 
-- Modular monolith come forma generale.
-- PostgreSQL come database primario.
-- DBIC result classes e migrazioni tracciate.
-- Outbox/retry/dead-letter come pattern.
-- Query budget e query-plan evidence.
-- Security/operations bootstrap centralizzati.
-- ViewModel separati dalle template.
-- CI con Perl::Critic/perltidy/syntax/test/coverage/benchmark.
-- Hypnotoad/systemd/nginx deployment shape.
+- The modular monolith as a general shape.
+- PostgreSQL as the primary database.
+- DBIC result classes and tracked migrations.
+- Outbox/retry/dead-letter as a pattern.
+- Query budgets and query-plan evidence.
+- Centralized security/operations bootstraps.
+- View models separated from templates.
+- CI with Perl::Critic/perltidy/syntax/test/coverage/benchmark.
+- The Hypnotoad/systemd/nginx deployment shape.
 
-## Stima finale
+## Final estimate
 
-Quanto è probabile che GPForum resti mantenibile tra 5 anni senza una
-riscrittura?
+How likely is GPForum to stay maintainable in 5 years without a rewrite?
 
-Stima tecnica: 70%.
+Technical estimate: 70%.
 
-Questa probabilità sale verso 80% se il progetto resta focalizzato sul forum
-core e completa i refactor entro 12 mesi su controller, identity store e
-workflow write.
+That probability rises toward 80% if the project stays focused on the forum core
+and completes the refactors on controllers, the identity store, and the write
+workflows within 12 months.
 
-Scende verso 45-50% se nei prossimi 12-18 mesi vengono aggiunti federazione,
-API pubbliche, mobile app, multi-site e plugin ecosystem senza prima rafforzare
-i boundary applicativi.
+It falls toward 45-50% if the next 12-18 months add federation, public APIs, a
+mobile app, multi-site, and a plugin ecosystem without first strengthening the
+application boundaries.
 
-Conclusione: GPForum non ha bisogno di una riscrittura. Ha bisogno di
-proteggere il proprio nucleo, ridurre i controller grandi e rendere più
-espliciti i workflow applicativi prima che la superficie del prodotto cresca.
+Conclusion: GPForum does not need a rewrite. It needs to protect its core,
+shrink the large controllers, and make the application workflows more explicit
+before the product surface grows.
