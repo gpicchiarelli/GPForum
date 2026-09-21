@@ -161,6 +161,7 @@ sub _detect_type {
       if $check eq 'staging_ops_extensions'
       || $drill eq 'staging_ops_extensions';
     return 'dead_letter_check' if $check eq 'dead_letter_check';
+    return 'mail_lifecycle_check' if $check eq 'mail_lifecycle_check';
     return 'stress_load'
       if ( $decoded->{mode} // q{} ) eq 'stress-load'
       || ( $decoded->{plan}{profile} // q{} ) =~ /\A(?:smoke|100|500|1000)\z/msx;
@@ -179,7 +180,8 @@ sub _type_rules {
         || $type eq 'attachment_filesystem'
         || $type eq 'deploy_checklist'
         || $type eq 'staging_ops_extensions'
-        || $type eq 'dead_letter_check' )
+        || $type eq 'dead_letter_check'
+        || $type eq 'mail_lifecycle_check' )
     {
         push @findings, _require_status($decoded);
         push @findings,
