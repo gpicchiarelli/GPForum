@@ -33,12 +33,14 @@ sub run {
     my ( $self, $options ) = @_;
 
     $options ||= {};
-    return $self->_run_with_options($options);
+    return $self->_finalize_evidence( $self->_run_with_options($options),
+        $options );
 }
 
 sub format_evidence {
     my ( $self, $evidence, $format ) = @_;
 
+    $evidence = $self->_finalize_evidence( $evidence // {}, {} );
     $format ||= 'json';
     return $self->human_text($evidence) if $format eq 'human';
 
@@ -104,6 +106,111 @@ sub _evidence {
     $evidence{error} = $probe->{error} if _has_text( $probe->{error} );
 
     return \%evidence;
+}
+
+sub _finalize_evidence {
+    my ( $self, $evidence, $options ) = @_;
+
+    $evidence ||= {};
+    $options  ||= {};
+
+    my $config = $self->config;
+    my @secrets;
+    push @secrets, $PROBE_TOKEN;
+    if ($config) {
+        push @secrets, $config->smtp_password
+          if eval { return _has_text( $config->smtp_password ) };
+    }
+
+    $evidence = _scrub_structure( $evidence, \@secrets );
+    $evidence->{check} = 'mail_delivery';
+    $evidence->{secrets_redacted}     = \1;
+    $evidence->{private_beta_claimed} = 0;
+    $evidence->{residual_gaps} =
+      _unique_gaps( [ @{ $evidence->{residual_gaps} // [] },
+          @{ _residual_gaps_for($evidence) } ] );
+
+    return $evidence;
+}
+
+sub _residual_gaps_for {
+    my ($evidence) = @_;
+
+    my $mode      = $evidence->{mode} // 'dry_run';
+    my $transport = $evidence->{config}{mail_transport} // q{};
+    my @gaps      = (
+'This mail-check does not claim private-beta readiness by itself.',
+'Archive JSON beside staging-host-verify / stress-load evidence for the candidate commit.',
+    );
+
+    if ( $mode eq 'dry_run' ) {
+        push @gaps,
+'Controlled --send to an operator mailbox on staging SMTP/sendmail is still required before beta self-service mail claims.';
+    }
+    if ( $transport eq 'test' ) {
+        push @gaps,
+'Transport is Email::Sender::Transport::Test; staging SMTP or sendmail evidence remains open.';
+    }
+    if ( $mode eq 'send' && ( $evidence->{status} // q{} ) eq $STATUS_PASS ) {
+        push @gaps,
+'A single verification probe send is not a full identity-mail lifecycle drill (reset/change email with seeded roles).';
+    }
+
+    return \@gaps;
+}
+
+sub _scrub_structure {
+    my ( $value, $secrets ) = @_;
+
+    if ( ref $value eq 'HASH' ) {
+        my %out;
+        for my $key ( keys %{$value} ) {
+            if ( $key =~ /password|secret|token|authorization|credential/msxi
+                && $key ne 'secrets_redacted'
+                && $key ne 'secrets_leaked'
+                && $key ne 'username_configured' )
+            {
+                $out{$key} = '[redacted]';
+                next;
+            }
+            $out{$key} = _scrub_structure( $value->{$key}, $secrets );
+        }
+        return \%out;
+    }
+    if ( ref $value eq 'ARRAY' ) {
+        return [ map { _scrub_structure( $_, $secrets ) } @{$value} ];
+    }
+    if ( defined $value && !ref $value ) {
+        return _scrub_text( "$value", $secrets );
+    }
+
+    return $value;
+}
+
+sub _scrub_text {
+    my ( $text, $secrets ) = @_;
+
+    for my $secret ( @{$secrets} ) {
+        next if !_has_text($secret);
+        my $quoted = quotemeta $secret;
+        $text =~ s/$quoted/[redacted]/gmsx;
+    }
+
+    return $text;
+}
+
+sub _unique_gaps {
+    my ($gaps) = @_;
+
+    my %seen;
+    my @unique;
+    for my $gap ( @{$gaps} ) {
+        next if !_has_text($gap);
+        next if $seen{$gap}++;
+        push @unique, $gap;
+    }
+
+    return \@unique;
 }
 
 sub _config_fail {
@@ -234,20 +341,23 @@ sub _deliver_probe {
             }
         );
     };
-    return {
-        status => $STATUS_FAIL,
-        action => $action,
-        to     => $to,
-        error  => _trim($EVAL_ERROR),
-      }
-      if $EVAL_ERROR;
+    if ($EVAL_ERROR) {
+        return {
+            status => $STATUS_FAIL,
+            action => $action,
+            to     => $to,
+            error  => _scrub_text( _trim($EVAL_ERROR),
+                [ $PROBE_TOKEN, $config->smtp_password // q{} ] ),
+        };
+    }
 
     return {
-        status    => $STATUS_PASS,
-        action    => $action,
-        to        => $to,
-        delivered => $result->{ok} ? 1 : 0,
-        detail    => 'identity verification probe mailed',
+        status         => $STATUS_PASS,
+        action         => $action,
+        to             => $to,
+        delivered      => $result->{ok} ? 1 : 0,
+        detail         => 'identity verification probe mailed',
+        secrets_leaked => 0,
     };
 }
 
@@ -285,14 +395,19 @@ sub _smtp_connectivity_probe {
 }
 
 sub _smtp_fail {
-    my ( undef, $host, $port, $error ) = @_;
+    my ( $self, $host, $port, $error ) = @_;
+
+    my @secrets = ($PROBE_TOKEN);
+    my $config  = $self->config;
+    push @secrets, $config->smtp_password
+      if $config && eval { return _has_text( $config->smtp_password ) };
 
     return {
         status => $STATUS_FAIL,
         action => 'smtp_connect',
         host   => $host,
         port   => $port,
-        error  => $error,
+        error  => _scrub_text( $error, \@secrets ),
     };
 }
 
@@ -471,7 +586,9 @@ Version 0.001.
 
 Loads mail settings from L<GPForum::Config>, reports transport and from
 address without leaking SMTP passwords, and probes delivery readiness for
-C<test>, C<smtp>, and C<sendmail> transports.
+C<test>, C<smtp>, and C<sendmail> transports. Evidence is finalized with
+C<secrets_redacted>, explicit C<residual_gaps>, and scrubbed error text.
+Does not claim private-beta readiness.
 
 =head1 AUTHOR
 
