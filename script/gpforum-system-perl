@@ -141,7 +141,11 @@ resolve_candidate() {
 
     # Prefer distro paths; fall through so an old Apple /usr/bin/perl does
     # not block MacPorts /opt/local/bin/perl when that meets 5.38+.
-    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/local/bin/perl; do
+    # MacPorts ships versioned binaries (perl5.42) and only creates the
+    # unversioned symlink through `port select`, so probe the versioned
+    # names too, newest first.
+    versioned=$(ls /opt/local/bin/perl5.[0-9]* 2>/dev/null | sort -t. -k2,2nr || true)
+    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/local/bin/perl $versioned; do
         if [ -x "$candidate" ]; then
             canonical=$(canonicalize "$candidate")
             if validate_system_perl "$canonical"; then

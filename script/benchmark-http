@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
 configured=0
 has_route=0
 has_profile=0
@@ -18,7 +20,7 @@ for argument in "$@"; do
 done
 
 if [ "$configured" -eq 1 ]; then
-    carton exec perl -Ilib -MGPForum::Config -MGPForum::Schema -e '
+    "$gpforum_carton" exec perl -Ilib -MGPForum::Config -MGPForum::Schema -e '
         use strict;
         use warnings;
         my $ok = eval {
@@ -38,7 +40,7 @@ if [ "$configured" -eq 1 ]; then
 fi
 
 if [ "$has_route" -eq 1 ]; then
-    exec carton exec bin/gpforum-benchmark "$@"
+    exec "$gpforum_carton" exec bin/gpforum-benchmark "$@"
 fi
 
 if [ "$configured" -eq 1 ]; then
@@ -55,7 +57,7 @@ if [ "$has_profile" -eq 0 ]; then
     set -- "$@" --profile "$profile"
 fi
 
-exec carton exec bin/gpforum-benchmark "$@" \
+exec "$gpforum_carton" exec bin/gpforum-benchmark "$@" \
     --route / \
     --route /categories \
     --route "/c/$category_id" \

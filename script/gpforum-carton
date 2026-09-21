@@ -30,6 +30,59 @@ if "$perl_bin" -S carton version >/dev/null 2>&1; then
     exec "$perl_bin" -S carton "$@"
 fi
 
+# Carton is the only supported INSTALLER, so `install` still fails hard when
+# it is missing. `exec` only needs the locked tree on @INC, which local/ already
+# provides, so reproduce `carton exec` rather than blocking every quality gate
+# on a host where Carton itself is not packaged for the system Perl.
+if [ "${1:-}" = "exec" ] && [ -d "$root/local/lib/perl5" ]; then
+    shift
+    PERL5LIB="$root/local/lib/perl5${PERL5LIB:+:$PERL5LIB}"
+    export PERL5LIB
+    # Anything launched from here — including a program whose shebang says
+    # `#!/usr/bin/env perl` — must find the validated interpreter first, or it
+    # loads XS built for a different Perl. A shim directory makes `perl` on
+    # PATH mean exactly $perl_bin for the whole process tree.
+    shim="$root/local/.perl-shim"
+    if [ ! -x "$shim/perl" ] || [ "$(readlink "$shim/perl" 2>/dev/null)" != "$perl_bin" ]; then
+        mkdir -p "$shim" && ln -sf "$perl_bin" "$shim/perl"
+    fi
+    PATH="$shim:$root/local/bin:$PATH"
+    export PATH
+    # `carton exec -- cmd` is valid; drop the separator before dispatching.
+    if [ "${1:-}" = "--" ]; then
+        shift
+    fi
+    # MacPorts ships only versioned binaries, so a bare `perl`, `prove` or
+    # other Perl tool found on PATH can belong to an older interpreter than
+    # the one that validated above. Pin every Perl tool to $perl_bin.
+    command_name=${1:-}
+    case "$command_name" in
+        */*)
+            # An explicit path. A Perl entrypoint must run under the
+            # interpreter that validated above, not under whatever its
+            # shebang resolves to on this host, or it loads XS built for a
+            # different Perl and dies with a handshake mismatch.
+            if [ -r "$command_name" ] \
+                && head -n 1 "$command_name" 2>/dev/null | grep -q 'perl'; then
+                shift
+                exec "$perl_bin" "$command_name" "$@"
+            fi
+            exec "$@"
+            ;;
+        perl)
+            shift
+            exec "$perl_bin" "$@"
+            ;;
+    esac
+    if [ -n "$command_name" ] && [ ! -x "$perl_dir/$command_name" ] \
+        && "$perl_bin" -e 'exit 0' >/dev/null 2>&1 \
+        && "$perl_bin" -S "$command_name" --version >/dev/null 2>&1; then
+        shift
+        exec "$perl_bin" -S "$command_name" "$@"
+    fi
+    exec "$@"
+fi
+
 echo "gpforum-carton: Carton was not found for system Perl $perl_bin." >&2
 echo "Install it for this Perl with: $perl_bin -S cpanm -M https://cpan.metacpan.org/ Carton" >&2
 exit 1

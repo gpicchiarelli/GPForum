@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
 usage='Usage:
   script/profile-nytprof --route /path [benchmark options]
   script/profile-nytprof -- perl-program [args...]'
@@ -20,7 +22,7 @@ if [ "$1" = "--route" ]; then
     route="$2"
     shift 2
     export NYTPROF="${NYTPROF:-file=var/profile/route-nytprof.out:addpid=1}"
-    exec carton exec perl -Ilib -d:NYTProf bin/gpforum-benchmark \
+    exec "$gpforum_carton" exec perl -Ilib -d:NYTProf bin/gpforum-benchmark \
         --iterations 3 \
         --warmup 1 \
         --route "$route" \
@@ -32,4 +34,4 @@ if [ "$1" = "--" ]; then
 fi
 
 export NYTPROF="${NYTPROF:-file=var/profile/nytprof.out:addpid=1}"
-exec carton exec perl -d:NYTProf "$@"
+exec "$gpforum_carton" exec perl -d:NYTProf "$@"

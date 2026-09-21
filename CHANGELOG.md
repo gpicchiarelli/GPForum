@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Let `script/gpforum-carton exec` run against `local/` when the Carton
+  binary is missing for system Perl (still hard-fails on `install`). Route
+  quality-gate wrappers (`script/test`, coverage, perltidy, benches, …)
+  through it so gates do not depend on a packaged Carton. Does not claim
+  private-beta readiness.
+
 - Expand deploy host observe to `gpforum-scheduled-jobs.service` (unit-dir
   contract) and `gpforum-scheduled-jobs.timer` (`--systemd` is-active). Fold
   mail-lifecycle + dead-letter simulate commands into

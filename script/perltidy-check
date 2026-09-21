@@ -1,10 +1,14 @@
 #!/bin/sh
 set -eu
 
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+
 runner="perltidy"
 
-if command -v carton >/dev/null 2>&1 && [ -d local ]; then
-    runner="carton exec perltidy"
+# Route through the project wrapper so the locked tree and the validated
+# interpreter are used, instead of whatever happens to be on PATH.
+if [ -d "$root/local" ]; then
+    runner="$root/script/gpforum-carton exec perltidy"
 fi
 
 tmp_dir="${TMPDIR:-/tmp}/gpforum-perltidy-check.$$"

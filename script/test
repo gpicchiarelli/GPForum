@@ -1,10 +1,12 @@
 #!/bin/sh
 set -eu
 
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
 if [ ! -d t ] || ! find t -type f -name '*.t' | grep -q .; then
     echo "No tests found."
     exit 0
 fi
 
-exec carton exec prove -lr t "$@"
+exec "$gpforum_carton" exec prove -lr t "$@"
 

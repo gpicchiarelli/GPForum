@@ -68,7 +68,15 @@ check_internal_dependency_cycles() {
         for my $module ( keys %file_for ) {
             open my $handle, q{<}, $file_for{$module}
               or die qq{cannot read $file_for{$module}: $!};
+            my $in_pod = 0;
             while ( my $line = <$handle> ) {
+                # A SYNOPSIS showing "use GPForum::X" is documentation, not a
+                # dependency: counting it invents self-cycles.
+                last if $line =~ /\A__(?:END|DATA)__/;
+                if ( $line =~ /\A=cut\b/ ) { $in_pod = 0; next }
+                if ( $line =~ /\A=\w+/ )   { $in_pod = 1 }
+                next if $in_pod;
+                next if $line =~ /\A\s*#/;
                 while ( $line =~ /\buse\s+(GPForum(?:::\w+)+)/gmsx ) {
                     push @{ $edges{$module} }, $1 if exists $file_for{$1};
                 }

@@ -244,6 +244,23 @@ sub _assert_operator_surface {
     ok( -x $BOOTSTRAP, 'bootstrap-deps is executable' );
     ok( -x $CARTON,    'gpforum-carton is executable' );
 
+    my $carton = path($CARTON)->slurp;
+    like(
+        $carton,
+        qr/"\$\{1:-\}" [ ]= [ ]"exec".*local\/lib\/perl5/msx,
+        'gpforum-carton can exec from local/ when Carton binary is missing'
+    );
+    like(
+        $carton,
+        qr/local\/[.]perl-shim/msx,
+        'gpforum-carton pins PATH via a perl shim for Carton-less exec'
+    );
+    unlike(
+        $carton,
+        qr/^ [ ]* if [ ] [^\n]*install[^\n]*local\/lib\/perl5/msx,
+        'gpforum-carton does not soft-fail carton install without Carton'
+    );
+
     return;
 }
 

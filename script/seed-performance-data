@@ -1,4 +1,6 @@
 #!/bin/sh
 set -eu
 
-exec carton exec bin/gpforum-seed-performance-data "$@"
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
+exec "$gpforum_carton" exec bin/gpforum-seed-performance-data "$@"
