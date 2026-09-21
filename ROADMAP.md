@@ -19,7 +19,7 @@ places it at:
 | Target | Status |
 | --- | --- |
 | Local, personal use | Ready |
-| Private beta | Not yet | Cloud Agent live Hypnotoad verify + stress 100 archived (`docs/ops/evidence/2026-09-20-cloud-agent-live/`); staging TLS / SMTP `--send` / target install still open |
+| Private beta | Not yet | Cloud Agent Hypnotoad verify + stress 100 (`docs/ops/evidence/2026-09-20-cloud-agent-live/`) and capacity 500/1000 (`docs/ops/evidence/2026-09-20-cloud-agent-stress500/`); staging TLS / SMTP `--send` / target install still open |
 | Public production | Not yet |
 
 ## Shipped

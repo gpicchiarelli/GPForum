@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Point ROADMAP private-beta status row at the Cloud Agent stress 500/1000 archive.
+
 - Archive Cloud Agent VM Hypnotoad stress-load capacity evidence under
   `docs/ops/evidence/2026-09-20-cloud-agent-stress500/` (`carton_ok`, migrate +
   query-budget, medium seed, profile **500** `ok` / `--check` `pass`, profile
