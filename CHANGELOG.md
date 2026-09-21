@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/gpforum-mail-lifecycle-check` to exercise Identity::Mailer
+  `password_reset` / `email_change` / `email_verification` under the test
+  transport with EvidenceMeta JSON (token scrubbing). Staging SMTP `--send`
+  remains open. Does not claim private-beta readiness.
+
 - Add `script/gpforum-dead-letter-check` to automate the
   `docs/ops/dead-letters.md` staging check (`--simulate` permanent failure →
   dead-letter → redispatch → retention hold) with EvidenceMeta JSON. Live

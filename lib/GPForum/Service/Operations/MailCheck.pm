@@ -152,7 +152,7 @@ sub _residual_gaps_for {
     }
     if ( $mode eq 'send' && ( $evidence->{status} // q{} ) eq $STATUS_PASS ) {
         push @gaps,
-'A single verification probe send is not a full identity-mail lifecycle drill (reset/change email with seeded roles).';
+'A single verification probe send is not a full identity-mail lifecycle drill; run script/gpforum-mail-lifecycle-check --simulate, then still archive staging SMTP --send.';
     }
 
     return \@gaps;

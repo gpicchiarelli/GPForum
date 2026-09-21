@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 181;
+const my $EXPECTED_TESTS => 185;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -92,6 +92,7 @@ for my $required_file (
     bin/gpforum-evidence-validate
     bin/gpforum-evidence-meta
     bin/gpforum-dead-letter-check
+    bin/gpforum-mail-lifecycle-check
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
@@ -118,6 +119,7 @@ for my $required_file (
     script/gpforum-evidence-validate
     script/gpforum-evidence-meta
     script/gpforum-dead-letter-check
+    script/gpforum-mail-lifecycle-check
     )
   )
 {
@@ -491,6 +493,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('script/gpforum-dead-letter-check')->slurp,
         qr/gpforum-dead-letter-check/msx,
         'dead-letter-check wrapper invokes bin entrypoint'
+    );
+    like(
+        path('docs/ops/mail-check.md')->slurp,
+        qr/gpforum-mail-lifecycle-check|PRIVATE BETA|private-beta/msx,
+        'mail-check docs cover lifecycle entrypoint'
+    );
+    like(
+        path('script/gpforum-mail-lifecycle-check')->slurp,
+        qr/gpforum-mail-lifecycle-check/msx,
+        'mail-lifecycle-check wrapper invokes bin entrypoint'
     );
 
 1;

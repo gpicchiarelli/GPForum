@@ -86,6 +86,7 @@ script/stress-load --profile 100 --base-url http://127.0.0.1:8080 --check --json
 # 7. Mail probe
 script/gpforum-mail-check --human --dry-run
 # script/gpforum-mail-check --send --to you@example.test --human
+script/gpforum-mail-lifecycle-check --simulate --human
 
 # 7b. Dead-letter staging check (in-memory simulate; live /admin/jobs still open)
 script/gpforum-dead-letter-check --simulate --human
@@ -125,6 +126,7 @@ print_status() {
     status_line script/staging-host-verify staging-host-verify
     status_line script/stress-load stress-load
     status_line script/gpforum-mail-check mail-check
+    status_line script/gpforum-mail-lifecycle-check mail-lifecycle-check
     status_line script/gpforum-dead-letter-check dead-letter-check
     status_line script/gpforum-evidence-live evidence-live
     status_line docs/ops/private-beta-checklist.md checklist-doc

@@ -17,7 +17,7 @@ use GPForum::Service::Operations::EvidenceValidate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 22;
+const my $EXPECTED_TESTS => 23;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -188,6 +188,23 @@ $dead->spew(
 my $dead_ok = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => ["$dead"] } );
 is( $dead_ok->{status}, 'pass', 'dead_letter_check evidence validates' );
+
+my $lifecycle = path( $dir, 'mail-lifecycle.json' );
+$lifecycle->spew(
+    encode_json(
+        {
+            check                => 'mail_lifecycle_check',
+            status               => 'pass',
+            mode                 => 'simulate',
+            secrets_redacted     => \1,
+            private_beta_claimed => 0,
+            residual_gaps        => ['SMTP send still open'],
+        }
+    )
+);
+my $lifecycle_ok = GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$lifecycle"] } );
+is( $lifecycle_ok->{status}, 'pass', 'mail_lifecycle_check evidence validates' );
 
 my $missing = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => [] } );

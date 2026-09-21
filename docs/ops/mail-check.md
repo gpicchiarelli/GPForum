@@ -48,6 +48,20 @@ Evidence JSON always sets `secrets_redacted=true` and
 passwords plus the internal probe token from nested strings/errors. Never
 archive evidence that still contains secrets.
 
+## Identity mail lifecycle drill
+
+Exercise all three identity mail kinds through `Identity::Mailer` under the
+test transport (not a staging SMTP send):
+
+```sh
+script/gpforum-mail-lifecycle-check --simulate --human
+script/gpforum-mail-lifecycle-check --dry-run --json
+make mail-lifecycle-check
+```
+
+This closes the “single verification probe ≠ lifecycle” residual for local
+prep archives. Staging SMTP `--send` and seeded-role DB flows remain open.
+
 ## Environment
 
 | Variable | Role |
@@ -66,4 +80,5 @@ Defaults follow `GPForum::Config`: development/test → `test`; staging/producti
 - `GPForum::Service::Identity::Mailer`
 - `GPForum::Worker::Handler::IdentityMail`
 - `docs/audit/email-lifecycle.md`
-- Unit: `t/146-identity-mailer.t`, `t/154-identity-mail.t`, `t/162-mail-check.t`
+- Unit: `t/146-identity-mailer.t`, `t/154-identity-mail.t`, `t/162-mail-check.t`,
+  `t/171-mail-lifecycle-check.t`

@@ -34,6 +34,7 @@ on a real target, and operator runbook evidence.
 | Staging host verify | `script/staging-host-verify` | `docs/ops/staging-host.md` | Repo artifacts; optional env-file keys, systemd `is-active`, HTTP health — **not** an install |
 | Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Cloud Agent VM 100/500/1000 archived (`evidence/2026-09-20-cloud-agent-live/`, `…-stress500/`); staging TLS 100/500/1000 still open |
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
+| Mail lifecycle | `script/gpforum-mail-lifecycle-check` | `docs/ops/mail-check.md` | Test-transport reset/change/verify kinds; SMTP `--send` still open |
 | Dead letters | `script/gpforum-dead-letter-check` | `docs/ops/dead-letters.md` | Simulate permanent→dead-letter→redispatch; live `/admin/jobs` still open |
 | Live evidence pack | `script/gpforum-evidence-live` | `docs/ops/staging-host.md` | Prints verify+stress+mail archive commands; does **not** run them or claim readiness |
 | Evidence validate | `script/gpforum-evidence-validate` | `docs/ops/evidence-validate.md` | Validates archived JSON shape/secrets/claims; does **not** claim readiness |
