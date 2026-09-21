@@ -37,7 +37,7 @@ localizable presentation text.
 | `components/site_footer` | Product footer shell. |
 | `components/page_header` | Page heading, optional description, page actions. |
 | `components/section_header` | Section heading and optional description. |
-| `components/pagination` | Screen-reader-labelled pagination links. |
+| `components/pagination` | Screen-reader-labeled pagination links. |
 | `components/empty_state` | Empty/no-results surfaces. |
 | `components/alert` | Notice, warning, and error status surfaces. |
 | `components/badge` | Status/moderation/admin indicators. |
@@ -46,7 +46,7 @@ localizable presentation text.
 | `components/field_error` | Field-level validation message connected by `aria-describedby`. |
 | `components/status_banner` | Section-level warning/error/notice surface. |
 | `components/moderation_indicator` | Presentation-only moderation state badge. |
-| `components/admin_table` | Scroll-safe admin table primitive with labelled columns. |
+| `components/admin_table` | Scroll-safe admin table primitive with labeled columns. |
 | `components/notification_surface` | Inbox notification card with read-state action support. |
 | `components/confirmation` | SSR confirmation copy for reversible or high-impact actions. |
 | `components/card` | Generic card shell for simple repeated records. |
@@ -102,14 +102,14 @@ route-specific styling unless a component cannot express the UI.
 - Every rendered page has exactly one document `<main>` from the base layout.
 - Page templates use `section` or `article` inside the layout main landmark.
 - Pagination is rendered through `components/pagination` or follows the same
-  labelled `<nav>` contract.
+  labeled `<nav>` contract.
 - Statuses use text plus badge styling; color alone is not the only signal.
 - Form errors use alert summaries and field-level `aria-describedby`.
 - Confirmation and moderation actions include text labels, not color-only
   state.
 - Focus states remain visible via `:focus-visible`.
 - Motion-sensitive behavior must respect `prefers-reduced-motion`.
-- Tables used for admin/status data are labelled and wrapped for small
+- Tables used for admin/status data are labeled and wrapped for small
   screens.
 
 ## Verification

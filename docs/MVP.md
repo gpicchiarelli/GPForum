@@ -289,7 +289,7 @@ revisions, and counter deltas remain in the existing transaction boundary.
 Thread and post lists use keyset pagination through `PageWindow`; no forum route
 uses `OFFSET`.
 
-The SSR forum templates use semantic landmarks, labelled forms, stable post
+The SSR forum templates use semantic landmarks, labeled forms, stable post
 anchors, accessible pagination navigation, and no JavaScript requirement for
 core forum reading.
 

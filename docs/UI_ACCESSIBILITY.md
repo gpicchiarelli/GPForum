@@ -36,7 +36,7 @@ field-level messages connected by `aria-describedby`. Invalid controls set
 `aria-invalid="true"` and receive a border-width/focusable visual treatment in
 addition to color, so the state does not depend on color perception alone.
 
-The `/settings` form uses labelled selects, labelled notification checkboxes,
+The `/settings` form uses labeled selects, labeled notification checkboxes,
 and text descriptions for each channel. Notification state is never communicated
 by color alone.
 
@@ -50,7 +50,7 @@ route-local markup:
 - `site_header`, `primary_nav`, `identity_nav`, `locale_selector`,
   `theme_selector`,
   `breadcrumbs`, `flash_messages`, and `site_footer` for the shared shell;
-- `pagination` for labelled paging navigation;
+- `pagination` for labeled paging navigation;
 - `empty_state` for no-results and not-yet-created states;
 - `badge` for status, moderation, job, and audit indicators;
 - `alert` for warning/error/success status surfaces.

@@ -174,7 +174,7 @@ Violation severity:
 ### 8. Composer Accessibility
 
 - The composer MUST support: keyboard-only operation; accessible toolbar
-  controls; labelled inputs; accessible validation; accessible preview
+  controls; labeled inputs; accessible validation; accessible preview
   rendering; safe markdown assistance; screen-reader-safe formatting
   behavior; draft recovery without inaccessible modal traps; attachment
   insertion with accessible labels and states.

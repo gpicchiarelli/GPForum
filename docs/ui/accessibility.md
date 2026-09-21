@@ -7,11 +7,11 @@ Required contracts:
 - exactly one document `<main>` comes from the base layout;
 - every page has a skip link to `#content`;
 - header, navigation, main, breadcrumbs, flash messages, and footer use semantic
-  landmarks or labelled regions;
+  landmarks or labeled regions;
 - form controls have visible labels;
 - invalid forms use `components/error_summary` plus field-level
   `components/field_error` connected through `aria-describedby`;
-- pagination is a labelled `<nav>`;
+- pagination is a labeled `<nav>`;
 - status and moderation controls include text labels, not color-only cues;
 - focus styles stay visible through `:focus-visible`;
 - motion-sensitive behavior honors `prefers-reduced-motion`;
