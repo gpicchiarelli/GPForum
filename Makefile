@@ -1,4 +1,4 @@
-.PHONY: architecture bootstrap check critic evidence-live evidence-meta evidence-validate install-deps install-deps-postgres macports-env mail-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test tidy
+.PHONY: architecture bootstrap check critic dead-letter-check evidence-live evidence-meta evidence-validate install-deps install-deps-postgres macports-env mail-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -62,6 +62,10 @@ staging-drill-attachments:
 # Not part of `make check` or default CI.
 mail-check:
 	script/gpforum-mail-check --json --dry-run
+
+# Optional dead-letter staging check (in-memory simulate). Not part of make check.
+dead-letter-check:
+	script/gpforum-dead-letter-check --json --simulate
 
 # Optional non-destructive staging host verify (repo artifacts; live flags optional).
 # Not part of `make check` or default CI.

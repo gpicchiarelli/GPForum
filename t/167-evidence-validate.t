@@ -17,7 +17,7 @@ use GPForum::Service::Operations::EvidenceValidate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 21;
+const my $EXPECTED_TESTS => 22;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -171,6 +171,23 @@ my $legacy_drill_warn =
     { paths => ["$legacy_drill"] } );
 is( $legacy_drill_warn->{status}, 'degraded',
     'legacy staging_drill without meta degrades' );
+
+my $dead = path( $dir, 'dead-letter.json' );
+$dead->spew(
+    encode_json(
+        {
+            check                => 'dead_letter_check',
+            status               => 'pass',
+            mode                 => 'simulate',
+            secrets_redacted     => \1,
+            private_beta_claimed => 0,
+            residual_gaps        => ['live admin walk still open'],
+        }
+    )
+);
+my $dead_ok = GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$dead"] } );
+is( $dead_ok->{status}, 'pass', 'dead_letter_check evidence validates' );
 
 my $missing = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => [] } );
