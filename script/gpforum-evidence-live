@@ -69,16 +69,19 @@ export GPFORUM_EVIDENCE_DIR="${GPFORUM_EVIDENCE_DIR:-/tmp/gpforum-evidence-live}
 mkdir -p "$GPFORUM_EVIDENCE_DIR"
 
 # 1) Live staging-host-verify (values in env file are never printed by the tool)
+# Prefer https://… so the TLS observe phase records scheme with the health probe.
 script/staging-host-verify --json \
   --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
   --base-url "$STAGING_BASE_URL" \
   ${GPFORUM_METRICS_TOKEN:+--metrics-token "$GPFORUM_METRICS_TOKEN"} \
   > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-live.json"
 
-# Optional on systemd hosts:
+# Staging TLS + systemd target (operator host with units installed):
+# export STAGING_BASE_URL='https://staging.example'
 # script/staging-host-verify --json --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
 #   --systemd --base-url "$STAGING_BASE_URL" \
-#   > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-live-systemd.json"
+#   ${GPFORUM_METRICS_TOKEN:+--metrics-token "$GPFORUM_METRICS_TOKEN"} \
+#   > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-tls-systemd.json"
 
 # 2) Stress profiles (raise GPFORUM_FORUM_READ_RATE_LIMIT for single-IP capacity windows)
 script/stress-load --json --profile smoke --base-url "$STAGING_BASE_URL" \
@@ -91,7 +94,7 @@ script/stress-load --json --profile 500 --base-url "$STAGING_BASE_URL" \
 script/stress-load --json --profile 1000 --base-url "$STAGING_BASE_URL" \
   > "$GPFORUM_EVIDENCE_DIR/stress-1000.json"
 
-# 3) Mail (dry-run always; --send only on a mailbox you control)
+# 3) Mail (dry-run always; --send only on a mailbox you control on staging SMTP)
 script/gpforum-mail-check --json --dry-run \
   > "$GPFORUM_EVIDENCE_DIR/mail-check-dry.json"
 # script/gpforum-mail-check --json --send --to you@example.test \

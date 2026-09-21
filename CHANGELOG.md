@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Observe TLS on `script/staging-host-verify --base-url https://…` (records
+  https scheme; pair with the health probe). `http://` base URLs leave a
+  residual gap. Wired into `docs/ops/staging-host.md` and
+  `script/gpforum-evidence-live`. Does not claim private-beta readiness.
+
 - Point ROADMAP private-beta status row at the Cloud Agent stress 500/1000 archive.
 
 - Archive Cloud Agent VM Hypnotoad stress-load capacity evidence under

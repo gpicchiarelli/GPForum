@@ -85,9 +85,9 @@ places it at:
 
 ## Next
 
-- Re-run stress 500/1000 and `staging-host-verify` with `--systemd` on a
-  representative **staging TLS** host; Cloud Agent archives cover local
-  Hypnotoad verify + stress `100`
+- Re-run `staging-host-verify` with `--systemd` and an `https://` `--base-url`
+  (TLS observe phase) on a representative **staging TLS** host; Cloud Agent
+  archives cover local Hypnotoad verify + stress `100`
   (`docs/ops/evidence/2026-09-20-cloud-agent-live/`) and capacity `500`/`1000`
   (`docs/ops/evidence/2026-09-20-cloud-agent-stress500/`, 1000 p95 residual on
   4 vCPU) — not a beta go.

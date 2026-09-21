@@ -143,15 +143,15 @@ Usage: bin/gpforum-staging-host-verify [options]
 
 Non-destructive staging host verify. Always checks in-repo deploy/runbook
 artifacts. Optionally probes env-file key presence (values never printed),
-systemd unit activity, and HTTP /health and /metrics. Does not install
-units, reload nginx, or start Hypnotoad. Does not claim private-beta
-readiness.
+systemd unit activity, HTTP /health and /metrics, and https TLS scheme
+observe when --base-url is https. Does not install units, reload nginx,
+or start Hypnotoad. Does not claim private-beta readiness.
 
   --json                 evidence as JSON (default)
   --human                short plain-text evidence
   --env-file PATH        require key presence in staging env file
   --systemd              probe systemctl is-active for gpforum units
-  --base-url URL         probe /health/live and /health/ready
+  --base-url URL         probe /health/live and /health/ready (+ TLS observe)
   --metrics-token TOKEN  also probe /metrics (or GPFORUM_METRICS_TOKEN)
   --timeout SECONDS      HTTP timeout (default 5)
   --help                 show this help
