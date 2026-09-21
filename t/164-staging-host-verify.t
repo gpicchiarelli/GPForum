@@ -17,13 +17,14 @@ use GPForum::Service::Operations::StagingHostVerify;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 19;
+const my $EXPECTED_TESTS => 25;
 
 plan tests => $EXPECTED_TESTS;
 
 _test_prerequisites_only();
 _test_env_file_keys();
 _test_metrics_header();
+_test_tls_observe();
 _test_command_help();
 _test_command_unknown();
 _test_command_json();
@@ -37,6 +38,7 @@ sub _test_prerequisites_only {
     is( $evidence->{env_file}{status}, 'skipped', 'env_file skipped by default' );
     is( $evidence->{systemd}{status},  'skipped', 'systemd skipped by default' );
     is( $evidence->{health}{status},   'skipped', 'health skipped by default' );
+    is( $evidence->{tls}{status},      'skipped', 'tls skipped without base-url' );
     ok( @{ $evidence->{residual_gaps} } >= 1,
         'residual gaps note live staging evidence' );
 
@@ -92,6 +94,23 @@ sub _test_metrics_header {
     return;
 }
 
+sub _test_tls_observe {
+    my $http = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { base_url => 'http://127.0.0.1:9', timeout => 1 } );
+    is( $http->{tls}{status}, 'skipped', 'http base-url skips TLS pass' );
+    is( $http->{tls}{scheme}, 'http',    'http scheme recorded' );
+    ok( @{ $http->{tls}{residual_gaps} // [] } >= 1,
+        'http base-url residual asks for https evidence' );
+
+    like(
+        path('lib/GPForum/Service/Operations/StagingHostVerify.pm')->slurp,
+        qr/_tls_phase/msx,
+        'service defines tls observe phase'
+    );
+
+    return;
+}
+
 sub _test_command_help {
     my $command = GPForum::Command::StagingHostVerify->new;
     my $usage   = q{};
@@ -103,6 +122,7 @@ sub _test_command_help {
     }
     like( $usage, qr/gpforum-staging-host-verify/msx, 'help names command' );
     like( $usage, qr/private-beta/msx, 'help denies private-beta claim' );
+    like( $usage, qr/TLS|https/msx, 'help mentions TLS observe' );
 
     return;
 }

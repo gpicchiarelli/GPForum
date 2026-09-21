@@ -15,6 +15,7 @@ HTTP health endpoints answer.
 | Env file keys | `/etc/gpforum/gpforum.env` has required keys; values never printed | `--env-file` |
 | systemd units | `gpforum.service` / `gpforum-outbox.service` report active | `--systemd` |
 | HTTP health | `/health/live`, `/health/ready` (optional `/metrics`) | `--base-url` |
+| TLS observe | `https` scheme recorded (pair with health probe) | `--base-url https://…` |
 | DB migrate / dump | Throwaway or staging DB path | `script/staging-drill` |
 | Attachments + templates | Filesystem restore + static/host nginx/systemd samples | `script/staging-drill-attachments` |
 | Mail | Transport dry-run / optional send | `script/gpforum-mail-check` |
@@ -74,6 +75,9 @@ script/staging-host-verify --json \
   --metrics-token "$GPFORUM_METRICS_TOKEN"
 ```
 
+Prefer an `https://` `--base-url` so the TLS observe phase records the scheme
+alongside the health probe. An `http://` base URL leaves TLS as a residual gap.
+
 Exit `0` for `pass` or `degraded`. `fail` means a probed phase failed.
 
 ## Evidence archive (private-beta blockers)
@@ -121,4 +125,5 @@ NOT YET** even if every harness exits 0 locally.
   operator drill beyond the throwaway `var/attachments` rehearsal.
 - Staging/TLS stress numbers and SMTP `--send` evidence must be archived
   separately (see [`stress-load.md`](stress-load.md) and
-  [`mail-check.md`](mail-check.md)).
+  [`mail-check.md`](mail-check.md)). Prefer `https://` `--base-url` so the TLS
+  observe phase is not left skipped.

@@ -117,6 +117,10 @@ sub _execute {
     push @{ $evidence->{residual_gaps} },
       @{ $evidence->{health}{residual_gaps} // [] };
 
+    $evidence->{tls} = $self->_tls_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{tls}{residual_gaps} // [] };
+
     push @{ $evidence->{residual_gaps} }, $RESIDUAL_LIVE, $RESIDUAL_BETA,
       $RESIDUAL_EVIDENCE;
 
@@ -321,6 +325,60 @@ sub _health_phase {
     };
 }
 
+sub _tls_phase {
+    my ( $self, $options ) = @_;
+
+    my $base = $options->{base_url};
+    if ( !_has_text($base) ) {
+        return {
+            status => 'skipped',
+            reason => 'pass --base-url https://staging.example to observe TLS',
+            residual_gaps => [
+'TLS not observed; pass an https --base-url after staging TLS termination is up.'
+            ],
+        };
+    }
+
+    if ( $base =~ m{\Ahttp://}msxi ) {
+        return {
+            status  => 'skipped',
+            scheme  => 'http',
+            base_url => $base,
+            reason  => 'base-url uses http; TLS termination not observed',
+            residual_gaps => [
+'--base-url is http; archive staging-host-verify against https://… for TLS evidence.'
+            ],
+        };
+    }
+
+    if ( $base !~ m{\Ahttps://}msxi ) {
+        return {
+            status => 'fail',
+            reason => 'base-url must start with http:// or https://',
+            base_url => $base,
+        };
+    }
+
+    my $host_port = $base;
+    $host_port =~ s{\Ahttps://}{}msxi;
+    $host_port =~ s{/.*\z}{}msx;
+    my ( $host, $port ) = split /:/msx, $host_port, 2;
+    $port ||= '443';
+
+    return {
+        status   => 'pass',
+        scheme   => 'https',
+        base_url => $base,
+        host     => $host,
+        port     => 0 + $port,
+        note =>
+'Records https scheme for staging TLS evidence. Does not pin CAs, check HSTS, run ACME, or replace operator cert inventory. Pair with a successful health probe on the same --base-url.',
+        residual_gaps => [
+'Full ACME/cert-rotation evidence and reverse-proxy TLS config remain operator steps on the staging host.'
+        ],
+    };
+}
+
 sub _probe_http {
     my ( $ua, $url, $name, $headers ) = @_;
 
@@ -365,7 +423,7 @@ sub _combined_status {
     my ($evidence) = @_;
 
     my @statuses;
-    for my $name (qw(prerequisites env_file systemd health)) {
+    for my $name (qw(prerequisites env_file systemd health tls)) {
         my $status = $evidence->{$name}{status} // q{};
         next if $status eq 'skipped';
         push @statuses, $status;
@@ -384,7 +442,7 @@ sub _human_evidence {
 
     my @lines = (
         'staging-host-verify status=' . ( $evidence->{status} // 'fail' ) );
-    for my $name (qw(prerequisites env_file systemd health)) {
+    for my $name (qw(prerequisites env_file systemd health tls)) {
         my $phase = $evidence->{$name} // {};
         push @lines, "$name status=" . ( $phase->{status} // 'missing' );
     }
