@@ -68,8 +68,22 @@ check_internal_dependency_cycles() {
         for my $module ( keys %file_for ) {
             open my $handle, q{<}, $file_for{$module}
               or die qq{cannot read $file_for{$module}: $!};
+            my $in_pod = 0;
             while ( my $line = <$handle> ) {
+
+                # POD often shows a SYNOPSIS `use Module;` for the module
+                # itself, which is documentation, not a dependency.
+                if ( $line =~ /\A=cut\b/msx ) {
+                    $in_pod = 0;
+                    next;
+                }
+                if ( $line =~ /\A=\w+/msx ) {
+                    $in_pod = 1;
+                }
+                next if $in_pod;
+
                 while ( $line =~ /\buse\s+(GPForum(?:::\w+)+)/gmsx ) {
+                    next if $1 eq $module;
                     push @{ $edges{$module} }, $1 if exists $file_for{$1};
                 }
             }

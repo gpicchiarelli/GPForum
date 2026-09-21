@@ -239,6 +239,17 @@ admins through the existing catalog.
   reported or requested content to authorized staff.
 - `pending` accounts count as members (see Viewers).
 
+### Repository note
+
+- Open conflict: this decision is recorded but not yet implemented. The
+  Decision and Enforcement sections above describe the target behavior in the
+  present tense; on `main` none of it exists yet.
+  `GPForum::Service::Forum::Visibility`, `::ViewerResolver` and `::Viewer`,
+  the `gp_forum_viewer` helper, `PermissionGate::scoped_grants`, the scoped
+  `PermissionGate::allowed`, and the `category.read` permission are all
+  absent, the readers take no viewer, and `t/160-effective-visibility.t` has
+  not been written. Until they land, the leaks listed in Context remain open.
+
 ## Alternatives Rejected
 
 - Filtering in Perl after `LIMIT`: short pages, N+1 permission queries, and
@@ -263,5 +274,5 @@ admins through the existing catalog.
 - `docs/adr/0030-discovery-access.md`
 - `docs/adr/0041-forum-access.md`
 - `docs/adr/0042-attachment-access.md`
-- `t/160-effective-visibility.t`
+- `t/160-effective-visibility.t` (planned; see Repository note)
 - `t/integration/postgres.t`
