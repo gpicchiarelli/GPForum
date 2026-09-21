@@ -103,12 +103,22 @@ script/gpforum-mail-check --json --dry-run \
 #   > "$GPFORUM_EVIDENCE_DIR/mail-check-send.json"
 # Confirm evidence: secrets_redacted=true and no password/token plaintext.
 
+# 3b) Identity mail lifecycle (test transport; not a substitute for SMTP --send)
+script/gpforum-mail-lifecycle-check --json --simulate \
+  > "$GPFORUM_EVIDENCE_DIR/mail-lifecycle-simulate.json"
+
+# 3c) Dead-letter staging check (in-memory Dispatcher path; live /admin/jobs still open)
+script/gpforum-dead-letter-check --json --simulate \
+  > "$GPFORUM_EVIDENCE_DIR/dead-letter-simulate.json"
+
 # Copy JSON into docs/ops/evidence/<date>-*/ only after redacting secrets.
 # Validate before archiving:
 # script/gpforum-evidence-validate --strict --json \
 #   "$GPFORUM_EVIDENCE_DIR"/staging-host-verify-live.json \
 #   "$GPFORUM_EVIDENCE_DIR"/stress-100.json \
-#   "$GPFORUM_EVIDENCE_DIR"/mail-check-dry.json
+#   "$GPFORUM_EVIDENCE_DIR"/mail-check-dry.json \
+#   "$GPFORUM_EVIDENCE_DIR"/mail-lifecycle-simulate.json \
+#   "$GPFORUM_EVIDENCE_DIR"/dead-letter-simulate.json
 # PRIVATE BETA remains NOT YET until staging TLS + SMTP send + target install exist.
 EOF
 }
@@ -131,11 +141,16 @@ print_status() {
     status_line script/staging-host-verify staging-host-verify
     status_line script/stress-load stress-load
     status_line script/gpforum-mail-check mail-check
+    status_line script/gpforum-mail-lifecycle-check mail-lifecycle-check
+    status_line script/gpforum-dead-letter-check dead-letter-check
     status_line script/gpforum-evidence-validate evidence-validate
+    status_line script/gpforum-evidence-meta evidence-meta
     status_line script/bootstrap-deps bootstrap-deps
     status_line docs/ops/staging-host.md staging-host-doc
     status_line docs/ops/stress-load.md stress-load-doc
     status_line docs/ops/evidence-validate.md evidence-validate-doc
+    status_line docs/ops/dead-letters.md dead-letters-doc
+    status_line docs/ops/mail-check.md mail-check-doc
     printf '\n%s\n' \
         'status=print-only residual_gaps=staging-tls-smtp-send-target-install private_beta=not-claimed'
 }

@@ -96,6 +96,7 @@ const my @NGINX_CHECKS => (
 const my %HOST_UNIT_NAMES => map { $_ => 1 } qw(
   gpforum.service
   gpforum-outbox.service
+  gpforum-scheduled-jobs.service
 );
 
 sub deploy_unit_checks {
@@ -166,9 +167,10 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Single source of truth for systemd unit and nginx template contracts used by
-the deploy checklist drill and live staging-host verify observers. Matching
-never installs, enables, or reloads services, and never claims private-beta
-readiness.
+the deploy checklist drill and live staging-host verify observers. Host unit
+observe covers C<gpforum.service>, C<gpforum-outbox.service>, and
+C<gpforum-scheduled-jobs.service>. Matching never installs, enables, or
+reloads services, and never claims private-beta readiness.
 
 =head1 AUTHOR
 

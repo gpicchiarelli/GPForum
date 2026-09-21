@@ -143,6 +143,12 @@ User=gpforum
 EnvironmentFile=/etc/gpforum/gpforum.env
 ExecStart=/srv/gpforum/script/gpforum-carton exec bin/gpforum-outbox-dispatch
 UNIT
+    path( $dir, 'gpforum-scheduled-jobs.service' )->spew(<<'UNIT');
+[Service]
+User=gpforum
+EnvironmentFile=/etc/gpforum/gpforum.env
+ExecStart=/srv/gpforum/script/gpforum-carton exec bin/gpforum-scheduled-jobs --once
+UNIT
 
     my $pass = GPForum::Service::Operations::StagingHostVerify->new->run(
         { unit_dir => $dir } );

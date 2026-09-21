@@ -11,7 +11,7 @@ use Test::More;
 our $VERSION = '0.001';
 
 const my $HELPER         => 'script/gpforum-evidence-live';
-const my $EXPECTED_TESTS => 10;
+const my $EXPECTED_TESTS => 13;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -25,8 +25,8 @@ like(
 );
 like(
     $src,
-    qr/staging-host-verify|stress-load|mail-check/msx,
-    'helper lists live verify, stress, and mail tools'
+    qr/staging-host-verify|stress-load|mail-check|mail-lifecycle|dead-letter/msx,
+    'helper lists live verify, stress, mail, and ops-check tools'
 );
 unlike(
     $src,
@@ -40,6 +40,10 @@ unlike(
     like( $out, qr/PRIVATE [ ] BETA: [ ] NOT [ ] CLAIMED/msx, '--commands banner' );
     like( $out, qr/script\/staging-host-verify [ ] --json/msx,
         '--commands prints staging-host-verify' );
+    like( $out, qr/gpforum-mail-lifecycle-check/msx,
+        '--commands prints mail-lifecycle-check' );
+    like( $out, qr/gpforum-dead-letter-check/msx,
+        '--commands prints dead-letter-check' );
 }
 
 {
@@ -48,6 +52,8 @@ unlike(
     like( $out, qr/private_beta=not-claimed/msx, '--status residual line' );
     like( $out, qr/\bok\tstaging-host-verify\b/msx,
         '--status finds staging-host-verify' );
+    like( $out, qr/\bok\tmail-lifecycle-check\b/msx,
+        '--status finds mail-lifecycle-check' );
 }
 
 sub _run_helper {

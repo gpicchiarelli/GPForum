@@ -13,8 +13,8 @@ HTTP health endpoints answer.
 | --- | --- | --- |
 | Repo prerequisites | Deploy templates, carton wrapper, ops docs present | `script/staging-host-verify` (always) |
 | Env file keys | `/etc/gpforum/gpforum.env` has required keys; values never printed | `--env-file` |
-| systemd units | `gpforum.service` / `gpforum-outbox.service` report active | `--systemd` |
-| Installed unit files | Deploy contract (User / EnvironmentFile / ExecStart) | `--unit-dir` |
+| systemd units | `gpforum` / `gpforum-outbox` / `gpforum-scheduled-jobs.timer` report active | `--systemd` |
+| Installed unit files | Deploy contract (User / EnvironmentFile / ExecStart) for web, outbox, scheduled-jobs | `--unit-dir` |
 | Installed nginx site | Deploy contract (tcp or unix-socket template) | `--nginx-conf` |
 | HTTP health | `/health/live`, `/health/ready` (optional `/metrics`) | `--base-url` |
 | TLS observe | `https` scheme recorded (pair with health probe) | `--base-url https://…` |

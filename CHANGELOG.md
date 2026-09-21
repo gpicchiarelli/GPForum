@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Expand deploy host observe to `gpforum-scheduled-jobs.service` (unit-dir
+  contract) and `gpforum-scheduled-jobs.timer` (`--systemd` is-active). Fold
+  mail-lifecycle + dead-letter simulate commands into
+  `script/gpforum-evidence-live`. Does not install/reload services or claim
+  private-beta readiness.
+
 - Add `script/gpforum-mail-lifecycle-check` to exercise Identity::Mailer
   `password_reset` / `email_change` / `email_verification` under the test
   transport with EvidenceMeta JSON (token scrubbing). Staging SMTP `--send`
