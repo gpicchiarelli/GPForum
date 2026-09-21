@@ -142,7 +142,7 @@ Unset the variable (or restart without it) to restore the product default.
 Health routes are not subject to that forum retrieval limit; the default
 stress route set includes seeded forum pages, so capacity profiles should set
 the override when measuring stack throughput rather than abuse-protection
-behaviour.
+behavior.
 
 Also run `script/query-budget --sync` after migrate so `/health/ready` returns
 `200` (an empty budget catalog yields `503` and inflates error rate).
@@ -150,11 +150,11 @@ Also run `script/query-budget --sync` after migrate so `/health/ready` returns
 ## Prep evidence archive pointer (2026-09-20)
 
 Live Cloud Agent Hypnotoad verify + stress profile `100` JSON:
-[`docs/ops/evidence/2026-09-20-cloud-agent-live/`](../evidence/2026-09-20-cloud-agent-live/).
+[`docs/ops/evidence/2026-09-20-cloud-agent-live/`](evidence/2026-09-20-cloud-agent-live/).
 Partial prep / drills-only archives remain under
-[`docs/ops/evidence/2026-09-20-cloud-agent/`](../evidence/2026-09-20-cloud-agent/)
+[`docs/ops/evidence/2026-09-20-cloud-agent/`](evidence/2026-09-20-cloud-agent/)
 and
-[`docs/ops/evidence/2026-09-20-cloud-agent-drills/`](../evidence/2026-09-20-cloud-agent-drills/).
+[`docs/ops/evidence/2026-09-20-cloud-agent-drills/`](evidence/2026-09-20-cloud-agent-drills/).
 **PRIVATE BETA NOT YET.** Earlier completed stress appendix rows below are
 unchanged.
 
@@ -200,7 +200,7 @@ records `503`/`429` instead of a bare `error` bucket. Live runs without
 - Private-beta / staging multicore gate still open (representative staging
   host, TLS front door, SMTP, deploy target).
 - Profile `1000` p95 under default `--check` thresholds on this 4-vCPU VM.
-- Single-IP default rate limit remains the correct production behaviour;
+- Single-IP default rate limit remains the correct production behavior;
   capacity evidence requires an explicit `GPFORUM_FORUM_READ_RATE_LIMIT`.
 
 ## Tuned re-run (Cloud Agent VM, 2026-09-20, workers=8)

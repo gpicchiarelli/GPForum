@@ -249,7 +249,7 @@ All notable changes to GPForum are recorded here.
 - Docs: align `ROADMAP.md` / release readiness with shipped mail delivery,
   moderation locks/idempotency, failure-mode coverage, and LISTEN/NOTIFY
   realtime; residual “Next” is evidence and staging, not missing MVP code.
-- Docs: catalogue `attachment.uploaded`, `attachment.deleted`,
+- Docs: catalog `attachment.uploaded`, `attachment.deleted`,
   `report.assigned`, `report.released`, and `report.resolved` in
   `EVENTS.md`, ADR 0091, and ADR 0071 from emitting store payloads.
 - Docs: point roadmap/status at ADR 0068 and ADR 0091; keep prompt files as

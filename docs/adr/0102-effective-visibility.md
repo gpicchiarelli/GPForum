@@ -119,7 +119,7 @@ checking the effective visibility. Authors get a narrow override:
 - `PermissionGate::allowed` accepts an optional `scope`
   (`{ category_id, space_id }`) and then only counts bindings covering that
   scope. Unscoped calls (admin console, moderation, privacy, realtime
-  privileged queues) keep their previous behaviour; see Consequences.
+  privileged queues) keep their previous behavior; see Consequences.
 - `resource_acl`, `permission_grants`, and `effective_permissions` stay
   unused. Realtime and search no longer consult `resource_acl`.
 
@@ -242,7 +242,7 @@ admins through the existing catalog.
 ## Alternatives Rejected
 
 - Filtering in Perl after `LIMIT`: short pages, N+1 permission queries, and
-  cursor drift; rejected in favour of SQL joins.
+  cursor drift; rejected in favor of SQL joins.
 - Letting the author override lift space and category restrictions: exposes
   other people's replies after access is revoked.
 - Materializing `effective_permissions`: needs a rebuildable projection and

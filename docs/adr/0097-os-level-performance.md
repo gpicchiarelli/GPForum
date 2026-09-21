@@ -187,7 +187,7 @@ validate -> authorize -> write canonical row/event -> commit -> respond -> enque
 ### 17. Local Perl Cache
 
 - Per-process Perl cache is allowed for configuration, feature flags,
-  categories, static permission catalogues, small template fragments, and
+  categories, static permission catalogs, small template fragments, and
   low-volatility lookups.
 - It is forbidden for critical sessions, strong shared state, concurrent
   counters, and sensitive authorization without invalidation/versioning.

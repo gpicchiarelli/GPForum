@@ -33,7 +33,7 @@ make mail-check
 | `public_base_url` | base used for identity links |
 | `smtp.*` | host/port/ssl and whether a username is set (**never** the password) |
 
-## Probe behaviour
+## Probe behavior
 
 | Transport | `--dry-run` (default) | `--send --to …` |
 | --- | --- | --- |

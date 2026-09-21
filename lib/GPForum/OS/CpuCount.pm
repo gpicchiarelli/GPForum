@@ -325,7 +325,7 @@ throws.
 C<command_runner>, C<file_reader>, and C<sysconf_reader> are injectable code
 references so tests do not depend on the host. C<OMP_NUM_THREADS> and
 C<OMP_THREAD_LIMIT> are removed from the environment of probe commands
-because GNU C<nproc> honours them.
+because GNU C<nproc> honors them.
 
 =head1 DEPENDENCIES
 

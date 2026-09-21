@@ -5,7 +5,7 @@
 This directory archives operator prep blobs from a **developer Mac laptop**,
 not from a representative staging Hypnotoad+TLS host. It does **not** close
 private-beta blockers in
-[`docs/release/readiness-review.md`](../../release/readiness-review.md).
+[`docs/release/readiness-review.md`](../../../release/readiness-review.md).
 
 Commit baseline at capture time: `main` at/after `#21` / `#22`
 (`staging-host-verify` + user-space PostgreSQL docs).

@@ -8,7 +8,7 @@ replaces the prompt as the binding source.
 
 ## Context
 
-GPForum is a reading- and writing-centred discussion tool. Product and
+GPForum is a reading- and writing-centered discussion tool. Product and
 frontend work need one contract for the user experience structure,
 navigation model, page inventory, interface states, accessibility
 expectations and interaction rules. The rules are mandatory for frontend and

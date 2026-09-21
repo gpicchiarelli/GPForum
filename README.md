@@ -104,7 +104,7 @@ mentions, search documents, caches — is rebuildable and never authoritative.
 Read routes render semantic, accessible SSR by default and return JSON with
 `Accept: application/json` or `?format=json`. State-changing routes require an
 authenticated session and a CSRF token; SSR forms redirect back into the
-discussion, while JSON clients receive `201 Created`. Full behaviour is
+discussion, while JSON clients receive `201 Created`. Full behavior is
 described in [docs/MVP.md](docs/MVP.md).
 
 | Area | Routes |

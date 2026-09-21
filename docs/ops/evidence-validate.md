@@ -45,4 +45,4 @@ Exit `0` for `pass` or `degraded`. `fail` is non-zero.
 - [`staging-host.md`](staging-host.md)
 - [`mail-check.md`](mail-check.md)
 - [`stress-load.md`](stress-load.md)
-- [`../evidence/README.md`](../evidence/README.md)
+- [`evidence/README.md`](evidence/README.md)

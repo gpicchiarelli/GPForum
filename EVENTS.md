@@ -94,7 +94,7 @@ Adopted write paths:
 The service layer no longer writes `EventLog`, `OutboxMessage`, or `AuditLog`
 rows directly; those writes route through the infrastructure recorder.
 
-## Catalogued Domain Events (emitted)
+## Cataloged Domain Events (emitted)
 
 Payload fields below match the emitting store/`*::Event` modules. Envelope
 fields follow `GPForum::Domain::EventEnvelope` (`schema_version` 1 unless

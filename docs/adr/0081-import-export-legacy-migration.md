@@ -78,7 +78,7 @@ imports in request workflows.
 - Imports run as resumable background jobs with dry runs and audit logs, so
   large migrations can be rehearsed and restarted without request timeouts.
 - Legacy identifiers live in a separate mapping, keeping native identifiers
-  stable and enabling redirects that honour visibility and deletion.
+  stable and enabling redirects that honor visibility and deletion.
 - Imported roles and HTML go through the same authorization mapping and
   sanitization as native input, which costs adapter work but closes
   privilege-escalation and XSS paths.

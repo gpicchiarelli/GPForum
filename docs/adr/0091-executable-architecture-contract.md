@@ -727,7 +727,7 @@ invariants. This contract is mandatory.
     records the removal, as this contract requires.
   - Formal Event Catalog catch-up (2026-09-20): `attachment.uploaded`,
     `attachment.deleted`, `report.assigned`, `report.released`, and
-    `report.resolved` are now catalogued here and in `EVENTS.md` from the
+    `report.resolved` are now cataloged here and in `EVENTS.md` from the
     emitting store/`*::Event` payloads. Residual catalog drift elsewhere
     (for example naming differences called out in ADR 0071) is unchanged.
   - ADR files MUST include options considered, operational impact, security

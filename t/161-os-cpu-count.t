@@ -108,7 +108,7 @@ sub _linux_prefers_affinity {
     );
 
     is( $os->cpu_count, $AFFINITY_CPUS,
-        'linux prefers nproc, which honours sched_getaffinity' );
+        'linux prefers nproc, which honors sched_getaffinity' );
     is( $os->cpu_count_source, 'nproc', 'linux reports the nproc source' );
 
     return;
