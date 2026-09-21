@@ -10,6 +10,7 @@ use Mojo::Base -base;
 
 use GPForum::Service::Operations::AttachmentFilesystemDrill;
 use GPForum::Service::Operations::DeployChecklistDrill;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -49,6 +50,7 @@ sub _run_phases {
     my ( $self, $options ) = @_;
 
     my %evidence = (
+        check         => 'staging_ops_extensions',
         status        => undef,
         drill         => 'staging_ops_extensions',
         residual_gaps => [],
@@ -79,10 +81,9 @@ sub _run_phases {
         };
     }
 
-    $evidence{residual_gaps} = _unique_gaps( $evidence{residual_gaps} );
-    $evidence{status}        = _combined_status( \%evidence );
+    $evidence{status} = _combined_status( \%evidence );
 
-    return \%evidence;
+    return evidence_finalize( \%evidence );
 }
 
 sub _format {
@@ -184,19 +185,6 @@ sub _list_has_degraded {
     }
 
     return 0;
-}
-
-sub _unique_gaps {
-    my ($gaps) = @_;
-
-    my %seen;
-    my @unique;
-    for my $gap ( @{$gaps} ) {
-        next if $seen{$gap}++;
-        push @unique, $gap;
-    }
-
-    return \@unique;
 }
 
 sub _attachment_service {

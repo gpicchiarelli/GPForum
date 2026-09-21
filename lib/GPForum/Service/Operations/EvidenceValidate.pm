@@ -145,9 +145,21 @@ sub _detect_type {
     my ($decoded) = @_;
 
     my $check = $decoded->{check} // q{};
+    my $drill = $decoded->{drill} // q{};
     return 'staging_host_verify' if $check eq 'staging_host_verify';
     return 'mail_delivery'       if $check eq 'mail_delivery';
     return 'evidence_validate'   if $check eq 'evidence_validate';
+    return 'staging_drill'
+      if $check eq 'staging_drill'
+      || ( exists $decoded->{fresh_migrate} && exists $decoded->{upgrade_path} );
+    return 'attachment_filesystem'
+      if $check eq 'attachment_filesystem'
+      || $drill eq 'attachment_filesystem';
+    return 'deploy_checklist'
+      if $check eq 'deploy_checklist' || $drill eq 'deploy_checklist';
+    return 'staging_ops_extensions'
+      if $check eq 'staging_ops_extensions'
+      || $drill eq 'staging_ops_extensions';
     return 'stress_load'
       if ( $decoded->{mode} // q{} ) eq 'stress-load'
       || ( $decoded->{plan}{profile} // q{} ) =~ /\A(?:smoke|100|500|1000)\z/msx;
@@ -161,7 +173,11 @@ sub _type_rules {
     my @findings;
     if ( $type eq 'staging_host_verify'
         || $type eq 'mail_delivery'
-        || $type eq 'stress_load' )
+        || $type eq 'stress_load'
+        || $type eq 'staging_drill'
+        || $type eq 'attachment_filesystem'
+        || $type eq 'deploy_checklist'
+        || $type eq 'staging_ops_extensions' )
     {
         push @findings, _require_status($decoded);
         push @findings,

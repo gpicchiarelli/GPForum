@@ -118,7 +118,7 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Applies the common ops-evidence contract used by mail-check, staging-host
-verify, stress-load, and evidence-validate: C<secrets_redacted>,
+verify, stress-load, staging drills, and evidence-validate: C<secrets_redacted>,
 C<private_beta_claimed=0>, deduplicated C<residual_gaps>, and optional secret
 scrubbing. Never claims private-beta readiness.
 

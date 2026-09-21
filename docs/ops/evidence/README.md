@@ -13,9 +13,9 @@ script/gpforum-evidence-meta --write docs/ops/evidence/<archive>/staging-host-ve
 ```
 
 Harness-produced JSON already includes `secrets_redacted` /
-`private_beta_claimed=0` via `EvidenceMeta`. Historical archives may be
-meta-stamped in place; measurements stay unchanged. See
-[`../evidence-validate.md`](../evidence-validate.md).
+`private_beta_claimed=0` via `EvidenceMeta` (verify, mail, stress, and staging
+drills). Historical archives may be meta-stamped in place; measurements stay
+unchanged. See [`../evidence-validate.md`](../evidence-validate.md).
 
 | Archive | Notes |
 | --- | --- |

@@ -18,6 +18,7 @@ use GPForum::Service::Operations::DeployContract qw(
   deploy_nginx_checks
   deploy_unit_checks
 );
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -51,7 +52,7 @@ sub run {
     $evidence->{status} ||= _status_from_checks($evidence);
     $self->_cleanup($evidence);
 
-    return $evidence;
+    return evidence_finalize($evidence);
 }
 
 sub format_evidence {
@@ -448,6 +449,7 @@ sub _base_evidence {
     my ($options) = @_;
 
     return {
+        check          => 'deploy_checklist',
         status         => undef,
         drill          => 'deploy_checklist',
         residual_gaps  => [ $RESIDUAL_HOST, $RESIDUAL_BETA ],

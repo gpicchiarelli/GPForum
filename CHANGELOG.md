@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Extend EvidenceMeta / evidence-validate to staging drills
+  (`staging_drill`, `attachment_filesystem`, `deploy_checklist`,
+  `staging_ops_extensions`) so prep archives can be `--strict`-checked offline.
+  Meta-stamp Cloud Agent drill JSON. Does not claim private-beta readiness.
+
 - Add `script/gpforum-evidence-meta` to stamp archived ops JSON with the shared
   EvidenceMeta contract; meta-stamp Cloud Agent verify/stress/mail archives so
   `evidence-validate --strict` can accept historical preparation blobs without
