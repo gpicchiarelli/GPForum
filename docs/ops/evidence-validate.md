@@ -23,9 +23,7 @@ script/gpforum-evidence-validate --strict --json /tmp/gpforum-evidence-live/*.js
 | JSON object decode | fail | fail |
 | Obvious secret keys/patterns | fail | fail |
 | Private-beta readiness claims in text | fail | fail |
-| Known evidence families (`staging_host_verify`, `mail_delivery`, `stress-load`,
-  `staging_drill`, `attachment_filesystem`, `deploy_checklist`,
-  `staging_ops_extensions`, `dead_letter_check`, `mail_lifecycle_check`) | warn if unknown | fail if unknown |
+| Known evidence families (`staging_host_verify`, `mail_delivery`, `stress-load`, `staging_drill`, `attachment_filesystem`, `deploy_checklist`, `staging_ops_extensions`, `dead_letter_check`, `mail_lifecycle_check`) | warn if unknown | fail if unknown |
 | `residual_gaps` present | warn if missing | fail if missing |
 | Shared meta (`secrets_redacted`, `private_beta_claimed=0`) on all known families | warn if missing | fail if missing |
 

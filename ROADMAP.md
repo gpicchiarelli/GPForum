@@ -16,11 +16,11 @@ same HTTP MVP surface; the binding milestone set is ADR 0068.
 The latest [release-readiness review](docs/release/readiness-review.md)
 places it at:
 
-| Target | Status |
-| --- | --- |
-| Local, personal use | Ready |
+| Target | Status | Evidence and what is still open |
+| --- | --- | --- |
+| Local, personal use | Ready | Full suite, coverage, migrations, local backup/restore, query budget, and local benchmarks are green |
 | Private beta | Not yet | Cloud Agent Hypnotoad verify + stress 100 (`docs/ops/evidence/2026-09-20-cloud-agent-live/`) and capacity 500/1000 (`docs/ops/evidence/2026-09-20-cloud-agent-stress500/`); staging TLS / SMTP `--send` / target install still open |
-| Public production | Not yet |
+| Public production | Not yet | Every private-beta item, plus stress 100/500/1000 on a TLS target, a live attachment restore drill, and a rehearsed rollback |
 
 ## Shipped
 
