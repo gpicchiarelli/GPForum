@@ -15,7 +15,7 @@ use GPForum::Service::Operations::DeadLetterCheck;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 16;
+const my $EXPECTED_TESTS => 17;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -46,14 +46,23 @@ ok( !( grep { $_->{status} ne 'pass' } @{ $sim->{steps} } ),
 
 my $command = GPForum::Command::DeadLetterCheck->new;
 my $usage   = q{};
+my $help_err = q{};
 {
     open my $stdout, '>', \$usage or croak 'stdout';
+    open my $stderr, '>', \$help_err or croak 'stderr';
     local *STDOUT = $stdout;
+    local *STDERR = $stderr;
     is( $command->run('--help'), 0, 'help exits 0' );
     close $stdout or croak 'close stdout';
+    close $stderr or croak 'close stderr';
 }
 like( $usage, qr/gpforum-dead-letter-check/msx, 'help names command' );
 like( $usage, qr/private-beta/msx, 'help denies private-beta claim' );
+unlike(
+    $help_err,
+    qr/Wide[ ]character/msx,
+    'help avoids wide-character print warnings'
+);
 
 my $json = q{};
 {

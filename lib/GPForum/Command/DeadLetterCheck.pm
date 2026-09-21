@@ -103,7 +103,7 @@ outbox stack (simulate) or print the plan (dry-run). Emits EvidenceMeta JSON.
 Does not claim private-beta readiness. Live staging PostgreSQL confirmation
 remains a residual.
 
-  --simulate  run permanent-failure → dead-letter → redispatch (default)
+  --simulate  run permanent-failure -> dead-letter -> redispatch (default)
   --dry-run   print the staged plan only
   --json      evidence as JSON (default)
   --human     short plain-text evidence
