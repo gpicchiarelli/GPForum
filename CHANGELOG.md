@@ -4,6 +4,13 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Centralize ops evidence metadata in
+  `GPForum::Service::Operations::EvidenceMeta` (`secrets_redacted`,
+  `private_beta_claimed=0`, deduped `residual_gaps`, optional secret scrubbing).
+  Wire `staging-host-verify`, `mail-check`, and `stress-load` through it;
+  `evidence-validate --strict` requires the markers on all known families.
+  Does not claim private-beta readiness.
+
 - Add `script/gpforum-evidence-validate` / `bin/gpforum-evidence-validate` to
   validate archived ops evidence JSON (shape by family, secret patterns,
   private-beta claim rejection; `--strict` requires modern redaction markers).

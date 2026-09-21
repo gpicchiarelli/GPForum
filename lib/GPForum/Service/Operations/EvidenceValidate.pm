@@ -159,22 +159,15 @@ sub _type_rules {
     my ( $type, $decoded, $strict ) = @_;
 
     my @findings;
-    if ( $type eq 'staging_host_verify' ) {
-        push @findings, _require_status($decoded);
-        push @findings,
-          _require_array( $decoded, 'residual_gaps', $strict, 'warn' );
-    }
-    elsif ( $type eq 'mail_delivery' ) {
+    if ( $type eq 'staging_host_verify'
+        || $type eq 'mail_delivery'
+        || $type eq 'stress_load' )
+    {
         push @findings, _require_status($decoded);
         push @findings,
           _require_true( $decoded, 'secrets_redacted', $strict, 'warn' );
         push @findings,
           _require_zero( $decoded, 'private_beta_claimed', $strict, 'warn' );
-        push @findings,
-          _require_array( $decoded, 'residual_gaps', $strict, 'warn' );
-    }
-    elsif ( $type eq 'stress_load' ) {
-        push @findings, _require_status($decoded);
         push @findings,
           _require_array( $decoded, 'residual_gaps', $strict, 'warn' );
     }

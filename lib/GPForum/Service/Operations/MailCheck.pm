@@ -11,6 +11,7 @@ use Mojo::Base -base;
 
 use GPForum::Config;
 use GPForum::Service::Identity::Mailer;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -122,15 +123,12 @@ sub _finalize_evidence {
           if eval { return _has_text( $config->smtp_password ) };
     }
 
-    $evidence = _scrub_structure( $evidence, \@secrets );
     $evidence->{check} = 'mail_delivery';
-    $evidence->{secrets_redacted}     = \1;
-    $evidence->{private_beta_claimed} = 0;
-    $evidence->{residual_gaps} =
-      _unique_gaps( [ @{ $evidence->{residual_gaps} // [] },
-          @{ _residual_gaps_for($evidence) } ] );
-
-    return $evidence;
+    return evidence_finalize(
+        $evidence,
+        secrets    => \@secrets,
+        extra_gaps => _residual_gaps_for($evidence),
+    );
 }
 
 sub _residual_gaps_for {
@@ -157,60 +155,6 @@ sub _residual_gaps_for {
     }
 
     return \@gaps;
-}
-
-sub _scrub_structure {
-    my ( $value, $secrets ) = @_;
-
-    if ( ref $value eq 'HASH' ) {
-        my %out;
-        for my $key ( keys %{$value} ) {
-            if ( $key =~ /password|secret|token|authorization|credential/msxi
-                && $key ne 'secrets_redacted'
-                && $key ne 'secrets_leaked'
-                && $key ne 'username_configured' )
-            {
-                $out{$key} = '[redacted]';
-                next;
-            }
-            $out{$key} = _scrub_structure( $value->{$key}, $secrets );
-        }
-        return \%out;
-    }
-    if ( ref $value eq 'ARRAY' ) {
-        return [ map { _scrub_structure( $_, $secrets ) } @{$value} ];
-    }
-    if ( defined $value && !ref $value ) {
-        return _scrub_text( "$value", $secrets );
-    }
-
-    return $value;
-}
-
-sub _scrub_text {
-    my ( $text, $secrets ) = @_;
-
-    for my $secret ( @{$secrets} ) {
-        next if !_has_text($secret);
-        my $quoted = quotemeta $secret;
-        $text =~ s/$quoted/[redacted]/gmsx;
-    }
-
-    return $text;
-}
-
-sub _unique_gaps {
-    my ($gaps) = @_;
-
-    my %seen;
-    my @unique;
-    for my $gap ( @{$gaps} ) {
-        next if !_has_text($gap);
-        next if $seen{$gap}++;
-        push @unique, $gap;
-    }
-
-    return \@unique;
 }
 
 sub _config_fail {

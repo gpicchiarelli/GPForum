@@ -17,7 +17,7 @@ use GPForum::Service::Operations::StagingHostVerify;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 43;
+const my $EXPECTED_TESTS => 45;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -47,6 +47,10 @@ sub _test_prerequisites_only {
     is( $evidence->{tls}{status},    'skipped', 'tls skipped without base-url' );
     ok( @{ $evidence->{residual_gaps} } >= 1,
         'residual gaps note live staging evidence' );
+    ok( $evidence->{secrets_redacted},
+        'verify evidence marks secrets_redacted' );
+    is( $evidence->{private_beta_claimed}, 0,
+        'verify evidence refuses private-beta claim' );
 
     return;
 }

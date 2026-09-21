@@ -17,7 +17,7 @@ use GPForum::Service::Operations::EvidenceValidate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 16;
+const my $EXPECTED_TESTS => 18;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -27,9 +27,11 @@ my $staging = path( $dir, 'staging.json' );
 $staging->spew(
     encode_json(
         {
-            check         => 'staging_host_verify',
-            status        => 'pass',
-            residual_gaps => ['still open'],
+            check                => 'staging_host_verify',
+            status               => 'pass',
+            secrets_redacted     => \1,
+            private_beta_claimed => 0,
+            residual_gaps        => ['still open'],
         }
     )
 );
@@ -85,16 +87,38 @@ my $stress = path( $dir, 'stress.json' );
 $stress->spew(
     encode_json(
         {
-            mode          => 'stress-load',
-            status        => 'ok',
-            residual_gaps => ['not a beta gate'],
-            plan          => { profile => '100' },
+            mode                 => 'stress-load',
+            status               => 'ok',
+            secrets_redacted     => \1,
+            private_beta_claimed => 0,
+            residual_gaps        => ['not a beta gate'],
+            plan                 => { profile => '100' },
         }
     )
 );
 my $stress_ok = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => ["$stress"] } );
 is( $stress_ok->{status}, 'pass', 'stress-load evidence validates' );
+
+my $legacy_stress = path( $dir, 'legacy-stress.json' );
+$legacy_stress->spew(
+    encode_json(
+        {
+            mode          => 'stress-load',
+            status        => 'ok',
+            residual_gaps => ['old archive'],
+            plan          => { profile => '100' },
+        }
+    )
+);
+my $legacy_warn = GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$legacy_stress"] } );
+is( $legacy_warn->{status}, 'degraded',
+    'legacy stress without redaction markers degrades' );
+my $legacy_strict = GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$legacy_stress"], strict => 1 } );
+is( $legacy_strict->{status}, 'fail',
+    'strict mode fails legacy stress evidence' );
 
 my $missing = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => [] } );
