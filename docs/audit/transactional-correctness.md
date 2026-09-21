@@ -1,235 +1,237 @@
-# Audit correttezza transazionale
+# Transactional correctness audit
 
-Data: 2026-06-02.
+Date: 2026-06-02.
 
-Scopo: congelare le nuove funzionalità e mappare ciò che può corrompere dati,
-duplicare operazioni, perdere eventi o fallire sotto carico. Questo documento
-non introduce feature: classifica i rischi residui e definisce patch e test
-necessari per rendere il nucleo forum verificabile in produzione.
+Purpose: freeze the new features and map what can corrupt data, duplicate
+operations, lose events, or fail under load. This document introduces no
+features: it classifies the residual risks and defines the patches and tests
+needed to make the forum core verifiable in production.
 
-## Stato sintetico
+## Summary state
 
-Verdetto tecnico: quasi pronto come codebase verificabile, non pronto per
-go-live production finché i rischi `critical` e `high` sotto non sono chiusi in
-staging con database reale.
+Technical verdict: almost ready as a verifiable codebase, not ready for a
+production go-live until the `critical` and `high` risks below are closed on
+staging with a real database.
 
-Punti già chiusi:
+Points already closed:
 
-- Reply hot path: `PostStore` assegna la posizione dentro la transazione,
-  blocca il thread con `FOR UPDATE` e il vincolo DB `(thread_id, position)` resta
-  l'invariante finale.
-- `PostPosition::next_position` non è più utilizzabile per scritture: fallisce
-  esplicitamente e resta solo `read_next_position` per letture diagnostiche.
-- `create_thread`, `create_reply`, `edit_post`, `delete_post`, `edit_thread`, `delete_thread`, e `move_thread` richiedono `command_id` al boundary HTTP e
-  usano `command_log` per replay/conflict.
-- `record_audit` calcola sempre `record_hash` internamente e include
-  `previous_hash` nel payload canonico. `Infrastructure::AuditRecord`
-  possiede default, hashing e `verify`; `EventRecorder` resta
-  persistenza e lookup della chain.
+- Reply hot path: `PostStore` assigns the position inside the transaction, locks
+  the thread with `FOR UPDATE`, and the DB constraint `(thread_id, position)`
+  remains the final invariant.
+- `PostPosition::next_position` can no longer be used for writes: it fails
+  explicitly, and only `read_next_position` remains for diagnostic reads.
+- `create_thread`, `create_reply`, `edit_post`, `delete_post`, `edit_thread`,
+  `delete_thread`, and `move_thread` require a `command_id` at the HTTP boundary
+  and use `command_log` for replay/conflict.
+- `record_audit` always computes `record_hash` internally and includes
+  `previous_hash` in the canonical payload. `Infrastructure::AuditRecord` owns
+  the defaults, hashing, and `verify`; `EventRecorder` remains persistence and
+  chain lookup.
 
-Punti ancora da chiudere prima del go-live:
+Points still to close before go-live:
 
-- residuali di staging operativo (deploy/nginx/systemd end-to-end) restano
-  fuori da questi gate di evidenza DB. Reclaim outbox su lock `running`
-  scaduto è coperto da `t/integration/postgres-outbox-reclaim.t`;
-  `event_idempotency_keys` e reputation source unique da
+- Operational staging residuals (end-to-end deploy/nginx/systemd) remain outside
+  these DB evidence gates. Outbox reclaim on an expired `running` lock is
+  covered by `t/integration/postgres-outbox-reclaim.t`;
+  `event_idempotency_keys` and reputation source uniqueness by
   `t/integration/postgres-idempotency.t` (command_log, bookmark, subscription,
-  report, moderation hide, privacy approval, audit chain e token consume
-  restano in `t/integration/postgres-concurrency.t`).
+  report, moderation hide, privacy approval, audit chain, and token consume
+  remain in `t/integration/postgres-concurrency.t`).
 
-## Rubrica severità
+## Severity rubric
 
-| Severità | Definizione |
+| Severity | Definition |
 | --- | --- |
-| critical | Può produrre effetto distruttivo, privacy/compliance errata, perdita di eventi o stato non recuperabile sotto concorrenza. |
-| high | Può duplicare operazioni, audit/eventi/outbox, causare 500 su retry legittimo o lasciare stato business incoerente. |
-| medium | Può degradare verificabilità, produrre audit non lineare, rumore operativo o comportamento non deterministico ma recuperabile. |
-| low | Rischio operativo limitato o già mitigato da vincoli/test, da documentare o monitorare. |
+| critical | Can produce a destructive effect, incorrect privacy/compliance handling, event loss, or unrecoverable state under concurrency. |
+| high | Can duplicate operations, audit records, events, or outbox messages, cause a 500 on a legitimate retry, or leave business state inconsistent. |
+| medium | Can degrade verifiability, produce a non-linear audit chain, operational noise, or non-deterministic but recoverable behavior. |
+| low | Limited operational risk, or already mitigated by constraints/tests; to be documented or monitored. |
 
-## Registro rischi prioritario
+## Priority risk register
 
-### TX-001: posizione reply su thread caldo
+### TX-001: reply position on a hot thread
 
-Severità: chiuso, rischio storico `critical`.
+Severity: closed, historical risk `critical`.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Forum/PostStore.pm`
 - `lib/GPForum/Service/Forum/PostPosition.pm`
 - `migrations/003_forum_projection.sql`
 
-Comportamento attuale: `PostStore::_command_with_allocated_position` viene
-eseguito dentro `schema->txn_do`, blocca il record `threads` con `FOR UPDATE`,
-calcola la prossima posizione e inserisce `posts`. La migrazione mantiene
+Current behavior: `PostStore::_command_with_allocated_position` runs inside
+`schema->txn_do`, locks the `threads` record with `FOR UPDATE`, computes the next
+position, and inserts into `posts`. The migration keeps
 `posts_thread_position_key UNIQUE (thread_id, position)`.
 
-Rischio residuo: basso. Su backend non PostgreSQL il lock dipende dal driver, ma
-la produzione target è PostgreSQL.
+Residual risk: low. On a non-PostgreSQL backend the lock depends on the driver,
+but the target for production is PostgreSQL.
 
-Patch proposta: nessuna ora. Aggiungere solo evidenza PostgreSQL concorrente con
-due o più connessioni reali.
+Proposed patch: none for now. Only add concurrent PostgreSQL evidence with two
+or more real connections.
 
-Test da aggiungere: test DB-backed con 25-100 reply simultanee allo stesso
-thread, verifica posizioni contigue, zero duplicati, zero errori di unique.
+Test to add: a DB-backed test with 25-100 simultaneous replies to the same
+thread, verifying contiguous positions, zero duplicates, and zero unique errors.
 
-### ID-001: race concorrente su `command_log`
+### ID-001: concurrent race on `command_log`
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Operations/CommandIdempotency.pm`
 - `migrations/004_platform_governance.sql`
 - `lib/GPForum/Service/Forum/PostingWorkflow.pm`
 
-Comportamento attuale: `CommandIdempotency::run` cerca una riga esistente prima
-della transazione, poi crea la riga `command_log` dentro `txn_do`. Il vincolo
-`command_log_idempotency_key_key UNIQUE (idempotency_key)` impedisce due righe,
-ma due richieste concorrenti con lo stesso `command_id` possono entrambe vedere
-assenza; una vince, l'altra può fallire con violazione unique invece di ricevere
-replay o `in_progress`.
+Current behavior: `CommandIdempotency::run` looks for an existing row before the
+transaction, then creates the `command_log` row inside `txn_do`. The constraint
+`command_log_idempotency_key_key UNIQUE (idempotency_key)` prevents two rows, but
+two concurrent requests with the same `command_id` can both see it missing; one
+wins, and the other can fail with a unique violation instead of receiving a
+replay or `in_progress`.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
-esegue due connessioni reali sullo stesso `command_id`.
+Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
+runs two real connections on the same `command_id`.
 
-Patch applicata: `CommandIdempotency::run` cerca e inserisce `command_log`
-dentro `txn_do`. Una unique violation su `idempotency_key` ricarica la riga e
-restituisce replay o `in_progress` invece di 500. `UniqueConflict->attempt`
-usa un savepoint PostgreSQL così il catch non abortisce la `txn_do` esterna.
-Test fake in `t/87-command-idempotency.t`; evidenza PG in
+Patch applied: `CommandIdempotency::run` looks up and inserts `command_log`
+inside `txn_do`. A unique violation on `idempotency_key` reloads the row and
+returns replay or `in_progress` instead of a 500. `UniqueConflict->attempt` uses
+a PostgreSQL savepoint so the catch does not abort the outer `txn_do`. Fake
+tests in `t/87-command-idempotency.t`; PG evidence in
 `t/integration/postgres-concurrency.t`.
 
-### CM-001: bookmark non atomico
+### CM-001: non-atomic bookmark
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Community/BookmarkStore.pm`
 - `lib/GPForum/Controller/Forum.pm`
 - `migrations/007_advanced_community.sql`
 
-Comportamento attuale: `save_bookmark` fa `find_for_user_target`, poi
-`create_bookmark` o restore. Il vincolo `bookmarks_user_target_key` impedisce
-righe duplicate, ma la sequenza check-then-insert non è retry-safe.
+Current behavior: `save_bookmark` calls `find_for_user_target`, then
+`create_bookmark` or restore. The constraint `bookmarks_user_target_key`
+prevents duplicate rows, but the check-then-insert sequence is not retry-safe.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
-prova due `save_bookmark` concorrenti → una riga.
-Remove su una riga già soft-deleted non riscrive `deleted_at`.
+Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
+runs two concurrent `save_bookmark` calls → one row. A remove on an
+already-soft-deleted row does not rewrite `deleted_at`.
 
-Patch applicata: `save_bookmark` cattura unique su `bookmarks_user_target_key`,
-ricarica la riga vincente e la restore. `remove_bookmark` e
-`remove_for_user_target` saltano l'update se `deleted_at` è già valorizzato.
-Un secondo save su una riga già attiva con la stessa nota non riscrive
-`deleted_at` né `note`.
-Test fake in `t/146-concurrency-correctness.t` e `t/24-advanced-community.t`;
-evidenza PG in `t/integration/postgres-concurrency.t`.
+Patch applied: `save_bookmark` catches the unique violation on
+`bookmarks_user_target_key`, reloads the winning row, and restores it.
+`remove_bookmark` and `remove_for_user_target` skip the update when `deleted_at`
+is already set. A second save on an already-active row with the same note
+rewrites neither `deleted_at` nor `note`. Fake tests in
+`t/146-concurrency-correctness.t` and `t/24-advanced-community.t`; PG evidence
+in `t/integration/postgres-concurrency.t`.
 
-### CM-002: subscription non atomica
+### CM-002: non-atomic subscription
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Notification/SubscriptionStore.pm`
 - `lib/GPForum/Controller/Forum.pm`
 - `migrations/005_notifications_subscriptions.sql`
 
-Comportamento attuale: `save_subscription` fa find poi insert/restore. Il
-vincolo `subscriptions_unique_target` impedisce duplicati, ma non protegge la
-risposta applicativa sotto concorrenza.
+Current behavior: `save_subscription` does a find, then an insert/restore. The
+constraint `subscriptions_unique_target` prevents duplicates, but it does not
+protect the application response under concurrency.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
-prova due `save_subscription` concorrenti → una riga.
-HTTP `command_id` replay evita un secondo mute/unsubscribe con lo stesso
-comando; uno store retry senza comando nuovo non riscrive `muted_at` o
-`revoked_at` se il valore è già presente.
+Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
+runs two concurrent `save_subscription` calls → one row. An HTTP `command_id`
+replay avoids a second mute/unsubscribe with the same command; a store retry
+without a new command does not rewrite `muted_at` or `revoked_at` when the value
+is already present.
 
-Patch applicata: `save_subscription` cattura unique su
-`subscriptions_unique_target` e restore la riga vincente. Mute e revoke
-saltano l'update quando il timestamp è già valorizzato. Un secondo save
-su una riga già attiva con la stessa preference non riscrive
-`muted_at`, `revoked_at` né `preference`. Test fake in
-`t/146-concurrency-correctness.t` e `t/17-notifications.t`; evidenza PG in
-`t/integration/postgres-concurrency.t`.
+Patch applied: `save_subscription` catches the unique violation on
+`subscriptions_unique_target` and restores the winning row. Mute and revoke skip
+the update when the timestamp is already set. A second save on an already-active
+row with the same preference rewrites neither `muted_at`, `revoked_at`, nor
+`preference`. Fake tests in `t/146-concurrency-correctness.t` and
+`t/17-notifications.t`; PG evidence in `t/integration/postgres-concurrency.t`.
 
-### MOD-001: report duplicati aperti
+### MOD-001: duplicate open reports
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Moderation/ReportStore.pm`
 - `lib/GPForum/Controller/Forum.pm`
 - `migrations/008_moderation_review.sql`
 - `migrations/016_security_abuse_hardening.sql`
 
-Comportamento attuale: `create_report` controlla duplicato aperto dentro
-transazione, poi inserisce. HTTP mint e richiede `command_id` in
-`Community::Workflow`; una risposta persa ritentata con la stessa chiave
-riprole da `command_log` e non inserisce una seconda riga. La migrazione
-`016` aggiunge un indice parziale su report aperti/triaged, ma non è unique.
+Current behavior: `create_report` checks for an open duplicate inside the
+transaction, then inserts. HTTP mints and requires a `command_id` in
+`Community::Workflow`; a lost response retried with the same key replays from
+`command_log` and does not insert a second row. Migration `016` adds a partial
+index on open/triaged reports, but it is not unique.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
-prova due `create_report` concorrenti → un solo report open.
+Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
+runs two concurrent `create_report` calls → a single open report.
 
-Patch applicata: `migrations/026_concurrency_uniqueness.sql` aggiunge
-`idx_reports_reporter_target_open_unique`. `create_report` cattura il conflitto,
-ricarica il report aperto e registra un audit `duplicate_blocked`. Test fake in
-`t/146-concurrency-correctness.t`; evidenza PG in
+Patch applied: `migrations/026_concurrency_uniqueness.sql` adds
+`idx_reports_reporter_target_open_unique`. `create_report` catches the conflict,
+reloads the open report, and records a `duplicate_blocked` audit entry. Fake
+tests in `t/146-concurrency-correctness.t`; PG evidence in
 `t/integration/postgres-concurrency.t`.
 
-### MOD-002: transizioni report senza lock riga
+### MOD-002: report transitions without a row lock
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Moderation/ReportStore.pm`
 - `lib/GPForum/Controller/Moderation.pm`
 
-Comportamento attuale: assign/release/resolve sono transazionali, bloccano
-la riga `reports` con `FOR UPDATE`, e le form HTTP mintano un `command_id`
-distinto per comando. Lo store replaya sullo stato (stesso moderatore,
-già resolved) senza unique `command_id` sulla tabella `reports`.
+Current behavior: assign/release/resolve are transactional, lock the `reports`
+row with `FOR UPDATE`, and the HTTP forms mint a distinct `command_id` per
+command. The store replays on state (same moderator, already resolved) without a
+unique `command_id` on the `reports` table.
 
-Rischio residuo: due `command_id` diversi sullo stesso assign restano
-serializzati dal lock; non c'è replay `command_log` se il payload cambia.
+Residual risk: two different `command_id` values on the same assign remain
+serialized by the lock; there is no `command_log` replay when the payload
+changes.
 
-### MOD-003: azioni moderation su post/thread senza command-id
+### MOD-003: moderation actions on posts/threads without a command id
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Moderation/ActionStore.pm`
 - `lib/GPForum/Controller/Moderation.pm`
 
-Comportamento attuale: hide/restore/lock/unlock sono dentro `txn_do` e, se lo
-stato era già quello atteso, restituiscono l'action esistente senza un
-secondo insert. I target sono letti con `FOR UPDATE`.
+Current behavior: hide/restore/lock/unlock run inside `txn_do` and, when the
+state was already the expected one, return the existing action without a second
+insert. Targets are read with `FOR UPDATE`.
 
-Rischio residuo: chiuso per evidenza PG sullo stesso `command_id`.
-`t/integration/postgres-concurrency.t` prova due hide concorrenti → una
-action e post `hidden`. Un secondo hide con `command_id` diverso non
-inserisce action, evento, audit né outbox se lo stato è già quello atteso
-(coperto dai test fake; non rieseguito nel suite PG).
+Residual risk: closed by PG evidence for the same `command_id`.
+`t/integration/postgres-concurrency.t` runs two concurrent hides → one action
+and a `hidden` post. A second hide with a different `command_id` inserts no
+action, event, audit record, or outbox message when the state is already the
+expected one (covered by the fake tests; not re-run in the PG suite).
 
-Patch applicata: hide/restore/lock/unlock bloccano il target con `FOR UPDATE`.
-Lo stesso `command_id` replay la `moderation_actions` esistente senza nuovo
-evento/audit/outbox. Unique parziale `idx_moderation_actions_command_id` in
-`migrations/026_concurrency_uniqueness.sql`. Se il target è già nello stato
-atteso, lo store restituisce l'action non reversed più recente senza un
-secondo insert. Le form HTTP mintano e passano `command_id`. Test fake in
-`t/146-concurrency-correctness.t`, `t/25-moderation-review.t` e
-`t/86-engineering-correctness.t`; evidenza PG stesso `command_id` in
+Patch applied: hide/restore/lock/unlock lock the target with `FOR UPDATE`. The
+same `command_id` replays the existing `moderation_actions` row without a new
+event/audit/outbox write. A partial unique index
+`idx_moderation_actions_command_id` lives in
+`migrations/026_concurrency_uniqueness.sql`. When the target is already in the
+expected state, the store returns the most recent non-reversed action without a
+second insert. The HTTP forms mint and pass a `command_id`. Fake tests in
+`t/146-concurrency-correctness.t`, `t/25-moderation-review.t`, and
+`t/86-engineering-correctness.t`; same-`command_id` PG evidence in
 `t/integration/postgres-concurrency.t`.
 
-### PRIV-001: deletion request duplicabile
+### PRIV-001: duplicable deletion request
 
-Severità: high. Chiuso in codice.
+Severity: high. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
 - `lib/GPForum/Service/Privacy/Record.pm`
@@ -237,164 +239,164 @@ File coinvolti:
 - `lib/GPForum/Controller/Privacy.pm`
 - `migrations/004_platform_governance.sql`
 
-Comportamento attuale: `request_deletion` richiede `command_id` al boundary
-HTTP e, nello store, ricarica una richiesta `pending`/`approved`/`held` per
-lo stesso `(resource_type, resource_id, request_type)` dopo `FOR UPDATE`.
-Non inserisce una seconda riga e non emette un secondo evento.
+Current behavior: `request_deletion` requires a `command_id` at the HTTP
+boundary and, in the store, reloads a `pending`/`approved`/`held` request for the
+same `(resource_type, resource_id, request_type)` after `FOR UPDATE`. It does
+not insert a second row and does not emit a second event.
 
-Rischio residuo: unique parziale su pending non è più il gap; l'evidenza
-PostgreSQL a due connessioni resta da eseguire.
+Residual risk: the partial unique index on pending is no longer the gap; the
+two-connection PostgreSQL evidence still has to be run.
 
-Patch applicata: `migrations/027_privacy_resource_uniqueness.sql` aggiunge
-`idx_deletion_requests_open_resource_unique`. `DeletionWorkflow` cattura la
-unique violation e ricarica la richiesta aperta. Test fake in
+Patch applied: `migrations/027_privacy_resource_uniqueness.sql` adds
+`idx_deletion_requests_open_resource_unique`. `DeletionWorkflow` catches the
+unique violation and reloads the open request. Fake tests in
 `t/29-privacy-rights.t`.
 
-### PRIV-002: approval concorrente può creare più erasure job
+### PRIV-002: concurrent approval can create multiple erasure jobs
 
-Severità: mitigato, rischio storico `critical`.
+Severity: mitigated, historical risk `critical`.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
 - `migrations/004_platform_governance.sql`
 - `migrations/024_privacy_erasure_job_idempotency.sql`
 - `lib/GPForum/Schema/Result/ErasureJob.pm`
 
-Comportamento attuale: `approve_request` blocca la `deletion_requests` con
-`FOR UPDATE` prima di cercare o creare il job. `erasure_jobs` ora ha vincolo
-univoco su `deletion_request_id` tramite `idx_erasure_jobs_request_unique` e
-schema DBIC `erasure_jobs_request_key`. Una seconda approval dello stesso
-request id ricarica il job esistente e torna idempotente. Se la lookup
-del job manca e l'insert viola `idx_erasure_jobs_request_unique`,
-`DeletionWorkflow` cattura il conflitto, ricarica il job e non inserisce
-una seconda action. Test fake in `t/29-privacy-rights.t`.
+Current behavior: `approve_request` locks `deletion_requests` with `FOR UPDATE`
+before looking up or creating the job. `erasure_jobs` now has a unique
+constraint on `deletion_request_id` through `idx_erasure_jobs_request_unique`
+and the DBIC schema `erasure_jobs_request_key`. A second approval of the same
+request id reloads the existing job and returns idempotently. When the job
+lookup misses and the insert violates `idx_erasure_jobs_request_unique`,
+`DeletionWorkflow` catches the conflict, reloads the job, and does not insert a
+second action. Fake tests in `t/29-privacy-rights.t`.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
-esegue due approval concorrenti sullo stesso request id → un solo erasure job.
+Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
+runs two concurrent approvals on the same request id → a single erasure job.
 
-Patch applicata: migration `024`, vincolo DBIC, lock esplicito su approval,
-catch UniqueConflict su insert job e test di replay/race in
-`t/29-privacy-rights.t`; evidenza PG in `t/integration/postgres-concurrency.t`.
+Patch applied: migration `024`, the DBIC constraint, an explicit lock on
+approval, a UniqueConflict catch on the job insert, and replay/race tests in
+`t/29-privacy-rights.t`; PG evidence in `t/integration/postgres-concurrency.t`.
 
-### PRIV-003: retention hold e stato held ripetibili senza replay
+### PRIV-003: retention hold and held state repeatable without replay
 
-Severità: medium. Chiuso in codice.
+Severity: medium. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Privacy/RetentionHoldStore.pm`
 - `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
 - `lib/GPForum/Controller/Privacy.pm`
 
-Comportamento attuale: `create_hold` ricarica l'hold attivo per la stessa
-risorsa. `hold_deletion` richiede `command_id` HTTP. `hold_request` resta a
-quattro argomenti oltre l'invocante. Uno stato già `held` non registra un
-secondo evento/action.
+Current behavior: `create_hold` reloads the active hold for the same resource.
+`hold_deletion` requires an HTTP `command_id`. `hold_request` stays at four
+arguments besides the invocant. A state that is already `held` records no second
+event/action.
 
-Rischio residuo: evidenza PostgreSQL a due connessioni resta da eseguire.
+Residual risk: the two-connection PostgreSQL evidence still has to be run.
 
-Patch applicata: `migrations/027_privacy_resource_uniqueness.sql` aggiunge
-`idx_retention_holds_active_resource_unique`. `RetentionHoldStore` cattura
-la unique violation e ricarica l'hold attivo. Test fake in
+Patch applied: `migrations/027_privacy_resource_uniqueness.sql` adds
+`idx_retention_holds_active_resource_unique`. `RetentionHoldStore` catches the
+unique violation and reloads the active hold. Fake tests in
 `t/29-privacy-rights.t`.
 
-### PRIV-005: complete_job con hold attivo ripete action ed event
+### PRIV-005: complete_job with an active hold repeats the action and event
 
-Severità: medium. Chiuso in codice.
+Severity: medium. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
 - `lib/GPForum/Service/Privacy/Completion.pm`
 
-Comportamento attuale: `complete_job` con hold attivo marca la request
-`held`, scrive `last_error` sul job e restituisce `retention_hold_active`.
-Un secondo `complete_job` mentre l'hold è ancora attivo replay lo stesso
-esito (`idempotent`) senza una seconda deletion action né un secondo
-evento. Se l'hold termina, un `complete_job` successivo può completare
-l'erasure. `hold_request` resta a quattro argomenti oltre l'invocante.
+Current behavior: `complete_job` with an active hold marks the request `held`,
+writes `last_error` on the job, and returns `retention_hold_active`. A second
+`complete_job` while the hold is still active replays the same outcome
+(`idempotent`) with no second deletion action and no second event. When the hold
+ends, a later `complete_job` can complete the erasure. `hold_request` stays at
+four arguments besides the invocant.
 
-Rischio residuo: evidenza PostgreSQL a due connessioni resta da eseguire.
+Residual risk: the two-connection PostgreSQL evidence still has to be run.
 
-Patch applicata: `_block_or_replay` in `DeletionWorkflow`, hash
-`hold_block_replay` in `Completion`, test in `t/29-privacy-rights.t` e
+Patch applied: `_block_or_replay` in `DeletionWorkflow`, the `hold_block_replay`
+hash in `Completion`, and tests in `t/29-privacy-rights.t` and
 `t/125-privacy-completion.t`.
 
 ### PRIV-006: erasure failure after credential/session revocation
 
-Severità: high. Chiuso in codice.
+Severity: high. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
 - `t/lib/GPForum/Test/EngineeringCorrectness/ResultSet.pm`
 - `t/86-engineering-correctness.t`
 
-Comportamento attuale: `complete_job` anonymizza l'utente, revoca
-credential e sessioni, poi marca job/request e scrive EventLog/outbox/audit
-nella stessa `txn_do`. Un timeout su EventLog, outbox o audit dopo la
-revoca ripristina email, `deleted_at`, `revoked_at` e lascia il job
-`pending`. Un `complete_job` successivo completa erasure e revoca.
+Current behavior: `complete_job` anonymizes the user, revokes credentials and
+sessions, then marks the job/request and writes EventLog/outbox/audit in the same
+`txn_do`. A timeout on EventLog, outbox, or audit after the revocation restores
+the email, `deleted_at`, and `revoked_at`, and leaves the job `pending`. A later
+`complete_job` completes the erasure and the revocation.
 
-Rischio residuo: evidenza PostgreSQL reale del rollback resta da eseguire.
+Residual risk: real PostgreSQL evidence of the rollback still has to be run.
 
-Patch applicata: `ResultSet->all` sul fake schema di correttezza; test di
-timeout e retry in `t/86-engineering-correctness.t`.
+Patch applied: `ResultSet->all` on the correctness fake schema; timeout and
+retry tests in `t/86-engineering-correctness.t`.
 
-### PRIV-004: export request privacy duplicabile
+### PRIV-004: duplicable privacy export request
 
-Severità: medium. Chiuso in codice.
+Severity: medium. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Portability/ExportBundleBuilder.pm`
 - `lib/GPForum/Controller/Privacy.pm`
 - `migrations/010_import_export.sql`
 
-Comportamento attuale: `create_request` richiede `command_id` HTTP e ricarica
-una export `pending` per lo stesso requester/subject/type/format. Completare
-una request già `completed` resta idempotente. Lo stesso `command_id` dopo
-complete replay da `command_log` e non apre un secondo bundle.
+Current behavior: `create_request` requires an HTTP `command_id` and reloads a
+`pending` export for the same requester/subject/type/format. Completing an
+already `completed` request stays idempotent. The same `command_id` after
+completion replays from `command_log` and does not open a second bundle.
 
-Rischio residuo: evidenza PostgreSQL a due connessioni resta da eseguire.
+Residual risk: the two-connection PostgreSQL evidence still has to be run.
 
-Patch applicata: `Privacy::Workflow` wrappa `request_export` con
-`CommandIdempotency`. `migrations/027_privacy_resource_uniqueness.sql`
-aggiunge `idx_export_requests_pending_unique`. Test in `t/101-privacy-workflow.t`,
-`t/62-privacy-web.t` e `t/27-import-export.t`.
+Patch applied: `Privacy::Workflow` wraps `request_export` with
+`CommandIdempotency`. `migrations/027_privacy_resource_uniqueness.sql` adds
+`idx_export_requests_pending_unique`. Tests in `t/101-privacy-workflow.t`,
+`t/62-privacy-web.t`, and `t/27-import-export.t`.
 
-### AUD-001: hash-chain audit non serializzata sotto concorrenza
+### AUD-001: audit hash chain not serialized under concurrency
 
-Severità: high.
+Severity: high.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Infrastructure/EventRecorder.pm`
 - `lib/GPForum/Infrastructure/AuditRecord.pm`
 - `migrations/002_event_audit.sql`
 - `migrations/004_platform_governance.sql`
 
-Comportamento attuale: ogni audit ha `record_hash = sha256(canonical_record)`
-e il record canonico include `previous_hash`. Se `previous_hash` non arriva in
-input, il recorder legge l'ultimo hash disponibile. Questo rende il singolo
-record tamper-evident e verificabile con `verify_audit_record`.
+Current behavior: every audit record has `record_hash =
+sha256(canonical_record)`, and the canonical record includes `previous_hash`.
+When `previous_hash` does not arrive as input, the recorder reads the latest
+available hash. This makes the individual record tamper-evident and verifiable
+with `verify_audit_record`.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-concurrency.t`
-esegue due `record_audit` concorrenti → catena lineare senza branch. Errori di
-lookup non vengono più inghiottiti.
+Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
+runs two concurrent `record_audit` calls → a linear chain with no branch. Lookup
+errors are no longer swallowed.
 
-Patch applicata: `EventRecorder::record_audit` prende
-`pg_advisory_xact_lock` prima del lookup. `AuditRecord` hashing è invariato.
-Un fallimento di `AuditLog` search si propaga. Test fake in
-`t/146-concurrency-correctness.t`; evidenza PG in
-`t/integration/postgres-concurrency.t`.
+Patch applied: `EventRecorder::record_audit` takes `pg_advisory_xact_lock`
+before the lookup. `AuditRecord` hashing is unchanged. An `AuditLog` search
+failure propagates. Fake tests in `t/146-concurrency-correctness.t`; PG evidence
+in `t/integration/postgres-concurrency.t`.
 
-### OUT-001: worker crash dopo dispatch e prima di mark done
+### OUT-001: worker crash after dispatch and before mark done
 
-Severità: medium. Chiuso in codice.
+Severity: medium. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Outbox/Dispatcher.pm`
 - `lib/GPForum/Service/Outbox/ClaimQuery.pm`
@@ -405,56 +407,56 @@ File coinvolti:
 - `lib/GPForum/Worker/EventIdempotencyStore.pm`
 - `lib/GPForum/Worker/Handler/*`
 
-Comportamento attuale: claim PostgreSQL usa `FOR UPDATE SKIP LOCKED`, stato
-`running`, `locked_by` e `locked_until`. Crash prima di `done` rende il messaggio
-riclamabile dopo lock scaduto. Questo evita perdita silenziosa.
+Current behavior: the PostgreSQL claim uses `FOR UPDATE SKIP LOCKED`, the
+`running` state, `locked_by`, and `locked_until`. A crash before `done` makes the
+message reclaimable once the lock expires. This avoids silent loss.
 
-`DomainEventTransport` wrappa ogni handler catalogato e il fallback realtime
-con `IdempotentJobRunner`. Le chiavi sono `worker.<name>:{event_id}`.
-`EventIdempotencyStore` inserisce in `event_idempotency_keys` solo su
-`mark_done`; `begin` e `mark_failed` non persistono. Un crash dopo `begin` e
-prima di `handle` non salta il retry. Un crash tra `transport->dispatch` e
-`_mark_done` rilancia il messaggio; gli handler già completati risultano
-`skipped`. `IdentityMail` non è skip-wrapped: un retry dopo send e prima di
-`mark_done` reinvia dalla payload outbox, perché EventLog non ha il token
-raw.
+`DomainEventTransport` wraps every cataloged handler and the realtime fallback
+with `IdempotentJobRunner`. The keys are `worker.<name>:{event_id}`.
+`EventIdempotencyStore` inserts into `event_idempotency_keys` only on
+`mark_done`; `begin` and `mark_failed` do not persist. A crash after `begin` and
+before `handle` does not skip the retry. A crash between `transport->dispatch`
+and `_mark_done` redelivers the message; handlers that already completed come
+back as `skipped`. `IdentityMail` is not skip-wrapped: a retry after send and
+before `mark_done` resends from the outbox payload, because EventLog does not
+hold the raw token.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-idempotency.t`
-prova due `mark_done` concorrenti dentro `txn_do` → una sola riga chiave.
+Residual risk: closed by PG evidence. `t/integration/postgres-idempotency.t`
+runs two concurrent `mark_done` calls inside `txn_do` → a single key row.
 
-Patch applicata: catalogo `HandlerIdempotency`, store insert-on-done, wrap
-transport/bootstrap, replay e crash test in
-`t/150-outbox-handler-idempotency.t`; evidenza PG in
-`t/integration/postgres-idempotency.t`. `UniqueConflict->attempt` sulla
-insert dello store.
+Patch applied: the `HandlerIdempotency` catalog, an insert-on-done store,
+transport/bootstrap wrapping, and replay and crash tests in
+`t/150-outbox-handler-idempotency.t`; PG evidence in
+`t/integration/postgres-idempotency.t`. `UniqueConflict->attempt` on the store
+insert.
 
-### OUT-002: worker crash tra claim e dispatch
+### OUT-002: worker crash between claim and dispatch
 
-Severità: medium. Chiuso in codice.
+Severity: medium. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Outbox/Dispatcher.pm`
 - `t/84-outbox-concurrent-dispatcher.t`
 
-Comportamento attuale: `claim_ready_batch` marca la riga `running` con
-`locked_until` prima di `transport->dispatch`. Un crash in quel tratto non
-consegna il payload. Un altro worker non prende un lock ancora fresco. Dopo
-la scadenza del lock la riga è riclamata e consegnata una sola volta.
+Current behavior: `claim_ready_batch` marks the row `running` with
+`locked_until` before `transport->dispatch`. A crash in that window does not
+deliver the payload. Another worker does not take a lock that is still fresh.
+Once the lock expires, the row is reclaimed and delivered exactly once.
 
-Rischio residuo: nessuno sul reclaim del lock scaduto; resta evidenza
-concorrente aperta su idempotency/reputation (fuori slice).
+Residual risk: none on expired-lock reclaim; concurrent evidence remains open on
+idempotency/reputation (outside this slice).
 
-Patch applicata: test claim-then-crash-then-reclaim in
-`t/84-outbox-concurrent-dispatcher.t`; evidenza PostgreSQL a due connessioni
-in `t/integration/postgres-outbox-reclaim.t` (race reclaim su lock scaduto,
-fresh lock non preso, crash-claim-then-reclaim).
+Patch applied: a claim-then-crash-then-reclaim test in
+`t/84-outbox-concurrent-dispatcher.t`; two-connection PostgreSQL evidence in
+`t/integration/postgres-outbox-reclaim.t` (reclaim race on an expired lock, a
+fresh lock not taken, and crash-claim-then-reclaim).
 
-### REP-001: reputation event duplicabile sotto race
+### REP-001: reputation event duplicable under a race
 
-Severità: medium. Chiuso in codice.
+Severity: medium. Closed in code.
 
-File coinvolti:
+Files involved:
 
 - `lib/GPForum/Service/Community/ReputationLedger.pm`
 - `lib/GPForum/Schema/Result/ReputationEvent.pm`
@@ -462,71 +464,71 @@ File coinvolti:
 - `migrations/028_reputation_source_uniqueness.sql`
 - `migrations/029_reputation_source_required.sql`
 
-Comportamento attuale: `record_event` ricarica un evento esistente per
-`(user_id, source_type, source_id)` prima di inserire. Un unique index
-`idx_reputation_events_source_unique` copre ogni riga; `source_id` è `NOT
-NULL`. Eventi senza `source_id` non applicano il delta. Il worker usa
-`aggregate_id` o, se manca, `event_id`. Una unique violation ricarica
-l'evento e non applica di nuovo il delta allo snapshot.
+Current behavior: `record_event` reloads an existing event for
+`(user_id, source_type, source_id)` before inserting. A unique index
+`idx_reputation_events_source_unique` covers every row; `source_id` is `NOT
+NULL`. Events without a `source_id` do not apply the delta. The worker uses
+`aggregate_id` or, when it is missing, `event_id`. A unique violation reloads the
+event and does not apply the delta to the snapshot again.
 
-Rischio residuo: chiuso per evidenza PG. `t/integration/postgres-idempotency.t`
-prova due `record_event` concorrenti sulla stessa source → una riga evento e
-delta applicato una sola volta.
+Residual risk: closed by PG evidence. `t/integration/postgres-idempotency.t`
+runs two concurrent `record_event` calls on the same source → one event row and
+the delta applied exactly once.
 
-Patch applicata: migration `028` e `029`, vincolo DBIC, skip senza source,
-fallback `event_id` e test fake in `t/24-advanced-community.t` e
-`t/149-reputation-update-handler.t`; evidenza PG in
-`t/integration/postgres-idempotency.t`. `UniqueConflict->attempt` su insert
-evento e snapshot.
+Patch applied: migrations `028` and `029`, the DBIC constraint, a skip without a
+source, the `event_id` fallback, and fake tests in `t/24-advanced-community.t`
+and `t/149-reputation-update-handler.t`; PG evidence in
+`t/integration/postgres-idempotency.t`. `UniqueConflict->attempt` on the event
+and snapshot inserts.
 
-## Matrice idempotenza scritture
+## Write idempotency matrix
 
-| Operazione | Retry safe | Network retry safe | Double click safe | Job retry safe | Stato |
+| Operation | Retry safe | Network retry safe | Double click safe | Job retry safe | State |
 | --- | --- | --- | --- | --- | --- |
-| `create_thread` | sì per comando completato | sì, unique `command_log` replay | sì con stesso `command_id` | n/a | chiuso in codice |
-| `create_reply` | sì per comando completato | sì, unique `command_log` replay | sì con stesso `command_id` | n/a | chiuso in codice |
-| `edit_post` | sì per comando completato | sì, unique `command_log` replay + skip stesso `source_hash` | sì con stesso `command_id`; store skip se il body hash coincide | n/a | chiuso in codice |
-| `delete_post` | sì per comando completato | sì, unique `command_log` replay | sì con stesso `command_id` | n/a | chiuso in codice |
-| `edit_thread` | sì per comando completato | sì, unique `command_log` replay + skip titolo/slug invariati | sì con stesso `command_id`; store skip se titolo e slug coincidono | n/a | chiuso in codice |
-| `delete_thread` | sì per comando completato | sì, unique `command_log` replay | sì con stesso `command_id` | n/a | chiuso in codice |
-| `move_thread` | sì per comando completato | sì, unique `command_log` replay + skip stessa categoria | sì con stesso `command_id`; store skip se la categoria coincide | n/a | chiuso in codice |
-| `report` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique reporter/target | sì con stesso `command_id` | n/a | chiuso in codice |
-| `bookmark` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique restore | sì con stesso `command_id` | n/a | chiuso in codice |
-| `attachment upload` | sì, `command_id` HTTP + `command_log` | sì, unique command | sì con stesso `command_id` | n/a | hash senza bytes |
-| `attachment delete` | sì, `command_id` HTTP + `command_log` | sì, unique command + already-deleted | sì con stesso `command_id` | n/a | chiuso in codice |
-| `subscribe` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique restore | sì con stesso `command_id` | n/a | chiuso in codice |
-| `thread read marker` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique `(user_id, thread_id)` + upsert monotonic + skip se non avanza | sì con stesso `command_id`; store skip se la posizione non avanza o se la unique race ricarica un marker già sufficientemente avanzato | n/a | chiuso in codice |
-| `admin role/permission/category` | sì, `command_id` HTTP + `command_log` | sì, unique command + skip category invariata + unique role/permission/attach/category/space/binding | sì con stesso `command_id`; store skip se i campi coincidono; unique race riusa la riga | n/a | chiuso in codice |
-| `moderation assign/resolve` | sì, `command_id` HTTP + `command_log` | sì, unique command + `FOR UPDATE` | sì con stesso `command_id` | n/a | chiuso in codice |
-| `moderation hide/restore/lock/unlock` | sì, `command_id` HTTP + `command_log` | sì, lock + unique command | sì con stesso `command_id` | n/a | store e form HTTP chiusi |
-| `moderation reverse` | sì, `command_id` HTTP + `command_log` | sì, unique command + stato `reversed_at` | sì con stesso `command_id` | n/a | arity store ferma a 4 |
-| `moderation suspend/revoke` | sì, `command_id` HTTP + `command_log` | sì, unique command + active reuse | sì con stesso `command_id`; retry revoke completa restore utente, skip se già active | n/a | arity `revoke_suspension` ferma a 4 |
-| `privacy deletion request` | sì, `command_id` HTTP + replay richiesta aperta | sì, unique parziale + catch | sì stessa risorsa aperta | n/a | chiuso in codice |
-| `privacy approval` | sì per retry completato | sì, unique job + catch | sì, riusa job esistente; unique race fake senza seconda action | n/a | mitigato con lock e unique job; evidenza PG a due connessioni residua |
-| `privacy erasure completion` | sì per job `done` o blocco hold già scritto | sì, rollback se EventLog/outbox/audit fallisce dopo revoca | sì, replay blocco o complete; retry incompleto restaura `held`/`last_error` senza secondo evento; retry job `done` completa la request se ancora aperta | sì, replay blocco o complete | chiuso in codice |
-| `privacy hold` | sì, `command_id` HTTP + replay hold attivo | sì, unique parziale + catch | sì stessa risorsa attiva | n/a | arity `hold_request` ferma a 5 |
-| `privacy export request` | sì, `command_id` HTTP + `command_log` dopo complete | sì, unique pending + catch | sì stesso comando o stesso pending | n/a | chiuso in codice |
-| `identity login` | sì, `command_id` HTTP + `command_log` | sì, unique command | sì con stesso `command_id` | n/a | chiuso in codice |
-| `identity logout` | sì, `command_id` HTTP + `command_log` | sì, unique command | sì con stesso `command_id`; store skip se già revocata | n/a | chiuso in codice |
-| `identity register` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique username/email | sì con stesso `command_id`; unique race → errori duplicate | n/a | chiuso in codice |
-| `identity password change` | sì, `command_id` HTTP + `command_log` | sì, unique command + skip stessa secret | sì con stesso `command_id`; store skip se la secret coincide | n/a | chiuso in codice |
-| `identity locale change` | sì, `command_id` HTTP + `command_log` | sì, unique command + skip stesso valore | sì con stesso `command_id`; store skip se locale già uguale | n/a | guest cookie-only |
-| `identity theme change` | sì, `command_id` HTTP + `command_log` | sì, unique command + skip stesso valore | sì con stesso `command_id`; store skip se theme già uguale | n/a | guest cookie-only |
-| `notification preferences` | sì, `command_id` HTTP + `command_log` | sì, unique command + skip stessi canali | sì con stesso `command_id`; store skip se i canali coincidono | n/a | locale/theme su POST `/settings` mintano chiavi proprie |
-| `identity email change complete` | sì, `command_id` HTTP + `command_log` | sì, unique command + token `used_at` + skip stessa email già verificata | sì con stesso `command_id`; store skip se l'email coincide | n/a | chiuso in codice |
-| `identity email verification complete` | sì, `command_id` HTTP + `command_log` | sì, unique command + token `used_at` + skip già verificato | sì con stesso `command_id`; store skip se già active e verificato | n/a | chiuso in codice |
-| `identity password reset complete` | sì, `command_id` HTTP + `command_log` | sì, unique command + token `used_at` + skip rotazione stessa secret | sì con stesso `command_id`; store skip della rotazione se la secret coincide; le sessioni restano revocate | n/a | chiuso in codice |
-| `identity password reset request` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique unused `(user_id, token_type)` | sì con stesso `command_id`; `command_id` diverso ruota il token unused | n/a | chiuso in codice |
-| `identity email change request` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique unused `(user_id, token_type)` + skip email già verificata | sì con stesso `command_id`; store skip se l'email coincide; `command_id` diverso ruota il token unused | n/a | chiuso in codice |
-| `identity email verification request` | sì, `command_id` HTTP + `command_log` | sì, unique command + unique unused `(user_id, token_type)` | sì con stesso `command_id`; `command_id` diverso ruota il token unused | n/a | chiuso in codice |
-| `outbox dispatch` | at-least-once | n/a | n/a | sì, chiavi `worker.<name>:{event_id}` | chiuso in codice |
-| `reputation record` | sì per stessa source | sì, unique NOT NULL + catch | sì stessa source | sì, stessa source | `source_id` obbligatorio |
+| `create_thread` | yes for a completed command | yes, unique `command_log` replay | yes with the same `command_id` | n/a | closed in code |
+| `create_reply` | yes for a completed command | yes, unique `command_log` replay | yes with the same `command_id` | n/a | closed in code |
+| `edit_post` | yes for a completed command | yes, unique `command_log` replay + skip on the same `source_hash` | yes with the same `command_id`; the store skips when the body hash matches | n/a | closed in code |
+| `delete_post` | yes for a completed command | yes, unique `command_log` replay | yes with the same `command_id` | n/a | closed in code |
+| `edit_thread` | yes for a completed command | yes, unique `command_log` replay + skip on unchanged title/slug | yes with the same `command_id`; the store skips when title and slug match | n/a | closed in code |
+| `delete_thread` | yes for a completed command | yes, unique `command_log` replay | yes with the same `command_id` | n/a | closed in code |
+| `move_thread` | yes for a completed command | yes, unique `command_log` replay + skip on the same category | yes with the same `command_id`; the store skips when the category matches | n/a | closed in code |
+| `report` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique reporter/target | yes with the same `command_id` | n/a | closed in code |
+| `bookmark` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique restore | yes with the same `command_id` | n/a | closed in code |
+| `attachment upload` | yes, HTTP `command_id` + `command_log` | yes, unique command | yes with the same `command_id` | n/a | hash without bytes |
+| `attachment delete` | yes, HTTP `command_id` + `command_log` | yes, unique command + already-deleted | yes with the same `command_id` | n/a | closed in code |
+| `subscribe` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique restore | yes with the same `command_id` | n/a | closed in code |
+| `thread read marker` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique `(user_id, thread_id)` + monotonic upsert + skip when it does not advance | yes with the same `command_id`; the store skips when the position does not advance or when the unique race reloads a marker that is already far enough ahead | n/a | closed in code |
+| `admin role/permission/category` | yes, HTTP `command_id` + `command_log` | yes, unique command + skip on an unchanged category + unique role/permission/attach/category/space/binding | yes with the same `command_id`; the store skips when the fields match; a unique race reuses the row | n/a | closed in code |
+| `moderation assign/resolve` | yes, HTTP `command_id` + `command_log` | yes, unique command + `FOR UPDATE` | yes with the same `command_id` | n/a | closed in code |
+| `moderation hide/restore/lock/unlock` | yes, HTTP `command_id` + `command_log` | yes, lock + unique command | yes with the same `command_id` | n/a | store and HTTP forms closed |
+| `moderation reverse` | yes, HTTP `command_id` + `command_log` | yes, unique command + `reversed_at` state | yes with the same `command_id` | n/a | store arity stops at 4 |
+| `moderation suspend/revoke` | yes, HTTP `command_id` + `command_log` | yes, unique command + active reuse | yes with the same `command_id`; a revoke retry completes the user restore and skips when already active | n/a | `revoke_suspension` arity stops at 4 |
+| `privacy deletion request` | yes, HTTP `command_id` + open-request replay | yes, partial unique + catch | yes for the same open resource | n/a | closed in code |
+| `privacy approval` | yes for a completed retry | yes, unique job + catch | yes, reuses the existing job; the fake unique race adds no second action | n/a | mitigated with a lock and a unique job; two-connection PG evidence is residual |
+| `privacy erasure completion` | yes for a `done` job or an already-written hold block | yes, rollback when EventLog/outbox/audit fails after revocation | yes, replays the block or completes; an incomplete retry restores `held`/`last_error` with no second event; a `done` job retry completes the request when it is still open | yes, replays the block or completes | closed in code |
+| `privacy hold` | yes, HTTP `command_id` + active-hold replay | yes, partial unique + catch | yes for the same active resource | n/a | `hold_request` arity stops at 5 |
+| `privacy export request` | yes, HTTP `command_id` + `command_log` after completion | yes, unique pending + catch | yes for the same command or the same pending request | n/a | closed in code |
+| `identity login` | yes, HTTP `command_id` + `command_log` | yes, unique command | yes with the same `command_id` | n/a | closed in code |
+| `identity logout` | yes, HTTP `command_id` + `command_log` | yes, unique command | yes with the same `command_id`; the store skips when already revoked | n/a | closed in code |
+| `identity register` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique username/email | yes with the same `command_id`; a unique race → duplicate errors | n/a | closed in code |
+| `identity password change` | yes, HTTP `command_id` + `command_log` | yes, unique command + skip on the same secret | yes with the same `command_id`; the store skips when the secret matches | n/a | closed in code |
+| `identity locale change` | yes, HTTP `command_id` + `command_log` | yes, unique command + skip on the same value | yes with the same `command_id`; the store skips when the locale is already equal | n/a | guest cookie-only |
+| `identity theme change` | yes, HTTP `command_id` + `command_log` | yes, unique command + skip on the same value | yes with the same `command_id`; the store skips when the theme is already equal | n/a | guest cookie-only |
+| `notification preferences` | yes, HTTP `command_id` + `command_log` | yes, unique command + skip on the same channels | yes with the same `command_id`; the store skips when the channels match | n/a | locale/theme on `POST /settings` mint their own keys |
+| `identity email change complete` | yes, HTTP `command_id` + `command_log` | yes, unique command + token `used_at` + skip on the same already-verified email | yes with the same `command_id`; the store skips when the email matches | n/a | closed in code |
+| `identity email verification complete` | yes, HTTP `command_id` + `command_log` | yes, unique command + token `used_at` + skip when already verified | yes with the same `command_id`; the store skips when already active and verified | n/a | closed in code |
+| `identity password reset complete` | yes, HTTP `command_id` + `command_log` | yes, unique command + token `used_at` + skip the rotation on the same secret | yes with the same `command_id`; the store skips the rotation when the secret matches; sessions stay revoked | n/a | closed in code |
+| `identity password reset request` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique unused `(user_id, token_type)` | yes with the same `command_id`; a different `command_id` rotates the unused token | n/a | closed in code |
+| `identity email change request` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique unused `(user_id, token_type)` + skip on an already-verified email | yes with the same `command_id`; the store skips when the email matches; a different `command_id` rotates the unused token | n/a | closed in code |
+| `identity email verification request` | yes, HTTP `command_id` + `command_log` | yes, unique command + unique unused `(user_id, token_type)` | yes with the same `command_id`; a different `command_id` rotates the unused token | n/a | closed in code |
+| `outbox dispatch` | at-least-once | n/a | n/a | yes, keys `worker.<name>:{event_id}` | closed in code |
+| `reputation record` | yes for the same source | yes, unique NOT NULL + catch | yes for the same source | yes, same source | `source_id` required |
 
-## Controller: complessità e duplicazioni
+## Controllers: complexity and duplication
 
-Metodi controller oltre 30 righe rilevati con scansione locale:
+Controller methods longer than 30 lines, detected with a local scan:
 
-| File | Metodo | Riga | Righe |
+| File | Method | Line | Lines |
 | --- | --- | ---: | ---: |
 | `lib/GPForum/Controller/Admin.pm` | `user_roles` | 158 | 32 |
 | `lib/GPForum/Controller/Admin.pm` | `audit` | 235 | 35 |
@@ -553,71 +555,71 @@ Metodi controller oltre 30 righe rilevati con scansione locale:
 | `lib/GPForum/Controller/Realtime.pm` | `stream` | 21 | 39 |
 | `lib/GPForum/Controller/Realtime.pm` | `_handle_message` | 61 | 41 |
 
-Duplicazioni da ridurre dopo i fix transazionali:
+Duplication to reduce after the transactional fixes:
 
-- auth/write-user/permission denial ripetuti tra `Forum`, `Moderation`,
-  `Privacy`, `Attachments`;
-- negoziazione JSON/HTML e redirect action response ripetuti;
-- validazione `reason`/`details` ripetuta nei controller;
-- gestione `_system_failure`, `_bad_request`, `_not_found`, `_conflict` già
-  parzialmente centralizzata in `GPForum::Web::ErrorPayload`, ma non assorbita
-  da tutti i controller.
+- auth/write-user/permission denial repeated across `Forum`, `Moderation`,
+  `Privacy`, and `Attachments`;
+- JSON/HTML negotiation and redirect action responses repeated;
+- `reason`/`details` validation repeated across the controllers;
+- `_system_failure`, `_bad_request`, `_not_found`, and `_conflict` handling
+  already partially centralized in `GPForum::Web::ErrorPayload`, but not adopted
+  by every controller.
 
-Patch proposta: estrarre piccoli helper `GPForum::Web::*` solo dopo la chiusura
-dei rischi `critical/high`, partendo da `WriteBoundary` o `ActionResponse` per
-`command_id`, auth write, CSRF failure, error payload e redirect. Non allargare
-`Controller::Forum`.
+Proposed patch: extract small `GPForum::Web::*` helpers only after the
+`critical/high` risks are closed, starting from `WriteBoundary` or
+`ActionResponse` for `command_id`, write auth, CSRF failure, error payload, and
+redirects. Do not widen `Controller::Forum`.
 
-## Failure test mancanti
+## Missing failure tests
 
-| Scenario | Stato attuale | Test richiesto |
+| Scenario | Current state | Required test |
 | --- | --- | --- |
-| DB unavailable su readiness/realtime | coperto in parte da readiness/realtime | write route `create_reply`, report, hide e export ora 503 senza leakage (`t/152`) |
-| DB timeout in transazione write | timeout su insert EventLog, outbox e audit con rollback | `t/86-engineering-correctness.t` |
-| Minion unavailable | fail-closed se `GPFORUM_MINION_ENABLED=1` e backend assente; `gpforum-outbox-dispatch` salta Minion | `t/83-outbox-worker-wiring.t` |
+| DB unavailable on readiness/realtime | partially covered by readiness/realtime | the write routes `create_reply`, report, hide, and export now return 503 without leakage (`t/152`) |
+| DB timeout in a write transaction | timeout on the EventLog, outbox, and audit inserts with rollback | `t/86-engineering-correctness.t` |
+| Minion unavailable | fail-closed when `GPFORUM_MINION_ENABLED=1` and the backend is missing; `gpforum-outbox-dispatch` skips Minion | `t/83-outbox-worker-wiring.t` |
 | Outbox retry/dead letter | cancelled + dead-letter; permanent fail-fast; no re-claim | `t/13-outbox-dispatcher.t`, `docs/ops/dead-letters.md` |
-| Worker crash | crash tra claim e dispatch, o tra dispatch e mark done | `t/84-outbox-concurrent-dispatcher.t`, `t/150-outbox-handler-idempotency.t`, `t/integration/postgres-outbox-reclaim.t` |
-| Transaction rollback dopo event/outbox/audit | coperto su thread, report, hide e approval outbox failure | `t/86-engineering-correctness.t` |
-| Unique conflict su retry | non coperto | test PostgreSQL concorrenti per command_log, bookmark, subscription, report |
-| Errore dopo commit HTTP | retry identico create_reply, thread, report, hide, export | `t/153-lost-response-retry.t` |
+| Worker crash | crash between claim and dispatch, or between dispatch and mark done | `t/84-outbox-concurrent-dispatcher.t`, `t/150-outbox-handler-idempotency.t`, `t/integration/postgres-outbox-reclaim.t` |
+| Transaction rollback after event/outbox/audit | covered on thread, report, hide, and approval outbox failures | `t/86-engineering-correctness.t` |
+| Unique conflict on retry | not covered | concurrent PostgreSQL tests for command_log, bookmark, subscription, and report |
+| Error after the HTTP commit | identical retry of create_reply, thread, report, hide, and export | `t/153-lost-response-retry.t` |
 
 ## Email lifecycle
 
-Stato verificato:
+Verified state:
 
-- verifica email: non esiste workflow completo; `users.email_verified_at` è
-  presente, ma la registrazione crea account login-capable;
-- reset password: non trovato workflow di reset;
-- cambio email sicuro: non trovato workflow con verifica nuova email;
-- revoca sessioni: presente in `Identity::Store::revoke_session`, logout,
-  validazione server-side session e revoca in privacy erasure.
+- email verification: no complete workflow exists; `users.email_verified_at` is
+  present, but registration creates a login-capable account;
+- password reset: no reset workflow found;
+- secure email change: no workflow with new-email verification found;
+- session revocation: present in `Identity::Store::revoke_session`, logout,
+  server-side session validation, and privacy erasure revocation.
 
-Rischio: high per account pubblici reali, perché recupero accesso e verifica
-identità email sono prerequisiti operativi. È l'unica area funzionale ammessa
-prima di nuove feature, ma va trattata come hardening identity, non come
-espansione prodotto.
+Risk: high for real public accounts, because access recovery and email identity
+verification are operational prerequisites. This is the only functional area
+allowed before new features, but it should be treated as identity hardening, not
+as product expansion.
 
-Patch proposta: prima chiudere `critical/high` transazionali; poi introdurre un
-workflow minimo verification/reset/change-email con token hashed, scadenza,
-single-use e revoca sessioni su cambio password/email.
+Proposed patch: close the transactional `critical/high` risks first; then
+introduce a minimal verification/reset/change-email workflow with hashed tokens,
+expiry, single use, and session revocation on password/email change.
 
-## Stress test reale richiesto
+## Required real stress test
 
-Gli script esistenti misurano benchmark deterministici e Hypnotoad scaling, ma
-non bastano come prova finale 100/500/1000 utenti concorrenti.
+The existing scripts measure deterministic benchmarks and Hypnotoad scaling, but
+they are not enough as final proof at 100/500/1000 concurrent users.
 
-Baseline proposta:
+Proposed baseline:
 
-1. Preparare staging PostgreSQL con migrazioni e seed:
+1. Prepare a staging PostgreSQL with the migrations and seed data:
 
 ```sh
 script/seed-benchmark --profile medium
 script/seed-benchmark --profile hot-thread
 ```
 
-2. Avviare Hypnotoad con profilo produzione small/medium e metriche abilitate.
+2. Start Hypnotoad with a production small/medium profile and metrics enabled.
 
-3. Eseguire matrice read-heavy con harness esistente:
+3. Run the read-heavy matrix with the existing harness:
 
 ```sh
 script/bench-hypnotoad-scaling --profile medium --worker-set 4,8 \
@@ -628,34 +630,34 @@ script/bench-hypnotoad-scaling --profile hot-thread --worker-set 4,8 \
   --clients 1000 --iterations 100 --warmup 10 --json
 ```
 
-4. Coprire route:
+4. Cover the routes:
 
 - `/categories`
 - `/t/018f1004-0001-7000-8000-000000000001`
-- `/feed` con sessione utente seeded
+- `/feed` with a seeded user session
 - `/search?q=performance`
-- `POST /t/:thread_id/reply` con `command_id` unico per richiesta e variante
-  retry con stesso `command_id`
+- `POST /t/:thread_id/reply` with a unique `command_id` per request, plus a
+  retry variant with the same `command_id`
 
-5. Report minimo per ogni route:
+5. Minimum report per route:
 
 - p50, p95, p99;
 - error rate;
 - req/s;
 - max/avg DB queries;
 - transaction count;
-- worker distribution da output Hypnotoad;
-- outbox pending/failed/dead-letter prima e dopo;
-- RSS e file descriptor.
+- worker distribution from the Hypnotoad output;
+- outbox pending/failed/dead-letter before and after;
+- RSS and file descriptors.
 
-Go-live gate: nessuna route critica con error rate maggiore di 1%, nessun
-duplicato reply/report/job, nessuna crescita outbox non drenata dopo test.
+Go-live gate: no critical route with an error rate above 1%, no duplicate
+reply/report/job, and no undrained outbox growth after the test.
 
-## Prossime patch prioritarie
+## Next priority patches
 
-1. Staging operativo end-to-end (nginx/systemd) oltre ai drill DB: reclaim
-   outbox su lock `running` scaduto è coperto da
-   `t/integration/postgres-outbox-reclaim.t` (claim-then-crash mock resta in
-   `t/84-outbox-concurrent-dispatcher.t`); `event_idempotency_keys` e reputation
-   source unique da `t/integration/postgres-idempotency.t`; le altre race in
-   `t/integration/postgres-concurrency.t`.
+1. End-to-end operational staging (nginx/systemd) beyond the DB drills: outbox
+   reclaim on an expired `running` lock is covered by
+   `t/integration/postgres-outbox-reclaim.t` (the claim-then-crash mock stays in
+   `t/84-outbox-concurrent-dispatcher.t`); `event_idempotency_keys` and
+   reputation source uniqueness by `t/integration/postgres-idempotency.t`; the
+   other races in `t/integration/postgres-concurrency.t`.
