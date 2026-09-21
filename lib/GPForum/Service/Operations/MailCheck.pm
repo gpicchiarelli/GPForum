@@ -11,7 +11,8 @@ use Mojo::Base -base;
 
 use GPForum::Config;
 use GPForum::Service::Identity::Mailer;
-use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
+use GPForum::Service::Operations::EvidenceMeta
+  qw(evidence_finalize evidence_scrub_text);
 
 our $VERSION = '0.001';
 
@@ -290,8 +291,10 @@ sub _deliver_probe {
             status => $STATUS_FAIL,
             action => $action,
             to     => $to,
-            error  => _scrub_text( _trim($EVAL_ERROR),
-                [ $PROBE_TOKEN, $config->smtp_password // q{} ] ),
+            error  => evidence_scrub_text(
+                _trim($EVAL_ERROR),
+                [ $PROBE_TOKEN, $config->smtp_password // q{} ]
+            ),
         };
     }
 
@@ -351,7 +354,7 @@ sub _smtp_fail {
         action => 'smtp_connect',
         host   => $host,
         port   => $port,
-        error  => _scrub_text( $error, \@secrets ),
+        error  => evidence_scrub_text( $error, \@secrets ),
     };
 }
 
