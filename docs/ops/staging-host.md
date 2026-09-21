@@ -15,6 +15,7 @@ HTTP health endpoints answer.
 | Env file keys | `/etc/gpforum/gpforum.env` has required keys; values never printed | `--env-file` |
 | systemd units | `gpforum.service` / `gpforum-outbox.service` report active | `--systemd` |
 | Installed unit files | Deploy contract (User / EnvironmentFile / ExecStart) | `--unit-dir` |
+| Installed nginx site | Deploy contract (tcp or unix-socket template) | `--nginx-conf` |
 | HTTP health | `/health/live`, `/health/ready` (optional `/metrics`) | `--base-url` |
 | TLS observe | `https` scheme recorded (pair with health probe) | `--base-url https://…` |
 | DB migrate / dump | Throwaway or staging DB path | `script/staging-drill` |
@@ -72,6 +73,7 @@ On the staging host after bring-up:
 script/staging-host-verify --json \
   --env-file /etc/gpforum/gpforum.env \
   --unit-dir /etc/systemd/system \
+  --nginx-conf /etc/nginx/sites-enabled/gpforum \
   --systemd \
   --base-url https://staging.example \
   --metrics-token "$GPFORUM_METRICS_TOKEN"
@@ -79,8 +81,9 @@ script/staging-host-verify --json \
 
 Prefer an `https://` `--base-url` so the TLS observe phase records the scheme
 alongside the health probe. An `http://` base URL leaves TLS as a residual gap.
-`--unit-dir` observes installed unit text against the deploy contract; it does
-**not** install or enable units.
+`--unit-dir` / `--nginx-conf` observe installed text against the shared deploy
+contract (`GPForum::Service::Operations::DeployContract`); they do **not**
+install, enable, or reload services.
 
 Exit `0` for `pass` or `degraded`. `fail` means a probed phase failed.
 
@@ -94,6 +97,7 @@ commit secrets.
 script/staging-host-verify --json \
   --env-file /etc/gpforum/gpforum.env \
   --unit-dir /etc/systemd/system \
+  --nginx-conf /etc/nginx/sites-enabled/gpforum \
   --systemd \
   --base-url "$STAGING_BASE_URL" \
   > /tmp/gpforum-staging-host-verify.json

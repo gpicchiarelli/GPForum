@@ -13,6 +13,12 @@ use Mojo::File qw(path);
 use Mojo::UserAgent;
 use Symbol qw(gensym);
 
+use GPForum::Service::Operations::DeployContract qw(
+  deploy_host_unit_checks
+  deploy_match_text
+  deploy_nginx_checks
+);
+
 our $VERSION = '0.001';
 
 const my $EXIT_FAILURE     => 1;
@@ -31,28 +37,6 @@ const my @REQUIRED_ENV_KEYS => qw(
 const my @SYSTEMD_UNITS => qw(
   gpforum.service
   gpforum-outbox.service
-);
-const my @UNIT_FILE_CONTRACTS => (
-    {
-        name       => 'gpforum.service',
-        must_match => [
-            qr/^User=gpforum\s*$/msx,
-            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
-qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+hypnotoad\s+.*/bin/gpforum\s*$}msx,
-        ],
-        labels =>
-          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
-    },
-    {
-        name       => 'gpforum-outbox.service',
-        must_match => [
-            qr/^User=gpforum\s*$/msx,
-            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
-            qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+}msx,
-        ],
-        labels =>
-          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
-    },
 );
 const my @REPO_ARTIFACTS => (
     'deploy/systemd/gpforum.service',
@@ -138,6 +122,10 @@ sub _execute {
     $evidence->{unit_files} = $self->_unit_files_phase($options);
     push @{ $evidence->{residual_gaps} },
       @{ $evidence->{unit_files}{residual_gaps} // [] };
+
+    $evidence->{nginx_conf} = $self->_nginx_conf_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{nginx_conf}{residual_gaps} // [] };
 
     $evidence->{health} = $self->_health_phase($options);
     push @{ $evidence->{residual_gaps} },
@@ -316,7 +304,7 @@ sub _unit_files_phase {
     }
 
     my @units;
-    for my $contract (@UNIT_FILE_CONTRACTS) {
+    for my $contract ( deploy_host_unit_checks() ) {
         push @units, _observe_unit_file( $dir, $contract );
     }
 
@@ -352,21 +340,74 @@ sub _observe_unit_file {
     }
 
     my $text = path($path)->slurp;
-    my @missing_labels;
-    my @patterns = @{ $contract->{must_match} // [] };
-    my @labels   = @{ $contract->{labels}     // [] };
-    for my $index ( 0 .. $#patterns ) {
-        my $pattern = $patterns[$index];
-        next if $text =~ $pattern;
-        push @missing_labels, $labels[$index] // "pattern_$index";
-    }
+    my $match = deploy_match_text( $text, $contract );
 
     return {
         name           => $name,
         path           => $path,
-        status         => @missing_labels ? 'fail' : 'pass',
-        missing_labels => \@missing_labels,
-        checked_labels => [@labels],
+        status         => $match->{status},
+        missing_labels => $match->{missing_labels},
+        matched_labels => $match->{matched_labels},
+        checked_labels => $match->{checked_labels},
+    };
+}
+
+sub _nginx_conf_phase {
+    my ( $self, $options ) = @_;
+
+    my $path = $options->{nginx_conf};
+    if ( !_has_text($path) ) {
+        return {
+            status => 'skipped',
+            reason =>
+              'pass --nginx-conf /etc/nginx/sites-enabled/gpforum to observe',
+            residual_gaps => [
+'Installed nginx site contract not observed; pass --nginx-conf on the staging host after installing a deploy/nginx template.'
+            ],
+        };
+    }
+
+    if ( !-f $path ) {
+        return {
+            status => 'fail',
+            path   => $path,
+            error  => 'nginx conf missing',
+        };
+    }
+
+    my $text = path($path)->slurp;
+    my @attempts;
+    my $winner;
+    for my $contract ( deploy_nginx_checks() ) {
+        my $match = deploy_match_text( $text, $contract );
+        push @attempts,
+          {
+            name           => $contract->{name},
+            template       => $contract->{path},
+            status         => $match->{status},
+            matched_labels => $match->{matched_labels},
+            missing_labels => $match->{missing_labels},
+          };
+        if ( $match->{status} eq 'pass' && !$winner ) {
+            $winner = $contract->{name};
+        }
+    }
+
+    my @gaps;
+    if ($winner) {
+        push @gaps,
+'Nginx conf contract observe is not a substitute for nginx -t, reload, or TLS certificate install evidence.';
+    }
+
+    return {
+        status         => $winner ? 'pass' : 'fail',
+        path           => $path,
+        matched_profile => $winner,
+        attempts       => \@attempts,
+        note =>
+'Passes when the installed site matches either tcp (gpforum.conf) or unix-socket template contract. Does not reload nginx.',
+        residual_gaps => \@gaps,
+        error         => $winner ? undef : 'no deploy/nginx contract matched',
     };
 }
 
@@ -559,7 +600,9 @@ sub _combined_status {
     my ($evidence) = @_;
 
     my @statuses;
-    for my $name (qw(prerequisites env_file systemd unit_files health tls)) {
+    for my $name (
+        qw(prerequisites env_file systemd unit_files nginx_conf health tls))
+    {
         my $status = $evidence->{$name}{status} // q{};
         next if $status eq 'skipped';
         push @statuses, $status;
@@ -578,7 +621,9 @@ sub _human_evidence {
 
     my @lines = (
         'staging-host-verify status=' . ( $evidence->{status} // 'fail' ) );
-    for my $name (qw(prerequisites env_file systemd unit_files health tls)) {
+    for my $name (
+        qw(prerequisites env_file systemd unit_files nginx_conf health tls))
+    {
         my $phase = $evidence->{$name} // {};
         push @lines, "$name status=" . ( $phase->{status} // 'missing' );
     }
@@ -691,9 +736,9 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Probes repository prerequisites and, when asked, staging env-file key presence
-(values redacted), systemd unit activity, installed unit-file contracts,
-HTTP health endpoints, and https TLS scheme observe. Never installs units,
-reloads nginx, or starts Hypnotoad.
+(values redacted), systemd unit activity, installed unit-file and nginx
+site contracts, HTTP health endpoints, and https TLS scheme observe. Never
+installs units, reloads nginx, or starts Hypnotoad.
 
 =head1 AUTHOR
 
