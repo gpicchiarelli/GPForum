@@ -4,6 +4,8 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Refresh StagingHostVerify POD to mention the TLS observe phase.
+
 - Observe TLS on `script/staging-host-verify --base-url https://…` (records
   https scheme; pair with the health probe). `http://` base URLs leave a
   residual gap. Wired into `docs/ops/staging-host.md` and

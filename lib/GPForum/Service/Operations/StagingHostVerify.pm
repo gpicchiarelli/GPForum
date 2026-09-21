@@ -555,8 +555,8 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Probes repository prerequisites and, when asked, staging env-file key presence
-(values redacted), systemd unit activity, and HTTP health endpoints. Never
-installs units, reloads nginx, or starts Hypnotoad.
+(values redacted), systemd unit activity, HTTP health endpoints, and https
+TLS scheme observe. Never installs units, reloads nginx, or starts Hypnotoad.
 
 =head1 AUTHOR
 
