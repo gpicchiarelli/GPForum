@@ -1,49 +1,49 @@
-# Audit failure mode
+# Failure mode audit
 
-Data: 2026-06-02.
+Date: 2026-06-02.
 
-Scopo: rendere riproducibili i guasti che possono corrompere stato, perdere
-eventi, duplicare job o degradare il servizio. Questo documento è diagnostico:
-non aggiunge feature e non sostituisce i test PostgreSQL/staging richiesti prima
-del go-live.
+Purpose: make reproducible the faults that can corrupt state, lose events,
+duplicate jobs, or degrade the service. This document is diagnostic: it adds no
+features and does not replace the PostgreSQL/staging tests required before
+go-live.
 
-## Stato sintetico
+## Summary state
 
-GPForum ha già una buona base:
+GPForum already has a solid base:
 
-- canonical write con `txn_do` in forum, moderazione, privacy e outbox;
-- outbox claim con `FOR UPDATE SKIP LOCKED`;
-- retry/backoff/dead-letter per outbox;
-- health readiness con check database;
-- test su rollback forum quando outbox/event append fallisce;
-- test su realtime degraded quando database o LISTEN/NOTIFY non sono
-  disponibili;
-- CI con migrazioni, query plan evidence, benchmark smoke e coverage.
+- canonical writes with `txn_do` in forum, moderation, privacy, and outbox;
+- outbox claim with `FOR UPDATE SKIP LOCKED`;
+- retry/backoff/dead-letter for the outbox;
+- health readiness with a database check;
+- tests for forum rollback when the outbox/event append fails;
+- tests for degraded realtime when the database or LISTEN/NOTIFY is
+  unavailable;
+- CI with migrations, query plan evidence, benchmark smoke, and coverage.
 
-Il gap principale è la prova sistematica dei failure mode distruttivi o
-concorrenti su PostgreSQL reale. I test fake/unitari validano contratti e shape,
-ma non dimostrano lock scheduling, isolamento concorrente o crash worker.
-Timeout in transazione e retry HTTP dopo una risposta persa sono coperti dai
-test fake.
+The main gap is systematic proof of destructive or concurrent failure modes on a
+real PostgreSQL. Fake/unit tests validate contracts and shapes, but they do not
+demonstrate lock scheduling, concurrent isolation, or worker crashes.
+In-transaction timeouts and HTTP retries after a lost response are covered by
+the fake tests.
 
-## Registro failure mode
+## Failure mode register
 
-| ID | Scenario | Stato attuale | Rischio | Severità | Test o patch richiesto |
+| ID | Scenario | Current state | Risk | Severity | Required test or patch |
 | --- | --- | --- | --- | --- | --- |
-| FM-001 | Database down su route write | 503 uniforme su create_reply, report, hide, export, password-reset, verification-resend e email-change | errore HTTP non uniforme o leakage | high | coperto da `t/152-write-unavailable.t` |
-| FM-002 | Database timeout durante transazione | timeout EventLog/outbox/audit con rollback | transazione parziale o risposta 500 opaca | high | coperto da `t/86-engineering-correctness.t` |
-| FM-003 | Errore prima del commit | report, hide, approval rollback su outbox fail | side effect parziali in altre aree | high | coperto da `t/86-engineering-correctness.t` |
-| FM-004 | Errore dopo commit ma prima risposta HTTP | retry HTTP con stesso `command_id` | retry client può duplicare se manca idempotenza | high | coperto da `t/153-lost-response-retry.t` |
-| FM-005 | Worker crash dopo dispatch prima di mark done | stale lock riclamabile; handler skip su replay | side effect duplicato se handler non idempotente | medium | coperto da `t/150-outbox-handler-idempotency.t`, reclaim fake in `t/84-outbox-concurrent-dispatcher.t`, e reclaim PG in `t/integration/postgres-outbox-reclaim.t` |
-| FM-006 | Minion non disponibile | fail-closed se abilitato; outbox-dispatch salta Minion | confusione deploy o worker assente | medium | coperto da `t/83-outbox-worker-wiring.t` |
-| FM-007 | Outbox retry esaurito | cancelled + dead-letter; permanent fail-fast; no re-claim | dead-letter non drenata in staging | medium | coperto da `t/13-outbox-dispatcher.t` e `docs/ops/dead-letters.md` |
-| FM-008 | Job duplicato privacy approval | mitigato da migration `024` e lock request; evidenza PG in `t/integration/postgres-concurrency.t` | doppia erasure job | closed | due approval concorrenti → un solo erasure job |
-| FM-009 | Command log race | unique + catch replay/`in_progress`; evidenza PG in `t/integration/postgres-concurrency.t` | 500 unique violation | closed | stesso `command_id` concorrente → un winner, replay/`in_progress` |
-| FM-010 | Audit hash-chain branching | `pg_advisory_xact_lock` + evidenza PG in `t/integration/postgres-concurrency.t` | chain branch | closed | due append concorrenti → catena lineare senza branch |
+| FM-001 | Database down on a write route | uniform 503 on create_reply, report, hide, export, password-reset, verification-resend, and email-change | non-uniform HTTP error or leakage | high | covered by `t/152-write-unavailable.t` |
+| FM-002 | Database timeout during a transaction | EventLog/outbox/audit timeout with rollback | partial transaction or opaque 500 response | high | covered by `t/86-engineering-correctness.t` |
+| FM-003 | Error before commit | report, hide, and approval roll back on outbox failure | partial side effects in other areas | high | covered by `t/86-engineering-correctness.t` |
+| FM-004 | Error after commit but before the HTTP response | HTTP retry with the same `command_id` | a client retry can duplicate when idempotency is missing | high | covered by `t/153-lost-response-retry.t` |
+| FM-005 | Worker crash after dispatch, before mark done | stale lock is reclaimable; handler skips on replay | duplicated side effect when the handler is not idempotent | medium | covered by `t/150-outbox-handler-idempotency.t`, fake reclaim in `t/84-outbox-concurrent-dispatcher.t`, and PG reclaim in `t/integration/postgres-outbox-reclaim.t` |
+| FM-006 | Minion unavailable | fail-closed when enabled; outbox-dispatch skips Minion | deploy confusion or missing worker | medium | covered by `t/83-outbox-worker-wiring.t` |
+| FM-007 | Outbox retries exhausted | cancelled + dead-letter; permanent fail-fast; no re-claim | dead-letter queue not drained in staging | medium | covered by `t/13-outbox-dispatcher.t` and `docs/ops/dead-letters.md` |
+| FM-008 | Duplicate privacy approval job | mitigated by migration `024` and a request lock; PG evidence in `t/integration/postgres-concurrency.t` | double erasure job | closed | two concurrent approvals produce a single erasure job |
+| FM-009 | Command log race | unique constraint + catch replay/`in_progress`; PG evidence in `t/integration/postgres-concurrency.t` | 500 unique violation | closed | the same `command_id` concurrently produces one winner, replay/`in_progress` |
+| FM-010 | Audit hash-chain branching | `pg_advisory_xact_lock` + PG evidence in `t/integration/postgres-concurrency.t` | chain branch | closed | two concurrent appends produce a linear chain with no branch |
 
-## Test già presenti utili
+## Existing tests that already help
 
-| Area | Evidenza |
+| Area | Evidence |
 | --- | --- |
 | outbox retry/dead-letter | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `docs/ops/dead-letters.md` |
 | worker wiring | `t/16-workers-phase.t`, `t/83-outbox-worker-wiring.t` |
@@ -51,7 +51,7 @@ test fake.
 | claim crash before dispatch | `t/84-outbox-concurrent-dispatcher.t`, `t/integration/postgres-outbox-reclaim.t` |
 | expired running lock reclaim (PG) | `t/integration/postgres-outbox-reclaim.t` |
 | forum rollback | `t/86-engineering-correctness.t` (thread, report, hide, approval) |
-| privacy erasure idempotente | `t/29-privacy-rights.t` |
+| idempotent privacy erasure | `t/29-privacy-rights.t` |
 | realtime DB unavailable | `t/81-realtime-operational.t` |
 | readiness payload | `t/23-operations-hardening.t`, `t/77-web-technical-payloads.t` |
 | write DB unavailable | `t/152-write-unavailable.t` |
@@ -59,21 +59,21 @@ test fake.
 | Minion backend absent | `t/83-outbox-worker-wiring.t` |
 | erasure rollback after revoke | `t/86-engineering-correctness.t` |
 
-## Patch applicata in questo incremento
+## Patch applied in this increment
 
-`PRIV-002` è stato mitigato:
+`PRIV-002` has been mitigated:
 
-- `migrations/024_privacy_erasure_job_idempotency.sql` aggiunge
+- `migrations/024_privacy_erasure_job_idempotency.sql` adds
   `idx_erasure_jobs_request_unique`;
-- `ErasureJob` espone `erasure_jobs_request_key`;
-- `DeletionWorkflow::approve_request` blocca la deletion request con
-  `FOR UPDATE` prima di cercare o creare il job;
-- `t/29-privacy-rights.t` verifica lock, replay approval e assenza di job/action
-  duplicati.
+- `ErasureJob` exposes `erasure_jobs_request_key`;
+- `DeletionWorkflow::approve_request` locks the deletion request with
+  `FOR UPDATE` before looking up or creating the job;
+- `t/29-privacy-rights.t` verifies the lock, approval replay, and the absence of
+  duplicate jobs/actions.
 
-## Prossimi failure test prioritari
+## Next priority failure tests
 
-1. Nessun residuale prioritario su reclaim outbox scaduto o su
-   `event_idempotency_keys` / reputation source unique: coperti da
-   `t/integration/postgres-outbox-reclaim.t` e
-   `t/integration/postgres-idempotency.t` (oltre a `postgres-concurrency.t`).
+1. No priority residual remains on expired outbox reclaim or on
+   `event_idempotency_keys` / reputation source uniqueness: both are covered by
+   `t/integration/postgres-outbox-reclaim.t` and
+   `t/integration/postgres-idempotency.t` (alongside `postgres-concurrency.t`).

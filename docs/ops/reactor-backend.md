@@ -1,74 +1,74 @@
 # Reactor backend
 
-Data: 2026-06-02.
+Date: 2026-06-02.
 
-Questo documento spiega l'anomalia osservata:
+This document explains the following observed anomaly:
 
 ```text
 declared_event_backend=epoll
 actual_reactor=Mojo::Reactor::Poll
 ```
 
-## Diagnosi
+## Diagnosis
 
-`declared_event_backend` descrive la postura OS desiderata o dichiarata dal
-profilo runtime. `actual_reactor` è invece la classe realmente usata da
-Mojolicious in quel processo Perl.
+`declared_event_backend` describes the OS posture the runtime profile wants or
+declares. `actual_reactor` is the class Mojolicious actually uses in that Perl
+process.
 
-Su macOS è normale vedere `Mojo::Reactor::Poll`: `epoll` è Linux-specifico e non
-può essere il backend reale. Su Linux, `epoll` non appare come reactor nativo
-Mojolicious a meno che l'ambiente abbia dipendenze/event loop compatibili e
-Mojolicious scelga un reactor diverso da Poll. Per questo il mismatch deve
-essere trattato come segnale diagnostico, non come errore universale.
+On macOS, `Mojo::Reactor::Poll` is expected: `epoll` is Linux-specific and
+cannot be the real backend. On Linux, `epoll` does not appear as a native
+Mojolicious reactor unless the environment provides compatible dependencies and
+event loop, and Mojolicious selects a reactor other than Poll. The mismatch must
+therefore be treated as a diagnostic signal, not as a universal error.
 
-## Stato repository
+## Repository state
 
-Il repository ha già evidenza runtime:
+The repository already carries runtime evidence:
 
-- `lib/GPForum/OS/RuntimeEvidence.pm` registra reactor dichiarato, reactor
-  atteso, reactor reale e raccomandazione;
-- `docs/OS_RUNTIME_EVIDENCE.md` documenta il mismatch locale;
-- `t/58-os-runtime-evidence.t` copre profili OS e fallback;
-- `t/57-hypnotoad-benchmark.t` verifica che il report benchmark includa
+- `lib/GPForum/OS/RuntimeEvidence.pm` records the declared reactor, the expected
+  reactor, the actual reactor, and a recommendation;
+- `docs/OS_RUNTIME_EVIDENCE.md` documents the local mismatch;
+- `t/58-os-runtime-evidence.t` covers OS profiles and fallbacks;
+- `t/57-hypnotoad-benchmark.t` verifies that the benchmark report includes
   `actual_reactor`.
 
-## Regola operativa
+## Operational rule
 
-| Ambiente | Comportamento atteso | Gate |
+| Environment | Expected behavior | Gate |
 | --- | --- | --- |
-| macOS dev | `Mojo::Reactor::Poll` accettabile | warning diagnostico |
-| FreeBSD dev/staging | fallback accettabile se documentato | warning diagnostico |
-| Linux production | mismatch da investigare | fail solo in preflight strict |
-| CI generica | non assumere epoll | test portabile, no falso fail |
+| macOS dev | `Mojo::Reactor::Poll` is acceptable | diagnostic warning |
+| FreeBSD dev/staging | fallback acceptable when documented | diagnostic warning |
+| Linux production | mismatch must be investigated | fail only in strict preflight |
+| Generic CI | do not assume epoll | portable test, no false failure |
 
-## Patch proposta
+## Proposed patch
 
-Non forzare un nuovo reactor come dipendenza obbligatoria. Prima rendere il
-messaggio più chiaro:
+Do not force a new reactor as a mandatory dependency. Make the message clearer
+first:
 
-- distinguere `declared_event_backend` da `actual_reactor`;
-- indicare OS rilevato;
-- indicare se il mismatch è atteso su OS non Linux;
-- in `--strict`, fallire solo quando il profilo dichiara Linux/epoll e il
-  target production richiede esplicitamente native reactor.
+- distinguish `declared_event_backend` from `actual_reactor`;
+- report the detected OS;
+- state whether the mismatch is expected on a non-Linux OS;
+- under `--strict`, fail only when the profile declares Linux/epoll and the
+  production target explicitly requires a native reactor.
 
-## Test richiesti
+## Required tests
 
-1. macOS/fallback: mismatch epoll/Poll produce warning, non fail.
-2. Linux strict: profilo production con native backend richiesto e Poll reale
-   produce fail diagnostico.
-3. CI portability: test non assume epoll quando `uname` non è Linux.
-4. Benchmark report: `actual_reactor` e raccomandazione restano visibili in
-   output text e JSON.
+1. macOS/fallback: an epoll/Poll mismatch produces a warning, not a failure.
+2. Linux strict: a production profile that requires a native backend, with Poll
+   as the actual reactor, produces a diagnostic failure.
+3. CI portability: the test does not assume epoll when `uname` is not Linux.
+4. Benchmark report: `actual_reactor` and the recommendation stay visible in
+   both text and JSON output.
 
 ## Deploy
 
-In produzione non usare il reactor come unica prova di readiness. Verificare
-insieme:
+In production, do not use the reactor as the only readiness proof. Check it
+together with:
 
 - `/health/ready`;
 - query plan evidence;
-- benchmark Hypnotoad con worker reali;
-- file descriptor e backlog;
+- Hypnotoad benchmarks with real workers;
+- file descriptors and backlog;
 - p95/p99 request latency;
-- outbox pending/failed/dead-letter.
+- outbox pending/failed/dead-letter counts.
