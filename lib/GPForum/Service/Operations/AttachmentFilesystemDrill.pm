@@ -17,6 +17,7 @@ use Mojo::Base -base;
 use Mojo::File qw(path);
 
 use GPForum::Service::Attachment::FilesystemStorage;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -47,7 +48,7 @@ sub run {
     $evidence->{status} ||= 'pass';
     $self->_cleanup($evidence);
 
-    return $evidence;
+    return evidence_finalize($evidence);
 }
 
 sub format_evidence {
@@ -226,6 +227,7 @@ sub _base_evidence {
     my ($options) = @_;
 
     return {
+        check          => 'attachment_filesystem',
         status         => undef,
         drill          => 'attachment_filesystem',
         residual_gaps  => [ $RESIDUAL_LIVE, $RESIDUAL_BETA ],

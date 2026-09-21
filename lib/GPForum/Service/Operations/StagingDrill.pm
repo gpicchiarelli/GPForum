@@ -21,6 +21,7 @@ use GPForum::Config;
 use GPForum::Migration::Plan;
 use GPForum::Migration::Runner;
 use GPForum::Schema;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -54,7 +55,7 @@ sub run {
     $self->_cleanup( $evidence, $options );
     $evidence->{status} ||= _status_from_phases($evidence);
 
-    return $evidence;
+    return evidence_finalize($evidence);
 }
 
 sub format_evidence {
@@ -677,6 +678,7 @@ sub _base_evidence {
     my ($options) = @_;
 
     return {
+        check        => 'staging_drill',
         status       => undef,
         seed_profile => $options->{seed_profile},
         attachments  => {

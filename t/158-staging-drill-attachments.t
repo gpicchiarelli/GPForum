@@ -16,7 +16,7 @@ use GPForum::Service::Operations::DeployChecklistDrill;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS    => 25;
+const my $EXPECTED_TESTS    => 32;
 const my $MIN_SYSTEMD_UNITS => 4;
 const my $MIN_NGINX_CONFIGS => 2;
 
@@ -47,6 +47,10 @@ sub _test_attachment_drill {
         $attachments->{attachments}{wiped_before_restore},
         'attachment drill wiped source before restore'
     );
+    ok( $attachments->{secrets_redacted},
+        'attachment drill marks secrets_redacted' );
+    is( $attachments->{private_beta_claimed}, 0,
+        'attachment drill refuses private-beta claim' );
 
     return;
 }
@@ -64,6 +68,10 @@ sub _test_deploy_drill {
         'deploy checklist inspects nginx configs' );
     is( $deploy->{deploy_checklist}{mode},
         'static_plus_host', 'deploy checklist mode includes host validation' );
+    ok( $deploy->{secrets_redacted},
+        'deploy checklist marks secrets_redacted' );
+    is( $deploy->{private_beta_claimed}, 0,
+        'deploy checklist refuses private-beta claim' );
 
     my $host = $deploy->{deploy_checklist}{host_validation};
     ok( $host, 'host_validation evidence present' );
@@ -144,6 +152,12 @@ sub _test_combined_command {
     );
     is( $combined->{attachments_phase}{status},
         'pass', 'combined attachments phase pass' );
+    ok( $combined->{secrets_redacted},
+        'combined drill marks secrets_redacted' );
+    is( $combined->{private_beta_claimed}, 0,
+        'combined drill refuses private-beta claim' );
+    is( $combined->{check}, 'staging_ops_extensions',
+        'combined drill sets check name' );
 
     return;
 }

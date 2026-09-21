@@ -17,7 +17,7 @@ use GPForum::Service::Operations::EvidenceValidate;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 18;
+const my $EXPECTED_TESTS => 21;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -119,6 +119,58 @@ my $legacy_strict = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => ["$legacy_stress"], strict => 1 } );
 is( $legacy_strict->{status}, 'fail',
     'strict mode fails legacy stress evidence' );
+
+my $drill = path( $dir, 'staging-drill.json' );
+$drill->spew(
+    encode_json(
+        {
+            check                => 'staging_drill',
+            status               => 'pass',
+            secrets_redacted     => \1,
+            private_beta_claimed => 0,
+            residual_gaps        => ['deploy still open'],
+            fresh_migrate        => { status => 'pass' },
+            upgrade_path         => { status => 'pass' },
+        }
+    )
+);
+my $drill_ok = GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$drill"] } );
+is( $drill_ok->{status}, 'pass', 'staging_drill evidence validates' );
+
+my $ops = path( $dir, 'ops-extensions.json' );
+$ops->spew(
+    encode_json(
+        {
+            check                => 'staging_ops_extensions',
+            drill                => 'staging_ops_extensions',
+            status               => 'pass',
+            secrets_redacted     => \1,
+            private_beta_claimed => 0,
+            residual_gaps        => ['host install still open'],
+        }
+    )
+);
+my $ops_ok = GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$ops"] } );
+is( $ops_ok->{status}, 'pass', 'staging_ops_extensions evidence validates' );
+
+my $legacy_drill = path( $dir, 'legacy-drill.json' );
+$legacy_drill->spew(
+    encode_json(
+        {
+            status        => 'pass',
+            residual_gaps => ['old'],
+            fresh_migrate => { status => 'pass' },
+            upgrade_path  => { status => 'pass' },
+        }
+    )
+);
+my $legacy_drill_warn =
+  GPForum::Service::Operations::EvidenceValidate->new->run(
+    { paths => ["$legacy_drill"] } );
+is( $legacy_drill_warn->{status}, 'degraded',
+    'legacy staging_drill without meta degrades' );
 
 my $missing = GPForum::Service::Operations::EvidenceValidate->new->run(
     { paths => [] } );

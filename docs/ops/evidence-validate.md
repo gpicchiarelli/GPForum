@@ -23,13 +23,16 @@ script/gpforum-evidence-validate --strict --json /tmp/gpforum-evidence-live/*.js
 | JSON object decode | fail | fail |
 | Obvious secret keys/patterns | fail | fail |
 | Private-beta readiness claims in text | fail | fail |
-| Known evidence families (`staging_host_verify`, `mail_delivery`, `stress-load`) | warn if unknown | fail if unknown |
+| Known evidence families (`staging_host_verify`, `mail_delivery`, `stress-load`,
+  `staging_drill`, `attachment_filesystem`, `deploy_checklist`,
+  `staging_ops_extensions`) | warn if unknown | fail if unknown |
 | `residual_gaps` present | warn if missing | fail if missing |
 | Shared meta (`secrets_redacted`, `private_beta_claimed=0`) on all known families | warn if missing | fail if missing |
 
-Harnesses (`staging-host-verify`, `mail-check`, `stress-load`) emit that meta via
-`GPForum::Service::Operations::EvidenceMeta`. Older archives without the markers
-validate as `degraded` (or `fail` under `--strict`). Re-stamp with:
+Harnesses (`staging-host-verify`, `mail-check`, `stress-load`, staging drills)
+emit that meta via `GPForum::Service::Operations::EvidenceMeta`. Older archives
+without the markers validate as `degraded` (or `fail` under `--strict`).
+Re-stamp with:
 
 ```sh
 script/gpforum-evidence-meta --write path/to/archive.json
