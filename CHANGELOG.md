@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/gpforum-evidence-validate` / `bin/gpforum-evidence-validate` to
+  validate archived ops evidence JSON (shape by family, secret patterns,
+  private-beta claim rejection; `--strict` requires modern redaction markers).
+  Docs: `docs/ops/evidence-validate.md`. Does not claim private-beta readiness.
+
 - Harden `script/gpforum-mail-check` evidence: always set
   `secrets_redacted` / `private_beta_claimed=false`, emit `residual_gaps`, and
   scrub SMTP passwords plus the internal probe token from nested

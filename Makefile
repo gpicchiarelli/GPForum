@@ -1,4 +1,4 @@
-.PHONY: architecture bootstrap check critic evidence-live install-deps install-deps-postgres macports-env mail-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test tidy
+.PHONY: architecture bootstrap check critic evidence-live evidence-validate install-deps install-deps-postgres macports-env mail-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -77,3 +77,10 @@ private-beta-checklist:
 # Does not start Hypnotoad or claim readiness. See docs/ops/staging-host.md.
 evidence-live:
 	script/gpforum-evidence-live --commands
+
+# Validate archived evidence JSON (secrets/claims/shape). Not part of make check.
+# Example: make evidence-validate FILES='a.json b.json'
+FILES ?=
+evidence-validate:
+	@test -n "$(FILES)" || (echo 'make evidence-validate requires FILES="..."' >&2; exit 2)
+	script/gpforum-evidence-validate --json $(FILES)
