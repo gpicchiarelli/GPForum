@@ -18,6 +18,7 @@ use GPForum::Service::Operations::DeployContract qw(
   deploy_match_text
   deploy_nginx_checks
 );
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -80,10 +81,8 @@ sub run {
         $evidence->{error}  = _trim_error($EVAL_ERROR);
     }
     $evidence->{status} ||= _combined_status($evidence);
-    $evidence->{residual_gaps}
-      = _unique_gaps( [ @{ $evidence->{residual_gaps} // [] } ] );
 
-    return $evidence;
+    return evidence_finalize($evidence);
 }
 
 sub format_evidence {
@@ -681,19 +680,6 @@ sub _detect_repo_root {
     }
 
     return;
-}
-
-sub _unique_gaps {
-    my ($gaps) = @_;
-
-    my %seen;
-    my @unique;
-    for my $gap ( @{$gaps} ) {
-        next if $seen{$gap}++;
-        push @unique, $gap;
-    }
-
-    return \@unique;
 }
 
 sub _trim_error {

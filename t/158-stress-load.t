@@ -16,7 +16,7 @@ use GPForum::Service::Operations::StressLoad;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 17;
+const my $EXPECTED_TESTS => 20;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -86,6 +86,10 @@ my $dry_json = q{};
 my $dry = decode_json($dry_json);
 is( $dry->{status},            'dry-run', 'dry-run status' );
 is( $dry->{plan}{concurrency}, 500,       'dry-run concurrency from profile' );
+ok( $dry->{secrets_redacted}, 'stress evidence marks secrets_redacted' );
+is( $dry->{private_beta_claimed}, 0,
+    'stress evidence refuses private-beta claim' );
+ok( @{ $dry->{residual_gaps} // [] } >= 1, 'stress evidence lists residual gaps' );
 
 my $human = $service->format_evidence( $dry, 'human' );
 like(

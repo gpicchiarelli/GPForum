@@ -12,6 +12,8 @@ use Mojo::IOLoop;
 use Mojo::UserAgent;
 use Time::HiRes qw(time);
 
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
+
 our $VERSION = '0.001';
 
 const my $EXIT_FAILURE           => 1;
@@ -66,23 +68,25 @@ sub run {
     my ( $self, $options ) = @_;
 
     my $plan = $self->plan($options);
-    return _dry_run_evidence($plan) if $options->{dry_run};
+    return evidence_finalize( _dry_run_evidence($plan) ) if $options->{dry_run};
 
     croak 'GPForum stress-load requires --base-url (running Hypnotoad/app)'
       if !_has_text( $options->{base_url} );
 
     my $evidence = eval { return $self->_execute( $plan, $options ) };
     if ( !$evidence ) {
-        return {
-            status        => 'fail',
-            mode          => 'stress-load',
-            error         => _trim_error($EVAL_ERROR),
-            plan          => $plan,
-            prerequisites => _prerequisites($options),
-        };
+        return evidence_finalize(
+            {
+                status        => 'fail',
+                mode          => 'stress-load',
+                error         => _trim_error($EVAL_ERROR),
+                plan          => $plan,
+                prerequisites => _prerequisites($options),
+            }
+        );
     }
 
-    return $evidence;
+    return evidence_finalize($evidence);
 }
 
 sub plan {

@@ -25,7 +25,11 @@ script/gpforum-evidence-validate --strict --json /tmp/gpforum-evidence-live/*.js
 | Private-beta readiness claims in text | fail | fail |
 | Known evidence families (`staging_host_verify`, `mail_delivery`, `stress-load`) | warn if unknown | fail if unknown |
 | `residual_gaps` present | warn if missing | fail if missing |
-| Mail `secrets_redacted` / `private_beta_claimed=0` | warn if missing | fail if missing |
+| Shared meta (`secrets_redacted`, `private_beta_claimed=0`) on all known families | warn if missing | fail if missing |
+
+Harnesses (`staging-host-verify`, `mail-check`, `stress-load`) emit that meta via
+`GPForum::Service::Operations::EvidenceMeta`. Older archives without the markers
+validate as `degraded` (or `fail` under `--strict`).
 
 Exit `0` for `pass` or `degraded`. `fail` is non-zero.
 
