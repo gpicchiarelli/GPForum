@@ -102,6 +102,7 @@ script/staging-host-verify --json
 # on the live host:
 script/staging-host-verify --json \
   --env-file /etc/gpforum/gpforum.env \
+  --unit-dir /etc/systemd/system \
   --systemd \
   --base-url https://staging.example
 # or: make staging-host-verify

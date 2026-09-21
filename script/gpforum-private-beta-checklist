@@ -75,7 +75,8 @@ script/staging-drill-attachments --json
 
 # 5. Staging host verify (non-destructive; live flags on the host)
 script/staging-host-verify --json
-# script/staging-host-verify --json --env-file /etc/gpforum/gpforum.env --systemd --base-url https://staging.example
+# script/staging-host-verify --json --env-file /etc/gpforum/gpforum.env \
+#   --unit-dir /etc/systemd/system --systemd --base-url https://staging.example
 
 # 6. Stress / load (requires running Hypnotoad --base-url)
 script/stress-load --dry-run --profile smoke --human

@@ -17,7 +17,7 @@ use GPForum::Service::Operations::StagingHostVerify;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 25;
+const my $EXPECTED_TESTS => 37;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -25,6 +25,7 @@ _test_prerequisites_only();
 _test_env_file_keys();
 _test_metrics_header();
 _test_tls_observe();
+_test_unit_files_observe();
 _test_command_help();
 _test_command_unknown();
 _test_command_json();
@@ -37,8 +38,10 @@ sub _test_prerequisites_only {
         'pass', 'prerequisites phase passes' );
     is( $evidence->{env_file}{status}, 'skipped', 'env_file skipped by default' );
     is( $evidence->{systemd}{status},  'skipped', 'systemd skipped by default' );
-    is( $evidence->{health}{status},   'skipped', 'health skipped by default' );
-    is( $evidence->{tls}{status},      'skipped', 'tls skipped without base-url' );
+    is( $evidence->{unit_files}{status},
+        'skipped', 'unit_files skipped by default' );
+    is( $evidence->{health}{status}, 'skipped', 'health skipped by default' );
+    is( $evidence->{tls}{status},    'skipped', 'tls skipped without base-url' );
     ok( @{ $evidence->{residual_gaps} } >= 1,
         'residual gaps note live staging evidence' );
 
@@ -99,14 +102,56 @@ sub _test_tls_observe {
         { base_url => 'http://127.0.0.1:9', timeout => 1 } );
     is( $http->{tls}{status}, 'skipped', 'http base-url skips TLS pass' );
     is( $http->{tls}{scheme}, 'http',    'http scheme recorded' );
+    is( $http->{tls}{port},   9,         'http port parsed from base-url' );
     ok( @{ $http->{tls}{residual_gaps} // [] } >= 1,
         'http base-url residual asks for https evidence' );
 
+    my $https = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { base_url => 'https://staging.example:8443/', timeout => 1 } );
+    is( $https->{tls}{status}, 'pass',  'https base-url tls observe passes' );
+    is( $https->{tls}{scheme}, 'https', 'https scheme recorded' );
+    is( $https->{tls}{host}, 'staging.example', 'https host parsed' );
+    is( $https->{tls}{port}, 8443, 'https port parsed' );
+
     like(
         path('lib/GPForum/Service/Operations/StagingHostVerify.pm')->slurp,
-        qr/_tls_phase/msx,
-        'service defines tls observe phase'
+        qr/_tls_phase|_parse_base_url/msx,
+        'service defines tls observe helpers'
     );
+
+    return;
+}
+
+sub _test_unit_files_observe {
+    my $dir = tempdir( CLEANUP => 1 );
+    path( $dir, 'gpforum.service' )->spew(<<'UNIT');
+[Service]
+User=gpforum
+EnvironmentFile=/etc/gpforum/gpforum.env
+ExecStart=/srv/gpforum/script/gpforum-carton exec hypnotoad /srv/gpforum/bin/gpforum
+UNIT
+    path( $dir, 'gpforum-outbox.service' )->spew(<<'UNIT');
+[Service]
+User=gpforum
+EnvironmentFile=/etc/gpforum/gpforum.env
+ExecStart=/srv/gpforum/script/gpforum-carton exec bin/gpforum-outbox-dispatch
+UNIT
+
+    my $pass = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { unit_dir => $dir } );
+    is( $pass->{unit_files}{status}, 'pass', 'matching unit contracts pass' );
+    is( $pass->{status}, 'pass', 'overall pass with unit_dir only' );
+
+    path( $dir, 'gpforum.service' )->spew("User=root\n");
+    my $fail = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { unit_dir => $dir } );
+    is( $fail->{unit_files}{status}, 'fail', 'broken unit contract fails' );
+    is( $fail->{status},             'fail', 'overall fail on unit contract' );
+
+    my $missing = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { unit_dir => path( $dir, 'missing' )->to_string } );
+    is( $missing->{unit_files}{status},
+        'fail', 'missing unit directory fails phase' );
 
     return;
 }
@@ -123,6 +168,7 @@ sub _test_command_help {
     like( $usage, qr/gpforum-staging-host-verify/msx, 'help names command' );
     like( $usage, qr/private-beta/msx, 'help denies private-beta claim' );
     like( $usage, qr/TLS|https/msx, 'help mentions TLS observe' );
+    like( $usage, qr/--unit-dir/msx, 'help mentions unit-dir observe' );
 
     return;
 }

@@ -4,7 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
-- Refresh StagingHostVerify POD to mention the TLS observe phase.
+- Add non-destructive `--unit-dir` observe to `staging-host-verify`: installed
+  systemd unit text must match the deploy contract (`User`, `EnvironmentFile`,
+  `ExecStart` via `gpforum-carton`). Harden TLS URL parsing (host/port,
+  trailing slash). Does not install/enable units or claim private-beta
+  readiness.
 
 - Observe TLS on `script/staging-host-verify --base-url https://…` (records
   https scheme; pair with the health probe). `http://` base URLs leave a
