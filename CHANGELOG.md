@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Add `script/gpforum-evidence-meta` to stamp archived ops JSON with the shared
+  EvidenceMeta contract; meta-stamp Cloud Agent verify/stress/mail archives so
+  `evidence-validate --strict` can accept historical preparation blobs without
+  changing measurements. Does not claim private-beta readiness.
+
 - Centralize ops evidence metadata in
   `GPForum::Service::Operations::EvidenceMeta` (`secrets_redacted`,
   `private_beta_claimed=0`, deduped `residual_gaps`, optional secret scrubbing).

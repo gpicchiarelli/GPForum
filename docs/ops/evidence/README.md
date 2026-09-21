@@ -7,9 +7,15 @@ Validate candidates before/after archiving:
 
 ```sh
 script/gpforum-evidence-validate --human docs/ops/evidence/<archive>/*.json
+
+# Stamp legacy archives with shared meta markers (stdout or --write):
+script/gpforum-evidence-meta --write docs/ops/evidence/<archive>/staging-host-verify.json
 ```
 
-See [`../evidence-validate.md`](../evidence-validate.md).
+Harness-produced JSON already includes `secrets_redacted` /
+`private_beta_claimed=0` via `EvidenceMeta`. Historical archives may be
+meta-stamped in place; measurements stay unchanged. See
+[`../evidence-validate.md`](../evidence-validate.md).
 
 | Archive | Notes |
 | --- | --- |

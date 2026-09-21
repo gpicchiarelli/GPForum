@@ -171,6 +171,9 @@ sub _type_rules {
         push @findings,
           _require_array( $decoded, 'residual_gaps', $strict, 'warn' );
     }
+    elsif ( $type eq 'evidence_validate' ) {
+        push @findings, _require_status($decoded);
+    }
     else {
         push @findings,
           {

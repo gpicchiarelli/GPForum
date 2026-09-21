@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 172;
+const my $EXPECTED_TESTS => 176;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -89,6 +89,7 @@ for my $required_file (
     bin/gpforum-staging-host-verify
     bin/gpforum-stress-load
     bin/gpforum-evidence-validate
+    bin/gpforum-evidence-meta
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
@@ -113,6 +114,7 @@ for my $required_file (
     script/gpforum-private-beta-checklist
     script/gpforum-evidence-live
     script/gpforum-evidence-validate
+    script/gpforum-evidence-meta
     )
   )
 {
@@ -466,6 +468,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('script/gpforum-evidence-validate')->slurp,
         qr/gpforum-evidence-validate/msx,
         'evidence-validate wrapper invokes bin entrypoint'
+    );
+    like(
+        path('docs/ops/evidence/README.md')->slurp,
+        qr/gpforum-evidence-meta|EvidenceMeta/msx,
+        'evidence archive README covers meta stamp'
+    );
+    like(
+        path('script/gpforum-evidence-meta')->slurp,
+        qr/gpforum-evidence-meta/msx,
+        'evidence-meta wrapper invokes bin entrypoint'
     );
 
 1;
