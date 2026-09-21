@@ -36,6 +36,7 @@ on a real target, and operator runbook evidence.
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
 | Live evidence pack | `script/gpforum-evidence-live` | `docs/ops/staging-host.md` | Prints verify+stress+mail archive commands; does **not** run them or claim readiness |
 | Evidence validate | `script/gpforum-evidence-validate` | `docs/ops/evidence-validate.md` | Validates archived JSON shape/secrets/claims; does **not** claim readiness |
+| Evidence meta stamp | `script/gpforum-evidence-meta` | `docs/ops/evidence/README.md` | Stamps shared meta markers on legacy archives; does **not** claim readiness |
 
 Print the same map as shell commands (without running drills):
 

@@ -29,7 +29,11 @@ script/gpforum-evidence-validate --strict --json /tmp/gpforum-evidence-live/*.js
 
 Harnesses (`staging-host-verify`, `mail-check`, `stress-load`) emit that meta via
 `GPForum::Service::Operations::EvidenceMeta`. Older archives without the markers
-validate as `degraded` (or `fail` under `--strict`).
+validate as `degraded` (or `fail` under `--strict`). Re-stamp with:
+
+```sh
+script/gpforum-evidence-meta --write path/to/archive.json
+```
 
 Exit `0` for `pass` or `degraded`. `fail` is non-zero.
 
