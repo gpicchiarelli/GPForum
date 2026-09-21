@@ -21,6 +21,7 @@ const my %FLAG_OPTIONS => (
 );
 const my %VALUE_OPTIONS => (
     '--env-file'      => 'env_file',
+    '--unit-dir'      => 'unit_dir',
     '--base-url'      => 'base_url',
     '--metrics-token' => 'metrics_token',
     '--timeout'       => 'timeout',
@@ -63,6 +64,7 @@ sub _options {
         help           => 0,
         systemd        => 0,
         env_file       => undef,
+        unit_dir       => undef,
         base_url       => undef,
         metrics_token  => $ENV{GPFORUM_METRICS_TOKEN},
         timeout        => undef,
@@ -112,6 +114,7 @@ sub _set_value {
     my $value = shift @{$arguments};
     croak "Missing value for --"
       . ( $name eq 'env_file'       ? 'env-file'
+        : $name eq 'unit_dir'       ? 'unit-dir'
         : $name eq 'base_url'       ? 'base-url'
         : $name eq 'metrics_token'  ? 'metrics-token'
         :                             $name )
@@ -143,13 +146,15 @@ Usage: bin/gpforum-staging-host-verify [options]
 
 Non-destructive staging host verify. Always checks in-repo deploy/runbook
 artifacts. Optionally probes env-file key presence (values never printed),
-systemd unit activity, HTTP /health and /metrics, and https TLS scheme
-observe when --base-url is https. Does not install units, reload nginx,
-or start Hypnotoad. Does not claim private-beta readiness.
+systemd unit activity, installed unit-file contracts, HTTP /health and
+/metrics, and https TLS scheme observe when --base-url is https. Does not
+install units, reload nginx, or start Hypnotoad. Does not claim private-beta
+readiness.
 
   --json                 evidence as JSON (default)
   --human                short plain-text evidence
   --env-file PATH        require key presence in staging env file
+  --unit-dir DIR         observe installed unit files against deploy contract
   --systemd              probe systemctl is-active for gpforum units
   --base-url URL         probe /health/live and /health/ready (+ TLS observe)
   --metrics-token TOKEN  also probe /metrics (or GPFORUM_METRICS_TOKEN)

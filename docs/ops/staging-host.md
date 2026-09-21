@@ -14,6 +14,7 @@ HTTP health endpoints answer.
 | Repo prerequisites | Deploy templates, carton wrapper, ops docs present | `script/staging-host-verify` (always) |
 | Env file keys | `/etc/gpforum/gpforum.env` has required keys; values never printed | `--env-file` |
 | systemd units | `gpforum.service` / `gpforum-outbox.service` report active | `--systemd` |
+| Installed unit files | Deploy contract (User / EnvironmentFile / ExecStart) | `--unit-dir` |
 | HTTP health | `/health/live`, `/health/ready` (optional `/metrics`) | `--base-url` |
 | TLS observe | `https` scheme recorded (pair with health probe) | `--base-url https://…` |
 | DB migrate / dump | Throwaway or staging DB path | `script/staging-drill` |
@@ -70,6 +71,7 @@ On the staging host after bring-up:
 ```sh
 script/staging-host-verify --json \
   --env-file /etc/gpforum/gpforum.env \
+  --unit-dir /etc/systemd/system \
   --systemd \
   --base-url https://staging.example \
   --metrics-token "$GPFORUM_METRICS_TOKEN"
@@ -77,6 +79,8 @@ script/staging-host-verify --json \
 
 Prefer an `https://` `--base-url` so the TLS observe phase records the scheme
 alongside the health probe. An `http://` base URL leaves TLS as a residual gap.
+`--unit-dir` observes installed unit text against the deploy contract; it does
+**not** install or enable units.
 
 Exit `0` for `pass` or `degraded`. `fail` means a probed phase failed.
 
@@ -89,6 +93,7 @@ commit secrets.
 # 1) Host verify
 script/staging-host-verify --json \
   --env-file /etc/gpforum/gpforum.env \
+  --unit-dir /etc/systemd/system \
   --systemd \
   --base-url "$STAGING_BASE_URL" \
   > /tmp/gpforum-staging-host-verify.json

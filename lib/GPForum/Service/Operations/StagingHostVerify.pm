@@ -32,6 +32,28 @@ const my @SYSTEMD_UNITS => qw(
   gpforum.service
   gpforum-outbox.service
 );
+const my @UNIT_FILE_CONTRACTS => (
+    {
+        name       => 'gpforum.service',
+        must_match => [
+            qr/^User=gpforum\s*$/msx,
+            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
+qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+hypnotoad\s+.*/bin/gpforum\s*$}msx,
+        ],
+        labels =>
+          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
+    },
+    {
+        name       => 'gpforum-outbox.service',
+        must_match => [
+            qr/^User=gpforum\s*$/msx,
+            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
+            qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+}msx,
+        ],
+        labels =>
+          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
+    },
+);
 const my @REPO_ARTIFACTS => (
     'deploy/systemd/gpforum.service',
     'deploy/systemd/gpforum-outbox.service',
@@ -112,6 +134,10 @@ sub _execute {
     $evidence->{systemd} = $self->_systemd_phase($options);
     push @{ $evidence->{residual_gaps} },
       @{ $evidence->{systemd}{residual_gaps} // [] };
+
+    $evidence->{unit_files} = $self->_unit_files_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{unit_files}{residual_gaps} // [] };
 
     $evidence->{health} = $self->_health_phase($options);
     push @{ $evidence->{residual_gaps} },
@@ -266,6 +292,84 @@ sub _systemd_phase {
     };
 }
 
+sub _unit_files_phase {
+    my ( $self, $options ) = @_;
+
+    my $dir = $options->{unit_dir};
+    if ( !_has_text($dir) ) {
+        return {
+            status => 'skipped',
+            reason =>
+              'pass --unit-dir /etc/systemd/system to observe installed units',
+            residual_gaps => [
+'Installed unit-file contracts not observed; pass --unit-dir on the staging host after copying deploy/systemd templates.'
+            ],
+        };
+    }
+
+    if ( !-d $dir ) {
+        return {
+            status => 'fail',
+            path   => $dir,
+            error  => 'unit directory missing',
+        };
+    }
+
+    my @units;
+    for my $contract (@UNIT_FILE_CONTRACTS) {
+        push @units, _observe_unit_file( $dir, $contract );
+    }
+
+    my $failed = grep { $_->{status} eq 'fail' } @units;
+    my @gaps;
+    if ( !$failed ) {
+        push @gaps,
+'Unit-file contract observe is not a substitute for systemctl enable/start or nginx TLS install evidence.';
+    }
+
+    return {
+        status => $failed ? 'fail' : 'pass',
+        path   => $dir,
+        note =>
+'Compares installed unit text to the in-repo contract (User, EnvironmentFile, ExecStart). Does not install, enable, or reload units.',
+        units         => \@units,
+        residual_gaps => \@gaps,
+    };
+}
+
+sub _observe_unit_file {
+    my ( $dir, $contract ) = @_;
+
+    my $name = $contract->{name};
+    my $path = path( $dir, $name )->to_string;
+    if ( !-f $path ) {
+        return {
+            name   => $name,
+            path   => $path,
+            status => 'fail',
+            error  => 'unit file missing',
+        };
+    }
+
+    my $text = path($path)->slurp;
+    my @missing_labels;
+    my @patterns = @{ $contract->{must_match} // [] };
+    my @labels   = @{ $contract->{labels}     // [] };
+    for my $index ( 0 .. $#patterns ) {
+        my $pattern = $patterns[$index];
+        next if $text =~ $pattern;
+        push @missing_labels, $labels[$index] // "pattern_$index";
+    }
+
+    return {
+        name           => $name,
+        path           => $path,
+        status         => @missing_labels ? 'fail' : 'pass',
+        missing_labels => \@missing_labels,
+        checked_labels => [@labels],
+    };
+}
+
 sub _health_phase {
     my ( $self, $options ) = @_;
 
@@ -339,44 +443,76 @@ sub _tls_phase {
         };
     }
 
-    if ( $base =~ m{\Ahttp://}msxi ) {
+    $base =~ s{/\z}{}msx;
+    my $parsed = _parse_base_url($base);
+    if ( !$parsed->{ok} ) {
         return {
-            status  => 'skipped',
-            scheme  => 'http',
+            status   => 'fail',
+            reason   => $parsed->{error},
             base_url => $base,
-            reason  => 'base-url uses http; TLS termination not observed',
+        };
+    }
+
+    if ( $parsed->{scheme} eq 'http' ) {
+        return {
+            status   => 'skipped',
+            scheme   => 'http',
+            base_url => $base,
+            host     => $parsed->{host},
+            port     => $parsed->{port},
+            reason   => 'base-url uses http; TLS termination not observed',
             residual_gaps => [
 '--base-url is http; archive staging-host-verify against https://… for TLS evidence.'
             ],
         };
     }
 
-    if ( $base !~ m{\Ahttps://}msxi ) {
-        return {
-            status => 'fail',
-            reason => 'base-url must start with http:// or https://',
-            base_url => $base,
-        };
-    }
-
-    my $host_port = $base;
-    $host_port =~ s{\Ahttps://}{}msxi;
-    $host_port =~ s{/.*\z}{}msx;
-    my ( $host, $port ) = split /:/msx, $host_port, 2;
-    $port ||= '443';
-
     return {
         status   => 'pass',
         scheme   => 'https',
         base_url => $base,
-        host     => $host,
-        port     => 0 + $port,
+        host     => $parsed->{host},
+        port     => $parsed->{port},
         note =>
 'Records https scheme for staging TLS evidence. Does not pin CAs, check HSTS, run ACME, or replace operator cert inventory. Pair with a successful health probe on the same --base-url.',
         residual_gaps => [
 'Full ACME/cert-rotation evidence and reverse-proxy TLS config remain operator steps on the staging host.'
         ],
     };
+}
+
+sub _parse_base_url {
+    my ($base) = @_;
+
+    if ( $base =~ m{\Ahttps://([^/]+)}msxi ) {
+        my ( $host, $port ) = _split_host_port( $1, 443 );
+        return { ok => 1, scheme => 'https', host => $host, port => $port };
+    }
+    if ( $base =~ m{\Ahttp://([^/]+)}msxi ) {
+        my ( $host, $port ) = _split_host_port( $1, 80 );
+        return { ok => 1, scheme => 'http', host => $host, port => $port };
+    }
+
+    return {
+        ok    => 0,
+        error => 'base-url must start with http:// or https://',
+    };
+}
+
+sub _split_host_port {
+    my ( $host_port, $default_port ) = @_;
+
+    if ( $host_port =~ /\A\[([^\]]+)\]:(\d+)\z/msx ) {
+        return ( $1, 0 + $2 );
+    }
+    if ( $host_port =~ /\A\[([^\]]+)\]\z/msx ) {
+        return ( $1, 0 + $default_port );
+    }
+    if ( $host_port =~ /\A([^:]+):(\d+)\z/msx ) {
+        return ( $1, 0 + $2 );
+    }
+
+    return ( $host_port, 0 + $default_port );
 }
 
 sub _probe_http {
@@ -423,7 +559,7 @@ sub _combined_status {
     my ($evidence) = @_;
 
     my @statuses;
-    for my $name (qw(prerequisites env_file systemd health tls)) {
+    for my $name (qw(prerequisites env_file systemd unit_files health tls)) {
         my $status = $evidence->{$name}{status} // q{};
         next if $status eq 'skipped';
         push @statuses, $status;
@@ -442,7 +578,7 @@ sub _human_evidence {
 
     my @lines = (
         'staging-host-verify status=' . ( $evidence->{status} // 'fail' ) );
-    for my $name (qw(prerequisites env_file systemd health tls)) {
+    for my $name (qw(prerequisites env_file systemd unit_files health tls)) {
         my $phase = $evidence->{$name} // {};
         push @lines, "$name status=" . ( $phase->{status} // 'missing' );
     }
@@ -555,8 +691,9 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Probes repository prerequisites and, when asked, staging env-file key presence
-(values redacted), systemd unit activity, HTTP health endpoints, and https
-TLS scheme observe. Never installs units, reloads nginx, or starts Hypnotoad.
+(values redacted), systemd unit activity, installed unit-file contracts,
+HTTP health endpoints, and https TLS scheme observe. Never installs units,
+reloads nginx, or starts Hypnotoad.
 
 =head1 AUTHOR
 

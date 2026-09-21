@@ -79,7 +79,7 @@ script/staging-host-verify --json \
 # Staging TLS + systemd target (operator host with units installed):
 # export STAGING_BASE_URL='https://staging.example'
 # script/staging-host-verify --json --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
-#   --systemd --base-url "$STAGING_BASE_URL" \
+#   --unit-dir /etc/systemd/system --systemd --base-url "$STAGING_BASE_URL" \
 #   ${GPFORUM_METRICS_TOKEN:+--metrics-token "$GPFORUM_METRICS_TOKEN"} \
 #   > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-tls-systemd.json"
 
