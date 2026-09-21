@@ -9,7 +9,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 167;
+const my $EXPECTED_TESTS => 172;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -51,6 +51,7 @@ for my $required_file (
     docs/ops/stress-load.md
     docs/ops/mail-check.md
     docs/ops/private-beta-checklist.md
+    docs/ops/evidence-validate.md
     docs/ops/evidence/2026-09-20-macos-laptop-prep/README.md
     docs/ops/evidence/2026-09-20-cloud-agent/README.md
     docs/ops/evidence/2026-09-20-cloud-agent-complete/README.md
@@ -87,6 +88,7 @@ for my $required_file (
     bin/gpforum-staging-drill-attachments
     bin/gpforum-staging-host-verify
     bin/gpforum-stress-load
+    bin/gpforum-evidence-validate
     script/bench-http
     script/bench-hotpaths
     script/bench-hypnotoad
@@ -110,6 +112,7 @@ for my $required_file (
     script/stress-load
     script/gpforum-private-beta-checklist
     script/gpforum-evidence-live
+    script/gpforum-evidence-validate
     )
   )
 {
@@ -453,6 +456,16 @@ like( $deployment, qr/gpforum-scheduled-jobs/msx,
         path('script/gpforum-evidence-live')->slurp,
         qr/not-claimed|NOT CLAIMED/msx,
         'evidence-live script does not claim readiness'
+    );
+    like(
+        path('docs/ops/evidence-validate.md')->slurp,
+        qr/gpforum-evidence-validate|PRIVATE BETA|private-beta/msx,
+        'evidence-validate docs cover validator entrypoint'
+    );
+    like(
+        path('script/gpforum-evidence-validate')->slurp,
+        qr/gpforum-evidence-validate/msx,
+        'evidence-validate wrapper invokes bin entrypoint'
     );
 
 1;

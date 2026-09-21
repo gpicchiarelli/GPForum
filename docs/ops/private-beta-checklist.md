@@ -35,6 +35,7 @@ on a real target, and operator runbook evidence.
 | Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Cloud Agent VM 100/500/1000 archived (`evidence/2026-09-20-cloud-agent-live/`, `…-stress500/`); staging TLS 100/500/1000 still open |
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
 | Live evidence pack | `script/gpforum-evidence-live` | `docs/ops/staging-host.md` | Prints verify+stress+mail archive commands; does **not** run them or claim readiness |
+| Evidence validate | `script/gpforum-evidence-validate` | `docs/ops/evidence-validate.md` | Validates archived JSON shape/secrets/claims; does **not** claim readiness |
 
 Print the same map as shell commands (without running drills):
 

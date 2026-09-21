@@ -3,6 +3,14 @@
 Operator-captured JSON/human blobs for private-beta *preparation*. Presence of
 files here does **not** mean private beta is ready.
 
+Validate candidates before/after archiving:
+
+```sh
+script/gpforum-evidence-validate --human docs/ops/evidence/<archive>/*.json
+```
+
+See [`../evidence-validate.md`](../evidence-validate.md).
+
 | Archive | Notes |
 | --- | --- |
 | [2026-09-20-cloud-agent-stress500/](2026-09-20-cloud-agent-stress500/) | Cloud Agent VM Hypnotoad `:8080` capacity: `carton_ok`, migrate + query-budget, medium seed, `stress-load` profile **500** `ok`/`--check` **pass**, profile **1000** `ok` (p95 residual under `--check`). Extends live archive. **PRIVATE BETA NOT YET.** |
