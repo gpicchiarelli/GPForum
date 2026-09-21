@@ -12,8 +12,8 @@ privata e produzione pubblica.
 | Target | Verdetto | Motivazione tecnica |
 | --- | --- | --- |
 | LOCAL READY | sì | Suite completa, coverage, migrazioni fresh/upgrade, backup/restore locale, query budget, benchmark smoke/stress locali e security/failure suite sono verdi. |
-| PRIVATE BETA READY | no | Harness + Cloud Agent live archive in `docs/ops/evidence/2026-09-20-cloud-agent-live/` (`carton_ok`; Hypnotoad `:8080`; `staging-host-verify --env-file --base-url` pass; stress profile `100` ok). Restano evidenza su **staging TLS reale** (SMTP `--send`, stress 500/1000, deploy/systemd install target). **PRIVATE BETA NOT YET.** |
-| PUBLIC PRODUCTION READY | no | Mancano staging rappresentativo end-to-end, numeri stress 100/500/1000 su target, attachment restore drill live e runbook di rollback provato sul target (harness/drill in tree). |
+| PRIVATE BETA READY | no | Harness + Cloud Agent live/stress archives (`docs/ops/evidence/2026-09-20-cloud-agent-live/` profile `100`; `docs/ops/evidence/2026-09-20-cloud-agent-stress500/` profiles `500` pass + `1000` ok with p95 residual). Restano evidenza su **staging TLS reale** (SMTP `--send`, stress 500/1000 su target, deploy/systemd install). **PRIVATE BETA NOT YET.** |
+| PUBLIC PRODUCTION READY | no | Mancano staging rappresentativo end-to-end, numeri stress 100/500/1000 su target TLS, attachment restore drill live e runbook di rollback provato sul target (harness/drill in tree). |
 
 Raccomandazione finale: GPForum è pronto per uso locale personale e per
 ulteriore hardening su staging. Non è pronto per beta privata self-service né
@@ -39,7 +39,7 @@ per produzione pubblica.
 | Perltidy | GO | `script/perltidy-check`: PASS | Nessuno | Mantenere gate |
 | Coverage | GO | `script/coverage`: PASS (gate) | Alcuni moduli operativi hanno coverage basso, ma gate passa | Aumentare coverage su realtime/controller solo se toccati |
 | Benchmark smoke | GO | Fixture e configured benchmark verdi | Numeri locali, non staging | Ripetere con dataset rappresentativo |
-| Benchmark stress | PARTIAL | Harness + live VM evidence: smoke/100/500 `--check` pass (peak 500, ~587 req/s); 1000 peak sustained with 0 HTTP errors but p95 residual; see `docs/ops/stress-load.md` | Staging/TLS target 100/500/1000 not yet recorded; 1000 p95 on 4 vCPU | Re-run on staging hardware; archive JSON beside VM appendix |
+| Benchmark stress | PARTIAL | Harness + live VM archives: smoke/100 + `docs/ops/evidence/2026-09-20-cloud-agent-stress500/` (500 `--check` pass ~574 req/s; 1000 peak ok, p95 residual ~2.1–2.5 s); see `docs/ops/stress-load.md` | Staging/TLS target 100/500/1000 not yet recorded; 1000 p95 on 4 vCPU | Re-run on staging hardware; archive JSON beside VM appendix |
 | Query budget | GO | `script/query-budget --sync`, `--check`: PASS; route thread max 3 query, budget ok | Catalog deve essere sincronizzato in deploy | Eseguire sync/check dopo ogni migration deploy |
 | Query plan | GO | `script/query-plan-check`: `offset_violations=0`; `query-plan-evidence` PASS su small | Dataset locale piccolo | Medium/hot-thread staging evidence |
 | Security audit | PARTIAL GO | Security suite mirata PASS | Bot/device anomaly non avanzati | Estendere security tests prima beta |
@@ -100,7 +100,7 @@ ora a 36 migrazioni (`001`–`036`).
 | Blocco | Impatto | Azione richiesta |
 | --- | --- | --- |
 | Nessun deploy staging completo con systemd/nginx/Hypnotoad e DB target | Drill DB throwaway + `script/staging-host-verify` / `docs/ops/staging-host.md` shippati; manca nginx/systemd end-to-end sul target | Eseguire bring-up da `docs/ops/staging-host.md`, poi `script/staging-host-verify --env-file … --systemd --base-url …` e archiviare JSON |
-| Stress test rappresentativo non eseguito | Live Hypnotoad+PG evidence on Cloud Agent VM archived in `docs/ops/stress-load.md` (smoke/100/500 pass; 1000 peak ok, p95 residual); manca staging target | Re-run load test on staging with p50/p95/p99, error rate, worker distribution, DB latency |
+| Stress test rappresentativo non eseguito | Live Hypnotoad+PG evidence on Cloud Agent VM archived in `docs/ops/stress-load.md` + `docs/ops/evidence/2026-09-20-cloud-agent-stress500/` (smoke/100/500 pass; 1000 peak ok, p95 residual); manca staging target | Re-run load test on staging with p50/p95/p99, error rate, worker distribution, DB latency |
 | Backup/restore non provato su staging con attachment storage | DB dump/restore + `script/staging-drill-attachments` shippati; manca evidenza live target | Drill restore completo DB + allegati + readiness su staging |
 | Mail delivery su staging non drillata | Adapter + `script/gpforum-mail-check` in codice; staging evidence non ancora archiviata | Eseguire `script/gpforum-mail-check --dry-run` / `--send` su staging |
 

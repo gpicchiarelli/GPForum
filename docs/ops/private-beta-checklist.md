@@ -32,7 +32,7 @@ on a real target, and operator runbook evidence.
 | Staging DB drill | `script/staging-drill` | `docs/ops/staging-drills.md` | Fresh migrate, upgrade path, dump/restore on throwaway DBs |
 | Attachments + deploy checklist | `script/staging-drill-attachments` | `docs/ops/staging-drills.md` | Populated throwaway `var/attachments` restore + static (and optional host) nginx/systemd checks — **not** live install/reload |
 | Staging host verify | `script/staging-host-verify` | `docs/ops/staging-host.md` | Repo artifacts; optional env-file keys, systemd `is-active`, HTTP health — **not** an install |
-| Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Profile evidence against a running Hypnotoad; staging 100/500/1000 still open |
+| Stress / load | `script/stress-load` | `docs/ops/stress-load.md` | Cloud Agent VM 100/500/1000 archived (`evidence/2026-09-20-cloud-agent-live/`, `…-stress500/`); staging TLS 100/500/1000 still open |
 | Mail | `script/gpforum-mail-check` | `docs/ops/mail-check.md` | Transport config + dry-run / optional `--send` on staging |
 | Live evidence pack | `script/gpforum-evidence-live` | `docs/ops/staging-host.md` | Prints verify+stress+mail archive commands; does **not** run them or claim readiness |
 

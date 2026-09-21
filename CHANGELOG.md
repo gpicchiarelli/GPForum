@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Archive Cloud Agent VM Hypnotoad stress-load capacity evidence under
+  `docs/ops/evidence/2026-09-20-cloud-agent-stress500/` (`carton_ok`, migrate +
+  query-budget, medium seed, profile **500** `ok` / `--check` `pass`, profile
+  **1000** `ok` with p95 residual under `--check`). Extends
+  `2026-09-20-cloud-agent-live/`. **PRIVATE BETA remains NOT YET.**
+
 - Clarify Cloud Agent live evidence reproducibility: metrics pass requires `e964899` (header fix), not bare checkout base `e5bc023`.
 
 - Point `script/gpforum-evidence-live` at stress profile `500` as the next capacity step after archived profile `100`.
