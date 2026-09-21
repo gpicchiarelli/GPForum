@@ -17,7 +17,7 @@ use GPForum::Service::Operations::StagingHostVerify;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 37;
+const my $EXPECTED_TESTS => 43;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -26,6 +26,7 @@ _test_env_file_keys();
 _test_metrics_header();
 _test_tls_observe();
 _test_unit_files_observe();
+_test_nginx_conf_observe();
 _test_command_help();
 _test_command_unknown();
 _test_command_json();
@@ -40,6 +41,8 @@ sub _test_prerequisites_only {
     is( $evidence->{systemd}{status},  'skipped', 'systemd skipped by default' );
     is( $evidence->{unit_files}{status},
         'skipped', 'unit_files skipped by default' );
+    is( $evidence->{nginx_conf}{status},
+        'skipped', 'nginx_conf skipped by default' );
     is( $evidence->{health}{status}, 'skipped', 'health skipped by default' );
     is( $evidence->{tls}{status},    'skipped', 'tls skipped without base-url' );
     ok( @{ $evidence->{residual_gaps} } >= 1,
@@ -156,6 +159,26 @@ UNIT
     return;
 }
 
+sub _test_nginx_conf_observe {
+    my $dir  = tempdir( CLEANUP => 1 );
+    my $path = path( $dir, 'gpforum.conf' )->to_string;
+    path($path)->spew( path('deploy/nginx/gpforum.conf')->slurp );
+
+    my $pass = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { nginx_conf => $path } );
+    is( $pass->{nginx_conf}{status}, 'pass', 'matching nginx conf passes' );
+    is( $pass->{nginx_conf}{matched_profile},
+        'gpforum.conf', 'tcp nginx profile matched' );
+
+    path($path)->spew("server { listen 80; }\n");
+    my $fail = GPForum::Service::Operations::StagingHostVerify->new->run(
+        { nginx_conf => $path } );
+    is( $fail->{nginx_conf}{status}, 'fail', 'non-contract nginx conf fails' );
+    is( $fail->{status},             'fail', 'overall fail on nginx conf' );
+
+    return;
+}
+
 sub _test_command_help {
     my $command = GPForum::Command::StagingHostVerify->new;
     my $usage   = q{};
@@ -169,6 +192,7 @@ sub _test_command_help {
     like( $usage, qr/private-beta/msx, 'help denies private-beta claim' );
     like( $usage, qr/TLS|https/msx, 'help mentions TLS observe' );
     like( $usage, qr/--unit-dir/msx, 'help mentions unit-dir observe' );
+    like( $usage, qr/--nginx-conf/msx, 'help mentions nginx-conf observe' );
 
     return;
 }

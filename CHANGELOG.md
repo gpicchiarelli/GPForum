@@ -4,6 +4,12 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Centralize deploy systemd/nginx contracts in
+  `GPForum::Service::Operations::DeployContract` (shared by the deploy
+  checklist drill and staging-host verify). Add non-destructive
+  `--nginx-conf` observe to `staging-host-verify`. Does not install/reload
+  services or claim private-beta readiness.
+
 - Add non-destructive `--unit-dir` observe to `staging-host-verify`: installed
   systemd unit text must match the deploy contract (`User`, `EnvironmentFile`,
   `ExecStart` via `gpforum-carton`). Harden TLS URL parsing (host/port,

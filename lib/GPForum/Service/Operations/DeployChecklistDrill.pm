@@ -13,88 +13,18 @@ use Mojo::Base -base;
 use Mojo::File qw(path);
 use Symbol     qw(gensym);
 
+use GPForum::Service::Operations::DeployContract qw(
+  deploy_match_text
+  deploy_nginx_checks
+  deploy_unit_checks
+);
+
 our $VERSION = '0.001';
 
 const my $EXIT_FAILURE     => 1;
 const my $EXIT_SHIFT       => 8;
 const my $REPO_ROOT_MARKER => 'cpanfile';
 const my $ROOT_WALK_LIMIT  => 8;
-const my @UNIT_CHECKS => (
-    {
-        path       => 'deploy/systemd/gpforum.service',
-        name       => 'gpforum.service',
-        must_match => [
-            qr/^User=gpforum\s*$/msx,
-            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
-qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+hypnotoad\s+.*/bin/gpforum\s*$}msx,
-        ],
-        labels =>
-          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
-    },
-    {
-        path       => 'deploy/systemd/gpforum-unix-socket.service',
-        name       => 'gpforum-unix-socket.service',
-        must_match => [
-            qr/^User=gpforum\s*$/msx,
-            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
-qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+hypnotoad\s+.*/bin/gpforum\s*$}msx,
-        ],
-        labels =>
-          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
-    },
-    {
-        path       => 'deploy/systemd/gpforum-outbox.service',
-        name       => 'gpforum-outbox.service',
-        must_match => [
-            qr/^User=gpforum\s*$/msx,
-            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
-            qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+}msx,
-        ],
-        labels =>
-          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
-    },
-    {
-        path       => 'deploy/systemd/gpforum-scheduled-jobs.service',
-        name       => 'gpforum-scheduled-jobs.service',
-        must_match => [
-            qr/^User=gpforum\s*$/msx,
-            qr/^EnvironmentFile=\/etc\/gpforum\/gpforum[.]env\s*$/msx,
-            qr{^ExecStart=.*/script/gpforum-carton\s+exec\s+}msx,
-        ],
-        labels =>
-          [ 'User=gpforum', 'EnvironmentFile', 'ExecStart via gpforum-carton' ],
-    },
-);
-const my @NGINX_CHECKS => (
-    {
-        path       => 'deploy/nginx/gpforum.conf',
-        name       => 'gpforum.conf',
-        must_match => [
-            qr/upstream\s+gpforum_backend\s*[{]/msx,
-            qr/server\s+127[.]0[.]0[.]1:8080;/msx,
-            qr{location\s+/internal-attachments/}msx,
-        ],
-        labels => [
-            'upstream gpforum_backend',
-            'upstream 127.0.0.1:8080',
-            'internal-attachments'
-        ],
-    },
-    {
-        path       => 'deploy/nginx/gpforum-unix-socket.conf',
-        name       => 'gpforum-unix-socket.conf',
-        must_match => [
-            qr/upstream\s+gpforum_unix_backend\s*[{]/msx,
-            qr{server\s+unix:/run/gpforum/gpforum[.]sock;}msx,
-            qr{location\s+/internal-attachments/}msx,
-        ],
-        labels => [
-            'upstream gpforum_unix_backend',
-            'unix socket upstream',
-            'internal-attachments'
-        ],
-    },
-);
 const my @STUB_SCRIPTS => (
     'script/gpforum-carton',      'script/gpforum-os-preflight',
     'bin/gpforum',                'bin/gpforum-outbox-dispatch',
@@ -147,8 +77,8 @@ sub _execute {
     my $root = $self->repo_root;
     croak 'repository root not found' if !_has_text($root);
 
-    my @unit_results  = map { _check_file( $root, $_ ) } @UNIT_CHECKS;
-    my @nginx_results = map { _check_file( $root, $_ ) } @NGINX_CHECKS;
+    my @unit_results  = map { _check_file( $root, $_ ) } deploy_unit_checks();
+    my @nginx_results = map { _check_file( $root, $_ ) } deploy_nginx_checks();
     my $host          = $self->_host_validation( $root, $evidence );
 
     $evidence->{deploy_checklist} = {
@@ -207,7 +137,7 @@ sub _systemd_verify_phase {
       if !_has_text($binary);
 
     my @units;
-    for my $check (@UNIT_CHECKS) {
+    for my $check ( deploy_unit_checks() ) {
         push @units, _verify_one_unit( $root, $workspace, $binary, $check );
     }
 
@@ -277,7 +207,7 @@ sub _nginx_test_phase {
       if !_has_text($binary);
 
     my @configs;
-    for my $check (@NGINX_CHECKS) {
+    for my $check ( deploy_nginx_checks() ) {
         push @configs, _nginx_test_one( $root, $workspace, $binary, $check );
     }
 
@@ -461,22 +391,10 @@ sub _check_file {
         return $result;
     }
 
-    my $text = path($absolute)->slurp;
-    my @matched;
-    my @missing;
-    for my $index ( 0 .. $#{ $check->{must_match} } ) {
-        my $pattern = $check->{must_match}[$index];
-        my $label   = $check->{labels}[$index] // "pattern_$index";
-        if ( $text =~ $pattern ) {
-            push @matched, $label;
-        }
-        else {
-            push @missing, $label;
-        }
-    }
-    $result->{matched} = \@matched;
-    $result->{missing} = \@missing;
-    $result->{status}  = @missing ? 'fail' : 'pass';
+    my $match = deploy_match_text( path($absolute)->slurp, $check );
+    $result->{matched} = $match->{matched_labels};
+    $result->{missing} = $match->{missing_labels};
+    $result->{status}  = $match->{status};
 
     return $result;
 }

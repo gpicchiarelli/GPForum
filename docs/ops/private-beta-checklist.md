@@ -103,6 +103,7 @@ script/staging-host-verify --json
 script/staging-host-verify --json \
   --env-file /etc/gpforum/gpforum.env \
   --unit-dir /etc/systemd/system \
+  --nginx-conf /etc/nginx/sites-enabled/gpforum \
   --systemd \
   --base-url https://staging.example
 # or: make staging-host-verify
