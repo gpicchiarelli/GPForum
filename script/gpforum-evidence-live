@@ -98,8 +98,10 @@ script/stress-load --json --profile 1000 --base-url "$STAGING_BASE_URL" \
 # 3) Mail (dry-run always; --send only on a mailbox you control on staging SMTP)
 script/gpforum-mail-check --json --dry-run \
   > "$GPFORUM_EVIDENCE_DIR/mail-check-dry.json"
+# Staging SMTP/sendmail controlled send (never commit secrets; JSON is redacted):
 # script/gpforum-mail-check --json --send --to you@example.test \
 #   > "$GPFORUM_EVIDENCE_DIR/mail-check-send.json"
+# Confirm evidence: secrets_redacted=true and no password/token plaintext.
 
 # Copy JSON into docs/ops/evidence/<date>-*/ only after redacting secrets.
 # PRIVATE BETA remains NOT YET until staging TLS + SMTP send + target install exist.

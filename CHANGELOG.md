@@ -4,6 +4,11 @@ All notable changes to GPForum are recorded here.
 
 ## Unreleased
 
+- Harden `script/gpforum-mail-check` evidence: always set
+  `secrets_redacted` / `private_beta_claimed=false`, emit `residual_gaps`, and
+  scrub SMTP passwords plus the internal probe token from nested
+  strings/errors (including connect failures). Docs + evidence-live updated.
+
 - Centralize deploy systemd/nginx contracts in
   `GPForum::Service::Operations::DeployContract` (shared by the deploy
   checklist drill and staging-host verify). Add non-destructive

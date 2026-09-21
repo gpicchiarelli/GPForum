@@ -19,7 +19,7 @@ use GPForum::Service::Operations::MailCheck;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 25;
+const my $EXPECTED_TESTS => 34;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -49,6 +49,11 @@ is( $test_report->{probe}{action},
     'test_transport', 'test dry-run uses test transport probe' );
 ok( $test_report->{probe}{delivery_count} >= 1,
     'test probe records a delivery' );
+ok( $test_report->{secrets_redacted}, 'evidence marks secrets_redacted' );
+is( $test_report->{private_beta_claimed},
+    0, 'evidence refuses private-beta claim' );
+ok( @{ $test_report->{residual_gaps} // [] } >= 2,
+    'evidence lists residual gaps' );
 unlike(
     encode_json($test_report),
     qr/smtp_password|sasl_password|mail-check-probe-token/msx,
@@ -113,6 +118,46 @@ my $missing_send = GPForum::Service::Operations::MailCheck->new(
     mailer => $test_mailer,
 )->run( { mode => 'send' } );
 is( $missing_send->{status}, 'fail', 'send without --to fails' );
+
+my $send_ok = GPForum::Service::Operations::MailCheck->new(
+    config => $test_config,
+    mailer => $test_mailer,
+)->run( { mode => 'send', to => 'ops@forum.test' } );
+is( $send_ok->{status}, 'pass', 'send with --to on test transport passes' );
+is( $send_ok->{probe}{action}, 'send', 'send mode records send action' );
+unlike(
+    encode_json($send_ok),
+    qr/mail-check-probe-token|super-secret-password/msx,
+    'send evidence does not leak probe token'
+);
+ok(
+    (
+        grep { /lifecycle|staging [ ] SMTP/msx }
+        @{ $send_ok->{residual_gaps} // [] }
+    ),
+    'send pass still records residual gaps'
+);
+
+my $smtp_fail_check = GPForum::Service::Operations::MailCheck->new(
+    config => GPForum::Config->new(
+        mail_transport => 'smtp',
+        mail_from      => 'noreply@forum.test',
+        public_base_url => 'http://forum.test',
+        smtp_host      => 'smtp.example.test',
+        smtp_port      => 2525,
+        smtp_password  => 'super-secret-password',
+    ),
+    smtp_connector => sub {
+        croak 'auth failed for password=super-secret-password';
+    },
+);
+my $smtp_fail = $smtp_fail_check->run( { mode => 'dry_run' } );
+is( $smtp_fail->{status}, 'fail', 'smtp connect failure fails probe' );
+unlike(
+    encode_json($smtp_fail),
+    qr/super-secret-password/msx,
+    'smtp failure evidence scrubs password from errors'
+);
 
 my $command = GPForum::Command::MailCheck->new( check => $test_check );
 my $usage   = q{};

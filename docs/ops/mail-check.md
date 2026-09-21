@@ -43,6 +43,11 @@ make mail-check
 
 Exit status is non-zero on misconfiguration or probe failure.
 
+Evidence JSON always sets `secrets_redacted=true` and
+`private_beta_claimed=false`, lists `residual_gaps`, and scrubs SMTP
+passwords plus the internal probe token from nested strings/errors. Never
+archive evidence that still contains secrets.
+
 ## Environment
 
 | Variable | Role |
