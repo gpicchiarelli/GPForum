@@ -1,0 +1,13 @@
+# Coverage floor for lib/, enforced by script/coverage-check.
+#
+# A ratchet: raise these when coverage improves, never lower them to make a
+# build pass. script/coverage-check reports when a criterion sits a whole point
+# or more above its floor, which is the cue to raise it.
+#
+# Measured 2026-09-24 over 402 files in lib/, test files excluded:
+#   statement 88.7   subroutine 93.3   branch 68.2   condition 47.1
+# The floors sit a few tenths below that to absorb run-to-run variation, not
+# to leave room for regressions. Branch and condition coverage are reported
+# but not yet gated.
+statement 88.5
+subroutine 93.0

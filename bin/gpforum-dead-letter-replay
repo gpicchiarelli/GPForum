@@ -1,0 +1,17 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use strict;
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use GPForum::Command::DeadLetterReplay;
+
+our $VERSION = '0.001';
+
+exit GPForum::Command::DeadLetterReplay->new->run(@ARGV);

@@ -1,0 +1,14 @@
+% layout 'default';
+% title t('auth.logout_accepted_title') . ' - ' . t('app.name');
+
+<section aria-labelledby="logout-accepted-heading">
+  <%= include 'components/page_header',
+    heading_id => 'logout-accepted-heading',
+    component_title => t('auth.logout_accepted_title'),
+    actions_label => t('auth.logout_next_steps'),
+    actions => ui_actions(
+      { href => url_for('login'), label => t('auth.login_again') },
+      { href => url_for('categories'), label => t('forum.browse_categories') },
+    ) %>
+  <%= include 'components/alert', tone => 'success', message => t('auth.logout_status') %>
+</section>

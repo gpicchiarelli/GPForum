@@ -1,0 +1,131 @@
+% layout 'default';
+% title t('admin.async_jobs') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-jobs-heading">
+  <%= include 'components/page_header', heading_id => 'admin-jobs-heading', component_title => t('admin.async_jobs'), actions_label => t('admin.jobs_nav'), actions => ui_actions({ href => url_for('admin_dashboard'), label => t('admin.admin') }, { href => url_for('admin_status'), label => t('admin.health_runtime') }) %>
+
+  <form method="get" action="<%= url_for('admin_jobs') %>">
+    <label for="admin-job-status"><%= t('admin.outbox_status') %></label>
+    <select id="admin-job-status" name="status">
+      <option value="" <%= !$status ? 'selected' : '' %>><%= t('common.any') %></option>
+      <option value="pending" <%= $status && $status eq 'pending' ? 'selected' : '' %>><%= ui_label('state', 'pending') %></option>
+      <option value="failed" <%= $status && $status eq 'failed' ? 'selected' : '' %>><%= ui_label('state', 'failed') %></option>
+      <option value="cancelled" <%= $status && $status eq 'cancelled' ? 'selected' : '' %>><%= ui_label('state', 'cancelled') %></option>
+      <option value="done" <%= $status && $status eq 'done' ? 'selected' : '' %>><%= ui_label('state', 'done') %></option>
+    </select>
+    <button type="submit"><%= t('common.filter') %></button>
+  </form>
+
+  % my $search = $maintenance->{search} || {};
+  <section aria-labelledby="admin-maintenance-heading">
+    <%= include 'components/section_header', heading_id => 'admin-maintenance-heading', component_title => t('admin.maintenance') %>
+    % if ($search->{unavailable}) {
+      <p><%= t('admin.search_status_unavailable') %></p>
+    % } else {
+      % my $lag = $search->{lag} || {};
+      % my $latest = $search->{latest};
+      <dl>
+        <dt><%= t('admin.search_index') %></dt>
+        <dd><%= include 'components/status_badge', value => $lag->{status} || 'unknown' %> <%= tc('admin.search_pending', $lag->{pending} || 0) %></dd>
+        % if ($lag->{oldest_pending_at}) {
+          <dt><%= t('admin.search_oldest_pending') %></dt>
+          <dd><time datetime="<%= $lag->{oldest_pending_at} %>"><%= dt($lag->{oldest_pending_at}) %></time></dd>
+        % }
+        <dt><%= t('admin.search_last_rebuild') %></dt>
+        % if (!$latest) {
+          <dd><%= t('admin.search_never_rebuilt') %></dd>
+        % } else {
+          % my $totals = $latest->{totals} || {};
+          <dd>
+            <%= include 'components/status_badge', value => $latest->{completed} ? 'completed' : 'pending' %>
+            <time datetime="<%= $latest->{at} %>"><%= dt($latest->{at}) %></time>
+            <%= t('admin.search_rebuild_totals', { indexed => $totals->{indexed} || 0, unchanged => $totals->{unchanged} || 0, pruned => $totals->{pruned} || 0 }) %>
+          </dd>
+        % }
+      </dl>
+    % }
+    <form method="post" action="<%= url_for('admin_search_rebuild') %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $maintenance->{search_rebuild_command_id} || q{} %>">
+      <p id="search-rebuild-hint"><%= t('admin.search_rebuild_hint') %></p>
+      <button type="submit" aria-describedby="search-rebuild-hint"><%= t('admin.rebuild_search') %></button>
+    </form>
+    <form method="post" action="<%= url_for('admin_cache_purge') %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $maintenance->{cache_purge_command_id} || q{} %>">
+      <p id="cache-purge-hint"><%= t('admin.cache_purge_hint') %></p>
+      <button type="submit" aria-describedby="cache-purge-hint"><%= t('admin.purge_cache') %></button>
+    </form>
+  </section>
+
+  <section aria-labelledby="admin-outbox-heading">
+    <%= include 'components/section_header', heading_id => 'admin-outbox-heading', component_title => t('admin.outbox') %>
+    % if (@{ $jobs->{outbox_messages} || [] }) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.outbox_list') %>">
+        % for my $message (@{ $jobs->{outbox_messages} }) {
+          <li>
+            <article aria-labelledby="<%= $message->{ui}{heading_id} %>">
+              <h3 id="<%= $message->{ui}{heading_id} %>"><%= $message->{job_type} %></h3>
+              <dl>
+                <dt><%= t('admin.status') %></dt>
+                <dd><%= include 'components/status_badge', value => $message->{status} %></dd>
+                <dt><%= t('admin.queue') %></dt>
+                <dd><%= $message->{queue} %></dd>
+                <dt><%= t('admin.retries') %></dt>
+                <dd><%= $message->{attempt_count} || $message->{attempts} || 0 %></dd>
+                <dt><%= t('admin.next_attempt') %></dt>
+                <dd><time datetime="<%= $message->{next_attempt_at} %>"><%= dt($message->{next_attempt_at}) %></time></dd>
+                <dt><%= t('admin.last_error') %></dt>
+                <dd><%= $message->{last_error} || t('common.none') %></dd>
+              </dl>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state', heading_id => 'admin-outbox-empty-heading', component_title => t('admin.no_outbox') %>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-dead-letter-heading">
+    <%= include 'components/section_header', heading_id => 'admin-dead-letter-heading', component_title => t('admin.dead_letters') %>
+    % if (@{ $jobs->{dead_letters} || [] }) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.dead_letter_list') %>">
+        % for my $letter (@{ $jobs->{dead_letters} }) {
+          <li>
+            <article aria-labelledby="<%= $letter->{ui}{heading_id} %>">
+              <h3 id="<%= $letter->{ui}{heading_id} %>"><%= $letter->{error_class} %></h3>
+              <dl>
+                <dt><%= t('admin.source') %></dt>
+                <dd><%= $letter->{source_table} %>: <%= $letter->{source_id} %></dd>
+                <dt><%= t('admin.failure_type') %></dt>
+                <dd><%= $letter->{failure_type} || t('common.none') %></dd>
+                <dt><%= t('admin.retries') %></dt>
+                <dd><%= $letter->{retry_count} %></dd>
+                <dt><%= t('admin.last_failed') %></dt>
+                <dd><time datetime="<%= $letter->{last_failed_at} %>"><%= dt($letter->{last_failed_at}) %></time></dd>
+                <dt><%= t('admin.error') %></dt>
+                <dd><%= $letter->{error_message} %></dd>
+                % if ($letter->{replay_status}) {
+                  <dt><%= t('admin.dead_letter_replay_status') %></dt>
+                  <dd><%= include 'components/status_badge', value => $letter->{replay_status} %></dd>
+                % }
+              </dl>
+              % if (!$letter->{replay_status} && ($letter->{source_table} // q{}) eq 'outbox_messages') {
+                % my $hint_id = 'replay-hint-' . $letter->{dead_letter_id};
+                <form method="post" action="<%= url_for('admin_dead_letter_replay', dead_letter_id => $letter->{dead_letter_id}) %>">
+                  <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $letter->{replay_command_id} || q{} %>">
+                  <p id="<%= $hint_id %>"><%= t('admin.dead_letter_replay_hint') %></p>
+                  <button type="submit" aria-describedby="<%= $hint_id %>"><%= t('admin.replay_dead_letter') %></button>
+                </form>
+              % }
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state', heading_id => 'admin-dead-letter-empty-heading', component_title => t('admin.no_dead_letters') %>
+    % }
+  </section>
+</section>

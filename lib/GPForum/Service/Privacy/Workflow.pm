@@ -1,0 +1,397 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Privacy::Workflow;
+
+use strict;
+use warnings;
+
+use English qw(-no_match_vars);
+use Mojo::Base -base, -signatures;
+
+our $VERSION = '0.001';
+
+has command_idempotency => undef;
+has deletion_workflow   => undef;
+has export_builder      => undef;
+has hold_store          => undef;
+has logger              => undef;
+has reviewer            => undef;
+
+sub request_export ( $self, $input ) {
+    return $self->_export_with_command($input);
+}
+
+sub request_deletion ( $self, $input ) {
+    my $command = {
+        reason            => _trim( $input->{reason} ),
+        request_type      => 'anonymize',
+        requester_user_id => $input->{user_id},
+        resource_id       => $input->{user_id},
+        resource_type     => 'user',
+    };
+    my $invalid = $self->_missing_field( $command, 'reason' );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_store(
+        $input,
+        'deletion request not found',
+        sub { return $self->deletion_workflow->request_deletion($command); },
+    );
+}
+
+sub approve_deletion ( $self, $input ) {
+    my $command = {
+        actor_user_id => $input->{actor_user_id},
+        reason        => _trim( $input->{reason} ),
+        request_id    => $input->{request_id},
+    };
+    my $invalid = $self->_missing_field( $command, 'reason' );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_store(
+        $input,
+        'deletion request not found',
+        sub {
+            return $self->deletion_workflow->approve_request(
+                $command->{request_id},
+                $command->{actor_user_id},
+                $command->{reason},
+            );
+        },
+    );
+}
+
+sub hold_deletion ( $self, $input ) {
+    my $command = {
+        actor_user_id => $input->{actor_user_id},
+        reason        => _trim( $input->{reason} ),
+        request_id    => $input->{request_id},
+    };
+    my $invalid = $self->_missing_field( $command, 'reason' );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_commanded_store(
+        $input,
+        'deletion request not found',
+        sub { return $self->_create_hold($command); },
+    );
+}
+
+sub run_erasure_job ( $self, $input ) {
+    return $self->_commanded_store(
+        $input,
+        'erasure job not found',
+        sub {
+            return $self->deletion_workflow->complete_job( $input->{job_id},
+                $input->{actor_user_id} );
+        },
+    );
+}
+
+sub _create_hold ( $self, $command ) {
+    my $request = $self->reviewer->deletion_request( $command->{request_id} );
+    if ( !$request ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    my $hold = $self->hold_store->create_hold(
+        {
+            created_by    => $command->{actor_user_id},
+            reason        => $command->{reason},
+            resource_id   => _column( $request, 'resource_id' ),
+            resource_type => _column( $request, 'resource_type' ),
+        }
+    );
+
+    return $self->deletion_workflow->hold_request(
+        $command->{request_id},
+        $command->{actor_user_id},
+        $command->{reason}, $hold,
+    );
+}
+
+sub _export_with_command ( $self, $input ) {
+    my $invalid = $self->_missing_field( $input, 'command_id' );
+    if ($invalid) {
+        return $invalid;
+    }
+    if ( $self->command_idempotency ) {
+        return $self->_idempotent_export($input);
+    }
+
+    return $self->_run_export_store($input);
+}
+
+sub _idempotent_export ( $self, $input ) {
+    my $result = eval {
+        return $self->command_idempotency->result_of(
+            {
+                actor_id     => $input->{user_id},
+                command_id   => $input->{command_id},
+                command_type => 'privacy.export',
+                request      => { user_id => $input->{user_id} },
+                run => sub { return $self->_run_export_store($input); },
+            }
+        );
+    };
+    if ($EVAL_ERROR) {
+        $self->_log_error("privacy command log failed: $EVAL_ERROR");
+        return _result(
+            error  => 'privacy store failed',
+            status => 'failed',
+        );
+    }
+
+    return $result;
+}
+
+sub _run_export_store ( $self, $input ) {
+    return $self->_run_store(
+        'export request not found',
+        sub { return $self->_complete_export( $input->{user_id} ); },
+    );
+}
+
+sub _complete_export ( $self, $user_id ) {
+    my $request = $self->export_builder->request_user_export($user_id);
+    my $completed =
+      $self->export_builder->complete_user_export(
+        $request->{export_request_id} );
+    if ($completed) {
+        return $completed;
+    }
+
+    return $request;
+}
+
+sub _missing_field ( $, $input, $name ) {
+    if ( length _trim( $input->{$name} ) ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    return _result(
+        errors => { $name => "$name is required" },
+        status => 'invalid',
+    );
+}
+
+sub _commanded_store ( $self, $input, $not_found, $code ) {
+    my $invalid = $self->_missing_field( $input, 'command_id' );
+    if ($invalid) {
+        return $invalid;
+    }
+
+    return $self->_run_store( $not_found, $code );
+}
+
+sub _run_store ( $self, $not_found, $code ) {
+    my $stored = $self->_eval_store($code);
+    if ( $stored->{failed} ) {
+        return _result(
+            error  => 'privacy store failed',
+            status => 'failed',
+        );
+    }
+
+    return _stored_result( $not_found, $stored->{value} );
+}
+
+sub _eval_store ( $self, $code ) {
+    my $value = eval { return $code->(); };
+    if ($EVAL_ERROR) {
+        $self->_log_error("privacy write failed: $EVAL_ERROR");
+        return { failed => 1 };
+    }
+
+    return { value => $value };
+}
+
+sub _stored_result ( $not_found, $value ) {
+    if ( !$value ) {
+        return _result(
+            error  => $not_found,
+            status => 'not_found',
+        );
+    }
+
+    return _blocked_or_ok($value);
+}
+
+sub _blocked_or_ok ($value) {
+    if ( _is_blocked($value) ) {
+        return _result(
+            error  => $value->{error},
+            status => 'conflict',
+            stored => $value,
+        );
+    }
+
+    return _result(
+        status => 'ok',
+        stored => $value,
+    );
+}
+
+sub _is_blocked ($value) {
+    if ( ref $value ne 'HASH' ) {
+        return 0;
+    }
+    if ( !exists $value->{ok} ) {
+        return 0;
+    }
+
+    return $value->{ok} ? 0 : 1;
+}
+
+sub _column ( $row, $name ) {
+    if ( !$row ) {
+        my $undefined;
+        return $undefined;
+    }
+    if ( ref $row eq 'HASH' ) {
+        return $row->{$name};
+    }
+
+    return _object_column( $row, $name );
+}
+
+sub _object_column ( $row, $name ) {
+    if ( $row->can('get_column') ) {
+        return $row->get_column($name);
+    }
+
+    my $undefined;
+    return $undefined;
+}
+
+sub _result (%input) {
+    return {
+        error  => $input{error},
+        errors => $input{errors},
+        ok     => ( $input{status} || q{} ) eq 'ok' ? 1 : 0,
+        status => $input{status} || 'failed',
+        stored => $input{stored},
+    };
+}
+
+sub _trim ($value) {
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}
+
+sub _log_error ( $self, $message ) {
+    if ( !$self->logger || !$self->logger->can('error') ) {
+        return;
+    }
+
+    $self->logger->error($message);
+
+    return;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Privacy::Workflow - Privacy export, deletion, and hold writes.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $result = $workflow->request_deletion(
+        {
+            reason  => $reason,
+            user_id => $user_id,
+        }
+    );
+
+=head1 DESCRIPTION
+
+Application boundary for member export/deletion requests and staff approval,
+legal-hold, and erasure commands. Validates required fields, orchestrates
+existing privacy stores, and returns a normalized result hash. Stores keep
+transaction, event, audit, and outbox ownership.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 request_export
+
+Creates and completes a user export bundle when a command id is present.
+
+=head2 request_deletion
+
+Creates an anonymize deletion request when a command id and reason are present.
+An open request for the same resource is reused.
+
+=head2 approve_deletion
+
+Approves a pending deletion request or reports an active hold as conflict when
+a command id and reason are present.
+
+=head2 hold_deletion
+
+Creates a retention hold and marks the deletion request held when a command id
+and reason are present. C<hold_request> stays four arguments besides the
+invocant.
+
+=head2 run_erasure_job
+
+Completes an erasure job or reports an active hold as conflict when a command
+id is present.
+
+=head1 DIAGNOSTICS
+
+Returns C<invalid>, C<not_found>, C<conflict>, or C<failed> statuses instead of
+throwing for expected write outcomes. Unexpected store or command-log
+exceptions are logged and mapped to C<failed>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Uses deletion, export, hold, and review services supplied by the composition
+root.
+
+=head1 DEPENDENCIES
+
+Uses L<Mojo::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Command-id is required for export, deletion, approval, hold, and erasure
+writes. Open deletion requests, pending exports, and active holds replay on
+retry. The same export C<command_id> replays from C<command_log> after the
+bundle is already completed. C<hold_request> stays four arguments besides
+the invocant.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -1,0 +1,180 @@
+GPForum - PostgreSQL Native Search & Perl Retrieval Constitution
+
+Prompt 53 alignment: PostgreSQL-native retrieval now covers search, feeds,
+syndication, autocomplete, ranking, metadata, and discovery projections. These
+surfaces MUST remain derived, rebuildable, permission-safe, moderation-safe,
+deletion-aware, observable, and anti-leak.
+
+This document defines the replacement of OpenSearch as the default search architecture for GPForum.
+
+This specification is foundational and mandatory.
+
+---
+
+Decision
+
+GPForum search MUST be PostgreSQL-native by default.
+
+The canonical search model is:
+
+* PostgreSQL full-text search;
+* PostgreSQL trigram search;
+* PostgreSQL search projection tables;
+* Perl indexing orchestration;
+* Perl query normalization;
+* Perl ranking policy;
+* Minion-backed asynchronous indexing.
+
+OpenSearch is OPTIONAL external acceleration and MUST NOT be foundational infrastructure.
+
+---
+
+PostgreSQL Search Features
+
+The search subsystem SHOULD use:
+
+* tsvector columns;
+* tsquery and websearch_to_tsquery;
+* GIN indexes;
+* pg_trgm for autocomplete and fuzzy matching;
+* unaccent where appropriate;
+* language-specific configurations;
+* weighted vectors for title/body/category metadata.
+
+Italian support SHOULD be first-class.
+
+---
+
+Perl Search Layer
+
+The Perl search layer SHOULD include:
+
+* GPForum::Search;
+* GPForum::Search::Indexer;
+* GPForum::Search::Query;
+* GPForum::Search::Ranker;
+* GPForum::Search::Rebuild;
+* GPForum::Search::PermissionFilter.
+
+Perl MUST own search policy.
+
+PostgreSQL executes retrieval.
+
+---
+
+Search Projection Tables
+
+Search documents SHOULD be stored in PostgreSQL projection tables.
+
+Recommended projection fields:
+
+* entity_type;
+* entity_id;
+* space_id;
+* visibility;
+* permission_scope;
+* language;
+* title;
+* body;
+* search_vector;
+* indexed_at;
+* source_version.
+
+Search projections MUST remain rebuildable from canonical persistence.
+
+Search documents are never authoritative. A hidden post MUST be removed from or
+filtered out of search before it can be shown to ordinary users.
+
+Search projection rows MUST include source_version, visibility_version, and
+permission_version. Rebuild jobs MUST compare these versions before publishing
+results or cache invalidations.
+
+---
+
+Indexing Workflow
+
+Indexing MUST be asynchronous.
+
+Canonical workflow:
+
+* canonical write completes;
+* domain event is stored;
+* Minion job indexes or updates the search projection;
+* PostgreSQL search indexes are updated;
+* cache invalidation is emitted where needed.
+
+Indexing MUST NOT block user-facing writes.
+
+---
+
+Ranking
+
+Ranking SHOULD combine:
+
+* PostgreSQL ts_rank or ts_rank_cd;
+* title/body weighting;
+* freshness;
+* category/thread visibility;
+* moderation state;
+* optional Perl-side ranking policy.
+
+Ranking MUST remain explainable.
+
+---
+
+Authorization
+
+Search MUST be permission-aware.
+
+Authorization filtering MAY occur through:
+
+* indexed visibility fields;
+* permission scope columns;
+* SQL joins;
+* post-query Perl filtering for final safety.
+
+Private, quarantined, hidden, deleted, or restricted content MUST NOT leak through search results, snippets, counts, autocomplete, or feeds.
+
+---
+
+Autocomplete
+
+Autocomplete SHOULD use pg_trgm where appropriate.
+
+Autocomplete MUST be:
+
+* rate-limited;
+* permission-aware;
+* bounded;
+* abuse-resistant.
+
+---
+
+Rebuild
+
+Search rebuild MUST support:
+
+* full rebuild;
+* targeted rebuild;
+* event-range replay;
+* progress tracking;
+* idempotency;
+* safe interruption and resume.
+
+Rebuild MUST NOT block canonical forum writes.
+
+---
+
+Optional External Search
+
+External search engines MAY be introduced only through ADR.
+
+Any external search engine MUST remain:
+
+* derived;
+* rebuildable;
+* non-authoritative;
+* permission-aware;
+* operationally optional.
+
+The default GPForum architecture remains PostgreSQL-native search with Perl orchestration.

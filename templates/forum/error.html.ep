@@ -1,0 +1,25 @@
+% layout 'default';
+% my $page = stash('error_page') || {};
+% my $heading = t($page->{title_key} || 'forum.error_title');
+% title $heading . ' - ' . t('app.name');
+% my $field_errors = stash('errors') || {};
+
+<section aria-labelledby="forum-error-heading">
+  <h1 id="forum-error-heading"><%= $heading %></h1>
+  <p role="alert"><%= t($page->{message_key} || 'forum.error_default') %></p>
+  % if (defined $page->{detail}) {
+    <p class="error-detail"><%= t('forum.error_detail') %>: <%= $page->{detail} %></p>
+  % }
+  % if (ref $field_errors eq 'HASH' && keys %{$field_errors}) {
+    <ul aria-label="<%= t('forum.validation_errors') %>">
+      % for my $field (sort keys %{$field_errors}) {
+        <li><%= $field %>: <%= $field_errors->{$field} %></li>
+      % }
+    </ul>
+  % }
+  % if (($page->{kind} // q{}) eq 'unauthorized') {
+    <p><a href="<%= url_for('login') %>"><%= t('forum.login_to_continue') %></a></p>
+    <p><a href="<%= url_for('register') %>"><%= t('forum.create_account') %></a></p>
+  % }
+  <p><a href="<%= url_for('categories') %>"><%= t('forum.back_to_categories') %></a></p>
+</section>

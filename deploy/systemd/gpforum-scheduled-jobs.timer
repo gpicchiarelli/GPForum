@@ -1,0 +1,11 @@
+[Unit]
+Description=Hourly GPForum operational job sweep
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+AccuracySec=1min
+Unit=gpforum-scheduled-jobs.service
+
+[Install]
+WantedBy=timers.target

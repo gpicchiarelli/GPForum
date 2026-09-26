@@ -1,0 +1,88 @@
+name: Set up GPForum on the OS system Perl
+description: >-
+  Install the Debian/Ubuntu system Perl toolchain, restore the Carton local/
+  tree from the dependency cache, and install the locked CPAN distributions.
+  Mirrors the setup steps that .github/workflows/ci.yml keeps inline as the
+  contract-pinned canonical gate.
+
+inputs:
+  postgres:
+    description: >-
+      Install the cpanfile postgres feature (DBD::Pg, Mojo::Pg,
+      Test::PostgreSQL). Requires pg_config / libpq.
+    required: false
+    default: 'true'
+  postgres-client-version:
+    description: >-
+      PostgreSQL client major version to install from apt.postgresql.org.
+      Empty keeps the client shipped by the runner image. Set this when the
+      job talks to a server newer than the runner client, because pg_dump
+      refuses a server newer than itself.
+    required: false
+    default: ''
+  cache:
+    description: Restore and save local/ through actions/cache.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Install system dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y perl build-essential cpanminus libpq-dev postgresql-client
+        # Carton is a host tool for the OS system Perl, not a Carton-local binary.
+        sudo /usr/bin/perl /usr/bin/cpanm --notest Carton
+
+    - name: Install versioned PostgreSQL client
+      if: inputs.postgres-client-version != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        sudo install -d /usr/share/postgresql-common/pgdg
+        sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+          https://www.postgresql.org/media/keys/ACCC4CF8.asc
+        printf 'deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt %s-pgdg main\n' \
+          "$(lsb_release -cs)" | sudo tee /etc/apt/sources.list.d/pgdg.list > /dev/null
+        sudo apt-get update
+        sudo apt-get install -y "postgresql-client-${POSTGRES_CLIENT_VERSION}"
+        echo "/usr/lib/postgresql/${POSTGRES_CLIENT_VERSION}/bin" >> "$GITHUB_PATH"
+      env:
+        POSTGRES_CLIENT_VERSION: ${{ inputs.postgres-client-version }}
+
+    - name: Verify system Perl
+      shell: bash
+      run: |
+        set -euo pipefail
+        test "$(readlink -f "$(command -v perl)")" = /usr/bin/perl
+        script/gpforum-system-perl --preflight
+        script/gpforum-system-perl --require
+
+    - name: Resolve Perl version for the dependency cache
+      id: system-perl
+      shell: bash
+      run: |
+        set -euo pipefail
+        printf 'version=%s\n' "$(/usr/bin/perl -MConfig -e 'print $Config{version}')" >> "$GITHUB_OUTPUT"
+
+    - name: Restore locked CPAN tree
+      if: inputs.cache == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: local
+        key: gpforum-carton-${{ runner.os }}-${{ runner.arch }}-perl${{ steps.system-perl.outputs.version }}-pg${{ inputs.postgres }}-${{ hashFiles('cpanfile', 'cpanfile.postgres', 'cpanfile.snapshot') }}
+
+    - name: Install locked CPAN distributions
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${POSTGRES_FEATURE}" = 'true' ]; then
+          script/bootstrap-deps --postgres
+        else
+          script/bootstrap-deps
+        fi
+      env:
+        POSTGRES_FEATURE: ${{ inputs.postgres }}

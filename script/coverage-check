@@ -1,0 +1,96 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use strict;
+use warnings;
+
+use Carp qw(croak);
+use Const::Fast;
+use English qw(-no_match_vars);
+
+use Devel::Cover::DB;
+
+our $VERSION = '0.001';
+
+# The coverage verdict, read from the coverage database rather than scraped
+# from a report. script/coverage used to run the suite under Devel::Cover and
+# print a table: it enforced no threshold, so the CI step named "Run coverage
+# gate" could not fail, and it selected ^(lib/GPForum|t)/ -- counting the test
+# files themselves, which execute almost entirely, in the denominator.
+#
+# This measures lib/ only and compares it with a floor recorded in
+# etc/coverage-floor. The floor is a ratchet: it is raised by hand when
+# coverage improves and never lowered to make a build pass.
+
+const my $FLOOR_FILE => 'etc/coverage-floor';
+const my @CRITERIA   => qw(statement subroutine);
+const my $HEADROOM   => 1;
+
+my $database = shift @ARGV || 'cover_db';
+croak "no coverage database at $database" if !-d $database;
+
+my $db    = Devel::Cover::DB->new( db => $database )->merge_runs;
+my @files = grep { m{\A lib/}msx } $db->cover->items;
+if ( !@files ) {
+    _say( *STDERR, 'coverage-check status=fail reason=no-lib-files-measured' );
+    exit 1;
+}
+
+$db->calculate_summary( ( map { $_ => 1 } @CRITERIA ), files => \@files );
+
+my %floor_for = _floor();
+my @failed;
+my @report;
+for my $criterion (@CRITERIA) {
+    my $measured = $db->summary( 'Total', $criterion, 'percentage' );
+    if ( !defined $measured ) {
+        $measured = 0;
+    }
+    my $minimum = $floor_for{$criterion};
+    croak "$FLOOR_FILE has no floor for $criterion" if !defined $minimum;
+
+    push @report, sprintf '%s=%.1f(floor %.1f)', $criterion, $measured,
+      $minimum;
+    if ( $measured < $minimum ) {
+        push @failed, $criterion;
+    }
+    if ( $measured >= $minimum + $HEADROOM ) {
+        printf {*STDERR}
+          "coverage-check: %s is %.1f, %.1f above its floor; raise %s\n",
+          $criterion, $measured, $measured - $minimum, $FLOOR_FILE;
+    }
+}
+
+my $files = scalar @files;
+if (@failed) {
+    _say( *STDERR, "coverage-check status=fail files=$files @report" );
+    exit 1;
+}
+
+_say( *STDOUT, "coverage-check status=ok files=$files @report" );
+exit 0;
+
+sub _say {
+    my ( $handle, $line ) = @_;
+
+    print {$handle} "$line\n" or croak "write: $ERRNO";
+
+    return;
+}
+
+sub _floor {
+    open my $handle, '<', $FLOOR_FILE
+      or croak "open $FLOOR_FILE: $ERRNO";
+    my %floor;
+    while ( my $line = <$handle> ) {
+        next if $line =~ /\A \s* (?: [#] | \z )/msx;
+        my ( $criterion, $value ) = split q{ }, $line;
+        $floor{$criterion} = $value;
+    }
+    close $handle or croak "close $FLOOR_FILE: $ERRNO";
+
+    return %floor;
+}

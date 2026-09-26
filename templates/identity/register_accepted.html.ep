@@ -1,0 +1,19 @@
+% layout 'default';
+% title t('auth.registration_accepted_title') . ' - ' . t('app.name');
+
+<section aria-labelledby="registration-accepted-heading">
+  <%= include 'components/page_header',
+    heading_id => 'registration-accepted-heading',
+    component_title => t('auth.registration_accepted_title'),
+    actions_label => t('auth.registration_next_steps'),
+    actions => ui_actions(
+      { href => url_for('login'), label => t('auth.login') },
+      { href => url_for('categories'), label => t('forum.browse_categories') },
+    ) %>
+  <%= include 'components/alert',
+    tone => 'success',
+    message => t('auth.registration_ready', { username => $registration->{user}{username} }) %>
+  <p>
+    <a href="<%= url_for('email_verify_request') %>"><%= t('auth.email_verify_request_title') %></a>
+  </p>
+</section>

@@ -1,0 +1,37 @@
+gpforum-private-beta-checklist: print-only orchestrator
+PRIVATE BETA: NOT CLAIMED (commands/status only; record evidence separately)
+Docs: docs/ops/private-beta-checklist.md
+
+# 1. System Perl + MacPorts PATH (macOS)
+script/gpforum-system-perl --preflight
+eval "$(script/gpforum-macports-env)"
+script/gpforum-macports-env --check
+
+# 2. Migrate + query budget (requires GPFORUM_DATABASE_*)
+script/gpforum-carton exec bin/gpforum-migrate --apply
+script/query-budget --sync
+script/query-budget --check
+
+# 3. Staging DB drill (throwaway DBs)
+script/staging-drill --json
+
+# 4. Attachments + deploy checklist (static; host verify when tools exist)
+script/staging-drill-attachments --json
+
+# 5. Staging host verify (non-destructive; live flags on the host)
+script/staging-host-verify --json
+# script/staging-host-verify --json --env-file /etc/gpforum/gpforum.env --systemd --base-url https://staging.example
+
+# 6. Stress / load (requires running Hypnotoad --base-url)
+script/stress-load --dry-run --profile smoke --human
+script/stress-load --profile 100 --base-url http://127.0.0.1:8080 --check --json
+
+# 7. Mail probe
+script/gpforum-mail-check --human --dry-run
+# script/gpforum-mail-check --send --to you@example.test --human
+
+# Aggregate docs
+# docs/ops/private-beta-checklist.md
+# docs/ops/staging-host.md
+# docs/release/readiness-review.md
+exit:0

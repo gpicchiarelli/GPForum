@@ -1,0 +1,145 @@
+name: Release artifact
+
+# The artifact creation stage of prompt/11.txt: immutable, reproducible,
+# traceable deployment units. A tag produces a source tarball built with
+# `git archive` (byte-identical for a given commit), the Carton vendor bundle
+# for offline installs, checksums, and build provenance.
+#
+# The GitHub release is created as a draft: publishing stays a maintainer
+# decision.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  artifact:
+    name: Build and attest the release artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Set up GPForum
+        uses: ./.github/actions/setup-gpforum-perl
+        with:
+          postgres: 'true'
+
+      - name: Resolve the release version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_TYPE}" = 'tag' ]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="0.0.0+$(git rev-parse --short HEAD)"
+          fi
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+          printf 'release: %s\n' "$version"
+
+      - name: Verify the dependency lock
+        run: script/gpforum-carton check
+
+      - name: Build the source tarball
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          # git archive is reproducible for a commit; gzip -n drops the
+          # timestamp so the bytes stay stable across rebuilds.
+          git archive --format=tar --prefix="gpforum-${VERSION}/" HEAD \
+            | gzip -n -9 > "artifacts/gpforum-${VERSION}.tar.gz"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Bundle the locked CPAN distributions
+        run: |
+          set -euo pipefail
+          script/gpforum-carton bundle
+          tar --create --gzip --numeric-owner --owner=0 --group=0 \
+            --file "artifacts/gpforum-vendor-${VERSION}.tar.gz" vendor
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Validate the deployment payload
+        run: |
+          set -euo pipefail
+          workdir="$(mktemp -d)"
+          tar -xzf "artifacts/gpforum-${VERSION}.tar.gz" -C "$workdir"
+          tree="${workdir}/gpforum-${VERSION}"
+          for required in \
+            bin/gpforum \
+            script/gpforum-carton \
+            script/gpforum-system-perl \
+            script/os-preflight \
+            cpanfile \
+            cpanfile.snapshot \
+            deploy/systemd/gpforum.service \
+            deploy/freebsd/gpforum \
+            deploy/launchd/com.gpforum.app.plist \
+            deploy/nginx/gpforum.conf \
+            deploy/caddy/Caddyfile
+          do
+            test -f "${tree}/${required}" || {
+              echo "release artifact is missing ${required}" >&2
+              exit 1
+            }
+          done
+          test -x "${tree}/script/gpforum-carton"
+          test -x "${tree}/script/gpforum-system-perl"
+          ( cd "$tree" && script/gpforum-system-perl --require )
+          echo 'ok: release artifact carries the documented deployment surface'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+
+      - name: Write checksums
+        run: |
+          set -euo pipefail
+          cd artifacts
+          sha256sum ./*.tar.gz > SHA256SUMS
+          sha256sum --check --strict SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: artifacts/*.tar.gz
+
+      - name: Upload the release artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-release-${{ steps.version.outputs.version }}
+          path: artifacts/
+
+      - name: Create the draft GitHub release
+        if: github.ref_type == 'tag'
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" \
+            --draft \
+            --title "GPForum $GITHUB_REF_NAME" \
+            --generate-notes \
+            artifacts/gpforum-*.tar.gz \
+            artifacts/SHA256SUMS
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

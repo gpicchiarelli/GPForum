@@ -1,0 +1,4 @@
+% my $tone = stash('tone') || 'neutral';
+% my $label = stash('label') || q{};
+
+<span class="ui-badge ui-badge--<%= $tone %>"><%= $label %></span>

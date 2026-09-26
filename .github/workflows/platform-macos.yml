@@ -1,0 +1,133 @@
+name: macOS target
+
+# macOS is the supported developer host, not a deployment platform (README
+# names Debian and FreeBSD for deployment). The contract job proves the
+# MacPorts system-Perl policy and the launchd units on every run; the full gate
+# builds the locked tree and runs the suite on schedule and on demand.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/GPForum/OS/**'
+      - 'lib/GPForum/OS.pm'
+      - 'deploy/launchd/**'
+      - 'script/gpforum-system-perl'
+      - 'script/gpforum-macports-env'
+      - 'script/gpforum-carton'
+      - 'script/bootstrap-deps'
+      - '.github/parameters/gha-install-macports.yaml'
+      - '.github/workflows/platform-macos.yml'
+  schedule:
+    - cron: '53 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  contract:
+    name: MacPorts developer-host contract
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install MacPorts and ports
+        uses: melusina-org/setup-macports@103eded5f10979e927bffcd6d0b86cbbdb2c3bb3 # v1.1.6
+
+      - name: Verify MacPorts system Perl is selected over Apple Perl
+        run: |
+          set -euo pipefail
+          script/gpforum-system-perl --preflight
+          resolved="$(script/gpforum-system-perl --require)"
+          case "$resolved" in
+            /opt/local/*)
+              echo "ok: system Perl -> $resolved"
+              ;;
+            *)
+              echo "system Perl resolved outside MacPorts: $resolved" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Verify MacPorts PostgreSQL client helper
+        run: script/gpforum-macports-env --check
+
+      - name: Lint launchd units
+        run: |
+          set -euo pipefail
+          for plist in deploy/launchd/*.plist; do
+            plutil -lint "$plist"
+          done
+
+  full-gate:
+    name: MacPorts locked tree and suite
+    runs-on: macos-latest
+    timeout-minutes: 180
+    # The laptop path is expensive: MacPorts publishes no App::cpanminus or
+    # Carton port for Perl 5.38+, so Carton is bootstrapped from MetaCPAN with
+    # core CPAN.pm and the whole locked tree is built from source.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install MacPorts and ports
+        uses: melusina-org/setup-macports@103eded5f10979e927bffcd6d0b86cbbdb2c3bb3 # v1.1.6
+
+      - name: Put MacPorts Perl tooling on PATH
+        run: |
+          set -euo pipefail
+          perl_bin="$(script/gpforum-system-perl --require)"
+          # shellcheck disable=SC2016 # $Config is Perl, not shell.
+          sitebin="$("$perl_bin" -MConfig -e 'print $Config{installsitescript}')"
+          printf '%s\n' "$sitebin" >> "$GITHUB_PATH"
+          printf '%s\n' "$(dirname "$perl_bin")" >> "$GITHUB_PATH"
+          printf 'GPFORUM_PERL=%s\n' "$perl_bin" >> "$GITHUB_ENV"
+          script/gpforum-macports-env --print-path >> "$GITHUB_PATH"
+
+      - name: Bootstrap Carton for the MacPorts Perl
+        run: |
+          set -euo pipefail
+          sudo -E "$GPFORUM_PERL" -MCPAN -e '
+            CPAN::HandleConfig->load( doit => 1, autoconfig => 1 );
+            CPAN::HandleConfig->commit;
+            CPAN::Shell->notest( q{install}, q{Carton} );
+            exit( CPAN::Shell->expand( q{Module}, q{Carton} )->uptodate ? 0 : 1 );
+          '
+        env:
+          PERL_MM_USE_DEFAULT: '1'
+          NONINTERACTIVE_TESTING: '1'
+
+      - name: Install locked CPAN distributions
+        run: script/bootstrap-deps --postgres
+        env:
+          PERL_CARTON_MIRROR: https://cpan.metacpan.org/
+
+      - name: Verify dependency lock
+        run: script/gpforum-carton check
+
+      - name: Check Perl syntax
+        run: script/gpforum-carton exec script/perl-syntax-check
+
+      - name: Run OS preflight
+        run: script/os-preflight --json
+
+      - name: Run tests
+        run: script/gpforum-carton exec prove -lr t
+
+      - name: Run platform check
+        run: script/gpforum-carton exec bin/gpforum-platform-check --local

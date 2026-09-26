@@ -1,0 +1,17 @@
+% my $breadcrumbs = stash('breadcrumbs') || ui_breadcrumbs;
+
+% if (@{$breadcrumbs}) {
+  <nav class="breadcrumbs page-shell" aria-label="<%= t('nav.breadcrumbs') %>">
+    <ol>
+      % for my $item (@{$breadcrumbs}) {
+        <li>
+          % if ($item->{current}) {
+            <span aria-current="page"><%= $item->{label} %></span>
+          % } else {
+            <a href="<%= $item->{url} %>"><%= $item->{label} %></a>
+          % }
+        </li>
+      % }
+    </ol>
+  </nav>
+% }

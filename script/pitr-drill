@@ -1,0 +1,165 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Rehearse point-in-time recovery end to end against a throwaway cluster.
+#
+# ADR 0050 requires operators to run PostgreSQL with WAL archiving and PITR.
+# Until this script existed the repository said that and shipped nothing to do
+# it with: no sample configuration, no procedure, and no way to find out
+# whether a restore would work before needing one.
+#
+# The drill builds its own cluster, so it touches nothing an operator runs. It
+# takes a base backup, writes rows on either side of a recovery target, and
+# then restores to that target and checks that the rows before it came back and
+# the rows after it did not. A restore that silently returns the wrong instant
+# is the failure mode worth catching, and row counts alone would not catch it.
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+port=${GPFORUM_PITR_PORT:-55444}
+workdir=${GPFORUM_PITR_DIR:-${TMPDIR:-/tmp}/gpforum-pitr.$$}
+socket=/tmp/gpfpitr.$$
+keep=0
+
+for argument in "$@"; do
+    case "$argument" in
+        --keep) keep=1 ;;
+        --help|-h)
+            cat <<'USAGE'
+Usage: script/pitr-drill [--keep]
+
+Rehearses point-in-time recovery against a throwaway PostgreSQL cluster and
+reports whether the restore landed on the requested instant.
+
+  --keep   leave the cluster and the archive behind for inspection
+  --help   show this help
+
+Environment:
+  GPFORUM_PITR_PORT   port for the throwaway cluster (default 55444)
+  GPFORUM_PITR_DIR    working directory (default a temporary one)
+
+Exit status: 0 the restore landed on the target, 1 it did not, 2 usage error.
+USAGE
+            exit 0
+            ;;
+        *)
+            echo "unknown option $argument" >&2
+            echo "Usage: script/pitr-drill [--keep]" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if ! command -v initdb >/dev/null 2>&1; then
+    eval "$(script/gpforum-macports-env 2>/dev/null || true)"
+fi
+for tool in initdb pg_ctl pg_basebackup psql; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        echo "pitr-drill: $tool not found on PATH" >&2
+        exit 1
+    }
+done
+
+data="$workdir/data"
+archive="$workdir/archive"
+backup="$workdir/backup"
+mkdir -p "$archive" "$socket"
+
+cleanup() {
+    pg_ctl -D "$data" -m immediate stop >/dev/null 2>&1 || true
+    [ "$keep" -eq 1 ] || rm -rf "$workdir" "$socket"
+}
+trap cleanup EXIT HUP INT TERM
+
+say() { printf '  %s\n' "$1"; }
+
+printf 'pitr-drill: rehearsing point-in-time recovery\n'
+say "working directory $workdir"
+
+initdb -D "$data" --auth-local=trust --auth-host=trust -U gpforum >/dev/null
+
+# The settings ADR 0050 requires of an operator, applied here so the drill
+# rehearses the documented configuration rather than a convenient one.
+cat >>"$data/postgresql.conf" <<CONF
+wal_level = replica
+archive_mode = on
+archive_command = 'test ! -f $archive/%f && cp %p $archive/%f'
+max_wal_senders = 3
+CONF
+
+pg_ctl -D "$data" -l "$workdir/pg.log" \
+    -o "-p $port -k $socket -c listen_addresses=127.0.0.1" start >/dev/null
+sleep 2
+
+run() { psql -h 127.0.0.1 -p "$port" -U gpforum -d "$1" -Atqc "$2"; }
+
+run postgres "CREATE DATABASE gpfpitr;" >/dev/null
+run gpfpitr "CREATE TABLE posts (id serial primary key, body text, wrote_at timestamptz default now());" >/dev/null
+run gpfpitr "INSERT INTO posts (body) VALUES ('before the backup');" >/dev/null
+
+say 'taking a base backup'
+pg_basebackup -h 127.0.0.1 -p "$port" -U gpforum -D "$backup" -Fp -Xs >/dev/null
+
+run gpfpitr "INSERT INTO posts (body) VALUES ('kept: written before the target');" >/dev/null
+run gpfpitr "SELECT pg_sleep(1);" >/dev/null
+target=$(run gpfpitr "SELECT now();")
+say "recovery target $target"
+run gpfpitr "SELECT pg_sleep(1);" >/dev/null
+
+run gpfpitr "INSERT INTO posts (body) VALUES ('dropped: written after the target');" >/dev/null
+run gpfpitr "SELECT pg_switch_wal();" >/dev/null
+before_rows=$(run gpfpitr "SELECT count(*) FROM posts;")
+say "rows before the incident: $before_rows"
+
+say 'simulating loss of the data directory'
+pg_ctl -D "$data" -m immediate stop >/dev/null
+rm -rf "$data"
+mv "$backup" "$data"
+chmod 700 "$data"
+
+cat >>"$data/postgresql.conf" <<CONF
+restore_command = 'cp $archive/%f %p'
+recovery_target_time = '$target'
+recovery_target_action = 'promote'
+CONF
+: >"$data/recovery.signal"
+
+say 'restoring to the recovery target'
+if ! pg_ctl -D "$data" -l "$workdir/restore.log" \
+    -o "-p $port -k $socket -c listen_addresses=127.0.0.1" start >/dev/null
+then
+    # The usual cause is an incomplete archive: the base backup is fine, but
+    # the WAL needed to roll forward to the target was never archived, so
+    # recovery cannot reach it and refuses to promote. That is the failure an
+    # operator finds out about during an incident if nobody rehearses.
+    echo "pitr-drill status=fail reason=recovery-did-not-start" >&2
+    echo "pitr-drill: the server could not reach the recovery target." >&2
+    echo "pitr-drill: check archive_command and that $archive holds the WAL" >&2
+    echo "pitr-drill: segments written after the base backup." >&2
+    tail -n 15 "$workdir/restore.log" >&2 2>/dev/null || true
+    exit 1
+fi
+sleep 4
+
+kept=$(run gpfpitr "SELECT count(*) FROM posts WHERE body LIKE 'kept:%';")
+dropped=$(run gpfpitr "SELECT count(*) FROM posts WHERE body LIKE 'dropped:%';")
+after_rows=$(run gpfpitr "SELECT count(*) FROM posts;")
+
+printf '\n'
+say "rows after the restore: $after_rows"
+say "rows written before the target, recovered: $kept (want 1)"
+say "rows written after the target, recovered:  $dropped (want 0)"
+printf '\n'
+
+if [ "$kept" -eq 1 ] && [ "$dropped" -eq 0 ]; then
+    echo "pitr-drill status=pass target='$target' recovered=$after_rows"
+    exit 0
+fi
+
+echo "pitr-drill status=fail target='$target' kept=$kept dropped=$dropped" >&2
+echo "pitr-drill: the restore did not land on the requested instant" >&2
+exit 1

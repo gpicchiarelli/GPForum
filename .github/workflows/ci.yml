@@ -1,0 +1,182 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perl:
+    name: Perl quality gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=127.0.0.1;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y perl build-essential cpanminus libpq-dev postgresql-client
+          # Carton is a host tool for the OS system Perl, not a Carton-local binary.
+          sudo /usr/bin/perl /usr/bin/cpanm --notest Carton
+
+      - name: Verify system Perl
+        run: |
+          test "$(readlink -f "$(command -v perl)")" = /usr/bin/perl
+          script/gpforum-system-perl --preflight
+          script/gpforum-system-perl --require
+
+      - name: Resolve Perl version for the dependency cache
+        id: system-perl
+        run: |
+          printf 'version=%s\n' "$(/usr/bin/perl -MConfig -e 'print $Config{version}')" >> "$GITHUB_OUTPUT"
+
+      - name: Restore locked CPAN tree
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: local
+          key: gpforum-carton-${{ runner.os }}-${{ runner.arch }}-perl${{ steps.system-perl.outputs.version }}-pgtrue-${{ hashFiles('cpanfile', 'cpanfile.postgres', 'cpanfile.snapshot') }}
+
+      - name: Install Perl dependencies
+        run: script/bootstrap-deps --postgres
+
+      - name: Verify dependency lock
+        run: script/gpforum-carton check
+
+      - name: Check CPAN license review
+        run: script/cpan-license-check
+
+      - name: Check whitespace
+        run: git diff --check
+
+      - name: Check Perl syntax
+        run: script/gpforum-carton exec script/perl-syntax-check
+
+      - name: Check Perl formatting
+        run: script/perltidy-check
+
+      - name: Run Perl::Critic
+        run: script/perlcritic
+
+      - name: Apply database migrations
+        run: script/gpforum-carton exec bin/gpforum-migrate --apply
+
+      - name: Seed production evidence dataset
+        run: script/seed-benchmark --profile small
+
+      - name: Sync query budget catalog
+        run: script/query-budget --sync
+
+      - name: Check query budget catalog
+        run: script/query-budget --check
+
+      - name: Run architecture boundary check
+        run: script/architecture-check
+
+      - name: Run query plan check
+        run: script/query-plan-check --require-db
+
+      - name: Run OS preflight
+        run: script/os-preflight --json
+
+      # ADR 0108: the antivirus is the one the operating system's package
+      # installs. Ubuntu's clamav-daemon, started with a database holding only
+      # the EICAR test signature -- generated from the module, so the string
+      # never sits in this file -- rather than downloading the full set. Its
+      # files live under /tmp: the package's enforced AppArmor profile lets
+      # clamd write there, and not under the runner's home.
+      - name: Start the system clamd with a test signature
+        run: |
+          sudo apt-get install -y clamav-daemon
+          sudo systemctl stop clamav-daemon clamav-freshclam || true
+          dir=$(mktemp -d /tmp/clamd.XXXXXX)
+          mkdir "$dir/db"
+          hex=$(script/gpforum-carton exec perl -Ilib \
+            -MGPForum::Service::Operations::AntivirusCheck \
+            -e 'print unpack q{H*}, GPForum::Service::Operations::AntivirusCheck->test_file')
+          printf 'Eicar-Test-Signature:0:*:%s\n' "$hex" > "$dir/db/eicar.ndb"
+          cat > "$dir/clamd.conf" <<CONF
+          DatabaseDirectory $dir/db
+          LocalSocket $dir/clamd.sock
+          TemporaryDirectory $dir
+          StreamMaxLength 26M
+          CONF
+          clamd --config-file="$dir/clamd.conf"
+          for attempt in $(seq 1 30); do
+            if [ -S "$dir/clamd.sock" ]; then
+              echo "GPFORUM_CLAMD_SOCKET=$dir/clamd.sock" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo 'clamd did not start' >&2
+          exit 1
+
+      # The directory, never a list of files: a list is where a new test goes
+      # to never run. t/190-gate-honesty.t holds every workflow to this.
+      - name: Run PostgreSQL integration tier
+        run: make integration
+
+      - name: Run tests
+        run: script/gpforum-carton exec prove -lr t
+
+      - name: Run benchmark smoke
+        run: script/gpforum-carton exec bin/gpforum-benchmark --fixture --check --iterations 2 --warmup 1 --route /health/live --route /categories
+
+      - name: Run query plan evidence
+        run: script/query-plan-evidence --check
+
+      - name: Run configured benchmark smoke
+        run: >-
+          script/benchmark-http --configured --check --iterations 3 --warmup 1
+          --route /
+          --route /categories
+          --route /c/018f1001-0001-7000-8000-000000000001
+          --route /t/018f1004-0001-7000-8000-000000000001
+          --route '/search?q=performance'
+          --route /health/ready
+
+      - name: Run Hypnotoad benchmark smoke
+        run: script/bench-hypnotoad --check --profile small --workers 2 --iterations 2 --warmup 1 --no-compare --route /categories --route /health/ready
+
+      - name: Run platform check
+        run: script/gpforum-carton exec bin/gpforum-platform-check --with-db
+
+      - name: Run coverage gate
+        run: script/coverage
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-cover-db
+          path: cover_db/

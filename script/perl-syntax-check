@@ -1,0 +1,69 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+use strict;
+use warnings;
+
+use File::Find;
+
+my @inputs = @ARGV ? @ARGV : qw(bin lib script t);
+my @roots  = grep { -d $_ } @inputs;
+my @files  = grep { -f $_ && _is_perl_file($_) } @inputs;
+
+# A gate that checked nothing has not passed. Run from the wrong directory,
+# this used to print "No Perl roots found." and exit 0, so a CI step with a
+# mistaken working directory reported every file compiling.
+if ( !@roots && !@files ) {
+    warn 'perl-syntax-check: no Perl roots found; nothing was checked' . "\n";
+    exit 1;
+}
+
+find(
+    {
+        no_chdir => 1,
+        wanted   => sub {
+            return if !-f $File::Find::name;
+            return if $File::Find::name =~ m{/(?:local|blib|cover_db)/}msx;
+            return if !_is_perl_file($File::Find::name);
+
+            push @files, $File::Find::name;
+        },
+    },
+    @roots
+);
+
+if ( !@files ) {
+    warn 'perl-syntax-check: no Perl files found; nothing was checked' . "\n";
+    exit 1;
+}
+
+my $failed = 0;
+for my $file ( sort @files ) {
+    system $^X, '-Ilib', '-It/lib', '-c', $file;
+    if ( $? != 0 ) {
+        $failed = 1;
+    }
+}
+
+exit( $failed ? 1 : 0 );
+
+sub _is_perl_file {
+    my ($file) = @_;
+
+    return 1 if $file =~ m{[.](?:pm|pl|t)\z}msx;
+    return 1 if $file =~ m{\Abin/}msx;
+    return 1 if $file =~ m{\Ascript/}msx && _has_perl_shebang($file);
+
+    return 0;
+}
+
+sub _has_perl_shebang {
+    my ($file) = @_;
+
+    open my $handle, '<', $file or return 0;
+    my $first_line = <$handle> || q{};
+    close $handle or return 0;
+
+    return $first_line =~ /\A [#]! .* perl \b/msx ? 1 : 0;
+}

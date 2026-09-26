@@ -1,0 +1,183 @@
+name: Security scanning
+
+# The security scanning stage of prompt/11.txt: dependency advisories, license
+# governance, secret scanning, workflow static analysis and shell linting.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    # New CPANSA advisories land against an unchanged lock, so scan on a clock
+    # as well as on a diff.
+    - cron: '11 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  GITLEAKS_VERSION: '8.30.1'
+  GITLEAKS_SHA256: '551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb'
+  ACTIONLINT_VERSION: '1.7.12'
+  ACTIONLINT_SHA256: '8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8'
+
+jobs:
+  dependencies:
+    name: Dependency advisories and licenses
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install CPAN::Audit for the system Perl
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y perl build-essential cpanminus
+          # A host tool, like Carton: it audits the lock, so it stays out of it.
+          sudo /usr/bin/perl /usr/bin/cpanm --notest CPAN::Audit
+
+      - name: Check CPAN license review
+        run: script/cpan-license-check
+
+      - name: Audit the dependency lock against CPANSA
+        run: script/cpan-audit --verbose
+
+      - name: Record the audit report
+        if: always()
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          script/cpan-audit --json > artifacts/cpan-audit.json || true
+
+      - name: Upload the audit report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-cpan-audit
+          path: artifacts/cpan-audit.json
+          if-no-files-found: warn
+
+  secrets:
+    name: Secret scanning
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Scan the history reachable from this ref, not only the tip tree.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          printf '%s  %s\n' "$GITLEAKS_SHA256" "$archive" | sha256sum --check --strict
+          tar -xzf "$archive" gitleaks
+          sudo install -m 0755 gitleaks /usr/local/bin/gitleaks
+          rm -f "$archive" gitleaks
+
+      - name: Scan the working tree
+        run: gitleaks dir . --config .gitleaks.toml --redact --no-banner --verbose
+
+      - name: Scan the commit history
+        run: gitleaks git . --config .gitleaks.toml --redact --no-banner
+
+  static-analysis:
+    name: Workflow and shell static analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install shellcheck
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y shellcheck
+
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          archive="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
+          curl -fsSL -o "$archive" \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/${archive}"
+          printf '%s  %s\n' "$ACTIONLINT_SHA256" "$archive" | sha256sum --check --strict
+          tar -xzf "$archive" actionlint
+          sudo install -m 0755 actionlint /usr/local/bin/actionlint
+          rm -f "$archive" actionlint
+
+      - name: Lint workflows
+        run: actionlint -color
+
+      - name: Lint POSIX sh entrypoints
+        run: |
+          set -euo pipefail
+          # deploy/freebsd/gpforum is an rc.subr framework script: its
+          # variables are consumed by /etc/rc.subr, so it is checked with
+          # `sh -n` in the FreeBSD target workflow instead.
+          find script -maxdepth 1 -type f -exec sh -c \
+            'head -n 1 "$1" | grep -q "^#!/bin/sh"' _ {} \; -print \
+            | sort \
+            | xargs shellcheck --shell=sh --severity=warning
+
+      - name: Assert every action is pinned to a commit SHA
+        run: |
+          set -euo pipefail
+          unpinned="$(grep -rnE '^\s*uses:\s*[^./#]' .github/workflows .github/actions \
+            | grep -vE 'uses:\s*[^@]+@[0-9a-f]{40}\s*#' || true)"
+          if [ -n "$unpinned" ]; then
+            echo 'third-party actions must be pinned to a commit SHA with a version comment:' >&2
+            printf '%s\n' "$unpinned" >&2
+            exit 1
+          fi
+          echo 'ok: every third-party action is SHA-pinned'
+
+  scorecard:
+    name: OpenSSF Scorecard
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Upload Scorecard results
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: results.sarif

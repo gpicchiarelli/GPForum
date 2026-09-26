@@ -1,0 +1,170 @@
+GPForum - Prompt Governance, ADR & Architecture Evolution Constitution
+
+This document defines the governance model for the prompt architecture itself, including how constitutions evolve, how conflicts are resolved, how ADRs are written, and how AI-assisted implementation must consume these prompts.
+
+This specification is mandatory for maintaining the prompt system.
+
+---
+
+Prompt Governance Philosophy
+
+The prompt set is an architectural artifact.
+
+It MUST remain:
+
+* coherent;
+* versioned;
+* readable;
+* implementation-guiding;
+* conflict-aware;
+* reviewable.
+
+The prompt set MUST avoid:
+
+* contradictory mandatory requirements;
+* stale exploratory notes presented as final decisions;
+* hidden precedence rules;
+* unreviewed architectural drift.
+
+---
+
+Prompt Types
+
+Prompt documents SHOULD be classified as:
+
+* constitution;
+* blueprint;
+* implementation prompt;
+* memo;
+* ADR;
+* runbook prompt.
+
+Only final-decision documents may supersede earlier mandatory requirements.
+
+Exploration memos MUST be labeled clearly.
+
+---
+
+Naming
+
+Prompt files SHOULD use numeric ordering.
+
+New prompts SHOULD preserve sequence continuity.
+
+Major additions SHOULD update `README.md`.
+
+Renaming prompts SHOULD be avoided unless the index is updated.
+
+Prompt 50 alignment: architecture-changing work MUST consult the execution
+constitution before code generation. Prompt alignment tests SHOULD include
+prompt/50.txt whenever workflow, persistence, projection, audit, permission,
+transaction, or operational execution rules change.
+
+---
+
+Conflict Resolution
+
+When prompts conflict:
+
+* security wins;
+* privacy wins;
+* final decision documents win over memos;
+* specific domain prompts win over broad philosophy;
+* ADRs explain intentional changes.
+
+Conflicts SHOULD be fixed in the prompt text, not left to interpretation.
+
+---
+
+ADR Requirements
+
+ADRs MUST include:
+
+* title;
+* date;
+* status;
+* context;
+* decision;
+* consequences;
+* superseded documents if any.
+
+ADRs SHOULD be stored in a dedicated `adr/` directory when implementation begins.
+
+---
+
+AI Usage Contract
+
+AI code generation MUST:
+
+* read the relevant constitution before coding;
+* follow the milestone sequence;
+* avoid implementing optional future features early;
+* preserve security and privacy rules;
+* add tests for generated behavior;
+* call out conflicts instead of inventing silent compromises.
+
+AI review MUST:
+
+* compare code against prompts;
+* identify architectural drift;
+* identify missing tests;
+* identify security and privacy violations.
+
+---
+
+Prompt Alignment Gate
+
+Every architecture-changing commit MUST update the relevant prompt documents in
+the same change.
+
+Executable contracts, migrations, tests, README status, ADRs, and prompt
+constitutions MUST remain mutually consistent.
+
+If implementation introduces or renames a bounded context, table, interface,
+event, worker, security rule, operational invariant, or deployment discipline,
+the matching prompt MUST be updated before the change is considered complete.
+
+Prompt alignment MUST be verified by automated tests where practical.
+
+The Definition of Done for every milestone MUST include a prompt alignment
+review.
+
+---
+
+Change Management
+
+Prompt changes SHOULD be committed intentionally.
+
+Large prompt changes SHOULD include:
+
+* summary;
+* affected domains;
+* compatibility impact;
+* implementation impact.
+
+Architecture-changing prompt updates SHOULD be reviewed as seriously as code.
+
+---
+
+Verifiable Invariants Amendment
+
+New constitutions that introduce storage, workers, projections, plugins,
+external dependencies, authorization behavior, moderation behavior, or
+operational workflows MUST define their engineering invariants.
+
+Prompt alignment tests SHOULD include prompt/45.txt when architecture changes
+affect contracts, invariants, release gates, replay behavior, dependency
+governance, or migration discipline.
+
+Prompt alignment tests SHOULD include prompt/46.txt when architecture changes
+affect frontend rendering, themes, plugins, composer behavior, realtime
+interaction, notifications, moderation/admin UI, or user-facing workflow
+accessibility.
+
+Prompt alignment tests SHOULD include prompt/47.txt when architecture changes
+affect community lifecycle, emotional usability, contributor identity,
+discovery, personalization, retention, or social continuity.
+
+Prompt alignment tests SHOULD include prompt/48.txt when architecture changes
+affect core boundaries, plugin capability scope, controller responsibilities,
+cache authority, CQRS usage, PostgreSQL authority, or moderation core rules.

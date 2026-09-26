@@ -1,0 +1,192 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+# Resolve and validate the OS / distro system Perl. GPForum does not support
+# version managers (perlbrew, plenv, asdf), perl-from-source, or other custom
+# PREFIX installs. Carton and local/ still install under this interpreter.
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-system-perl [--print|--require|--preflight]
+
+  --print      print the absolute path of the system Perl (default)
+  --require    require Perl 5.38+ and exit non-zero on failure
+  --preflight  print which/perl -v/-V evidence for operators and CI
+
+Environment:
+  GPFORUM_PERL  optional absolute path; must still pass system-Perl checks
+EOF
+}
+
+mode=print
+for argument in "$@"; do
+    case "$argument" in
+        --print)
+            mode=print
+            ;;
+        --require)
+            mode=require
+            ;;
+        --preflight)
+            mode=preflight
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-system-perl: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+reject() {
+    echo "gpforum-system-perl: $*" >&2
+    exit 1
+}
+
+is_denied_path() {
+    perl_path=$1
+    # The per-manager layouts stay spelled out so the rejected install shapes
+    # remain readable, even where a broader pattern already covers one.
+    # shellcheck disable=SC2221,SC2222
+    case "$perl_path" in
+        */perlbrew/*|*/.perlbrew/*|*/perl5/perlbrew/*)
+            return 0
+            ;;
+        */.plenv/*|*/plenv/versions/*)
+            return 0
+            ;;
+        */.asdf/installs/perl/*|*/asdf/installs/perl/*)
+            return 0
+            ;;
+        */.local/perl/*|*/perl-from-source/*|*/opt/perl/*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+is_system_prefix() {
+    candidate=$1
+    # Distro system Perl uses Config prefix /usr (Linux, macOS),
+    # /usr/local (FreeBSD packages), or /opt/local (MacPorts). Accept
+    # those without broader OS probes so architecture OS rules stay
+    # behind lib/GPForum/OS*.pm.
+    "$candidate" -MConfig -e '
+        my $prefix = $Config{prefix} // q{};
+        exit(
+            (   $prefix eq "/usr"
+                || $prefix eq "/usr/local"
+                || $prefix eq "/opt/local"
+            ) ? 0 : 1
+        );
+    '
+}
+
+meets_version() {
+    candidate=$1
+    "$candidate" -e 'exit($] < 5.038 ? 1 : 0)'
+}
+
+canonicalize() {
+    candidate=$1
+    if command -v readlink >/dev/null 2>&1; then
+        resolved=$(readlink -f "$candidate" 2>/dev/null || true)
+        if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+            printf '%s\n' "$resolved"
+            return 0
+        fi
+    fi
+    printf '%s\n' "$candidate"
+}
+
+# Return 0 when $1 is an acceptable system Perl (path, prefix, version).
+validate_system_perl() {
+    candidate=$1
+    if is_denied_path "$candidate"; then
+        return 1
+    fi
+    if ! is_system_prefix "$candidate"; then
+        return 1
+    fi
+    if ! meets_version "$candidate"; then
+        return 1
+    fi
+    return 0
+}
+
+reject_invalid() {
+    candidate=$1
+    if is_denied_path "$candidate"; then
+        reject "refusing version-manager or custom Perl at $candidate (use distro /usr/bin/perl or MacPorts /opt/local/bin/perl)"
+    fi
+    if ! is_system_prefix "$candidate"; then
+        prefix=$("$candidate" -MConfig -e 'print $Config{prefix}')
+        reject "refusing non-system Perl at $candidate (Config prefix=$prefix); install distro or MacPorts perl"
+    fi
+    if ! meets_version "$candidate"; then
+        version=$("$candidate" -e 'print $]')
+        reject "Perl 5.38+ required (got $version at $candidate)"
+    fi
+}
+
+resolve_candidate() {
+    if [ -n "${GPFORUM_PERL:-}" ]; then
+        if [ ! -x "${GPFORUM_PERL}" ]; then
+            reject "GPFORUM_PERL is not executable: ${GPFORUM_PERL}"
+        fi
+        printf '%s\n' "${GPFORUM_PERL}"
+        return 0
+    fi
+
+    # Prefer distro paths; fall through so an old Apple /usr/bin/perl does
+    # not block MacPorts /opt/local/bin/perl when that meets 5.38+.
+    # MacPorts ships versioned binaries (perl5.42) and only creates the
+    # unversioned symlink through `port select`, so probe the versioned
+    # names too, newest first.
+    versioned=$(ls /opt/local/bin/perl5.[0-9]* 2>/dev/null | sort -t. -k2,2nr || true)
+    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/local/bin/perl $versioned; do
+        if [ -x "$candidate" ]; then
+            canonical=$(canonicalize "$candidate")
+            if validate_system_perl "$canonical"; then
+                printf '%s\n' "$canonical"
+                return 0
+            fi
+        fi
+    done
+
+    if command -v perl >/dev/null 2>&1; then
+        command -v perl
+        return 0
+    fi
+
+    return 1
+}
+
+perl_bin=$(resolve_candidate) || reject "no system Perl found (/usr/bin/perl, /usr/local/bin/perl, or MacPorts /opt/local/bin/perl)"
+perl_bin=$(canonicalize "$perl_bin")
+
+# GPFORUM_PERL and PATH fallbacks still need hard rejection messages.
+reject_invalid "$perl_bin"
+
+case "$mode" in
+    print)
+        printf '%s\n' "$perl_bin"
+        ;;
+    require)
+        printf '%s\n' "$perl_bin"
+        ;;
+    preflight)
+        printf 'ok: system_perl -> %s\n' "$perl_bin"
+        printf 'ok: which_perl -> %s\n' "$(command -v perl 2>/dev/null || echo missing)"
+        "$perl_bin" -v
+        echo "--- perl -V (summary) ---"
+        "$perl_bin" -V | sed -n '1,25p'
+        ;;
+esac

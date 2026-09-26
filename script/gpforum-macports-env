@@ -1,0 +1,150 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+# Print PATH exports for MacPorts PostgreSQL client tools on macOS.
+# Safe no-op on Linux CI and hosts without MacPorts (exit 0).
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-macports-env [--exports|--print-path|--check|--help]
+
+  --exports     print `export PATH=...` for eval (default)
+  --print-path  print the MacPorts PostgreSQL bin dir only
+  --check       verify psql / pg_dump / pg_config resolve under MacPorts
+  --help        show this help
+
+Environment:
+  GPFORUM_MACPORTS_ROOT  MacPorts prefix (default /opt/local); for tests
+  GPFORUM_UNAME          override `uname -s` (default from uname); for tests
+
+On non-Darwin hosts, or when MacPorts is absent, --exports/--print-path print
+nothing and exit 0. --check prints a skip line and exits 0 so Linux CI stays
+green. Operators on macOS:
+
+  eval "$(script/gpforum-macports-env)"
+  script/gpforum-macports-env --check
+EOF
+}
+
+mode=exports
+for argument in "$@"; do
+    case "$argument" in
+        --exports)
+            mode=exports
+            ;;
+        --print-path)
+            mode=print_path
+            ;;
+        --check)
+            mode=check
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-macports-env: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+root=${GPFORUM_MACPORTS_ROOT:-/opt/local}
+uname_s=${GPFORUM_UNAME:-$(uname -s 2>/dev/null || echo unknown)}
+
+skip() {
+    if [ "$mode" = check ]; then
+        printf 'skip: %s\n' "$*"
+    fi
+    exit 0
+}
+
+if [ "$uname_s" != Darwin ]; then
+    skip "not Darwin (uname=$uname_s); MacPorts PATH helper is a no-op"
+fi
+
+if [ ! -d "$root" ]; then
+    skip "MacPorts root missing: $root"
+fi
+
+find_pg_bin() {
+    if [ -n "${GPFORUM_MACPORTS_PG_BIN:-}" ] && [ -d "${GPFORUM_MACPORTS_PG_BIN}" ]; then
+        printf '%s\n' "${GPFORUM_MACPORTS_PG_BIN}"
+        return 0
+    fi
+    for candidate in \
+        "$root/lib/postgresql18/bin" \
+        "$root/lib/postgresql17/bin" \
+        "$root/lib/postgresql16/bin" \
+        "$root/lib/postgresql15/bin" \
+        "$root/lib/postgresql14/bin"
+    do
+        if [ -d "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+pg_bin=$(find_pg_bin) || {
+    if [ "$mode" = check ]; then
+        echo "gpforum-macports-env: no MacPorts PostgreSQL client bin under $root/lib/postgresql*/bin" >&2
+        echo "Install e.g. sudo port install postgresql16 postgresql16-server" >&2
+        exit 1
+    fi
+    # Still useful to put /opt/local/bin first for MacPorts perl / tools.
+    if [ -d "$root/bin" ]; then
+        case "$mode" in
+            print_path)
+                printf '%s\n' "$root/bin"
+                ;;
+            exports)
+                printf 'export PATH="%s:$PATH"\n' "$root/bin"
+                ;;
+        esac
+    fi
+    exit 0
+}
+
+macports_path="$pg_bin"
+if [ -d "$root/bin" ]; then
+    macports_path="$pg_bin:$root/bin"
+fi
+
+case "$mode" in
+    print_path)
+        printf '%s\n' "$pg_bin"
+        ;;
+    exports)
+        printf 'export PATH="%s:$PATH"\n' "$macports_path"
+        ;;
+    check)
+        PATH="$macports_path:$PATH"
+        export PATH
+        missing=0
+        for tool in psql pg_dump pg_config; do
+            resolved=$(command -v "$tool" 2>/dev/null || true)
+            case "$resolved" in
+                "$root"/*)
+                    printf 'ok: %s -> %s\n' "$tool" "$resolved"
+                    ;;
+                *)
+                    echo "missing or non-MacPorts: $tool -> ${resolved:-absent}" >&2
+                    missing=1
+                    ;;
+            esac
+        done
+        if [ "$missing" -ne 0 ]; then
+            echo "gpforum-macports-env: put MacPorts PostgreSQL bins on PATH first:" >&2
+            echo "  eval \"\$(script/gpforum-macports-env)\"" >&2
+            exit 1
+        fi
+        printf 'ok: macports_root -> %s\n' "$root"
+        printf 'ok: macports_pg_bin -> %s\n' "$pg_bin"
+        ;;
+esac

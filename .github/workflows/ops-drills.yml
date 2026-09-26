@@ -1,0 +1,149 @@
+name: Ops drills
+
+# CI for the operator targets that `make` exposes but that are marked "not part
+# of make check or default CI": the private-beta preparation harnesses. They run
+# in their offline / simulate / dry-run modes, which need no staging host, and
+# their evidence is validated with the same gate operators use.
+#
+# Running green here does not claim private-beta readiness. Live staging TLS,
+# SMTP --send and target stress numbers stay operator work
+# (docs/ops/private-beta-checklist.md).
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'bin/gpforum-staging-drill*'
+      - 'bin/gpforum-staging-host-verify'
+      - 'bin/gpforum-stress-load'
+      - 'bin/gpforum-mail-*'
+      - 'bin/gpforum-dead-letter-check'
+      - 'bin/gpforum-evidence-*'
+      - 'lib/GPForum/Service/Ops/**'
+      - 'script/staging-*'
+      - 'script/stress-load'
+      - 'script/gpforum-mail-*'
+      - 'script/dead-letter-check'
+      - 'script/gpforum-evidence-*'
+      - 'script/gpforum-private-beta-checklist'
+      - 'docs/ops/evidence/**'
+      - '.github/workflows/ops-drills.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'bin/gpforum-staging-drill*'
+      - 'bin/gpforum-staging-host-verify'
+      - 'bin/gpforum-stress-load'
+      - 'bin/gpforum-mail-*'
+      - 'bin/gpforum-dead-letter-check'
+      - 'bin/gpforum-evidence-*'
+      - 'lib/GPForum/Service/Ops/**'
+      - 'script/staging-*'
+      - 'script/stress-load'
+      - 'script/gpforum-mail-*'
+      - 'script/dead-letter-check'
+      - 'script/gpforum-evidence-*'
+      - 'script/gpforum-private-beta-checklist'
+      - 'docs/ops/evidence/**'
+      - '.github/workflows/ops-drills.yml'
+  schedule:
+    - cron: '47 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-drills-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  drills:
+    name: Offline operator drills
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=127.0.0.1;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up GPForum
+        uses: ./.github/actions/setup-gpforum-perl
+        with:
+          postgres: 'true'
+          postgres-client-version: '18'
+
+      - name: Apply database migrations
+        run: script/gpforum-carton exec bin/gpforum-migrate --apply
+
+      - name: Prepare the evidence directory
+        run: mkdir -p artifacts
+
+      - name: Rehearse backup and restore against PostgreSQL
+        run: script/staging-drill --json | tee artifacts/staging-drill.json
+
+      - name: Rehearse attachment restore and deploy templates
+        run: script/staging-drill-attachments --json | tee artifacts/staging-drill-attachments.json
+
+      - name: Verify staging host artifacts
+        run: script/staging-host-verify --json | tee artifacts/staging-host-verify.json
+
+      - name: Probe the identity mail transport
+        run: script/mail-check --json --dry-run | tee artifacts/gpforum-mail-check-dry.json
+
+      - name: Exercise the identity mail lifecycle
+        run: script/mail-lifecycle-check --json --simulate | tee artifacts/gpforum-mail-lifecycle-check.json
+
+      - name: Exercise the dead-letter lifecycle
+        run: script/dead-letter-check --json --simulate | tee artifacts/gpforum-dead-letter-check.json
+
+      - name: Plan the stress-load profiles
+        run: |
+          set -euo pipefail
+          for profile in smoke 100 500 1000; do
+            script/stress-load --dry-run --profile "$profile" --json \
+              | tee "artifacts/stress-load-${profile}-dry.json"
+          done
+
+      - name: Print the private-beta preparation status
+        run: |
+          set -euo pipefail
+          script/gpforum-private-beta-checklist --status | tee artifacts/private-beta-checklist-status.txt
+          script/gpforum-evidence-live --status | tee artifacts/evidence-live-status.txt
+
+      - name: Validate the evidence produced by this run
+        run: script/evidence-validate --strict --human artifacts/*.json
+
+      - name: Validate the archived evidence
+        run: script/gpforum-evidence-archive-check
+
+      - name: Upload drill evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-ops-drills
+          path: artifacts/
+          if-no-files-found: warn

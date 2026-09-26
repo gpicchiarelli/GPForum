@@ -1,0 +1,15 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
+if [ ! -d t ] || ! find t -type f -name '*.t' | grep -q .; then
+    echo "No tests found."
+    exit 0
+fi
+
+exec "$gpforum_carton" exec prove -lr t "$@"
+

@@ -1,0 +1,15 @@
+forum.example.com {
+    encode zstd gzip
+
+    # Repo tree is assets/. handle keeps the /assets/ prefix so
+    # /assets/css/site.css maps to /opt/gpforum/assets/css/site.css.
+    handle /assets/* {
+        root * /opt/gpforum
+        file_server
+        header Cache-Control "public, max-age=604800"
+    }
+
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

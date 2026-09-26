@@ -1,0 +1,28 @@
+% my $heading_id = stash('heading_id') || 'page-heading';
+% my $component_title = stash('component_title') || q{};
+% my $description = stash('description') || q{};
+% my $description_id = stash('description_id') || q{};
+% my $eyebrow = stash('eyebrow') || q{};
+% my $actions = stash('actions') || [];
+% my $actions_label = stash('actions_label') || t('ui.actions');
+
+<header class="ui-page-header">
+  <div class="ui-page-header__copy">
+    % if (length $eyebrow) {
+      <p class="ui-eyebrow"><%= $eyebrow %></p>
+    % }
+    <h1 id="<%= $heading_id %>"><%= $component_title %></h1>
+    % if (length $description && length $description_id) {
+      <p class="ui-page-description" id="<%= $description_id %>"><%= $description %></p>
+    % } elsif (length $description) {
+      <p class="ui-page-description"><%= $description %></p>
+    % }
+  </div>
+  % if (@{$actions}) {
+    <nav class="ui-action-list" aria-label="<%= $actions_label %>">
+      % for my $action (@{$actions}) {
+        <a class="<%= $action->{class} || 'button button--secondary' %>" href="<%= $action->{href} %>"><%= $action->{label} %></a>
+      % }
+    </nav>
+  % }
+</header>

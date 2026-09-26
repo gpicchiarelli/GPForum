@@ -1,0 +1,81 @@
+% layout 'default';
+% title t('admin.audit') . ' - ' . t('app.name');
+% my @fields = (
+%   { name => 'actor_id',       id => 'audit-actor',       label => t('common.actor') },
+%   { name => 'action',         id => 'audit-action',      label => t('admin.action') },
+%   { name => 'target_type',    id => 'audit-target-type', label => t('common.target_type') },
+%   { name => 'target_id',      id => 'audit-target-id',   label => t('common.target_id') },
+%   { name => 'correlation_id', id => 'audit-correlation', label => t('common.correlation') },
+%   { name => 'from',           id => 'audit-from',        label => t('admin.audit_from'),  type => 'date' },
+%   { name => 'until',          id => 'audit-until',       label => t('admin.audit_until'), type => 'date' },
+% );
+% my %label_for = map { $_->{name} => $_->{label} } @fields;
+% my %invalid   = map { $_->{field} => 1 } @{ $invalid || [] };
+% my %messages  = map { $_->{field} => t('admin.audit_invalid_filter') . ' ' . $label_for{ $_->{field} } . ': ' . $_->{value} } @{ $invalid || [] };
+% my %shown     = %{ $submitted || {} };
+
+<section aria-labelledby="admin-audit-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-audit-heading',
+    component_title => t('admin.audit') %>
+
+  <%= include 'components/error_summary',
+    errors => \%messages,
+    fields => \@fields,
+    summary_id => 'audit-filter-errors' %>
+
+  <form method="get" action="<%= url_for('admin_audit') %>" aria-label="<%= t('admin.audit_filters') %>">
+    % for my $field (@fields) {
+      <label for="<%= $field->{id} %>"><%= $field->{label} %></label>
+      <input id="<%= $field->{id} %>" name="<%= $field->{name} %>"
+        type="<%= $field->{type} || 'text' %>"
+        value="<%= $shown{ $field->{name} } // '' %>"
+        % if ( $invalid{ $field->{name} } ) {
+        aria-invalid="true" aria-describedby="audit-filter-errors"
+        % }
+      >
+    % }
+    <button type="submit"><%= t('common.filter') %></button>
+    <a href="<%= url_for('admin_audit') %>"><%= t('admin.audit_clear_filters') %></a>
+  </form>
+
+  % if (@{$audit_rows}) {
+    <ol class="ui-card-list" aria-label="<%= t('admin.audit_log') %>">
+      % for my $row (@{$audit_rows}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="<%= $row->{ui}{heading_id} %>">
+            <h2 id="<%= $row->{ui}{heading_id} %>"><%= $row->{action} %></h2>
+            <dl>
+              <dt><%= t('common.actor') %></dt>
+              <dd><%= $row->{actor_id} || t('common.system') %></dd>
+              <dt><%= t('common.target') %></dt>
+              <dd><%= ui_label('target', $row->{target_type} || 'system') %>: <%= $row->{target_id} || '' %></dd>
+              <dt><%= t('common.created') %></dt>
+              <dd><time datetime="<%= $row->{created_at} %>"><%= dt($row->{created_at}) %></time></dd>
+              <dt><%= t('common.correlation') %></dt>
+              <dd><a href="<%= url_for('admin_audit')->query( correlation_id => $row->{correlation_id} ) %>"><%= $row->{correlation_id} %></a></dd>
+              % if (@{ $row->{metadata_items} || [] }) {
+                <dt><%= t('admin.audit_metadata') %></dt>
+                <dd>
+                  <dl aria-label="<%= t('admin.audit_metadata_label') %>">
+                    % for my $item (@{ $row->{metadata_items} }) {
+                      <dt><%= $item->{name} %></dt>
+                      <dd><%= $item->{value} %></dd>
+                    % }
+                  </dl>
+                </dd>
+              % }
+            </dl>
+          </article>
+        </li>
+      % }
+    </ol>
+    % if ($next_cursor) {
+      <p><a rel="next" href="<%= url_for('admin_audit')->query( %{ $filters || {} }, after => $next_cursor ) %>"><%= t('admin.audit_older') %></a></p>
+    % }
+  % } elsif ( !@{ $invalid || [] } ) {
+    <%= include 'components/empty_state',
+      heading_id => 'admin-audit-empty-heading',
+      component_title => t('admin.no_audit_rows_match') %>
+  % }
+</section>

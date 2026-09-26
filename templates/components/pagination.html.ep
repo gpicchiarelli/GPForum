@@ -1,0 +1,10 @@
+% my $label = stash('label') || t('ui.pagination');
+% my $items = stash('items') || [];
+
+% if (@{$items}) {
+  <nav class="ui-pagination pagination" aria-label="<%= $label %>">
+    % for my $item (@{$items}) {
+      <a href="<%= $item->{href} %>"<%== $item->{rel} ? ' rel="' . $item->{rel} . '"' : q{} %>><%= $item->{label} %></a>
+    % }
+  </nav>
+% }

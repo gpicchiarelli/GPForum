@@ -1,0 +1,302 @@
+# ADR 0052: Perl Engineering and Coding Discipline Constitution
+
+## Status
+
+Accepted. Amended by ADR 0107, which names the layers the code actually
+has and makes the dependency direction a checked rule.
+
+Converted on 2026-09-19 from `prompt/4.txt` ("GPForum — Perl Engineering &
+Coding Discipline Constitution"); this ADR replaces the prompt as the binding
+source.
+
+## Context
+
+GPForum is Perl-first (ADR 0049). This ADR defines the mandatory Perl
+engineering standards, module architecture, code organization rules, static
+analysis discipline, runtime safety requirements, asynchronous execution
+model, dependency philosophy, and maintainability standards. It is
+foundational and mandatory for all Perl code in every bounded context,
+including controllers, services, workers, realtime handlers, schema classes,
+and tooling.
+
+## Decision
+
+### Perl Philosophy
+
+- GPForum is: a modern Perl project; a security-first platform; a long-term
+  maintainable system; a distributed application framework.
+- The codebase MUST prioritize: determinism; readability; auditability;
+  operational predictability; explicit behavior; architectural coherence.
+- The project MUST avoid: magic-heavy programming; implicit behavior; hidden
+  side effects; uncontrolled metaprogramming; legacy CGI-era practices.
+
+### Perl Version Strategy
+
+- The platform MUST target modern stable Perl.
+- The project SHOULD maintain explicit minimum Perl version support.
+- The runtime version MUST remain: deterministic; reproducible;
+  deployment-controlled.
+
+### Mandatory Core Pragmas
+
+- Every module MUST include `use strict;` and `use warnings;`.
+- Optional: `use feature`; `use utf8`.
+- The project MUST avoid inconsistent pragma usage.
+
+### Static Analysis Philosophy
+
+- Mandatory static analysis: Perl::Critic. Perl::Critic is NOT optional.
+- All CI pipelines MUST fail on critic violations above the approved
+  threshold.
+
+### Perl::Critic Discipline
+
+- Mandatory baseline: severity = 5; maximum strictness; security-focused
+  policies; maintainability-focused policies; complexity-focused policies.
+- The codebase MUST prioritize: low complexity; explicit flow; lexical
+  scoping; bounded behavior.
+
+### Forbidden Language Patterns
+
+- Prohibited unless explicitly justified: string eval; symbolic references;
+  package variables; bareword filehandles; two-argument open; implicit
+  globals; uncontrolled AUTOLOAD usage; hidden side effects; implicit return
+  ambiguity in complex logic.
+- Prohibited examples: `eval $string`; `open FH, ...`; `${$variable}`.
+
+### Subroutine Discipline
+
+- Subroutines MUST: remain small; remain deterministic; maintain bounded
+  complexity; explicitly unpack arguments.
+- Preferred style:
+
+  ```perl
+  sub foo {
+      my ($arg1, $arg2) = @_;
+  }
+  ```
+
+- Direct access to `@_` SHOULD be avoided.
+
+### Perl Native Signatures
+
+- Native Perl signatures SHOULD be avoided unless explicitly justified, for
+  tooling compatibility, critic stability, operational consistency, and
+  long-term maintainability.
+- If signatures are used, they MUST remain consistent project-wide.
+
+### Complexity Limits
+
+- Mandatory complexity discipline: bounded McCabe complexity; bounded
+  nesting depth; bounded subroutine length.
+- Business logic MUST remain decomposed into: services; workflows; domain
+  units.
+- Large procedural controller logic is prohibited.
+
+### Thin Controller Rule
+
+- Controllers MUST: validate requests; authorize requests; orchestrate
+  workflows; return responses.
+- Controllers MUST NOT: contain business logic; execute persistence logic
+  directly; implement authorization rules inline; contain large conditional
+  flows.
+
+### Business Logic Placement
+
+- Business logic MUST reside in: domain services; application services;
+  dedicated workflows.
+- Business logic MUST NOT exist in: templates; controllers; ORM entities;
+  websocket handlers.
+
+### Module Architecture
+
+- Mandatory namespace: `GPForum::*`.
+- Recommended structure: `GPForum::Domain`, `GPForum::Application`,
+  `GPForum::Infrastructure`, `GPForum::Web`, `GPForum::Realtime`,
+  `GPForum::Worker`, `GPForum::Security`, `GPForum::Search`.
+- Modules MUST maintain: clear ownership; explicit responsibilities; bounded
+  scope.
+
+### File Naming Standards
+
+- Mandatory: descriptive names; explicit intent; no generic helper dumping.
+- Forbidden: `Utils.pm`, `Misc.pm`, `Common.pm`, `Temp.pm`.
+- Preferred: `CreateThread.pm`, `PermissionEvaluator.pm`,
+  `NotificationDispatcher.pm`.
+
+### Dependency Philosophy
+
+- Dependencies MUST remain: intentional; audited; minimal; maintained.
+- The project MUST avoid: dependency sprawl; abandoned modules; unnecessary
+  abstraction layers.
+- Every dependency SHOULD be: reviewed; version-pinned where appropriate;
+  security-audited.
+
+### Error Handling Philosophy
+
+- Errors MUST remain: explicit; typed where possible; structured;
+  observable.
+- The system SHOULD avoid: raw `die` usage; string-only exception handling.
+- Preferred: structured exceptions; explicit error classes; centralized
+  logging.
+
+### Input Validation
+
+- All external input MUST be treated as hostile.
+- Mandatory validation: request payloads; query parameters; uploads;
+  websocket payloads; headers; JSON structures.
+- Validation MUST occur before: persistence; authorization-sensitive
+  operations; business execution.
+
+### Output Encoding
+
+- All output MUST remain: context-aware; escaped correctly; sanitized when
+  user-controlled.
+- HTML output MUST assume hostile user content.
+
+### Asynchronous Philosophy
+
+- The platform MUST prefer: event-loop concurrency; asynchronous workflows;
+  non-blocking operations.
+- Preferred runtime model: Mojolicious event loop; `Mojo::IOLoop`; multiple
+  independent Perl processes; async workflows.
+- Perl interpreter threads MAY be used only for isolated, bounded,
+  explicitly reviewed workloads.
+- The platform MUST avoid: shared-state thread correctness dependencies;
+  unbounded thread creation; thread pools required for request correctness;
+  thread-heavy architectures that bypass the process model.
+- The primary concurrency unit is the Perl process. Threads are optional
+  acceleration tools, not the foundation of correctness.
+
+### Application Root Discipline
+
+- The Mojolicious application class MUST remain a small composition root.
+- It MAY: load validated configuration; build runtime objects; register
+  routes; register helpers; attach middleware; initialize logging and
+  observability.
+- It MUST NOT become: a god class application; a business logic container;
+  a persistence orchestration layer; a search orchestration layer; a queue
+  workflow layer; a websocket workflow layer; a moderation policy container.
+- Any non-wiring behavior MUST be extracted into explicit modules with clear
+  ownership, tests, profiling visibility, and Perl::Critic compliance.
+
+### Realtime Discipline
+
+- Realtime handlers MUST: remain lightweight; avoid persistence-heavy logic;
+  avoid long-running operations; validate all payloads.
+- Websocket handlers MUST remain stateless where possible.
+
+### ORM Discipline
+
+- Mandatory ORM: DBIx::Class.
+- ORM entities MUST NOT become: business logic containers; god objects;
+  controller surrogates.
+- Mandatory: bounded queries; pagination; explicit ordering; selective column
+  loading.
+- Unbounded ORM result loading is prohibited.
+
+### Database Access Philosophy
+
+- All database access SHOULD flow through: repositories; services;
+  infrastructure abstractions.
+- Direct database logic inside controllers is prohibited.
+
+### Logging Philosophy
+
+- Logging MUST remain: structured; centralized; machine-readable;
+  correlation-aware.
+- Preferred: JSON structured logs.
+- Logs MUST NOT leak: secrets; credentials; sensitive tokens.
+
+### Security Engineering
+
+- Security is mandatory.
+- The codebase MUST: minimize attack surface; avoid unsafe shell execution;
+  avoid dynamic code execution; avoid unsafe deserialization.
+- Security-sensitive operations MUST remain auditable.
+
+### Serialization Philosophy
+
+- Preferred serialization: Sereal; safe JSON handling.
+- Unsafe serialization formats SHOULD be avoided.
+
+### Test Philosophy
+
+- Mandatory testing: unit tests; integration tests; authorization tests;
+  security tests; regression tests; coverage validation; profiling
+  validation.
+- Critical workflows MUST remain covered.
+- Perl profiling MUST be supported through Devel::NYTProf.
+- Perl dependency management MUST use Carton.
+
+### CI/CD Philosophy
+
+- CI MUST enforce: Perl::Critic; test suite execution; coverage execution;
+  profiling smoke execution; security scanning; formatting consistency;
+  dependency auditing.
+- Broken critic rules MUST block merges.
+
+### Refactoring Philosophy
+
+- Refactoring MUST prioritize: clarity; simplification; decomposition;
+  bounded complexity.
+- Architectural consistency is more important than cleverness.
+
+### Documentation Philosophy
+
+- Critical modules MUST include: intent; responsibilities; invariants;
+  failure assumptions.
+- The platform MUST remain understandable by future maintainers.
+
+### Long-Term Engineering Goal
+
+- The Perl codebase MUST remain: maintainable for decades; highly auditable;
+  operationally predictable; security-focused; scalable under distributed
+  workloads; coherent across all modules.
+- All future Perl code MUST comply with this constitution.
+
+### Verifiable Invariants Amendment
+
+- All Perl code MUST align with ADR 0093.
+- Perl modules MUST expose behavior that can be tested through explicit
+  contracts, not only inferred from implementation.
+- New services MUST document their invariants when they own canonical data,
+  authorization behavior, replay behavior, projections, workers, plugins, or
+  operational side effects.
+- Controllers MUST remain thin enough for architecture checks to verify that
+  they do not directly manipulate DBIx::Class resultsets.
+- God-class services and hidden workflow coupling are prohibited.
+
+## Consequences
+
+- Perl::Critic, tidy, coverage, profiling smoke, and dependency audits are
+  merge gates, so style and complexity drift fails early and costs CI time.
+- Thin controllers and a wiring-only application root keep business logic in
+  services and workflows, where it is testable without HTTP.
+- The process, not the thread, is the concurrency unit; thread use needs an
+  explicit review.
+- Carton pins the dependency set; every new CPAN module needs review.
+- Open conflicts:
+  - The Perl::Critic baseline says "severity = 5" together with "maximum
+    strictness". In Perl::Critic, severity 5 is the gentlest level and
+    maximum strictness is severity 1 ("brutal"). `.perlcriticrc` uses
+    `severity = brutal`, which satisfies "maximum strictness" but not the
+    literal "severity = 5".
+
+## Alignment
+
+- ADR 0049 (foundation), ADR 0051 (database and ORM discipline), ADR 0053
+  (security), ADR 0059 (CI/CD), ADR 0064 (engineering governance), ADR 0084
+  (test strategy), ADR 0088 (multi-process and threading), ADR 0089
+  (profiling and coverage), ADR 0093 (verifiable invariants), ADR 0096
+  (core boundary discipline).
+- ADR 0002 (bootstrap boundaries), ADR 0016 (shared HTTP access).
+- `.perlcriticrc`, `cpanfile`, `cpanfile.snapshot`, `lib/GPForum.pm`,
+  `lib/GPForum/Bootstrap/`.
+- `script/perlcritic`, `script/perltidy-check`, `script/perl-syntax-check`,
+  `script/coverage`, `script/profile-nytprof`, `script/gpforum-carton`,
+  `script/architecture-check`, `script/cpan-license-check`.
+- `t/34-architecture-discipline.t`, `t/73-bootstrap-composition.t`,
+  `t/75-architecture-foundation.t`, `t/86-engineering-correctness.t`.
+- `CONTRIBUTING.md`, `docs/PROFILING.md`, `docs/ENGINEERING_CORRECTNESS.md`,
+  `docs/CPAN_LICENSE_REVIEW.md`.

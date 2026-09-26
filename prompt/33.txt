@@ -1,0 +1,127 @@
+GPForum - Import, Export & Legacy Migration Constitution
+
+This document defines the mandatory import/export architecture, legacy forum migration strategy, data mapping rules, validation requirements, and user data portability standards for GPForum.
+
+This specification is mandatory when import/export features are implemented.
+
+---
+
+Migration Philosophy
+
+Import and export are high-risk data operations.
+
+They MUST prioritize:
+
+* data integrity;
+* traceability;
+* repeatability;
+* reversibility where feasible;
+* privacy;
+* user identity safety.
+
+They MUST avoid:
+
+* silent data loss;
+* unvalidated legacy HTML;
+* privilege escalation through imported roles;
+* broken content ownership;
+* unbounded imports in request workflows.
+
+---
+
+Import Sources
+
+Import tooling MAY support:
+
+* CSV;
+* JSON;
+* SQL dumps transformed offline;
+* common forum exports;
+* custom migration adapters.
+
+Every adapter MUST define its trust boundary.
+
+---
+
+Import Mapping
+
+Imports MUST map:
+
+* users;
+* spaces/categories;
+* threads;
+* posts;
+* timestamps;
+* attachments;
+* moderation state where available;
+* redirects or legacy identifiers.
+
+Imported identifiers MUST not collide with native identifiers.
+
+---
+
+Validation
+
+Import validation MUST check:
+
+* required fields;
+* ownership references;
+* timestamp sanity;
+* attachment availability;
+* content sanitization;
+* duplicate detection;
+* permission mapping.
+
+Invalid records MUST be reportable.
+
+---
+
+Execution Model
+
+Imports MUST run asynchronously.
+
+Large imports MUST support:
+
+* dry run;
+* progress tracking;
+* resumability;
+* failure reporting;
+* audit logs;
+* rollback or quarantine strategy.
+
+---
+
+Legacy URLs
+
+Legacy migration SHOULD support:
+
+* old thread id mapping;
+* old post id mapping;
+* redirect generation;
+* canonical URL preservation where possible.
+
+Redirects MUST respect visibility and deletion state.
+
+---
+
+Export
+
+Export SHOULD support:
+
+* user data export;
+* administrative content export;
+* moderation/audit export for authorized staff;
+* machine-readable formats.
+
+Exports MUST respect privacy and authorization boundaries.
+
+---
+
+Security
+
+Imported content MUST be treated as hostile input.
+
+Imported HTML MUST be sanitized or converted.
+
+Imported attachments MUST pass validation and scanning workflows.
+

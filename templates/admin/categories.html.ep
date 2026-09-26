@@ -1,0 +1,83 @@
+% layout 'default';
+% title t('admin.categories') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-categories-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-categories-heading',
+    component_title => t('admin.categories'),
+    actions_label => t('admin.categories'),
+    actions => ui_actions(
+      { href => url_for('admin_dashboard'), label => t('admin.admin') },
+      { href => url_for('admin_roles'), label => t('admin.roles') },
+    ) %>
+
+  <section aria-labelledby="create-category-heading">
+    <%= include 'components/section_header',
+      heading_id => 'create-category-heading',
+      component_title => t('admin.create_category') %>
+    <form method="post" action="<%= url_for('admin_category_create') %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $create_command_id || q{} %>">
+      <label for="category-title"><%= t('forum.thread_title') %></label>
+      <input id="category-title" name="title" required>
+      <label for="category-slug"><%= t('admin.slug') %></label>
+      <input id="category-slug" name="slug">
+      <label for="category-description"><%= t('admin.description') %></label>
+      <input id="category-description" name="description">
+      <label for="category-visibility"><%= t('forum.visibility') %></label>
+      <select id="category-visibility" name="visibility">
+        <option value="public"><%= t('forum.visibility_public') %></option>
+        <option value="members"><%= t('forum.visibility_members') %></option>
+        <option value="private"><%= t('forum.visibility_private') %></option>
+      </select>
+      <label for="category-position"><%= t('admin.position') %></label>
+      <input id="category-position" name="position" type="number" value="0">
+      <label for="category-space"><%= t('admin.space_id') %></label>
+      <input id="category-space" name="space_id">
+      <button type="submit"><%= t('admin.create_category') %></button>
+    </form>
+  </section>
+
+  <section aria-labelledby="category-list-heading">
+    <%= include 'components/section_header',
+      heading_id => 'category-list-heading',
+      component_title => t('admin.categories') %>
+    % if (@{$categories}) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.category_list') %>">
+      % for my $category (@{$categories}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="<%= $category->{ui}{heading_id} %>">
+            <h3 id="<%= $category->{ui}{heading_id} %>"><%= $category->{title} %></h3>
+            <p class="ui-meta"><%= $category->{slug} %> <%= $category->{visibility} %></p>
+            <p><%= $category->{description} %></p>
+            <form method="post" action="<%= url_for('admin_category_update', category_id => $category->{category_id}) %>">
+              <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $category->{update_command_id} || q{} %>">
+              <input type="hidden" name="category_id" value="<%= $category->{category_id} %>">
+              <label for="category-<%= $category->{category_id} %>-title"><%= t('forum.thread_title') %></label>
+              <input id="category-<%= $category->{category_id} %>-title" name="title" value="<%= $category->{title} %>" required>
+              <label for="category-<%= $category->{category_id} %>-slug"><%= t('admin.slug') %></label>
+              <input id="category-<%= $category->{category_id} %>-slug" name="slug" value="<%= $category->{slug} %>">
+              <label for="category-<%= $category->{category_id} %>-description"><%= t('admin.description') %></label>
+              <input id="category-<%= $category->{category_id} %>-description" name="description" value="<%= $category->{description} %>">
+              <label for="category-<%= $category->{category_id} %>-visibility"><%= t('forum.visibility') %></label>
+              <select id="category-<%= $category->{category_id} %>-visibility" name="visibility">
+                <option value="public" <%= $category->{visibility} eq 'public' ? 'selected' : '' %>><%= t('forum.visibility_public') %></option>
+                <option value="members" <%= $category->{visibility} eq 'members' ? 'selected' : '' %>><%= t('forum.visibility_members') %></option>
+                <option value="private" <%= $category->{visibility} eq 'private' ? 'selected' : '' %>><%= t('forum.visibility_private') %></option>
+              </select>
+              <label for="category-<%= $category->{category_id} %>-position"><%= t('admin.position') %></label>
+              <input id="category-<%= $category->{category_id} %>-position" name="position" type="number" value="<%= $category->{position} %>">
+              <button type="submit"><%= t('admin.save_category') %></button>
+            </form>
+          </article>
+        </li>
+      % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'categories-empty-heading',
+        component_title => t('admin.no_categories') %>
+    % }
+  </section>
+</section>

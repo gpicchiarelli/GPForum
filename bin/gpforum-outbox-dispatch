@@ -1,0 +1,24 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use strict;
+use warnings;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+
+use GPForum::Command::OutboxDispatch;
+
+our $VERSION = '0.001';
+
+# The composition root for this entry point: the application is built only
+# when the command needs it, so --help works without configuration.
+exit GPForum::Command::OutboxDispatch->new(
+    app => sub {
+        require GPForum;
+        return GPForum->new;
+    }
+)->run(@ARGV);

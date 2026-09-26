@@ -1,0 +1,31 @@
+# GPForum secret-scanning configuration.
+#
+# Secrets stay out of the repository (prompt/11.txt, SECURITY.md): configuration
+# is externalized through GPFORUM_* environment variables and /etc/gpforum.
+# This file only removes scan paths that never hold repository content and
+# fixture strings that exist to prove hashing/redaction behaviour.
+
+title = "GPForum"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Build, coverage and runtime trees are not repository content"
+paths = [
+  '''^local/''',
+  '''^local\.rebuild\.''',
+  '''^local\.incomplete\.''',
+  '''^cover_db/''',
+  '''^var/''',
+  '''^artifacts/''',
+  '''^\.claude/''',
+  '''^\.git/''',
+]
+
+[[allowlists]]
+description = "Test fixtures carry placeholder hashes and tokens, never credentials"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^t/''',
+]

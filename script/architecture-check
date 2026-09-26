@@ -1,0 +1,331 @@
+#!/bin/sh
+set -eu
+
+status=0
+
+check_controller_forbidden_persistence() {
+    file="$1"
+
+    if grep -nE -- '->resultset[[:space:]]*\(|DBIx::Class|GPForum::Schema' "$file"; then
+        echo "architecture-check: controller persistence boundary violation in $file" >&2
+        status=1
+    fi
+}
+
+check_os_specific_logic() {
+    if grep -RInE -- '\$\^O|OSNAME' lib t script bin \
+        | grep -vE '^lib/GPForum/OS([.]pm|/[^:]*[.]pm):' \
+        | grep -vE '^script/architecture-check:'; then
+        echo "architecture-check: OS-specific logic must live behind lib/GPForum/OS*.pm" >&2
+        status=1
+    fi
+}
+
+check_query_topology_gate() {
+    if ! script/query-plan-check >/dev/null; then
+        echo "architecture-check: query topology/static hot-path gate failed" >&2
+        status=1
+    fi
+}
+
+check_template_business_logic() {
+    if [ ! -d templates ]; then
+        return
+    fi
+
+    if grep -RInE -- 'resultset|DBIx::Class|GPForum::Schema|->search[[:space:]]*\(|->create[[:space:]]*\(|->update[[:space:]]*\(|->delete[[:space:]]*\(|gp_[[:alnum:]_]+' templates; then
+        echo "architecture-check: templates must render prepared view models only" >&2
+        status=1
+    fi
+}
+
+check_authority_language() {
+    if grep -RInE -- 'cache[^[:cntrl:]]*authoritative|authoritative[^[:cntrl:]]*cache|projection[^[:cntrl:]]*authoritative|authoritative[^[:cntrl:]]*projection' lib templates script bin \
+        | grep -vE '^script/architecture-check:'; then
+        echo "architecture-check: cache/projection authority language is forbidden in runtime code" >&2
+        status=1
+    fi
+}
+
+# Entrypoint layout rule; see docs/ENTRYPOINTS.md.
+#
+# bin/    Perl application entrypoints (deployed; load GPForum::* at runtime).
+# script/ repository tooling for developers and CI (not deployed).
+#
+# A script/ wrapper is named after the bin/ entrypoint it wraps without the
+# gpforum- prefix, so no basename may appear in both directories. The frozen
+# legacy set below is now empty and may only shrink: do not add entries.
+ENTRYPOINT_COLLISION_ALLOWLIST=''
+
+is_allowed_entrypoint_collision() {
+    candidate="$1"
+
+    for allowed in $ENTRYPOINT_COLLISION_ALLOWLIST; do
+        if [ "$candidate" = "$allowed" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+check_entrypoint_layout() {
+    for file in bin/*; do
+        [ -f "$file" ] || continue
+        name=${file#bin/}
+
+        if ! head -n 1 "$file" | grep -q -- 'perl'; then
+            echo "architecture-check: bin/ takes Perl entrypoints only: $file" >&2
+            status=1
+        fi
+
+        if [ ! -x "$file" ]; then
+            echo "architecture-check: $file must be executable" >&2
+            status=1
+        fi
+
+        if [ -e "script/$name" ] && ! is_allowed_entrypoint_collision "$name"; then
+            echo "architecture-check: $name exists in both bin/ and script/; see docs/ENTRYPOINTS.md" >&2
+            status=1
+        fi
+    done
+
+    for file in script/*; do
+        [ -f "$file" ] || continue
+
+        if [ ! -x "$file" ]; then
+            echo "architecture-check: $file must be executable" >&2
+            status=1
+        fi
+
+        targets=$(grep -o -- 'bin/gpforum[a-z0-9-]*' "$file" | sort -u || true)
+        for target in $targets; do
+            if [ ! -f "$target" ]; then
+                echo "architecture-check: $file wraps a missing entrypoint: $target" >&2
+                status=1
+            fi
+        done
+    done
+}
+
+check_internal_dependency_cycles() {
+    if ! perl -MFile::Find -e '
+        my %file_for;
+        find(
+            {
+                no_chdir => 1,
+                wanted => sub {
+                    return if !/[.]pm\z/;
+                    my $path = $File::Find::name;
+                    ( my $module = $path ) =~ s{\Alib/|[.]pm\z}{}g;
+                    $module =~ s{/}{::}g;
+                    $file_for{$module} = $path;
+                },
+            },
+            q{lib}
+        );
+
+        my %edges;
+        for my $module ( keys %file_for ) {
+            open my $handle, q{<}, $file_for{$module}
+              or die qq{cannot read $file_for{$module}: $!};
+            my $in_pod = 0;
+            while ( my $line = <$handle> ) {
+                last if $line =~ /\A__ (?: END | DATA ) __/msx;
+                if ( $line =~ /\A=cut\b/msx ) { $in_pod = 0; next; }
+                if ( $line =~ /\A=\w+/msx )   { $in_pod = 1; next; }
+                next if $in_pod;
+                next if $line =~ /\A\s*[#]/msx;
+                while ( $line =~ /\buse\s+(GPForum(?:::\w+)+)/gmsx ) {
+                    push @{ $edges{$module} }, $1 if exists $file_for{$1};
+                }
+            }
+            close $handle or die qq{cannot close $file_for{$module}: $!};
+        }
+
+        my ( @stack, %seen, %active, @cycles );
+        sub walk {
+            my ($module) = @_;
+            $seen{$module}   = 1;
+            $active{$module} = 1;
+            push @stack, $module;
+
+            for my $next ( @{ $edges{$module} || [] } ) {
+                if ( !$seen{$next} ) {
+                    walk($next);
+                }
+                elsif ( $active{$next} ) {
+                    my @cycle = @stack;
+                    shift @cycle while @cycle && $cycle[0] ne $next;
+                    push @cycles, [ @cycle, $next ];
+                }
+            }
+
+            pop @stack;
+            delete $active{$module};
+            return;
+        }
+
+        for my $module ( keys %file_for ) {
+            walk($module) if !$seen{$module};
+        }
+
+        if (@cycles) {
+            print join qq{\n}, map { join q{ -> }, @{$_} } @cycles;
+            print qq{\n};
+            exit 1;
+        }
+
+        exit 0;
+    '; then
+        echo "architecture-check: internal GPForum dependency cycle detected" >&2
+        status=1
+    fi
+}
+
+# Every script/ and bin/ path invoked from a CI workflow, the Makefile or
+# another entrypoint must exist. A rename that updates the tree but not its callers leaves the release
+# and platform gates permanently red while the badges still look plausible,
+# because a workflow that cannot find its entrypoint only fails at run time.
+#
+# Only repository-relative paths count: an absolute /usr/bin/perl, a glob such
+# as 'script/staging-*' in a paths: filter, and a runner-installed ~/bin tool
+# are not this repository's entrypoints.
+check_entrypoint_references() {
+    for source in .github/workflows/*.yml Makefile script/* bin/*; do
+        [ -f "$source" ] || continue
+
+        references=$(perl -ne '
+            while ( m{ (?<! [/\w.~-] ) ( (?:script|bin) / [\w-]+ (?: [.] [\w-]+ )* ) }gx ) {
+                my $path = $1;
+                next if $path =~ m{[*?]};
+                next if $path =~ m{-\z};
+                print "$path\n";
+            }
+        ' "$source" | sort -u)
+
+        for reference in $references; do
+            [ -e "$reference" ] && continue
+            echo "architecture-check: $source references missing entrypoint $reference" >&2
+            status=1
+        done
+    done
+}
+
+# A PostgreSQL unique violation aborts the whole transaction: every statement
+# after it fails with SQLSTATE 25P02 until a ROLLBACK or a ROLLBACK TO
+# SAVEPOINT. So an error captured by a bare `eval` inside an open txn_do can
+# never be used to recover — the recovery branch is unreachable code, and the
+# in-memory test doubles cannot show it because they have no storage layer.
+#
+# GPForum::Infrastructure::UniqueConflict->attempt is the primitive that gets
+# this right: it wraps the attempt in a savepoint and returns ($value, $error).
+# The invariant is therefore not "no eval" — defensive evals are fine — but
+# that $EVAL_ERROR and $@ must never reach conflict recovery.
+check_unique_conflict_recovery() {
+    offenders=$(grep -rnE \
+        '(_after_conflict|_after_unique|UniqueConflict->(rethrow|is_conflict))[[:space:]]*\(.*\$(EVAL_ERROR|@)' \
+        lib --include='*.pm' || true)
+
+    if [ -n "$offenders" ]; then
+        echo "$offenders" | while IFS= read -r offender; do
+            echo "architecture-check: hand-caught error feeds conflict recovery;" \
+                "use UniqueConflict->attempt: $offender" >&2
+        done
+        status=1
+    fi
+}
+
+check_universal_can_override() {
+    # A `sub can` in a class overrides UNIVERSAL::can for every caller, so
+    # $object->can('some_method') stops reporting whether the method exists.
+    # Two authorization classes did this, and it bit for real when
+    # search_condition was added: the capability probe called the authorization
+    # method instead. Authorization methods are named `permits`.
+    offenders=$(grep -rnE '^sub can[[:space:]]*[({]' lib t --include='*.pm' \
+        2>/dev/null || true)
+
+    if [ -n "$offenders" ]; then
+        echo "$offenders" | while IFS= read -r offender; do
+            echo "architecture-check: sub can overrides UNIVERSAL::can;" \
+                "name it permits: $offender" >&2
+        done
+        status=1
+    fi
+}
+
+check_column_reader_empty_list() {
+    # A column reader that ends in a bare `return;` yields the empty LIST in
+    # list context, and these are called from inside hash literals: a missing
+    # row then shifts every following key by one, with nothing but "Odd number
+    # of elements" to show for it. Readers delegate to
+    # GPForum::Infrastructure::Row, which returns undef.
+    offenders=$(awk '
+        /^sub _?column(_[a-z_]+)? ?\(/ { inside = 1; name = $0; line = FNR; last_return = "" }
+        inside && /^[[:space:]]*return[[:space:]]*;[[:space:]]*$/ { last_return = FNR }
+        inside && /^\}/ {
+            if (last_return != "") {
+                printf "%s:%d: %s\n", FILENAME, last_return, name
+            }
+            inside = 0
+        }
+    ' $(find lib -name '*.pm') 2>/dev/null || true)
+
+    if [ -n "$offenders" ]; then
+        echo "$offenders" | while IFS= read -r offender; do
+            echo "architecture-check: column reader returns the empty list;" \
+                "delegate to GPForum::Infrastructure::Row: $offender" >&2
+        done
+        status=1
+    fi
+}
+
+check_subroutine_prototypes() {
+    # Perl::Critic lost ProhibitSubroutinePrototypes when this tree adopted
+    # signatures: PPI 1.291 tokenizes `sub f ($self, $x)` as a prototype and
+    # the policy cannot tell the two apart. The check is replaced rather than
+    # dropped, and it can be exact -- a real prototype holds only sigils and
+    # punctuation, while every signature here names at least one variable.
+    offenders=$(grep -rnE '^sub [A-Za-z_][A-Za-z0-9_]*[[:space:]]*\([$@%;*&\\[:space:]]*\)[[:space:]]*\{' \
+        lib bin script --include='*.pm' --include='*.pl' 2>/dev/null || true)
+
+    if [ -n "$offenders" ]; then
+        echo "$offenders" | while IFS= read -r offender; do
+            echo "architecture-check: subroutine prototype; use a signature:" \
+                "$offender" >&2
+        done
+        status=1
+    fi
+}
+
+# ADR 0107: a module depends only on its own layer and the layers below it,
+# as GPForum::Application::LayerMap declares them. The rule and the scan live
+# in t/192-layering.t, which the suite also runs; it needs the project's
+# dependency tree, so it goes through script/gpforum-carton.
+check_layering() {
+    if ! script/gpforum-carton exec perl t/192-layering.t >/dev/null 2>&1; then
+        script/gpforum-carton exec perl t/192-layering.t 2>&1 | grep -E '^# ' >&2
+        echo "architecture-check: a module depends on a layer above its own" >&2
+        status=1
+    fi
+}
+
+for file in lib/GPForum/Controller/*.pm; do
+    [ -f "$file" ] || continue
+    check_controller_forbidden_persistence "$file"
+done
+
+check_os_specific_logic
+check_entrypoint_layout
+check_query_topology_gate
+check_template_business_logic
+check_authority_language
+check_internal_dependency_cycles
+check_entrypoint_references
+check_unique_conflict_recovery
+check_subroutine_prototypes
+check_column_reader_empty_list
+check_universal_can_override
+check_layering
+
+exit "$status"

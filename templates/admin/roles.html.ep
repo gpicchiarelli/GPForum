@@ -1,0 +1,96 @@
+% layout 'default';
+% title t('admin.roles') . ' - ' . t('app.name');
+
+<section aria-labelledby="admin-roles-heading">
+  <%= include 'components/page_header',
+    heading_id => 'admin-roles-heading',
+    component_title => t('admin.roles') %>
+
+  <section aria-labelledby="create-role-heading">
+    <%= include 'components/section_header',
+      heading_id => 'create-role-heading',
+      component_title => t('admin.create_role') %>
+    <form method="post" action="<%= url_for('admin_role_create') %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $role_command_id || q{} %>">
+      <label for="role-name"><%= t('admin.name') %></label>
+      <input id="role-name" name="name" required>
+      <label for="role-description"><%= t('admin.description') %></label>
+      <input id="role-description" name="description">
+      <button type="submit"><%= t('admin.create_role') %></button>
+    </form>
+  </section>
+
+  <section aria-labelledby="create-permission-heading">
+    <%= include 'components/section_header',
+      heading_id => 'create-permission-heading',
+      component_title => t('admin.create_permission') %>
+    <form method="post" action="<%= url_for('admin_permission_create') %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $permission_command_id || q{} %>">
+      <label for="permission-name"><%= t('admin.name') %></label>
+      <input id="permission-name" name="name" required>
+      <label for="permission-resource"><%= t('admin.resource_type') %></label>
+      <input id="permission-resource" name="resource_type" required>
+      <label for="permission-action"><%= t('admin.action') %></label>
+      <input id="permission-action" name="action" required>
+      <button type="submit"><%= t('admin.create_permission') %></button>
+    </form>
+  </section>
+
+  <section aria-labelledby="role-list-heading">
+    <%= include 'components/section_header',
+      heading_id => 'role-list-heading',
+      component_title => t('admin.roles') %>
+    % if (@{$roles}) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.role_list') %>">
+      % for my $role (@{$roles}) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="<%= $role->{ui}{heading_id} %>">
+            <h3 id="<%= $role->{ui}{heading_id} %>"><%= $role->{name} %></h3>
+              <p><%= $role->{description} %></p>
+              <form method="post" action="<%= url_for('admin_role_permission_attach', role_id => $role->{role_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $role->{attach_command_id} || q{} %>">
+                <input type="hidden" name="role_id" value="<%= $role->{role_id} %>">
+                <label for="role-<%= $role->{role_id} %>-permission"><%= t('admin.permissions') %></label>
+                <select id="role-<%= $role->{role_id} %>-permission" name="permission_id" required>
+                  % for my $permission (@{$permissions}) {
+                    <option value="<%= $permission->{permission_id} %>">
+                      <%= ui_label('permission', $permission->{resource_type} . q{.} . $permission->{action}) %>
+                    </option>
+                  % }
+                </select>
+                <button type="submit"><%= t('admin.attach_permission') %></button>
+              </form>
+            </article>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'roles-empty-heading',
+        component_title => t('admin.no_roles') %>
+    % }
+  </section>
+
+  <section aria-labelledby="permission-list-heading">
+    <%= include 'components/section_header',
+      heading_id => 'permission-list-heading',
+      component_title => t('admin.permissions') %>
+    % if (@{$permissions}) {
+      <ol class="ui-card-list" aria-label="<%= t('admin.permission_list') %>">
+        % for my $permission (@{$permissions}) {
+          <li class="ui-card-list__item">
+            <code><%= $permission->{resource_type} %>.<%= $permission->{action} %></code>
+            <span><%= ui_label('permission', $permission->{resource_type} . q{.} . $permission->{action}) %></span>
+          </li>
+        % }
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'permissions-empty-heading',
+        component_title => t('admin.no_permissions') %>
+    % }
+  </section>
+</section>

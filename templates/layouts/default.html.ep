@@ -1,0 +1,42 @@
+<!doctype html>
+% my $locale_metadata = ui_locale_metadata;
+<html lang="<%= ui_locale %>" dir="<%= ui_direction %>" data-locale="<%= ui_locale %>" data-direction="<%= ui_direction %>" data-script="<%= $locale_metadata->{script} %>" data-theme="<%= ui_theme %>" data-color-scheme="<%= ui_theme_color_scheme %>">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="<%= ui_theme_color_scheme %>">
+    <meta name="theme-color" content="<%= ui_theme_color %>">
+    <title><%= title %></title>
+    <link rel="icon" href="<%= url_for('/gpforum-mark.svg') %>" type="image/svg+xml">
+    <link rel="stylesheet" href="<%= url_for('/gpforum-ssr.css') %>">
+    % my $page_metadata = stash('page_metadata') || {};
+    % if ($page_metadata->{description}) {
+      <meta name="description" content="<%= $page_metadata->{description} %>">
+    % }
+    % if ($page_metadata->{robots}) {
+      <meta name="robots" content="<%= $page_metadata->{robots} %>">
+    % }
+    % if ($page_metadata->{canonical}) {
+      <link rel="canonical" href="<%= $page_metadata->{canonical} %>">
+    % }
+    % if ($page_metadata->{open_graph}) {
+      % my $open_graph = $page_metadata->{open_graph};
+      <meta property="og:title" content="<%= $open_graph->{title} %>">
+      <meta property="og:type" content="<%= $open_graph->{type} %>">
+      <meta property="og:url" content="<%= $open_graph->{url} %>">
+      % if ($open_graph->{description}) {
+        <meta property="og:description" content="<%= $open_graph->{description} %>">
+      % }
+    % }
+  </head>
+  <body class="app-shell <%= ui_typography_class %>">
+    <a class="skip-link" href="#content"><%= t('nav.skip_to_content') %></a>
+    <%= include 'components/site_header' %>
+    <%= include 'components/breadcrumbs' %>
+    <%= include 'components/flash_messages' %>
+    <main id="content" class="page-shell" tabindex="-1">
+      <%= content %>
+    </main>
+    <%= include 'components/site_footer' %>
+  </body>
+</html>

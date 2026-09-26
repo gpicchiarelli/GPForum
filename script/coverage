@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
+# A coverage gate that measured nothing has not passed. This used to print
+# "No tests found." and exit 0.
+if [ ! -d t ] || ! find t -type f -name '*.t' | grep -q .; then
+    echo "coverage: no tests found; nothing was measured" >&2
+    exit 1
+fi
+
+rm -rf cover_db
+HARNESS_PERL_SWITCHES=-MDevel::Cover "$gpforum_carton" exec prove -lr t "$@"
+
+# The report covers lib/ only. It used to select ^(lib/GPForum|t)/, counting
+# the test files -- which execute almost entirely -- in its own denominator.
+"$gpforum_carton" exec -- cover -select_re '^lib/' -silent
+
+# The verdict: lib/ coverage against the ratchet in etc/coverage-floor.
+exec "$gpforum_carton" exec script/coverage-check cover_db

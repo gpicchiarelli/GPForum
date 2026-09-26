@@ -1,0 +1,24 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: script/profile-route <path>"
+    echo "Example: script/profile-route /categories"
+    exit 2
+fi
+
+mkdir -p var/profile
+export NYTPROF="${NYTPROF:-file=var/profile/route-nytprof.out:addpid=1}"
+
+exec "$gpforum_carton" exec perl -Ilib -MTest::Mojo -d:NYTProf -e '
+    use strict;
+    use warnings;
+    my ($path) = @ARGV;
+    my $test = Test::Mojo->new("GPForum");
+    $test->get_ok($path);
+' "$1"

@@ -1,0 +1,111 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+missing=0
+
+need() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        echo "missing: $1"
+        missing=1
+    else
+        printf 'ok: %s -> %s\n' "$1" "$(command -v "$1")"
+    fi
+}
+
+if ! script/gpforum-system-perl --preflight; then
+    echo "missing: system Perl 5.38+ (/usr/bin/perl, FreeBSD /usr/local, or MacPorts /opt/local)"
+    echo "Debian/Ubuntu: apt install perl build-essential cpanminus libpq-dev"
+    echo "FreeBSD: pkg install perl5 p5-App-cpanminus postgresql16-client"
+    echo "macOS MacPorts: port install perl5.38; eval \"\$(script/gpforum-macports-env)\""
+    missing=1
+else
+    perl_bin=$(script/gpforum-system-perl --print)
+    PATH="$(dirname "$perl_bin"):$PATH"
+    export PATH
+fi
+
+if [ ! -f cpanfile ]; then
+    echo "missing: cpanfile"
+    missing=1
+else
+    echo "ok: cpanfile"
+fi
+
+if [ ! -f cpanfile.snapshot ]; then
+    echo "missing: cpanfile.snapshot"
+    missing=1
+else
+    echo "ok: cpanfile.snapshot"
+fi
+
+if [ ! -f cpanfile.postgres ]; then
+    echo "missing: cpanfile.postgres"
+    missing=1
+else
+    echo "ok: cpanfile.postgres"
+fi
+
+if script/gpforum-carton version >/dev/null 2>&1; then
+    printf 'ok: carton -> %s\n' "$(script/gpforum-carton version)"
+    script/gpforum-carton exec perl -Ilib -MGPForum::Runtime -MGPForum::Service::Operations::OSPreflight -e 'my $runtime = GPForum::Runtime->new; my $os = $runtime->os_profile; my $preflight = GPForum::Service::Operations::OSPreflight->new(runtime => $runtime)->check; print "ok: gpforum_os -> ", $os->name, "\n"; print "ok: gpforum_event_backend -> ", $os->event_backend, "\n"; print "ok: gpforum_workers -> ", $os->recommended_worker_count, "\n"; print "ok: gpforum_os_preflight -> ", $preflight->{status}, "\n";'
+else
+    echo "missing: carton"
+    echo "Install Carton for the system Perl with: cpanm -M https://cpan.metacpan.org/ Carton"
+    missing=1
+fi
+
+need perlcritic
+
+find_pg_config() {
+    if [ -n "${GPFORUM_PG_CONFIG:-}" ] && [ -x "${GPFORUM_PG_CONFIG}" ]; then
+        printf '%s\n' "${GPFORUM_PG_CONFIG}"
+        return 0
+    fi
+    if command -v pg_config >/dev/null 2>&1; then
+        command -v pg_config
+        return 0
+    fi
+    for candidate in \
+        /opt/local/lib/postgresql18/bin/pg_config \
+        /opt/local/lib/postgresql17/bin/pg_config \
+        /opt/local/lib/postgresql16/bin/pg_config \
+        /opt/homebrew/opt/libpq/bin/pg_config \
+        /usr/local/opt/libpq/bin/pg_config \
+        /Applications/Postgres.app/Contents/Versions/latest/bin/pg_config
+    do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if pg_config_bin=$(find_pg_config); then
+    printf 'ok: pg_config -> %s\n' "$pg_config_bin"
+    "$pg_config_bin" --version
+else
+    echo "missing: pg_config"
+    echo "Install PostgreSQL client development files before enabling the cpanfile postgres feature."
+    echo "Debian/Ubuntu: apt install libpq-dev"
+    echo "FreeBSD: pkg install postgresql16-client"
+    echo "macOS (MacPorts): eval \"\$(script/gpforum-macports-env)\" then re-run preflight"
+    echo "macOS: install PostgreSQL or libpq and ensure pg_config is in PATH"
+    missing=1
+fi
+
+if [ "$(uname -s 2>/dev/null || echo unknown)" = Darwin ] && [ -d /opt/local ]; then
+    if script/gpforum-macports-env --check >/dev/null 2>&1; then
+        echo "ok: macports_pg -> $(script/gpforum-macports-env --print-path)"
+    else
+        echo "hint: macOS MacPorts detected; run eval \"\$(script/gpforum-macports-env)\" for psql/pg_dump/pg_config"
+    fi
+fi
+
+exit "$missing"

@@ -1,0 +1,137 @@
+name: Performance and profiling
+
+# The profiling smoke validation stage of prompt/11.txt, plus the benchmark
+# evidence that docs/PERFORMANCE_EVIDENCE.md and docs/PROFILING.md describe.
+# ci.yml keeps the fast smoke gates; this workflow runs the wider set and keeps
+# the measurements as artifacts.
+#
+# Shared runners are noisy: the regression thresholds that ci.yml already
+# proves stay enforced, and the wider sweeps are recorded as evidence rather
+# than gated on absolute numbers.
+
+on:
+  schedule:
+    - cron: '37 1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: performance-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  benchmarks:
+    name: Benchmarks and NYTProf smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=127.0.0.1;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up GPForum
+        uses: ./.github/actions/setup-gpforum-perl
+        with:
+          postgres: 'true'
+
+      - name: Apply database migrations
+        run: script/gpforum-carton exec bin/gpforum-migrate --apply
+
+      - name: Seed production evidence dataset
+        run: script/seed-benchmark --profile small
+
+      - name: Sync query budget catalog
+        run: script/query-budget --sync
+
+      - name: Check query budget catalog
+        run: script/query-budget --check
+
+      - name: Prepare the evidence directory
+        run: mkdir -p artifacts
+
+      - name: Run hot-path benchmark
+        run: |
+          script/bench-hotpaths --json --iterations 5 --warmup 2 \
+            --route /health/live \
+            --route /categories \
+            | tee artifacts/bench-hotpaths.json
+
+      - name: Run configured HTTP benchmark
+        run: |
+          script/benchmark-http --configured --check --json --iterations 5 --warmup 2 \
+            --route / \
+            --route /categories \
+            --route /c/018f1001-0001-7000-8000-000000000001 \
+            --route /t/018f1004-0001-7000-8000-000000000001 \
+            --route '/search?q=performance' \
+            --route /health/ready \
+            | tee artifacts/benchmark-http.json
+
+      - name: Run Hypnotoad benchmark
+        run: |
+          script/bench-hypnotoad --check --json --profile small --workers 2 \
+            --iterations 3 --warmup 1 --no-compare \
+            --route /categories \
+            --route /health/ready \
+            | tee artifacts/bench-hypnotoad.json
+
+      - name: Sweep Hypnotoad worker scaling
+        run: |
+          script/bench-hypnotoad-scaling --json --profile small \
+            --worker-set 2,4 --iterations 2 --warmup 1 \
+            --route /categories \
+            | tee artifacts/bench-hypnotoad-scaling.json
+
+      - name: Benchmark the outbox dispatcher
+        run: |
+          script/gpforum-carton exec script/bench-outbox-dispatcher \
+            --json --messages 1000,10000 --workers 1,2,4 \
+            | tee artifacts/bench-outbox-dispatcher.json
+
+      - name: Check query plan evidence
+        run: script/query-plan-evidence --check
+
+      - name: Profile a request path with NYTProf
+        run: |
+          set -euo pipefail
+          script/profile-route /categories
+          ls -l var/profile
+
+      - name: Collect the profile output
+        if: always()
+        run: |
+          set -euo pipefail
+          if [ -d var/profile ]; then
+            cp -R var/profile artifacts/profile
+          fi
+
+      - name: Upload performance evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-performance
+          path: artifacts/
+          if-no-files-found: warn

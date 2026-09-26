@@ -1,0 +1,15 @@
+% layout 'default';
+% title t('auth.email_verified_title') . ' - ' . t('app.name');
+
+<section aria-labelledby="email-verified-heading">
+  <%= include 'components/page_header',
+    heading_id => 'email-verified-heading',
+    component_title => t('auth.email_verified_title'),
+    actions_label => t('auth.login_next_steps'),
+    actions => ui_actions(
+      { href => url_for('login'), label => t('auth.login') },
+    ) %>
+  <%= include 'components/alert',
+    tone => 'success',
+    message => t('auth.email_verified_status') %>
+</section>

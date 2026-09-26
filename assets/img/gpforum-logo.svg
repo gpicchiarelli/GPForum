@@ -1,0 +1,50 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 128" role="img" aria-label="GPForum logo">
+  <defs>
+    <linearGradient id="logo-bg" x1="12" y1="10" x2="106" y2="112" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#111412"/>
+      <stop offset="0.58" stop-color="#214237"/>
+      <stop offset="1" stop-color="#3f5f72"/>
+    </linearGradient>
+    <linearGradient id="logo-warm" x1="24" y1="18" x2="96" y2="104" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8f6ef"/>
+      <stop offset="1" stop-color="#c9835a"/>
+    </linearGradient>
+  </defs>
+  <g>
+    <rect x="16" y="16" width="96" height="96" rx="8" fill="url(#logo-bg)"/>
+    <rect x="24" y="24" width="80" height="80" rx="6" fill="none" stroke="#f8f6ef" stroke-opacity="0.68" stroke-width="2"/>
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M40 67c13.2-15.1 34-15.5 49.5-2.5" stroke="#f8f6ef" stroke-opacity="0.72" stroke-width="3"/>
+      <path d="M40 67c9.4 10.1 35.4 10.8 49.5-2.5" stroke="#f8f6ef" stroke-opacity="0.38" stroke-width="2.2"/>
+      <path d="M49.8 48.5c6.3 10.8 6.5 29.4 0.7 37" stroke="#f8f6ef" stroke-opacity="0.32" stroke-width="1.8"/>
+      <path d="M79.7 48.5c-6.3 10.8-6.5 29.4-0.7 37" stroke="#f8f6ef" stroke-opacity="0.32" stroke-width="1.8"/>
+      <path d="M36.5 67h56" stroke="#f8f6ef" stroke-opacity="0.28" stroke-width="1.5"/>
+      <path d="M40 53.6c18.1-8.4 36-8.2 49.5 0" stroke="#c9835a" stroke-opacity="0.68" stroke-width="2.2"/>
+      <path d="M40 80.6c16.3 7.9 34.7 8.1 49.5 0" stroke="#c9835a" stroke-opacity="0.52" stroke-width="2"/>
+    </g>
+    <g fill="#f8f6ef">
+      <circle cx="40" cy="67" r="3.8"/>
+      <circle cx="58" cy="51.4" r="3.2"/>
+      <circle cx="74" cy="84" r="3.2"/>
+      <circle cx="89.5" cy="64.5" r="3.8"/>
+    </g>
+    <g fill="#c9835a">
+      <circle cx="50.2" cy="83.4" r="2.5"/>
+      <circle cx="79.4" cy="50.2" r="2.5"/>
+    </g>
+    <g fill="none" stroke="url(#logo-warm)" stroke-width="3" stroke-linecap="round">
+      <path d="M30 43h9"/>
+      <path d="M30 53h9"/>
+      <path d="M30 63h9"/>
+      <path d="M30 73h9"/>
+      <path d="M88 85h9"/>
+      <path d="M88 75h9"/>
+    </g>
+    <path d="M50 94h24c5.3 0 9.6-3.8 9.6-8.5V84H59.6c-5.3 0-9.6 3.8-9.6 8.5V94Z" fill="#f8f6ef"/>
+    <path d="M59.6 84h24l7.3-5.7v7.2c0 4.7-3.9 8.5-9 8.5H59.6V84Z" fill="#c9835a" opacity="0.9"/>
+  </g>
+  <g fill="#111412">
+    <text x="136" y="67" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="42" font-weight="800" letter-spacing="0">GPForum</text>
+    <text x="138" y="93" font-family="Inter, Avenir Next, Helvetica, Arial, sans-serif" font-size="15" font-weight="700" letter-spacing="1.5" fill="#63735f">INDEPENDENT COMMUNITY INFRASTRUCTURE</text>
+  </g>
+</svg>

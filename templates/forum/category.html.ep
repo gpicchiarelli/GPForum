@@ -1,0 +1,66 @@
+% layout 'default';
+% title $category->{title} . ' - ' . t('app.name');
+% stash breadcrumbs => [
+%   { current => 0, label => t('nav.home'), url => url_for('home')->to_string },
+%   { current => 0, label => t('nav.categories'), url => url_for('categories')->to_string },
+%   { current => 1, label => $category->{title} },
+% ];
+
+<section aria-labelledby="category-heading">
+  <%= include 'components/page_header',
+    heading_id => 'category-heading',
+    component_title => $category->{title},
+    description => $category->{description} || q{},
+    actions_label => t('forum.category_actions'),
+    actions => ui_actions(
+      {
+        href => url_for('new_thread')->query(category_id => $category->{category_id}),
+        label => t('nav.start_thread'),
+      },
+    ) %>
+  % if (@{$threads}) {
+    <ol class="ui-card-list" aria-label="<%= $category->{title} %>">
+      % for my $thread (@{$threads}) {
+        <li class="ui-card-list__item">
+          <h2>
+            <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>">
+              <%= $thread->{title} %>
+            </a>
+          </h2>
+          <p class="ui-meta">
+            <%= t('forum.last_activity') %>:
+            <time datetime="<%= $thread->{last_activity_at} // q{} %>"><%= $thread->{last_activity_at} // t('state.unknown') %></time>
+          </p>
+          % if ($thread->{author_username}) {
+            <p class="ui-meta">
+              <%= t('forum.started_by') %>
+              <a href="<%= url_for('profile', username => $thread->{author_username}) %>"><%= $thread->{author_profile_label} || $thread->{author_display_name} %></a>
+            </p>
+          % }
+          % if ($thread->{deleted_at}) {
+            <p role="status"><%= t('forum.thread_deleted_notice') %></p>
+          % }
+          % if ($thread->{can_restore_thread}) {
+            <form class="forum-thread-restore" method="post" action="<%= url_for('thread_restore', thread_id => $thread->{thread_id}) %>">
+              <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $thread->{restore_thread_command_id} || q{} %>">
+              <button type="submit"><%= t('forum.restore_thread') %></button>
+            </form>
+          % }
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'category-empty-heading',
+      component_title => t('forum.no_visible_threads') %>
+  % }
+  % if ($next_cursor) {
+    <%= include 'components/pagination',
+      label => t('forum.thread_pagination'),
+      items => ui_next_page(
+        href => url_for('category', category_id => $category->{category_id})->query(after => $next_cursor),
+        label => t('forum.next_threads'),
+      ) %>
+  % }
+</section>

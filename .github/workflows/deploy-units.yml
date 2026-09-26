@@ -1,0 +1,126 @@
+name: Deployment units
+
+# The deployment validation stage of prompt/11.txt: the units in deploy/ are
+# parsed by the init systems and web servers that run them, against a staged
+# /opt/gpforum layout, instead of being reviewed by eye.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'deploy/**'
+      - 'bin/gpforum-staging-drill-attachments'
+      - 'script/staging-drill-attachments'
+      - '.github/workflows/deploy-units.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'deploy/**'
+      - 'bin/gpforum-staging-drill-attachments'
+      - 'script/staging-drill-attachments'
+      - '.github/workflows/deploy-units.yml'
+  schedule:
+    - cron: '29 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-units-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  units:
+    name: systemd, nginx, Caddy and rc(8)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up GPForum
+        uses: ./.github/actions/setup-gpforum-perl
+        with:
+          # The attachment/deploy drill needs no database driver.
+          postgres: 'false'
+
+      - name: Install unit tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y systemd nginx-core
+
+      - name: Stage the documented deployment layout
+        run: |
+          set -euo pipefail
+          # The units name /opt/gpforum and a gpforum service account; staging
+          # them makes systemd-analyze check real paths instead of reporting
+          # every ExecStart as missing.
+          sudo useradd --system --home-dir /opt/gpforum --shell /usr/sbin/nologin gpforum \
+            || echo 'gpforum user already present'
+          sudo install -d -o gpforum -g gpforum /opt/gpforum
+          sudo cp -R script bin /opt/gpforum/
+          sudo install -d /etc/gpforum
+          sudo install -m 0640 -o root -g gpforum /dev/null /etc/gpforum/gpforum.env
+          sudo chown -R gpforum:gpforum /opt/gpforum
+
+      - name: Verify systemd units
+        run: |
+          set -euo pipefail
+          systemd-analyze verify --no-pager \
+            deploy/systemd/gpforum.service \
+            deploy/systemd/gpforum-outbox.service \
+            deploy/systemd/gpforum-scheduled-jobs.service \
+            deploy/systemd/gpforum-scheduled-jobs.timer \
+            deploy/systemd/gpforum-unix-socket.service
+
+      - name: Verify the TCP nginx site
+        run: |
+          set -euo pipefail
+          sudo rm -f /etc/nginx/sites-enabled/default
+          sudo cp deploy/nginx/gpforum.conf /etc/nginx/sites-available/gpforum
+          sudo ln -sf /etc/nginx/sites-available/gpforum /etc/nginx/sites-enabled/gpforum
+          sudo nginx -t
+
+      - name: Verify the unix-socket nginx site
+        run: |
+          set -euo pipefail
+          # The two sites share server_name, so they are parsed one at a time.
+          sudo rm -f /etc/nginx/sites-enabled/gpforum
+          sudo cp deploy/nginx/gpforum-unix-socket.conf /etc/nginx/sites-available/gpforum-unix-socket
+          sudo ln -sf /etc/nginx/sites-available/gpforum-unix-socket /etc/nginx/sites-enabled/gpforum-unix-socket
+          sudo nginx -t
+
+      - name: Validate the Caddyfile
+        run: |
+          set -euo pipefail
+          docker run --rm -v "$PWD/deploy/caddy:/etc/caddy:ro" caddy:2 \
+            caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
+      - name: Check the FreeBSD rc(8) unit
+        run: sh -n deploy/freebsd/gpforum
+
+      - name: Run the deploy checklist drill
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          script/staging-drill-attachments --json | tee artifacts/staging-drill-attachments.json
+
+      - name: Validate drill evidence
+        run: script/evidence-validate --strict --human artifacts/staging-drill-attachments.json
+
+      - name: Upload deploy evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-deploy-units
+          path: artifacts/
+          if-no-files-found: warn

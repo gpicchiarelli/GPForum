@@ -1,0 +1,149 @@
+name: PostgreSQL targets
+
+# Migration and PostgreSQL behaviour across every server major GPForum
+# supports. ci.yml is the blocking gate on one server; this workflow proves the
+# same migration, integration and drill paths on the others.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'migrations/**'
+      - 'lib/GPForum/Migration/**'
+      - 'lib/GPForum/Schema/**'
+      - 'lib/GPForum/Schema.pm'
+      - 'lib/GPForum/Query/**'
+      - 't/integration/**'
+      - 'bin/gpforum-migrate'
+      - 'bin/gpforum-staging-drill'
+      - 'script/staging-drill'
+      - 'cpanfile'
+      - 'cpanfile.postgres'
+      - 'cpanfile.snapshot'
+      - '.github/actions/setup-gpforum-perl/action.yml'
+      - '.github/workflows/postgres-matrix.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'migrations/**'
+      - 'lib/GPForum/Migration/**'
+      - 'lib/GPForum/Schema/**'
+      - 'lib/GPForum/Schema.pm'
+      - 'lib/GPForum/Query/**'
+      - 't/integration/**'
+      - 'bin/gpforum-migrate'
+      - 'bin/gpforum-staging-drill'
+      - 'script/staging-drill'
+      - 'cpanfile'
+      - 'cpanfile.postgres'
+      - 'cpanfile.snapshot'
+      - '.github/actions/setup-gpforum-perl/action.yml'
+      - '.github/workflows/postgres-matrix.yml'
+  schedule:
+    # Nightly, so a server-side change lands as a CI signal and not as a
+    # staging surprise.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: postgres-matrix-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  postgres:
+    name: PostgreSQL ${{ matrix.postgres }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ['16', '17', '18']
+    services:
+      postgres:
+        image: postgres:${{ matrix.postgres }}
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=127.0.0.1;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up GPForum
+        uses: ./.github/actions/setup-gpforum-perl
+        with:
+          postgres: 'true'
+          # pg_dump refuses a server newer than itself, and the staging drill
+          # dumps and restores.
+          postgres-client-version: ${{ matrix.postgres }}
+
+      - name: Report server version
+        run: psql "host=127.0.0.1 port=5432 user=postgres dbname=gpforum_test" -c 'select version()'
+        env:
+          PGPASSWORD: postgres
+
+      - name: Print migration plan
+        run: script/gpforum-carton exec bin/gpforum-migrate --plan
+
+      - name: Apply database migrations
+        run: script/gpforum-carton exec bin/gpforum-migrate --apply
+
+      - name: Re-apply migrations is a no-op
+        run: |
+          applied="$(script/gpforum-carton exec bin/gpforum-migrate --apply)"
+          if [ -n "$applied" ]; then
+            echo 'migrations are not idempotent; the second --apply re-applied:' >&2
+            printf '%s\n' "$applied" >&2
+            exit 1
+          fi
+          echo 'ok: second --apply applied nothing'
+
+      - name: Seed production evidence dataset
+        run: script/seed-benchmark --profile small
+
+      # The directory, never a list of files: a list is where a new test goes
+      # to never run. t/190-gate-honesty.t holds every workflow to this.
+      - name: Run PostgreSQL integration tier
+        run: make integration
+
+      - name: Run platform check
+        run: script/gpforum-carton exec bin/gpforum-platform-check --with-db
+
+      - name: Run fresh/upgrade/dump-restore migration drill
+        run: |
+          mkdir -p artifacts
+          script/staging-drill --json \
+            | tee "artifacts/staging-drill-pg${{ matrix.postgres }}.json"
+
+      - name: Validate drill evidence
+        run: |
+          script/evidence-validate --strict --human \
+            "artifacts/staging-drill-pg${{ matrix.postgres }}.json"
+
+      - name: Upload drill evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: gpforum-staging-drill-pg${{ matrix.postgres }}
+          path: artifacts/
+          if-no-files-found: warn

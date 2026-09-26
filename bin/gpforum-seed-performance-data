@@ -1,0 +1,14 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+use strict;
+use warnings;
+
+use lib 'lib';
+
+use GPForum::Command::PerformanceSeed;
+
+our $VERSION = '0.001';
+
+exit GPForum::Command::PerformanceSeed->new->run(@ARGV);

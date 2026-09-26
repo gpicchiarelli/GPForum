@@ -1,0 +1,10 @@
+<header class="site-header">
+  <div class="site-header__inner">
+    <a class="brand" href="<%= url_for('home') %>">
+      <img class="brand__mark" src="<%= url_for('/gpforum-mark.svg') %>" alt="" aria-hidden="true">
+      <span class="brand__name"><%= t('app.name') %></span>
+    </a>
+    <%= include 'components/primary_nav' %>
+    <%= include 'components/identity_nav' %>
+  </div>
+</header>

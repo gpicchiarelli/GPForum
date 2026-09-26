@@ -1,0 +1,75 @@
+[Unit]
+Description=GPForum Hypnotoad application on UNIX socket
+After=network-online.target postgresql.service clamav-daemon.service
+Wants=network-online.target
+
+[Service]
+Type=forking
+User=gpforum
+Group=gpforum
+WorkingDirectory=/opt/gpforum
+Environment=MOJO_MODE=production
+Environment=GPFORUM_ENV=production
+EnvironmentFile=/etc/gpforum/gpforum.env
+# Hypnotoad daemonizes, and Mojo::Server::daemonize reopens STDERR on
+# /dev/null before the workers fork, so a logger left on STDERR writes
+# nowhere. An explicit path is what makes the log readable at 3am.
+Environment=GPFORUM_LOG_PATH=/var/log/gpforum/gpforum.log
+Environment=GPFORUM_RUNTIME_LISTEN=http+unix://%2Frun%2Fgpforum%2Fgpforum.sock
+Environment=GPFORUM_RUNTIME_WORKER_POLICY=cap-to-cpu
+Environment=GPFORUM_RUNTIME_BACKLOG=256
+Environment=GPFORUM_RUNTIME_CLIENTS=250
+Environment=GPFORUM_RUNTIME_REQUESTS=1000
+Environment=GPFORUM_RUNTIME_KEEP_ALIVE_TIMEOUT=5
+Environment=GPFORUM_RUNTIME_INACTIVITY_TIMEOUT=30
+Environment=GPFORUM_RUNTIME_GRACEFUL_TIMEOUT=20
+Environment=GPFORUM_RUNTIME_HEARTBEAT_INTERVAL=5
+Environment=GPFORUM_RUNTIME_HEARTBEAT_TIMEOUT=5
+Environment=GPFORUM_RUNTIME_UPGRADE_TIMEOUT=60
+Environment=GPFORUM_OS_MIN_RECOMMENDED_WORKERS=2
+Environment=GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS=65536
+Environment=GPFORUM_OS_REUSEPORT=auto
+Environment=GPFORUM_OS_SENDFILE=auto
+Environment=GPFORUM_OS_STATIC_XSENDFILE=auto
+Environment=GPFORUM_OS_AFFINITY=off
+Environment=GPFORUM_LOCAL_CACHE_MAX_ENTRIES=2048
+Environment=GPFORUM_CATEGORY_CACHE_TTL_SECONDS=60
+Environment=GPFORUM_REALTIME_LISTENER_ENABLED=1
+Environment=GPFORUM_REALTIME_LISTENER_POLL_INTERVAL_SECONDS=1
+Environment=GPFORUM_REALTIME_LISTENER_RECONNECT_BACKOFF_SECONDS=5
+Environment=GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS=30
+# carton install --deployment does not create local/bin/carton. Use the
+# same locator as script/bootstrap-deps, then Hypnotoad from local/.
+RuntimeDirectory=gpforum
+LogsDirectory=gpforum
+LogsDirectoryMode=0750
+RuntimeDirectoryMode=0750
+ExecStartPre=/opt/gpforum/script/os-preflight --strict --json
+ExecStart=/opt/gpforum/script/gpforum-carton exec hypnotoad /opt/gpforum/bin/gpforum
+# No ExecReload, deliberately. It used to be byte-identical to ExecStart, and
+# running hypnotoad against a live instance is its hot-deploy path: the new
+# manager sends QUIT to the old one and takes over. Under Type=forking with
+# PIDFile=, systemd read that file once at start and kept tracking the old
+# manager, so `systemctl reload` handed the service to a process systemd no
+# longer supervised -- the reload killed it.
+#
+# `ExecReload=/bin/kill -USR2 $MAINPID` does not fix this: USR2 *is* the hot
+# deploy, so the manager moves either way. Hypnotoad has no reload-in-place
+# signal -- INT/TERM and QUIT stop, TTIN/TTOU resize the pool, USR2 replaces
+# the manager -- so there is nothing honest to put here. `systemctl reload`
+# now fails with "operation not supported" instead of stopping the service,
+# and `systemctl restart` is the supported way to pick up new code or config.
+#
+# The durable fix is HYPNOTOAD_FOREGROUND=1 under Type=notify, which would let
+# systemd supervise the manager directly; that is the same restructuring 3.1
+# left open and it cannot be exercised on the development host.
+ExecStop=/bin/kill -QUIT $MAINPID
+PIDFile=/opt/gpforum/hypnotoad.pid
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

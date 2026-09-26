@@ -1,0 +1,83 @@
+name: FreeBSD target
+
+# FreeBSD is a named deployment platform (README, deploy/freebsd/gpforum).
+# GitHub has no FreeBSD runner, so the gate runs inside a FreeBSD VM on an
+# Ubuntu runner. Advisory, not a merge blocker: it is scheduled and manual, and
+# path-triggered on the OS abstraction and the rc(8) unit.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/GPForum/OS/**'
+      - 'lib/GPForum/OS.pm'
+      - 'deploy/freebsd/**'
+      - 'script/gpforum-system-perl'
+      - 'script/bootstrap-deps'
+      - 'script/gpforum-carton'
+      - 'cpanfile'
+      - 'cpanfile.postgres'
+      - 'cpanfile.snapshot'
+      - '.github/workflows/platform-freebsd.yml'
+  schedule:
+    - cron: '41 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-freebsd-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  freebsd:
+    name: FreeBSD system Perl
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Run the GPForum gate in a FreeBSD VM
+        uses: vmactions/freebsd-vm@4469451fe39bee80be4066836c5170362e9349f3 # v1.5.7
+        with:
+          release: '14.3'
+          copyback: false
+          envs: 'PERL_CARTON_MIRROR'
+          prepare: |
+            pkg install -y perl5 p5-Carton p5-App-cpanminus postgresql16-client
+          run: |
+            set -eu
+
+            echo '--- ports perl'
+            perl -v | sed -n '1,4p'
+
+            echo '--- system Perl contract'
+            script/gpforum-system-perl --preflight
+            script/gpforum-system-perl --require
+
+            echo '--- locked CPAN distributions'
+            script/bootstrap-deps --postgres
+
+            echo '--- dependency lock'
+            script/gpforum-carton check
+
+            echo '--- Perl syntax'
+            script/gpforum-carton exec script/perl-syntax-check
+
+            echo '--- rc(8) unit syntax'
+            sh -n deploy/freebsd/gpforum
+
+            echo '--- OS preflight'
+            script/os-preflight --json
+
+            echo '--- tests (PostgreSQL integration tests skip without a server)'
+            script/gpforum-carton exec prove -lr t
+
+            echo '--- platform check'
+            script/gpforum-carton exec bin/gpforum-platform-check --local
+        env:
+          PERL_CARTON_MIRROR: https://cpan.metacpan.org/

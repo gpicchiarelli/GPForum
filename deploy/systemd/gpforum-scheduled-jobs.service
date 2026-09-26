@@ -1,0 +1,26 @@
+[Unit]
+Description=GPForum scheduled operational jobs
+After=network-online.target postgresql.service gpforum.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gpforum
+Group=gpforum
+WorkingDirectory=/opt/gpforum
+Environment=MOJO_MODE=production
+Environment=GPFORUM_ENV=production
+EnvironmentFile=/etc/gpforum/gpforum.env
+# Hypnotoad daemonizes, and Mojo::Server::daemonize reopens STDERR on
+# /dev/null before the workers fork, so a logger left on STDERR writes
+# nowhere. An explicit path is what makes the log readable at 3am.
+Environment=GPFORUM_LOG_PATH=/var/log/gpforum/scheduled-jobs.log
+# carton install --deployment does not create local/bin/carton.
+ExecStart=/opt/gpforum/script/gpforum-carton exec /opt/gpforum/bin/gpforum-scheduled-jobs --once --limit 100
+Nice=10
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/gpforum

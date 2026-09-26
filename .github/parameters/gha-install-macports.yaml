@@ -1,0 +1,11 @@
+# Ports installed by melusina-org/setup-macports in .github/workflows/platform-macos.yml.
+#
+# GPForum runs on the OS system Perl only; on macOS that means MacPorts under
+# /opt/local (script/gpforum-system-perl). MacPorts ships only versioned Perl
+# binaries, so the helper probes /opt/local/bin/perl5.NN.
+#
+# postgresql18 provides the client bins under /opt/local/lib/postgresql18/bin
+# that script/gpforum-macports-env --check requires.
+ports:
+  - name: perl5.42
+  - name: postgresql18

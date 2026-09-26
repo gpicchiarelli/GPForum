@@ -1,0 +1,105 @@
+% layout 'default';
+% title $profile->{user}{display_name} . ' - ' . t('app.name');
+
+<section aria-labelledby="profile-heading">
+  <%= include 'components/page_header',
+    heading_id => 'profile-heading',
+    component_title => $profile->{user}{display_name},
+    description => $profile->{user}{profile_label} %>
+  % my $counts = $profile->{counts} || {};
+  <dl aria-label="<%= t('profile.contributor_summary') %>">
+    <dt><%= t('profile.public_contributions') %></dt>
+    <dd><%= $counts->{total_public} // 0 %></dd>
+    <dt><%= t('profile.public_threads') %></dt>
+    <dd><%= $counts->{public_threads} // 0 %></dd>
+    <dt><%= t('profile.public_replies') %></dt>
+    <dd><%= $counts->{public_replies} // 0 %></dd>
+    <dt><%= t('admin.trust_level') %></dt>
+    <dd><%= $profile->{trust}{trust_level} %></dd>
+    <dt><%= t('profile.trust_badge') %></dt>
+    <dd><%= $profile->{trust}{badge} || t('profile.new_contributor') %></dd>
+    <dt><%= t('profile.reputation_score') %></dt>
+    <dd><%= $profile->{trust}{score} %></dd>
+    % if ($profile->{user}{created_at}) {
+      <dt><%= t('profile.joined') %></dt>
+      <dd><time datetime="<%= $profile->{user}{created_at} %>"><%= dt($profile->{user}{created_at}) %></time></dd>
+    % }
+  </dl>
+  % if (session('user_id')) {
+    <form method="post" action="<%= url_for('profile_report', username => $profile->{user}{username}) %>">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $profile->{report_command_id} || q{} %>">
+      <label for="profile-report-reason"><%= t('moderation.report_profile') %></label>
+      <select id="profile-report-reason" name="reason" required>
+        <option value="spam"><%= t('moderation.reason.spam') %></option>
+        <option value="abuse"><%= t('moderation.reason.abuse') %></option>
+        <option value="privacy"><%= t('moderation.reason.privacy') %></option>
+        <option value="other"><%= t('moderation.reason.other') %></option>
+      </select>
+      <label for="profile-report-details"><%= t('common.details') %></label>
+      <textarea id="profile-report-details" name="details" rows="3"></textarea>
+      <button type="submit"><%= t('moderation.submit_report') %></button>
+    </form>
+  % }
+</section>
+
+<section aria-labelledby="profile-replies-heading">
+  <%= include 'components/section_header',
+    heading_id => 'profile-replies-heading',
+    component_title => t('profile.recent_public_replies') %>
+  % my $replies = $profile->{replies} || { items => [] };
+  % if (@{ $replies->{items} }) {
+    <ol class="ui-card-list" aria-label="<%= t('profile.recent_public_replies_by_contributor') %>">
+      % for my $reply (@{ $replies->{items} }) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="profile-reply-<%= $reply->{post_id} %>-heading">
+            <h3 id="profile-reply-<%= $reply->{post_id} %>-heading">
+              <a href="<%= url_for('thread', thread_id => $reply->{thread_id})->fragment('post-' . $reply->{post_id}) %>"><%= $reply->{thread_title} || t('profile.discussion_reply') %></a>
+            </h3>
+            % if ($reply->{created_at}) {
+              <p class="ui-meta"><%= t('profile.replied') %> <time datetime="<%= $reply->{created_at} %>"><%= dt($reply->{created_at}) %></time></p>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'profile-replies-empty-heading',
+      component_title => t('profile.no_public_replies') %>
+  % }
+</section>
+
+<section aria-labelledby="profile-threads-heading">
+  <%= include 'components/section_header',
+    heading_id => 'profile-threads-heading',
+    component_title => t('profile.public_discussions') %>
+  % if (@{ $profile->{threads}{items} }) {
+    <ol class="ui-card-list" aria-label="<%= t('profile.public_discussions_by_contributor') %>">
+      % for my $thread (@{ $profile->{threads}{items} }) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="profile-thread-<%= $thread->{thread_id} %>-heading">
+            <h3 id="profile-thread-<%= $thread->{thread_id} %>-heading">
+              <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>"><%= $thread->{title} %></a>
+            </h3>
+            % if ($thread->{last_activity_at}) {
+              <p class="ui-meta"><%= t('forum.last_activity') %> <time datetime="<%= $thread->{last_activity_at} %>"><%= dt($thread->{last_activity_at}) %></time></p>
+            % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'profile-threads-empty-heading',
+      component_title => t('profile.no_public_discussions') %>
+  % }
+  % if ($profile->{threads}{next_cursor}) {
+    <%= include 'components/pagination',
+      label => t('profile.profile_activity_pagination'),
+      items => ui_next_page(
+        href => url_for('profile', username => $profile->{user}{username})->query(after => $profile->{threads}{next_cursor}),
+        label => t('profile.older_public_discussions'),
+      ) %>
+  % }
+</section>

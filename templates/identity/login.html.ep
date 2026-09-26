@@ -1,0 +1,33 @@
+% layout 'default';
+% title t('auth.login_title') . ' - ' . t('app.name');
+% my $form_described_by = $ui->{described_by} || q{};
+
+<section aria-labelledby="login-heading">
+  <h1 id="<%= $ui->{heading_id} %>"><%= t('auth.login_title') %></h1>
+  % if ($errors->{login}) {
+    <%= include 'components/field_error', field_id => 'login-form-error', message => $errors->{login}, role => 'alert' %>
+  % }
+  <%= include 'components/error_summary',
+    summary_id => 'login-error-summary',
+    errors => $errors,
+    fields => $error_fields %>
+  <form method="post" action="<%= url_for('login_submit') %>"<%== length $form_described_by ? ' aria-describedby="' . $form_described_by . '"' : q{} %>>
+    <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= $command_id || q{} %>">
+    % for my $field (@{$fields}) {
+      <label for="<%= $field->{id} %>">
+        <%= t($field->{label_key}) %>
+      </label>
+      % if ($field->{type} eq 'password') {
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>" type="password" autocomplete="<%= $field->{autocomplete} %>"<%== $field->{error_attrs} %>>
+      % } else {
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>" type="<%= $field->{type} %>" value="<%= $field->{value} %>" autocomplete="<%= $field->{autocomplete} %>"<%== $field->{error_attrs} %>>
+      % }
+      <%= include 'components/field_error', field_id => $field->{error_id}, message => $field->{error} %>
+    % }
+    <button type="submit"><%= t('auth.login') %></button>
+  </form>
+  <p>
+    <a href="<%= url_for('password_reset_request') %>"><%= t('auth.forgot_password') %></a>
+  </p>
+</section>

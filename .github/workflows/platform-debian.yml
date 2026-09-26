@@ -1,0 +1,107 @@
+name: Debian target
+
+# Debian is a named deployment platform (README, deploy/systemd). ubuntu-latest
+# proves the Ubuntu system Perl; this job proves the Debian stable system Perl
+# and the deploy/systemd runtime shape in a plain Debian container.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'lib/**'
+      - 'bin/**'
+      - 'script/**'
+      - 't/**'
+      - 'migrations/**'
+      - 'cpanfile'
+      - 'cpanfile.postgres'
+      - 'cpanfile.snapshot'
+      - '.github/workflows/platform-debian.yml'
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-debian-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  debian:
+    name: Debian stable system Perl
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    container:
+      image: debian:trixie
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: gpforum_test
+        options: >-
+          --health-cmd "pg_isready -U postgres -d gpforum_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Service containers are reachable by service name from a container job.
+      GPFORUM_DATABASE_DSN: dbi:Pg:dbname=gpforum_test;host=postgres;port=5432
+      GPFORUM_DATABASE_USER: postgres
+      GPFORUM_DATABASE_PASSWORD: postgres
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: Install Debian system dependencies
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git \
+            perl build-essential cpanminus libpq-dev postgresql-client
+          # Carton is a host tool for the OS system Perl, not a Carton-local binary.
+          /usr/bin/perl /usr/bin/cpanm --notest Carton
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Trust the checkout inside the container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Verify system Perl
+        run: |
+          set -euo pipefail
+          test "$(readlink -f "$(command -v perl)")" = /usr/bin/perl
+          script/gpforum-system-perl --preflight
+          script/gpforum-system-perl --require
+
+      - name: Install locked CPAN distributions
+        run: script/bootstrap-deps --postgres
+
+      - name: Verify dependency lock
+        run: script/gpforum-carton check
+
+      - name: Check Perl syntax
+        run: script/gpforum-carton exec script/perl-syntax-check
+
+      - name: Run architecture boundary check
+        run: script/architecture-check
+
+      - name: Apply database migrations
+        run: script/gpforum-carton exec bin/gpforum-migrate --apply
+
+      - name: Run OS preflight
+        run: script/os-preflight --json
+
+      - name: Run tests
+        run: script/gpforum-carton exec prove -lr t
+
+      - name: Run platform check
+        run: script/gpforum-carton exec bin/gpforum-platform-check --with-db

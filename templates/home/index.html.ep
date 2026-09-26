@@ -1,0 +1,95 @@
+% layout 'default';
+% title t('app.name');
+
+<section aria-labelledby="home-heading">
+  <%= include 'components/page_header',
+    heading_id => 'home-heading',
+    component_title => t('app.name'),
+    description => t('forum.index_tagline'),
+    actions_label => t('forum.forum_actions'),
+    actions => ui_actions(
+      { href => url_for('categories'), label => t('nav.categories') },
+      { href => url_for('new_thread'), label => t('nav.start_thread') },
+      { href => url_for('forum_search'), label => t('nav.search') },
+    ) %>
+</section>
+
+<section aria-labelledby="home-categories-heading">
+  <%= include 'components/section_header',
+    heading_id => 'home-categories-heading',
+    component_title => t('nav.categories') %>
+  % if (@{ $home->{categories} }) {
+    <ol class="ui-card-list" aria-label="<%= t('forum.forum_categories') %>">
+      % for my $category (@{ $home->{categories} }) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="home-category-<%= $category->{category_id} %>-heading">
+            <h3 id="home-category-<%= $category->{category_id} %>-heading">
+              <a href="<%= url_for('category', category_id => $category->{category_id}) %>"><%= $category->{title} %></a>
+            </h3>
+          % if ($category->{description}) {
+            <p><%= $category->{description} %></p>
+          % }
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'home-categories-empty-heading',
+      component_title => t('forum.categories_empty') %>
+  % }
+</section>
+
+<section aria-labelledby="home-latest-heading">
+  <%= include 'components/section_header',
+    heading_id => 'home-latest-heading',
+    component_title => t('forum.latest_public_discussions') %>
+  % if (@{ $home->{latest_threads}{items} }) {
+    <ol class="ui-card-list" aria-label="<%= t('forum.latest_public_discussions') %>">
+      % for my $thread (@{ $home->{latest_threads}{items} }) {
+        <li class="ui-card-list__item">
+          <article aria-labelledby="home-thread-<%= $thread->{thread_id} %>-heading">
+            <h3 id="home-thread-<%= $thread->{thread_id} %>-heading">
+              <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>"><%= $thread->{title} %></a>
+            </h3>
+          % if ($thread->{last_activity_at}) {
+            <p class="ui-meta">
+              <%= t('forum.last_activity') %>:
+              <time datetime="<%= $thread->{last_activity_at} %>"><%= dt($thread->{last_activity_at}) %></time>
+            </p>
+          % }
+          % if ($thread->{safe_excerpt}) {
+            <p><%= $thread->{safe_excerpt} %></p>
+          % }
+          </article>
+        </li>
+      % }
+    </ol>
+    % if ($home->{latest_threads}{next_cursor}) {
+      <%= include 'components/pagination',
+        label => t('forum.latest_discussion_pagination'),
+        items => ui_next_page(
+          href => url_for('home')->query(after => $home->{latest_threads}{next_cursor}),
+          label => t('forum.older_discussions'),
+        ) %>
+    % }
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'home-latest-empty-heading',
+      component_title => t('forum.no_public_discussions') %>
+  % }
+</section>
+
+<section aria-labelledby="home-runtime-heading">
+  <%= include 'components/section_header',
+    heading_id => 'home-runtime-heading',
+    component_title => t('forum.runtime') %>
+  <dl>
+    <dt><%= t('forum.web_processes') %></dt>
+    <dd><%= $runtime->{web_processes} %></dd>
+    <dt><%= t('forum.worker_processes') %></dt>
+    <dd><%= $runtime->{worker_processes} %></dd>
+    <dt><%= t('forum.realtime_processes') %></dt>
+    <dd><%= $runtime->{realtime_processes} %></dd>
+  </dl>
+</section>

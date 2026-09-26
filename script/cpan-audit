@@ -1,0 +1,69 @@
+#!/bin/sh
+set -eu
+
+# Audit the locked CPAN distributions against the CPANSA advisory database.
+#
+# CPAN::Audit is a host tool for the OS system Perl, like Carton: it audits the
+# dependency lock, so it must not become part of that lock. Install it for the
+# same interpreter that script/gpforum-system-perl resolves:
+#
+#   sudo "$(script/gpforum-system-perl --print)" -S cpanm -M https://cpan.metacpan.org/ CPAN::Audit
+#
+# Core modules are excluded (--no-corelist): their patch level belongs to the OS
+# Perl package, not to cpanfile.snapshot. Accepted advisories live in
+# etc/cpan-audit-ignore.txt with a documented reason and review trigger.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+exclude_file=etc/cpan-audit-ignore.txt
+
+usage() {
+    cat <<'EOF'
+Usage: script/cpan-audit [cpan-audit options]
+
+  Runs: cpan-audit deps . --no-corelist --exclude-file etc/cpan-audit-ignore.txt
+
+  Extra options are passed through, for example --json or --verbose.
+  Exits non-zero when an unexcluded advisory affects the locked tree.
+EOF
+}
+
+for argument in "$@"; do
+    case "$argument" in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            ;;
+    esac
+done
+
+if [ ! -f "$exclude_file" ]; then
+    echo "cpan-audit: missing advisory exclusion file: $exclude_file" >&2
+    exit 1
+fi
+
+perl_bin=$(script/gpforum-system-perl --require)
+perl_dir=$(dirname "$perl_bin")
+PATH="$perl_dir:$PATH"
+export PATH
+
+set -- deps . --no-corelist --exclude-file "$exclude_file" "$@"
+
+if [ -x "$perl_dir/cpan-audit" ]; then
+    exec "$perl_dir/cpan-audit" "$@"
+fi
+
+if "$perl_bin" -S cpan-audit --version >/dev/null 2>&1; then
+    exec "$perl_bin" -S cpan-audit "$@"
+fi
+
+if command -v cpan-audit >/dev/null 2>&1; then
+    exec cpan-audit "$@"
+fi
+
+echo "cpan-audit: CPAN::Audit was not found for system Perl $perl_bin." >&2
+echo "Install it for this Perl with: sudo $perl_bin -S cpanm -M https://cpan.metacpan.org/ CPAN::Audit" >&2
+exit 1

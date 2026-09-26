@@ -1,0 +1,18 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
+if [ "$#" -eq 0 ]; then
+    echo "Usage: script/profile <perl-program> [args...]"
+    exit 2
+fi
+
+mkdir -p var/profile
+export NYTPROF="${NYTPROF:-file=var/profile/nytprof.out:addpid=1}"
+
+exec "$gpforum_carton" exec perl -d:NYTProf "$@"
+

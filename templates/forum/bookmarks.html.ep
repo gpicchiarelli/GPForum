@@ -1,0 +1,30 @@
+% layout 'default';
+% title t('community.bookmarks') . ' - ' . t('app.name');
+
+<section aria-labelledby="bookmarks-heading">
+  <%= include 'components/page_header', heading_id => 'bookmarks-heading', component_title => t('community.bookmarks') %>
+  % if (@{$bookmarks}) {
+    <ol class="ui-card-list" aria-label="<%= t('community.bookmarks') %>">
+      % for my $bookmark (@{$bookmarks}) {
+        <li>
+          <article aria-labelledby="bookmark-<%= $bookmark->{bookmark_id} %>-heading">
+            <h2 id="bookmark-<%= $bookmark->{bookmark_id} %>-heading">
+              <a href="<%= url_for('thread', thread_id => $bookmark->{target_id}) %>">
+                Thread <%= $bookmark->{target_id} %>
+              </a>
+            </h2>
+            % if (length($bookmark->{note} // q{})) {
+              <p><%= $bookmark->{note} %></p>
+            % }
+            <p><%= t('community.saved_at') %> <time datetime="<%= $bookmark->{created_at} %>"><%= dt($bookmark->{created_at}) %></time></p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state', heading_id => 'bookmarks-empty-heading', component_title => t('community.bookmarks_empty') %>
+  % }
+  % if ($next_cursor) {
+    <%= include 'components/pagination', label => t('community.bookmark_pagination'), items => ui_next_page(href => url_for('bookmarks')->query(after => $next_cursor), label => t('community.older_bookmarks')) %>
+  % }
+</section>

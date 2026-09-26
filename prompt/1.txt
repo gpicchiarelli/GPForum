@@ -1,0 +1,351 @@
+Questo deve essere il prompt fondativo.
+NON per generare codice immediatamente, ma per fissare la costituzione tecnica del progetto.
+
+Usalo come:
+
+* 000-foundation.md
+* prompt master iniziale
+* baseline permanente per AI/code generation.
+
+⸻
+
+GPForum — Foundational Architecture Constitution
+
+GPForum (General Purpose Forum) is a Perl-native distributed community platform designed for extreme scalability, security, maintainability, modularity, and long-term operational sustainability.
+
+The project MUST follow these principles permanently.
+
+⸻
+
+Core Philosophy
+
+GPForum is NOT:
+
+* a legacy monolithic forum;
+* a PHP-style page-oriented application;
+* a microservice explosion;
+* a JavaScript SPA-first platform.
+
+GPForum IS:
+
+* a distributed modular monolith;
+* event-driven;
+* security-first;
+* Perl-first;
+* append-oriented;
+* horizontally scalable;
+* realtime-capable;
+* operationally sustainable.
+
+The architecture must prioritize:
+
+* simplicity over hype;
+* deterministic behavior;
+* observability;
+* auditability;
+* low operational entropy;
+* strict coding discipline.
+
+⸻
+
+Technology Stack
+
+Mandatory stack:
+
+* Perl (modern Perl only)
+* Mojolicious
+* DBIx::Class
+* PostgreSQL
+* Minion
+* Nginx or HAProxy
+
+Optional acceleration infrastructure:
+
+* Redis or KeyDB
+
+The platform MUST remain Perl-native.
+
+Avoid polyglot architecture unless strictly unavoidable.
+
+⸻
+
+Architecture Style
+
+The system MUST be implemented as:
+
+* distributed modular monolith;
+* stateless application nodes;
+* multi-process Perl runtime;
+* event-driven internal workflows;
+* append-oriented persistence strategy.
+
+Application nodes MUST:
+
+* be disposable;
+* support horizontal scaling;
+* support dynamic process scaling per node;
+* avoid local persistent state;
+* avoid local sessions;
+* avoid local authoritative caches.
+
+Application root classes MUST remain composition roots only.
+
+They MUST NOT become god class applications.
+
+The application root MAY:
+
+* load configuration;
+* register routes;
+* register helpers;
+* wire dependency boundaries;
+* attach middleware;
+* start observability hooks.
+
+The application root MUST NOT:
+
+* contain business logic;
+* contain authorization policy logic;
+* contain persistence orchestration;
+* contain search orchestration;
+* contain queue workflow logic;
+* contain websocket workflow logic;
+* contain moderation workflow logic;
+* directly implement domain use cases.
+
+If the application root grows beyond wiring, the behavior MUST be moved into
+controllers, application services, domain services, infrastructure adapters, or
+runtime modules with explicit ownership.
+
+Shared state MUST reside in:
+
+* PostgreSQL;
+* object storage.
+
+Search MUST be PostgreSQL-native by default through full-text search, trigram indexes, and Perl orchestration.
+
+External search engines MAY be added only as optional acceleration through ADR.
+
+Redis/KeyDB MAY be used only as optional ephemeral acceleration.
+
+⸻
+
+Database Philosophy
+
+PostgreSQL is the system of record.
+
+The database architecture MUST:
+
+* support partitioning from day zero;
+* avoid giant mutable tables;
+* prefer append-only patterns;
+* support retention policies;
+* support CQRS-lite read models;
+* minimize destructive UPDATE and DELETE operations.
+
+Mandatory database characteristics:
+
+* UUIDv7 identifiers;
+* partitioned event tables;
+* append-only event_log;
+* immutable audit records;
+* migration-driven schema evolution.
+
+The system MUST be designed for multi-year growth without manual database maintenance crises.
+
+⸻
+
+Event-Driven Model
+
+All significant actions MUST emit events.
+
+Examples:
+
+* thread.created
+* post.created
+* post.edited
+* user.banned
+* notification.sent
+
+An append-only event_log MUST exist.
+
+Events MUST:
+
+* be immutable;
+* timestamped;
+* traceable;
+* replayable when possible.
+
+⸻
+
+Security Constitution
+
+Security is mandatory and foundational.
+
+Mandatory requirements:
+
+* Argon2id password hashing;
+* WebAuthn support;
+* TOTP support;
+* CSP enforcement;
+* HSTS;
+* SameSite cookies;
+* strict input validation;
+* HTML sanitization;
+* append-only audit trails;
+* RBAC + ABAC hybrid permissions.
+
+The system MUST assume hostile input at all times.
+
+No user-controlled HTML, JavaScript, or template execution may bypass sanitization.
+
+⸻
+
+Perl Coding Discipline
+
+The project MUST enforce maximum Perl::Critic discipline.
+
+Mandatory:
+
+* use strict;
+* use warnings;
+* lexical variables only;
+* no package variables;
+* no string eval;
+* no two-argument open;
+* explicit argument unpacking;
+* limited McCabe complexity;
+* deterministic error handling.
+
+Perl native signatures SHOULD be avoided unless explicitly justified.
+
+Business logic MUST NOT exist in templates.
+
+Controllers MUST remain thin.
+
+⸻
+
+Frontend Philosophy
+
+Frontend architecture MUST prioritize:
+
+* server-side rendering;
+* simplicity;
+* performance;
+* accessibility;
+* long-term maintainability.
+
+Preferred frontend strategy:
+
+* SSR;
+* HTMX;
+* minimal JavaScript;
+* Alpine.js when necessary.
+
+The platform MUST avoid SPA-first complexity unless strictly required.
+
+⸻
+
+Theme System
+
+Themes are presentation-only.
+
+Themes MUST NOT:
+
+* execute arbitrary Perl;
+* access the database directly;
+* contain business logic;
+* bypass security controls.
+
+Themes MUST support:
+
+* inheritance;
+* design tokens;
+* component overrides;
+* asset versioning.
+
+⸻
+
+Realtime Architecture
+
+Realtime features MUST:
+
+* support distributed websocket nodes;
+* avoid centralized bottlenecks;
+* support pub/sub synchronization;
+* use asynchronous event propagation.
+
+⸻
+
+Worker Architecture
+
+Long-running or slow operations MUST execute asynchronously.
+
+Examples:
+
+* email;
+* indexing;
+* moderation;
+* analytics;
+* media processing;
+* notifications.
+
+Minion workers MUST support:
+
+* retries;
+* idempotency;
+* distributed execution.
+
+⸻
+
+Observability
+
+The system MUST expose:
+
+* structured logs;
+* metrics;
+* tracing;
+* correlation IDs;
+* audit trails.
+
+Operational visibility is mandatory.
+
+⸻
+
+Scaling Philosophy
+
+Scaling MUST prioritize:
+
+* horizontal scalability;
+* Perl process multiplicity;
+* dynamic worker pool sizing;
+* cache efficiency;
+* asynchronous processing;
+* read/write separation;
+* partition-aware queries.
+
+The architecture MUST assume:
+
+* millions of users;
+* distributed deployments;
+* multi-node synchronization.
+
+The application tier MUST scale by increasing:
+
+* Perl web processes;
+* Perl worker processes;
+* Perl realtime processes;
+* application nodes.
+
+⸻
+
+Long-Term Engineering Philosophy
+
+GPForum is intended to be:
+
+* maintainable for decades;
+* operationally sustainable;
+* highly auditable;
+* security-focused;
+* architecturally coherent.
+
+All future code generation, modules, APIs, database structures, workers, themes, and services MUST comply with this constitution.

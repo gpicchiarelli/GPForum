@@ -1,0 +1,10 @@
+% my $confirm_id = stash('confirm_id');
+% my $consequence_id = $confirm_id . '-consequence';
+<div class="danger-zone">
+  <p id="<%= $consequence_id %>" class="danger-zone__consequence"><%= stash('consequence') %></p>
+  <label class="danger-zone__confirm" for="<%= $confirm_id %>">
+    <input id="<%= $confirm_id %>" type="checkbox" name="confirm" value="1" required aria-describedby="<%= $consequence_id %>">
+    <%= t('form.confirm_understood') %>
+  </label>
+  <button type="submit" class="button--danger" aria-describedby="<%= $consequence_id %>"><%= stash('button_label') %></button>
+</div>

@@ -1,0 +1,95 @@
+#!/bin/sh
+
+# PROVIDE: gpforum
+# REQUIRE: LOGIN postgresql clamav_clamd
+# KEYWORD: shutdown
+
+. /etc/rc.subr
+
+name="gpforum"
+rcvar="gpforum_enable"
+
+: ${gpforum_enable:="NO"}
+: ${gpforum_user:="gpforum"}
+: ${gpforum_group:="gpforum"}
+: ${gpforum_home:="/usr/local/www/gpforum"}
+: ${gpforum_env:="production"}
+# The FreeBSD counterpart of systemd's EnvironmentFile=/etc/gpforum/gpforum.env:
+# the database DSN, the session secret and the rest of GPFORUM_*. rc.conf
+# variables are never exported to the service, so without this file a
+# production start died in config validation.
+: ${gpforum_env_file:="/usr/local/etc/gpforum/gpforum.env"}
+: ${gpforum_log:="/var/log/gpforum/gpforum.log"}
+: ${gpforum_rundir:="/var/run/gpforum"}
+
+# daemon(8) supervises Hypnotoad's manager, which runs in the foreground
+# (-f): a daemonizing Hypnotoad double-forks, and daemon(8) was left tracking
+# a process that had already exited. rc.subr tracks the supervisor; the
+# manager's own pid is kept for the graceful stop.
+pidfile="${gpforum_rundir}/daemon.pid"
+manager_pidfile="${gpforum_rundir}/hypnotoad.pid"
+procname="/usr/sbin/daemon"
+command="/usr/sbin/daemon"
+command_args="-f -P ${pidfile} -p ${manager_pidfile} -u ${gpforum_user} /usr/bin/env GPFORUM_ENV=${gpforum_env} GPFORUM_LOG_PATH=${gpforum_log} MOJO_MODE=production ${gpforum_home}/script/gpforum-carton exec hypnotoad -f ${gpforum_home}/bin/gpforum"
+start_precmd="gpforum_prestart"
+stop_cmd="gpforum_stop"
+
+# Exported into the rc shell, and so into daemon(8) and Hypnotoad. The file
+# holds secrets: it must belong to root and be closed to others, and writable
+# by nobody else, or a local user could rewrite the service's environment.
+gpforum_load_env()
+{
+    if [ ! -r "${gpforum_env_file}" ]; then
+        warn "${gpforum_env_file} is missing; see docs/DEPLOYMENT.md"
+        return 1
+    fi
+    set -- $(stat -f '%Su %Lp' "${gpforum_env_file}")
+    if [ "$1" != "root" ]; then
+        warn "${gpforum_env_file} must be owned by root"
+        return 1
+    fi
+    case "$2" in
+        *[!0])
+            warn "${gpforum_env_file} must not be readable by others (chmod 0640)"
+            return 1
+            ;;
+        *[2367]?)
+            warn "${gpforum_env_file} must not be writable by its group (chmod 0640)"
+            return 1
+            ;;
+    esac
+
+    set -a
+    . "${gpforum_env_file}"
+    set +a
+}
+
+gpforum_prestart()
+{
+    install -d -o root -g wheel -m 0755 "${gpforum_rundir}" || return 1
+    gpforum_load_env || return 1
+    cd "${gpforum_home}" || return 1
+    su -m "${gpforum_user}" -c "${gpforum_home}/script/os-preflight --json" || return 1
+}
+
+# QUIT is Hypnotoad's graceful stop: the manager lets workers finish their
+# requests. daemon(8) exits once its child has, and rc waits for that.
+gpforum_stop()
+{
+    local supervisor
+    supervisor=$(check_pidfile "${pidfile}" "${procname}")
+    if [ -z "${supervisor}" ]; then
+        echo "${name} is not running."
+        return 1
+    fi
+    echo "Stopping ${name}."
+    if [ -f "${manager_pidfile}" ]; then
+        kill -QUIT "$(cat "${manager_pidfile}")"
+    else
+        kill -TERM "${supervisor}"
+    fi
+    wait_for_pids "${supervisor}"
+}
+
+load_rc_config $name
+run_rc_command "$1"
