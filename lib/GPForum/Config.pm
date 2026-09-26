@@ -149,10 +149,10 @@ has database_lock_timeout_ms => sub { return $DEFAULT_LOCK_TIMEOUT_MS; };
 has search_statement_timeout_ms => sub { return $DEFAULT_SEARCH_TIMEOUT_MS; };
 has search_candidate_limit      => sub { return $DEFAULT_SEARCH_CANDIDATES; };
 has web_processes               => sub { return $DEFAULT_WEB_PROCESSES; };
-has worker_processes         => sub { return $DEFAULT_WORKER_PROCESSES; };
-has realtime_processes       => sub { return $DEFAULT_REALTIME_PROCESSES; };
-has runtime_listen           => sub { return $DEFAULT_RUNTIME_LISTEN; };
-has runtime_worker_policy    => sub { return $DEFAULT_RUNTIME_WORKER_POLICY; };
+has worker_processes            => sub { return $DEFAULT_WORKER_PROCESSES; };
+has realtime_processes          => sub { return $DEFAULT_REALTIME_PROCESSES; };
+has runtime_listen              => sub { return $DEFAULT_RUNTIME_LISTEN; };
+has runtime_worker_policy   => sub { return $DEFAULT_RUNTIME_WORKER_POLICY; };
 has runtime_max_web_per_cpu => sub { return $DEFAULT_RUNTIME_MAX_WEB_PER_CPU; };
 has runtime_backlog         => sub { return $DEFAULT_RUNTIME_BACKLOG; };
 has runtime_clients         => sub { return $DEFAULT_RUNTIME_CLIENTS; };
@@ -268,8 +268,7 @@ sub from_environment ( $class, $environment = undef ) {
             $DEFAULT_LOCK_TIMEOUT_MS
         ),
         search_statement_timeout_ms => _env_integer(
-            $environment,
-            'GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS',
+            $environment, 'GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS',
             $DEFAULT_SEARCH_TIMEOUT_MS
         ),
         search_candidate_limit => _env_integer(
@@ -1076,7 +1075,11 @@ secrets.
 Reads C<GPFORUM_*> environment variables, including PostgreSQL connection
 settings (C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>,
 C<GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS>,
-C<GPFORUM_DATABASE_LOCK_TIMEOUT_MS>), session rotation
+C<GPFORUM_DATABASE_LOCK_TIMEOUT_MS>), search's own statement timeout
+(C<GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS>, 2000 by default; zero leaves search
+under C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>) and the number of newest
+matches it ranks (C<GPFORUM_SEARCH_CANDIDATE_LIMIT>, 1000 by default, at least
+1), session rotation
 (C<GPFORUM_SESSION_SECRET>, comma-separated
 C<GPFORUM_SESSION_SECRETS>), metrics scrape tokens
 (C<GPFORUM_METRICS_TOKEN>, comma-separated C<GPFORUM_METRICS_TOKENS>),

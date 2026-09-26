@@ -78,6 +78,11 @@ batch, and keeps write, dispatch, and dead-letter behavior inside
 attempt/backoff policy, and PostgreSQL claim SQL live in
 `Outbox::FailureType`, `Outbox::Retry`, and `Outbox::ClaimQuery`.
 
+The loop waits `--sleep` seconds only after a batch smaller than `--limit`.
+A full batch means more is waiting, so the next is claimed at once and a
+backlog drains at the handlers' speed. A failed message waits for its
+backoff, not for the loop, so failures cannot make it spin.
+
 A classified `permanent` failure cancels and dead-letters on that attempt.
 Transient and other classified failures retry until `max_attempts`, then
 cancel. Cancelled rows are not claimed again. Operator review is

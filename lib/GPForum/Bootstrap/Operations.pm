@@ -11,6 +11,7 @@ use Const::Fast;
 use English qw(-no_match_vars);
 
 use GPForum::Infrastructure::Antivirus;
+use GPForum::Infrastructure::PgNotifications;
 use GPForum::Log;
 use GPForum::Schema;
 use GPForum::Service::Operations::DbQueryStats;
@@ -79,6 +80,21 @@ sub _register_schema_helpers ( $application, $config ) {
                   $db_query_stats->attach_to_schema($schema);
             }
             return $schema;
+        }
+    );
+
+    # One notification queue per handle. The cache invalidation bus and the
+    # realtime listener both LISTEN on gp_schema's connection, and each used
+    # to read its buffer whole and take the other's notifications.
+    my $pg_notifications;
+    $application->helper(
+        gp_pg_notifications => sub {
+            my ($controller) = @_;
+
+            $pg_notifications ||=
+              GPForum::Infrastructure::PgNotifications->new(
+                schema => $controller->gp_schema );
+            return $pg_notifications;
         }
     );
 
@@ -206,9 +222,12 @@ sub _application_cache ( $config, $controller ) {
 # to the other workers until the entry expires. PostgreSQL LISTEN/NOTIFY is the
 # channel: no new daemon, and the notification is transactional with the write
 # that caused it.
+#
+# A helper is not a method: $controller->can('gp_schema') is false for every
+# helper, and asking it that way left the bus unattached in the application,
+# so no invalidation ever crossed workers. The helpers are called instead.
 sub _attach_invalidation_bus ( $cache, $controller ) {
-    if ( !$cache->can('bus') || !$controller || !$controller->can('gp_schema') )
-    {
+    if ( !$cache->can('bus') || !$controller ) {
         return;
     }
 
@@ -217,9 +236,12 @@ sub _attach_invalidation_bus ( $cache, $controller ) {
         return;
     }
 
+    my $notifications =
+      _optional_controller_helper( $controller, 'gp_pg_notifications' );
     $cache->bus(
         GPForum::Service::Operations::CacheInvalidationBus->new(
-            schema => $schema
+            ( $notifications ? ( notifications => $notifications ) : () ),
+            schema => $schema,
         )
     );
 

@@ -7,6 +7,7 @@ use strict;
 use warnings;
 
 use Carp qw(croak);
+use Const::Fast;
 use Test::Exception;
 use Test::More;
 
@@ -25,6 +26,11 @@ use GPForum::Worker::MinionRegistrar;
 use Mojolicious;
 
 our $VERSION = '0.001';
+
+# Messages each pass of the draining loop claims, with --limit 3: full,
+# short, full, none, short, and then full again.
+const my @CLAIMED      => ( 3, 1, 3, 0, 2 );
+const my $DRAIN_PASSES => 6;
 
 my $minion_unavailable =
   qr{Minion [ ] PostgreSQL [ ] backend [ ] is [ ] unavailable:}msx;
@@ -89,12 +95,41 @@ is_deeply(
     [ 3, 3 ],
     'outbox dispatch loop calls dispatcher for each iteration'
 );
-is_deeply( \@sleeps, [2], 'outbox dispatch loop sleeps between iterations' );
 like(
     $output,
 qr/outbox_dispatch [ ] selected=3 [ ] dispatched=3 [ ] failed=0 [ ] dead_lettered=0/msx,
     'outbox dispatch command prints operational summary'
 );
+
+# It slept after every batch, so however large the backlog it delivered at
+# most --limit messages per --sleep seconds, with realtime, notifications and
+# cache purges waiting behind it. A full batch now goes straight on to the
+# next; only a short one, the backlog drained, waits.
+is_deeply( \@sleeps, [], 'a full batch goes straight on to the next' );
+
+@sleeps = ();
+my $draining =
+  GPForum::Test::OutboxCommandDispatcher->new( selected => [@CLAIMED] );
+my $draining_command = GPForum::Command::OutboxDispatch->new(
+    dispatcher => $draining,
+    output     => $output_handle,
+    sleeper    => sub {
+        my ($seconds) = @_;
+
+        push @sleeps, $seconds;
+
+        return;
+    },
+);
+$draining_command->run( '--loop', '--limit', '3', '--sleep', '2',
+    '--max-iterations', $DRAIN_PASSES );
+is_deeply(
+    \@sleeps,
+    [ 2, 2, 2 ],
+    'a short or empty batch sleeps before the next'
+);
+is( scalar @{ $draining->calls },
+    $DRAIN_PASSES, 'and the loop still runs every pass' );
 
 throws_ok(
     sub {

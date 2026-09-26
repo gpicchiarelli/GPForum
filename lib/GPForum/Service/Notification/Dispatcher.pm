@@ -11,10 +11,12 @@ use Digest::SHA qw(sha1_hex);
 use English     qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 
+use GPForum::Infrastructure::Keyset;
 use GPForum::Infrastructure::Row;
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Forum::PageWindow;
+use GPForum::Service::Realtime::EventEnvelope;
 use GPForum::Infrastructure::Id;
 
 our $VERSION = '0.001';
@@ -29,12 +31,19 @@ const my $UNREAD_CAP                 => 99;
 const my $NOTIFICATION_ID_CONSTRAINT => 'notifications_pkey';
 const my @CURSOR_COLUMNS             => qw(created_at notification_id);
 
-has clock       => sub { return GPForum::Service::Clock->new; };
+has clock => sub { return GPForum::Service::Clock->new; };
+has event_contract =>
+  sub { return GPForum::Service::Realtime::EventEnvelope->new; };
 has id_service  => sub { return GPForum::Infrastructure::Id->new; };
 has page_window => sub { return GPForum::Service::Forum::PageWindow->new; };
 has permission_engine => undef;
 has preference_store  => undef;
-has realtime_hub      => undef;
+
+# Badges go out through NOTIFY (a PgNotifier), never to one process's hub:
+# a count changed by a request on one worker reached only the sockets of
+# that worker, and a reader's other tabs, on other workers or nodes, kept
+# the old one.
+has realtime_notifier => undef;
 
 # ADR 0102: the inbox and its unread count keep only notifications whose
 # source the recipient can still read. One created while a thread was public
@@ -58,8 +67,10 @@ sub create_notification ( $self, $input ) {
         $input->{recipient_user_id} );
 }
 
-# Realtime badges are pushed only once the rows are durable. Broadcasting from
-# inside txn_do would leave subscribers holding a count a rollback then erased.
+# The badge is counted once the rows are durable. pg_notify is transactional
+# as well: under an outer transaction (a mention inside the command log's)
+# PostgreSQL holds the badge until that commits and drops it on rollback, so
+# no subscriber holds a count a rollback erased.
 sub _committed ( $self, $work ) {
     return $self->schema->can('txn_do')
       ? $self->schema->txn_do($work)
@@ -522,11 +533,13 @@ sub _channel_enabled ( $self, $input, $channel ) {
     return $enabled ? 1 : 0;
 }
 
+# A failed NOTIFY leaves the badge to the next snapshot; the rows are written.
 sub _broadcast_unread_count ( $self, $user_id ) {
     my $count = $self->unread_count_for_user($user_id);
-    return $count if !$self->realtime_hub;
+    return $count if !$self->realtime_notifier;
 
-    $self->realtime_hub->broadcast_notification_badge( $user_id, $count );
+    $self->realtime_notifier->notify(
+        $self->event_contract->notification_badge( $user_id, $count ) );
 
     return $count;
 }
@@ -543,18 +556,14 @@ sub inbox_resultset ( $self, $user_id, $options ) {
         %{ $self->_readable_sources( $user_id, $options->{viewer} ) },
     };
     if ( $options->{after} ) {
-        $query->{-or} = [
-            { 'me.created_at' => { q{<} => $options->{after}{sort_value} } },
+        GPForum::Infrastructure::Keyset->after(
+            $query,
             {
-                -and => [
-                    { 'me.created_at' => $options->{after}{sort_value} },
-                    {
-                        'me.notification_id' =>
-                          { q{<} => $options->{after}{id} }
-                    },
-                ],
-            },
-        ];
+                direction => 'desc',
+                id   => [ 'me.notification_id', $options->{after}{id} ],
+                sort => [ 'me.created_at',      $options->{after}{sort_value} ],
+            }
+        );
     }
 
     return $self->schema->resultset('NotificationInbox')->search_rs(

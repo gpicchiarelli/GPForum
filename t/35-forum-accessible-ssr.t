@@ -18,7 +18,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 236;
+const my $EXPECTED_TESTS   => 246;
 const my $FORM_SNIPPET     => 800;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FOUND       => 302;
@@ -165,6 +165,24 @@ $test->status_is($HTTP_OK);
 $test->element_exists('nav[aria-label="Search pagination"]');
 $test->element_exists('nav[aria-label="Search pagination"] a[href*="limit=4"]');
 $test->content_like(qr/2 [ ] results/msx);
+
+# A word that filled every candidate slot was ranked over the newest matches
+# only, and the page says so (8.10). A search the database cancelled at its
+# statement timeout is a degraded page, not an error -- and the banner used to
+# be missing from it: rendering sets the stash's status to the HTTP code, so
+# the template never saw 'degraded' and the page said nothing had matched.
+$test->get_ok('/search?q=capped');
+$test->status_is($HTTP_OK);
+$test->text_like(
+    '#search-ranking-capped' => qr/1000 [ ] most [ ] recent [ ] matches/msx );
+$test->get_ok('/search?q=welcome');
+$test->element_exists_not('#search-ranking-capped');
+$test->get_ok('/search?q=timeout');
+$test->status_is($HTTP_OK);
+$test->element_exists('section[aria-labelledby="search-status-heading"]');
+$test->content_like(qr/Search [ ] is [ ] temporarily [ ] degraded/msx);
+$test->element_exists_not(
+    'section[aria-labelledby="search-no-results-heading"]');
 
 $test->get_ok('/__test/session/user-1');
 $test->status_is($HTTP_OK);

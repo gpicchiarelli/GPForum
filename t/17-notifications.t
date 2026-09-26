@@ -8,6 +8,7 @@ use warnings;
 use utf8;
 
 use Const::Fast;
+use MIME::Base64 qw(encode_base64url);
 use Test::More;
 
 use lib 'lib';
@@ -510,11 +511,12 @@ $realtime_hub->subscribe(
 );
 
 my $dispatcher = GPForum::Service::Notification::Dispatcher->new(
-    schema             => $schema,
-    clock              => $clock,
-    id_service         => GPForum::Test::Id->new,
-    permission_engine  => GPForum::Test::PermissionEngine->new,
-    realtime_hub       => $realtime_hub,
+    schema            => $schema,
+    clock             => $clock,
+    id_service        => GPForum::Test::Id->new,
+    permission_engine => GPForum::Test::PermissionEngine->new,
+    realtime_notifier =>
+      GPForum::Test::BadgeBroadcastSpy->new( hub => $realtime_hub ),
     subscription_store => $subscription_store,
 );
 my $created = $dispatcher->create_notification(
@@ -551,7 +553,7 @@ is( $created->{inbox}{rank_score}, 0, 'inbox uses default rank' );
 is( $created->{unread_count}, 1, 'notification create reports unread count' );
 is( $realtime_connection->sent->[0]{json}{type},
     'notification.badge', 'notification create broadcasts badge update' );
-is( $realtime_connection->sent->[0]{json}{unread_count},
+is( $realtime_connection->sent->[0]{json}{payload}{unread_count},
     1, 'notification create badge includes unread count' );
 
 my $duplicate = $dispatcher->create_notification(
@@ -701,7 +703,7 @@ is( scalar @{ $notifications->created },
     2, 'fanout inserts another notification row' );
 is( $dispatcher->unread_count_for_user('user-1'),
     2, 'unread count includes direct and fanout notifications' );
-is( $realtime_connection->sent->[-1]{json}{unread_count},
+is( $realtime_connection->sent->[-1]{json}{payload}{unread_count},
     2, 'fanout broadcasts updated unread badge' );
 
 my $duplicate_fanout = $dispatcher->fanout_to_subscribers(
@@ -749,7 +751,7 @@ is( scalar @{ $notifications->created },
     3, 'outbox event fanout persists notification' );
 is( $dispatcher->unread_count_for_user('user-1'),
     3, 'outbox event fanout updates unread count' );
-is( $realtime_connection->sent->[-1]{json}{unread_count},
+is( $realtime_connection->sent->[-1]{json}{payload}{unread_count},
     3, 'outbox event fanout pushes badge update' );
 
 my $duplicate_outbox_delivery = $transport->dispatch($outbox_message);
@@ -835,6 +837,25 @@ is(
     'notification page fetches one extra row'
 );
 
+# The next page resumes after the cursor as every other list does: the OR of
+# the keyset plus the bound it implies on created_at, which the index can
+# start from. Without the bound a deep page read every row before it.
+$dispatcher->list_page_for_user(
+    'user-1',
+    {
+        after => encode_base64url(
+            '2026-05-23T12:00:00Z|018f1000-0000-7000-8000-000000000001'),
+        limit => $LIST_LIMIT,
+    }
+);
+is_deeply(
+    $inbox->last_query->{'me.created_at'},
+    { q{<=} => '2026-05-23T12:00:00Z' },
+    'a notification page bounds created_at at its cursor'
+);
+ok( exists $inbox->last_query->{-or},
+    'and applies the keyset predicate past it' );
+
 my $read =
   $dispatcher->mark_read( $created->{notification}{notification_id}, 'user-1' );
 
@@ -857,7 +878,7 @@ is(
     'inbox read projection is updated'
 );
 is( $read->{unread_count}, 2, 'mark read returns updated unread count' );
-is( $realtime_connection->sent->[-1]{json}{unread_count},
+is( $realtime_connection->sent->[-1]{json}{payload}{unread_count},
     2, 'mark read broadcasts updated unread badge' );
 
 my $duplicate_read =
@@ -904,7 +925,7 @@ ok( !$all_read->{duplicate},
     'mark all read is not a duplicate when rows change' );
 is( scalar @{ $reads->created },
     $MARKED_READ_ROWS, 'mark all read upserts remaining read rows' );
-is( $realtime_connection->sent->[-1]{json}{unread_count},
+is( $realtime_connection->sent->[-1]{json}{payload}{unread_count},
     0, 'mark all read broadcasts a zero badge' );
 
 my $duplicate_all = $dispatcher->mark_all_read('user-1');
@@ -931,7 +952,7 @@ my $badge_dispatcher = GPForum::Service::Notification::Dispatcher->new(
     clock             => $clock,
     id_service        => GPForum::Test::Id->new,
     permission_engine => GPForum::Test::PermissionEngine->new,
-    realtime_hub      => $badge_spy,
+    realtime_notifier => $badge_spy,
     schema            => $badge_schema,
 );
 my $badge_created = $badge_dispatcher->create_notification(
@@ -974,7 +995,7 @@ my $rollback_dispatcher = GPForum::Service::Notification::Dispatcher->new(
     clock             => $clock,
     id_service        => GPForum::Test::Id->new,
     permission_engine => GPForum::Test::PermissionEngine->new,
-    realtime_hub      => $rollback_spy,
+    realtime_notifier => $rollback_spy,
     schema            => $rollback_schema,
 );
 my $rolled_back = eval {

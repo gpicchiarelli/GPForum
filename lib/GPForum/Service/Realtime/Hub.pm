@@ -19,14 +19,20 @@ our $VERSION = '0.001';
 const my $FALLBACK_POLL_SECONDS => 30;
 const my $THREAD_UPDATE         => 'thread.update';
 const my $NOTIFICATION_BADGE    => 'notification.badge';
+const my $NOTIFICATIONS         => 'notifications';
 const my $MODERATION_INVALIDATE => 'moderation.queue.invalidate';
 const my %CHANNEL_TYPE_FOR_EVENT => (
     $THREAD_UPDATE      => 'thread',
-    $NOTIFICATION_BADGE => 'notifications',
+    $NOTIFICATION_BADGE => $NOTIFICATIONS,
 );
 
 has authorizer =>
   sub { return GPForum::Service::Realtime::ChannelAuthorizer->new; };
+
+# Answers unread_count_for_user: the notification dispatcher, whose count is
+# the inbox's own -- readable sources only, capped (ADR 0102). Badge
+# snapshots need it; without one none are sent.
+has badge_counter => undef;
 has event_contract =>
   sub { return GPForum::Service::Realtime::EventEnvelope->new; };
 has registry =>
@@ -39,6 +45,7 @@ has registry =>
 has readability => undef;
 has stats       => sub {
     return {
+        badge_snapshots    => 0,
         broadcast          => 0,
         broadcast_failures => 0,
         broadcasts         => 0,
@@ -117,18 +124,42 @@ sub broadcast_thread_update ( $self, $thread_id, $payload ) {
     return $self->broadcast( _channel( 'thread', $thread_id ), $event, );
 }
 
-sub broadcast_notification_badge ( $self, $user_id, $count ) {
-    my $event = $self->event_contract->build(
-        type           => $NOTIFICATION_BADGE,
-        aggregate_type => 'user',
-        aggregate_id   => $user_id,
-        payload        => { unread_count => $count },
-        metadata       => { channel_type => 'notifications' },
-    );
-    $event->{user_id}      = $user_id;
-    $event->{unread_count} = $count;
+# The connection's user's unread count, sent to that connection alone. A
+# badge carries an absolute count, so one snapshot heals whatever a socket
+# missed: a subscriber that has just (re)connected, possibly to another node,
+# or every subscriber after this process lost notifications in a gap.
+sub send_badge_snapshot ( $self, $connection_id ) {
+    my $row     = $self->registry->connection($connection_id);
+    my $user_id = $row ? _user_id( $row->{actor} ) : undef;
+    return { ok => 0, reason => 'connection_not_found' } if !defined $user_id;
+    return { ok => 0, reason => 'badge_unavailable' } if !$self->badge_counter;
 
-    return $self->broadcast( _channel( 'notifications', $user_id ), $event, );
+    my $count =
+      eval { return $self->badge_counter->unread_count_for_user($user_id); };
+    return { ok => 0, reason => 'badge_unavailable' } if !defined $count;
+
+    my $sent = _send_json( $row->{connection},
+        $self->event_contract->notification_badge( $user_id, $count ) );
+    $self->stats->{badge_snapshots} += 1;
+
+    return { ok => $sent ? 1 : 0, unread_count => $count };
+}
+
+# Returns how many snapshots were sent.
+sub resend_badge_snapshots ($self) {
+    my $sent = 0;
+    for my $row ( $self->registry->subscribers_of_family($NOTIFICATIONS) ) {
+        my $snapshot = $self->send_badge_snapshot( $row->{connection_id} );
+        if ( $snapshot->{ok} ) {
+            $sent++;
+        }
+    }
+
+    return $sent;
+}
+
+sub connection_count ($self) {
+    return $self->registry->count;
 }
 
 sub broadcast_event ( $self, $event ) {

@@ -38,8 +38,8 @@ sub search ($self) {
 }
 
 sub _search_results ( $self, $query, $filters, $limit ) {
-    my $rows = eval {
-        return $self->gp_search_service->search(
+    my $found = eval {
+        return $self->gp_search_service->ranked_search(
             {
                 user_id => $self->_current_user_id,
                 viewer  => $self->gp_forum_viewer,
@@ -67,16 +67,17 @@ sub _search_results ( $self, $query, $filters, $limit ) {
     return $self->_search_success(
         {
             filters => $filters,
+            found   => $found,
             limit   => $limit,
             query   => $query,
-            rows    => $rows,
         }
     );
 }
 
 sub _search_success ( $self, $input ) {
     my $limit    = $input->{limit};
-    my @results  = @{ $input->{rows} };
+    my $found    = $input->{found};
+    my @results  = @{ $found->{results} };
     my $has_more = 0;
     if ( @results > $limit ) {
         $has_more = 1;
@@ -87,12 +88,14 @@ sub _search_success ( $self, $input ) {
 
     return $self->_search_page(
         {
-            filters    => $input->{filters},
-            has_more   => $has_more,
-            limit      => $limit,
+            candidate_limit => $found->{candidate_limit},
+            filters         => $input->{filters},
+            has_more        => $has_more,
+            limit           => $limit,
             more_limit => scalar $self->_search_more_limit( $has_more, $limit ),
             query      => $input->{query},
-            results    => \@results,
+            ranking_capped => $found->{ranking_capped},
+            results        => \@results,
         }
     );
 }
@@ -110,13 +113,15 @@ sub _search_page ( $self, $input ) {
         {
             controller => $self,
             payload    => $self->gp_forum_view_model->search_page(
-                filters    => $input->{filters},
-                has_more   => $input->{has_more} || 0,
-                limit      => $input->{limit},
-                more_limit => $input->{more_limit},
-                query      => $input->{query},
-                results    => $input->{results} || [],
-                status     => $input->{status},
+                candidate_limit => $input->{candidate_limit},
+                filters         => $input->{filters},
+                has_more        => $input->{has_more} || 0,
+                limit           => $input->{limit},
+                more_limit      => $input->{more_limit},
+                query           => $input->{query},
+                ranking_capped  => $input->{ranking_capped} || 0,
+                results         => $input->{results}        || [],
+                status          => $input->{status},
             ),
             status   => $HTTP_OK,
             template => 'forum/search',
@@ -198,7 +203,9 @@ failures stay logged here.
 =head2 search
 
 Renders the search page after the C<forum_retrieval> rate limit, degrading
-to an empty result set on backend failure.
+to an empty result set on backend failure -- a search the database cancelled
+at its own statement timeout included. Says so when the results were ranked
+among the newest matches only.
 
 =head2 search_autocomplete
 
@@ -210,7 +217,8 @@ Search backend failures are logged and rendered as degraded empty results.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Uses the search service helper configured during application startup.
+Uses the search service helper configured during application startup, with
+C<GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS> and C<GPFORUM_SEARCH_CANDIDATE_LIMIT>.
 
 =head1 DEPENDENCIES
 

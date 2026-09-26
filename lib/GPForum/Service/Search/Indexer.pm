@@ -28,6 +28,14 @@ const my $VECTOR_EXPRESSION => q{
 const my $REBUILD_BATCH  => 500;
 const my @REBUILD_COUNTS => qw(indexed pruned unchanged);
 
+# _lock_document's lock for a batch of documents, in one statement. The keys
+# are taken in sorted order -- PostgreSQL evaluates a volatile function in the
+# select list after the sort -- so two batches over the same documents queue
+# behind each other instead of deadlocking.
+const my $LOCK_DOCUMENTS_SQL => join q{ },
+  q{SELECT pg_advisory_xact_lock(hashtextextended(lock_key, 0))},
+  q{FROM unnest(?::text[]) AS document(lock_key) ORDER BY lock_key};
+
 # What the document builder indexes: a live thread, visible or locked, and a
 # live, visible post in such a thread.
 const my %LIVE_STATES => (
@@ -82,8 +90,10 @@ has clock   => sub { return GPForum::Service::Clock->new; };
 has id_service     => sub { return GPForum::Infrastructure::Id->new; };
 has offset_tracker => undef;
 
-# Ids a rebuild step indexes: enough to be worth an outbox message, few
-# enough that a step never holds the dispatcher for long.
+# Ids a rebuild step indexes, and posts a batch of one thread indexes or
+# removes: enough to be worth an outbox message, few enough that a step never
+# holds the dispatcher for long, nor a removal's transaction more than this
+# many document locks.
 has rebuild_batch_size => $REBUILD_BATCH;
 has schema             => undef;
 
@@ -132,12 +142,38 @@ sub _index_thread ( $self, $thread_id ) {
 # below is already atomic and a corpus-wide transaction would pin the
 # snapshot for the whole rebuild.
 sub index_thread_posts ( $self, $thread_id ) {
-    my @indexed;
-    for my $post_id ( $self->_post_ids_for_thread($thread_id) ) {
-        push @indexed, $self->index_post($post_id);
+    my %summary = map { $_ => 0 } @REBUILD_COUNTS;
+    my $after;
+    while (1) {
+        my $batch = $self->index_thread_posts_batch( $thread_id, $after );
+        for my $count (@REBUILD_COUNTS) {
+            $summary{$count} += $batch->{$count};
+        }
+        $after = $batch->{next_after};
+        last if !defined $after;
     }
 
-    return \@indexed;
+    return \%summary;
+}
+
+# One batch of a thread's posts indexed again, each post in its own
+# transaction: every post of the thread, whatever its state, so a post that
+# died since keeps no document. $after is the position of the last post
+# done; next_after, set when the batch was full, is where the next batch
+# starts. The search handler runs one batch per outbox message, so renaming
+# or moving a large thread never holds the dispatcher for long.
+sub index_thread_posts_batch ( $self, $thread_id, $after = undef ) {
+    my $posts  = $self->_thread_post_batch( $thread_id, $after );
+    my %counts = map { $_ => 0 } @REBUILD_COUNTS;
+    for my $post ( @{$posts} ) {
+        $counts{ _rebuild_outcome( $self->index_post( $post->{post_id} ) ) }++;
+    }
+
+    return {
+        %counts,
+        next_after => _next_position( $posts, $self->rebuild_batch_size ),
+        thread_id  => $thread_id,
+    };
 }
 
 sub index_post ( $self, $post_id ) {
@@ -167,20 +203,22 @@ sub remove_post ( $self, $post_id ) {
     );
 }
 
+# A hidden or deleted thread leaves the index with every post in it, or
+# deleted content stays searchable. The thread's document goes first, in its
+# own transaction: autocomplete serves thread documents only, so the title
+# leaves the suggestions at once. The posts follow a batch at a time, each
+# batch one transaction. It was one transaction for the whole thread, holding
+# one advisory lock per post, and PostgreSQL's shared lock table holds a few
+# thousand: a thread that large failed to leave, retried until it was
+# dead-lettered, and its posts stayed searchable. A failure part way leaves
+# removed whatever went; the retry removes the rest.
 sub remove_thread ( $self, $thread_id ) {
-    return $self->schema->txn_do(
+    my $result = $self->schema->txn_do(
         sub {
-            return $self->_remove_thread($thread_id);
+            return $self->_remove_document( 'thread', $thread_id );
         }
     );
-}
-
-# A thread's documents and every post document leave the index together, or
-# deleted content stays searchable.
-sub _remove_thread ( $self, $thread_id ) {
-    my $posts_removed = $self->_remove_posts_for_thread($thread_id);
-    my $result        = $self->_remove_document( 'thread', $thread_id );
-    $result->{posts_removed} = $posts_removed;
+    $result->{posts_removed} = $self->_remove_posts_for_thread($thread_id);
 
     return $result;
 }
@@ -329,30 +367,82 @@ sub _prune ( $self, $type ) {
 
 sub _remove_posts_for_thread ( $self, $thread_id ) {
     my $removed = 0;
-    for my $post_id ( $self->_post_ids_for_thread($thread_id) ) {
-        $self->_remove_document( 'post', $post_id );
-        $removed++;
+    my $after;
+    while (1) {
+        my $posts = $self->_thread_post_batch( $thread_id, $after );
+        last if !@{$posts};
+
+        $removed +=
+          $self->_remove_post_batch( [ map { $_->{post_id} } @{$posts} ] );
+        $after = _next_position( $posts, $self->rebuild_batch_size );
+        last if !defined $after;
     }
 
     return $removed;
 }
 
-sub _post_ids_for_thread ( $self, $thread_id ) {
-    my $search = $self->_posts_for_thread($thread_id);
-    if ( !$search ) {
-        return;
-    }
+# One transaction per batch: the batch's document locks in one statement,
+# then one delete. However large the thread, a transaction holds at most
+# rebuild_batch_size advisory locks.
+sub _remove_post_batch ( $self, $post_ids ) {
+    return $self->schema->txn_do(
+        sub {
+            $self->_lock_documents( 'post', $post_ids );
+            my $documents = $self->schema->resultset('SearchDocument');
+            my $deleted   = $documents->search_rs(
+                {
+                    entity_id   => \[ '= ANY(?::uuid[])', [ {} => $post_ids ] ],
+                    entity_type => 'post',
+                }
+            )->delete;
 
-    return map { $_->get_column('post_id') } _rows($search);
+            return 0 + ( $deleted // 0 );
+        }
+    );
 }
 
-sub _posts_for_thread ( $self, $thread_id ) {
+# Up to rebuild_batch_size posts of a thread, by position after $after:
+# every post, whatever its state, since a hidden or deleted post may still
+# have a document. Position, not post id: the thread's unique position index
+# serves the range and the order, where post id order would sort the whole
+# thread for every batch.
+sub _thread_post_batch ( $self, $thread_id, $after ) {
     my $posts = $self->_post_resultset;
-    if ( !$posts ) {
-        return;
-    }
+    return [] if !$posts;
 
-    return $posts->search_rs( { thread_id => $thread_id } );
+    return [
+        map {
+            {
+                position => _column( $_, 'position' ),
+                post_id  => _column( $_, 'post_id' ),
+            }
+        } _rows(
+            $posts->search_rs(
+                {
+                    'me.thread_id' => $thread_id,
+                    (
+                        defined $after
+                        ? ( 'me.position' => { q{>} => $after } )
+                        : ()
+                    ),
+                },
+                {
+                    columns  => [qw(me.post_id me.position)],
+                    order_by => { -asc => 'me.position' },
+                    rows     => $self->rebuild_batch_size,
+                }
+            )
+        )
+    ];
+}
+
+# Where the next batch starts, or nothing when this one was the last: a
+# batch shorter than the batch size has run out of posts.
+sub _next_position ( $posts, $batch_size ) {
+    my $undefined;
+    return $undefined if @{$posts} < $batch_size;
+
+    return $posts->[-1]{position};
 }
 
 sub _post_resultset ($self) {
@@ -519,11 +609,31 @@ sub _lock_document ( $self, $entity_type, $entity_id ) {
         sub ( $, $dbh ) {
             return $dbh->do(
                 'SELECT pg_advisory_xact_lock(hashtextextended(?, 0))',
-                undef, "search_document:$entity_type:$entity_id" );
+                undef, _lock_key( $entity_type, $entity_id ) );
         }
     );
 
     return;
+}
+
+# The same locks for a batch of documents of one type: the same keys, so a
+# batch and a single document writer exclude each other.
+sub _lock_documents ( $self, $entity_type, $entity_ids ) {
+    my $storage = $self->schema->storage;
+    return if !$storage->can('dbh_do');
+
+    $storage->dbh_do(
+        sub ( $, $dbh ) {
+            return $dbh->do( $LOCK_DOCUMENTS_SQL, undef,
+                [ map { _lock_key( $entity_type, $_ ) } @{$entity_ids} ] );
+        }
+    );
+
+    return;
+}
+
+sub _lock_key ( $entity_type, $entity_id ) {
+    return "search_document:$entity_type:$entity_id";
 }
 
 sub _search_vector_for ($document) {

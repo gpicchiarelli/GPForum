@@ -113,20 +113,30 @@ sub thread_page ( $self, $request ) {
 }
 
 sub search ( $self, $actor, $query, $options ) {
+    return $self->ranked_search( $actor, $query, $options )->{results};
+}
+
+# What the search page asks for: the results and whether their ranking was
+# capped, which a fixture never is.
+sub ranked_search ( $self, $actor, $query, $options ) {
     my $limit = $options->{limit} || $DEFAULT_SEARCH_LIMIT;
 
-    return [
-        map {
-            {
-                entity_type => 'thread',
-                entity_id   => 'thread-' . $_,
-                title       => "Benchmark $query $_",
-                body        => 'Safe benchmark excerpt',
-                visibility  => 'public',
-                indexed_at  => '2026-05-24T00:00:00Z',
-            }
-        } 1 .. $limit
-    ];
+    return {
+        candidate_limit => undef,
+        ranking_capped  => 0,
+        results         => [
+            map {
+                {
+                    entity_type => 'thread',
+                    entity_id   => 'thread-' . $_,
+                    title       => "Benchmark $query $_",
+                    body        => 'Safe benchmark excerpt',
+                    visibility  => 'public',
+                    indexed_at  => '2026-05-24T00:00:00Z',
+                }
+            } 1 .. $limit
+        ],
+    };
 }
 
 sub autocomplete ( $self, $actor, $query, $options ) {

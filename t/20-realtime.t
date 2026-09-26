@@ -16,12 +16,13 @@ use GPForum::Service::Realtime::ChannelAuthorizer;
 use GPForum::Service::Realtime::ConnectionRegistry;
 use GPForum::Service::Realtime::Hub;
 use GPForum::Test::FixedClock;
+use GPForum::Test::RealtimeBadgeCounter;
 use GPForum::Test::RealtimeConnection;
 use GPForum::Test::RealtimePermissionEngine;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 43;
+const my $EXPECTED_TESTS => 50;
 const my $POLL_SECONDS   => 30;
 const my $UNREAD_COUNT   => 7;
 
@@ -68,6 +69,15 @@ ok( !$unknown_channel->{ok}, 'unknown channel type is denied' );
 is( $unknown_channel->{reason},
     'unknown_channel', 'unknown channel reason is explicit' );
 
+# Nothing was ever published to presence, and a shared presence registry is
+# ruled out (ADR 0067): the family is gone rather than open to every user.
+is(
+    $authorizer->authorize( { user_id => 'user-1' }, 'presence:lobby', {} )
+      ->{reason},
+    'unknown_channel',
+    'presence is not a channel family'
+);
+
 my $policy_authorizer = GPForum::Service::Realtime::ChannelAuthorizer->new(
     permission_engine => GPForum::Test::RealtimePermissionEngine->new(
         denied => { 'thread-denied' => 1 },
@@ -100,6 +110,11 @@ ok( $registry->connection('connection-1'), 'connection can be fetched' );
 $registry->subscribe( 'connection-1', 'thread:thread-1' );
 my @thread_subscribers = $registry->subscribers('thread:thread-1');
 is( scalar @thread_subscribers, 1, 'registry lists channel subscribers' );
+is( $registry->count,           1, 'registry counts its connections' );
+is( scalar $registry->subscribers_of_family('thread'),
+    1, 'registry lists the subscribers of a channel family' );
+is( scalar $registry->subscribers_of_family('notifications'),
+    0, 'and not those of another family' );
 
 my $snapshot = $registry->snapshot;
 is( $snapshot->{connections},   1, 'snapshot counts connections' );
@@ -109,8 +124,11 @@ $registry->unregister('connection-1');
 is( $registry->snapshot->{connections}, 0, 'registry unregisters connection' );
 
 my $hub = GPForum::Service::Realtime::Hub->new(
-    registry   => GPForum::Service::Realtime::ConnectionRegistry->new,
-    authorizer => $policy_authorizer,
+    authorizer    => $policy_authorizer,
+    badge_counter => GPForum::Test::RealtimeBadgeCounter->new(
+        counts => { 'user-1' => $UNREAD_COUNT },
+    ),
+    registry => GPForum::Service::Realtime::ConnectionRegistry->new,
 );
 my $thread_connection = GPForum::Test::RealtimeConnection->new;
 my $badge_connection  = GPForum::Test::RealtimeConnection->new;
@@ -152,14 +170,22 @@ is( $thread_connection->sent->[0]{json}{type},
 is( $thread_connection->sent->[0]{json}{payload}{post_id},
     'post-1', 'thread broadcast sends payload' );
 
-my $badge_broadcast =
-  $hub->broadcast_notification_badge( 'user-1', $UNREAD_COUNT );
-ok( $badge_broadcast->{ok}, 'badge broadcast succeeds' );
-is( $badge_broadcast->{delivered}, 1, 'badge broadcast delivers once' );
+# Badges reach a hub through NOTIFY like every other event; the hub only
+# sends snapshots, to one connection at a time.
+my $badge_snapshot = $hub->send_badge_snapshot('badge-connection');
+ok( $badge_snapshot->{ok}, 'badge snapshot succeeds' );
 is( $badge_connection->sent->[0]{json}{type},
-    'notification.badge', 'badge broadcast sends type' );
-is( $badge_connection->sent->[0]{json}{unread_count},
-    $UNREAD_COUNT, 'badge broadcast sends unread count' );
+    'notification.badge', 'badge snapshot sends the badge type' );
+is( $badge_connection->sent->[0]{json}{payload}{unread_count},
+    $UNREAD_COUNT, 'badge snapshot carries the counter\'s unread count' );
+is( $badge_connection->sent->[0]{json}{aggregate_id},
+    'user-1', 'badge snapshot names the connection\'s user' );
+is( scalar @{ $thread_connection->sent },
+    1, 'a snapshot goes to that connection alone' );
+is( $hub->resend_badge_snapshots,
+    1,
+    'a resend reaches each notifications subscriber and no other connection' );
+is( $hub->connection_count, 2, 'hub counts its local connections' );
 
 my $fallback = $hub->fallback_state;
 is( $fallback->{realtime_required}, 0, 'realtime is never required' );

@@ -9,7 +9,8 @@ use warnings;
 use Const::Fast;
 use JSON::MaybeXS ();
 use Mojo::Base -base, -signatures;
-use Scalar::Util qw(refaddr);
+
+use GPForum::Infrastructure::PgNotifications;
 
 our $VERSION = '0.001';
 
@@ -24,12 +25,19 @@ has channel => $DEFAULT_CHANNEL;
 has codec   => sub {
     return JSON::MaybeXS->new( canonical => 1, utf8 => 1 );
 };
-has schema       => undef;
-has listening_on => undef;
-has stats        => sub {
+has schema => undef;
+
+# The process's one queue for its handle, shared with the realtime listener
+# (Bootstrap injects it). Reading the handle directly took the listener's
+# notifications and let the listener take ours.
+has notifications => sub ($self) {
+    return GPForum::Infrastructure::PgNotifications->new(
+        schema => $self->schema );
+};
+has stats => sub {
     return {
         applied          => 0,
-        listen_failures  => 0,
+        gaps             => 0,
         oversized        => 0,
         publish_failures => 0,
         published        => 0,
@@ -74,15 +82,32 @@ sub publish ( $self, $request ) {
 # call. The caller decides what to do with them, so the bus stays free of any
 # cache knowledge and is testable on its own.
 sub drain ($self) {
-    my $dbh = $self->_listening_dbh;
-    if ( !$dbh ) {
-        return [];
+    my $notifications = $self->notifications;
+    if ( !$notifications->registered( $self->channel ) ) {
+        $notifications->listen_to( $self->channel );
+    }
+
+    my $taken = $notifications->take( $self->channel );
+    if ( !$taken->{available} ) {
+        $self->stats->{unavailable} += 1;
+    }
+
+    # A gap means invalidations were lost: raised while this backend was
+    # reconnecting, or pushed out of a full queue. Which entries they named
+    # is unknown, so all of L1 goes. A refill costs a query; a missed
+    # invalidation serves a hidden post until its entry expires.
+    if ( $taken->{gap} ) {
+        $self->stats->{received} += scalar @{ $taken->{notifications} };
+        $self->stats->{gaps}     += 1;
+        return [ { clear => 1, keys => [], tags => [] } ];
     }
 
     my @requests;
-    while ( my $notification = $self->_next_notification($dbh) ) {
-        my $request = $self->_accept( $dbh, $notification );
-        push @requests, $request if $request;
+    for my $notification ( @{ $taken->{notifications} } ) {
+        my $request = $self->_accept($notification);
+        if ($request) {
+            push @requests, $request;
+        }
     }
 
     return \@requests;
@@ -92,13 +117,14 @@ sub snapshot ($self) {
     return { %{ $self->stats }, channel => $self->channel };
 }
 
-sub _accept ( $self, $dbh, $notification ) {
+sub _accept ( $self, $notification ) {
     my ( undef, $sender_pid, $payload ) = @{$notification};
     $self->stats->{received} += 1;
 
     # PostgreSQL delivers a NOTIFY to the sending backend as well. Our own
     # invalidation already ran locally, so replaying it would be wasted work.
-    if ( defined $sender_pid && $sender_pid == ( $dbh->{pg_pid} // -1 ) ) {
+    my $own_pid = $self->notifications->backend_pid;
+    if ( defined $sender_pid && defined $own_pid && $sender_pid eq $own_pid ) {
         $self->stats->{skipped_self} += 1;
         return;
     }
@@ -115,45 +141,6 @@ sub _accept ( $self, $dbh, $notification ) {
         keys  => _list( $decoded->{keys} ),
         tags  => _list( $decoded->{tags} ),
     };
-}
-
-# pg_notifies reads what libpq has already buffered, so it is a local call, not
-# a round trip. DBD::Pg does not deliver notices mid-transaction, and draining
-# inside one would also risk acting on a write that may still roll back.
-sub _next_notification ( $self, $dbh ) {
-    if ( !$dbh->{AutoCommit} ) {
-        return;
-    }
-
-    return eval { return $dbh->pg_notifies };
-}
-
-sub _listening_dbh ($self) {
-    my $dbh = $self->_dbh;
-    if ( !$dbh ) {
-        $self->stats->{unavailable} += 1;
-        return;
-    }
-
-    # A reconnect silently drops the subscription, so the LISTEN is re-issued
-    # whenever the handle underneath us changes identity.
-    my $identity = refaddr $dbh;
-    if ( ( $self->listening_on // q{} ) eq $identity ) {
-        return $dbh;
-    }
-
-    my $listened = eval {
-        $dbh->do( 'LISTEN ' . $dbh->quote_identifier( $self->channel ) );
-        return 1;
-    };
-    if ( !$listened ) {
-        $self->stats->{listen_failures} += 1;
-        return;
-    }
-
-    $self->listening_on($identity);
-
-    return $dbh;
 }
 
 sub _payload ( $self, $request ) {
@@ -241,9 +228,15 @@ to stay readable after a moderator removed it.
 This bus closes that gap with PostgreSQL's own pub/sub rather than a new piece
 of infrastructure. Publishing is transactional, because C<pg_notify> holds the
 message until the sending transaction commits and drops it on rollback, so
-peers never invalidate for a write that did not land. Draining is a local read
-of the libpq buffer, so it costs no round trip, and the sending backend's PID
-identifies our own notifications so they are not replayed.
+peers never invalidate for a write that did not land. Draining reads this
+channel's share of the process's notification queue
+(L<GPForum::Infrastructure::PgNotifications>), which the realtime listener
+reads too; the sending backend's PID identifies our own notifications so they
+are not replayed.
+
+When the queue reports a gap -- the backend was replaced and its LISTEN
+re-issued, or the queue overflowed -- the invalidations in between are gone,
+so C<drain> returns one clear request instead.
 
 The bus carries invalidation intent only. It holds no cache and applies
 nothing; the caller decides what a request means.
@@ -258,8 +251,9 @@ the notification was issued. A batch whose payload would exceed PostgreSQL's
 
 =head2 drain
 
-Returns an arrayref of C<{ keys, tags }> requests raised by other backends
-since the last call. Returns nothing while a transaction is open, because
+Returns an arrayref of C<{ clear, keys, tags }> requests raised by other
+backends since the last call, or a single clear request after a gap. The first
+call issues the LISTEN. Returns nothing while a transaction is open, because
 PostgreSQL does not deliver notices mid-transaction.
 
 =head2 snapshot
@@ -268,18 +262,20 @@ Counters plus the channel name, for the operations metrics surface.
 
 =head1 DIAGNOSTICS
 
-Never throws. A missing schema, an unreachable handle, a failed LISTEN and a
-malformed payload are all counted in C<stats> and degrade to no invalidation
-rather than to an exception on a read path.
+Never throws. A missing schema, an unreachable handle and a malformed payload
+are counted in C<stats> and degrade to no invalidation rather than to an
+exception on a read path; a failed LISTEN is counted by the queue.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Uses the application schema's database handle. The channel defaults to
+Uses the application schema's database handle, through the notification
+queue Bootstrap shares with the realtime listener. The channel defaults to
 C<gpforum_cache_invalidation>.
 
 =head1 DEPENDENCIES
 
-L<Mojo::Base>, L<JSON::MaybeXS>, L<Const::Fast>, L<Scalar::Util>.
+L<Mojo::Base>, L<JSON::MaybeXS>, L<Const::Fast>,
+L<GPForum::Infrastructure::PgNotifications>.
 
 =head1 INCOMPATIBILITIES
 
@@ -290,7 +286,8 @@ a handle that does not provide it.
 
 Notifications raised while this process has a transaction open are read on the
 next drain outside it, so a worker's own read path can lag an invalidation by
-one request.
+one request. Each drain costs one round trip: the handle is pinged when it is
+fetched.
 
 =head1 AUTHOR
 

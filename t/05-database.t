@@ -22,7 +22,7 @@ use GPForum::Test::MigrationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 479;
+const my $EXPECTED_TESTS => 487;
 
 # Derived from the directory instead of hardcoded: a literal turns every new
 # migration into a spurious failure, which trains people to bump the number
@@ -65,6 +65,7 @@ const my $DEAD_LETTER_UNIQUE_INDEX     => 32;
 const my $IMPORT_FAILURE_UNIQUE_INDEX  => 33;
 const my $GENERATION_SOURCE_INDEX      => 34;
 const my $CREDENTIAL_UNIQUE_INDEX      => 35;
+const my $SEARCH_CANDIDATE_INDEX       => 47;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -1578,6 +1579,53 @@ like(
     qr/idx_search_documents_public_filter_rank/msx,
     'search product migration indexes filtered ranked search'
 );
+
+# 048 drops that index again, with the three other partial ones on
+# permission_scope: no statement states the column, so the planner could never
+# use them. It adds the newest-first order search takes its candidates in
+# (quality program 8.10).
+my $search_candidate_sql =
+  path( $summary->[$SEARCH_CANDIDATE_INDEX]->{file} )->slurp;
+my $create_index = qr/CREATE [ ] INDEX [ ] IF [ ] NOT [ ] EXISTS/msx;
+my $candidate_index =
+  qr/idx_search_documents_created \s+ ON [ ] search_documents/msx;
+my $candidate_order =
+  qr/[(]source_created_at [ ] DESC, [ ] entity_id [ ] DESC[)]/msx;
+my $analyze_on_change =
+  qr/SET [ ] [(]autovacuum_analyze_threshold [ ] = [ ] 0[)];/msx;
+
+is(
+    $summary->[$SEARCH_CANDIDATE_INDEX]->{description},
+    'search candidate order',
+    'search candidate migration description is parsed'
+);
+like(
+    $search_candidate_sql,
+    qr/$create_index [ ] $candidate_index [ ] $candidate_order/msx,
+    'search candidate migration indexes the newest-first candidate order'
+);
+
+for my $index (
+    qw(public_latest public_title_prefix public_filter_rank source_created))
+{
+    my $name = "idx_search_documents_$index";
+    like(
+        $search_candidate_sql,
+        qr/DROP [ ] INDEX [ ] IF [ ] EXISTS [ ] \Q$name\E;/msx,
+        "search candidate migration drops $name"
+    );
+}
+
+# The planner walks that index only with statistics on the tables search
+# joins for readability, which autovacuum's default threshold may never
+# gather on tables this small.
+for my $table (qw(categories spaces)) {
+    like(
+        $search_candidate_sql,
+        qr/ALTER [ ] TABLE [ ] \Q$table\E [ ] $analyze_on_change/msx,
+        "search candidate migration has $table analysed whenever it changes"
+    );
+}
 
 my $user_locale_sql = path( $summary->[$USER_LOCALE_INDEX]->{file} )->slurp;
 

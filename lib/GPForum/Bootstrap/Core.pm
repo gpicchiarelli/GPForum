@@ -54,7 +54,8 @@ sub register {
                         suspension_store => $controller->gp_suspension_store,
                       ),
                   ),
-                readability => $readability,
+                badge_counter => scalar _badge_counter($controller),
+                readability   => $readability,
             );
             return $realtime_hub;
         }
@@ -79,8 +80,9 @@ sub register {
 
             $realtime_pg_listener ||=
               GPForum::Service::Realtime::PgListener->new(
-                hub    => $controller->gp_realtime_hub,
-                schema => $controller->gp_schema,
+                hub           => $controller->gp_realtime_hub,
+                notifications => $controller->gp_pg_notifications,
+                schema        => $controller->gp_schema,
               );
             return $realtime_pg_listener;
         }
@@ -109,6 +111,17 @@ sub register {
     _configure_realtime_listener_lifecycle( $application, $config );
 
     return;
+}
+
+# The dispatcher counts a badge as the inbox does (ADR 0102). Forum
+# registers it; an application built without it sends no badge snapshots.
+# A helper is not a method, so can() would never find it: the renderer is
+# asked.
+sub _badge_counter ($controller) {
+    return
+      if !$controller->app->renderer->get_helper('gp_notification_dispatcher');
+
+    return $controller->gp_notification_dispatcher;
 }
 
 sub _configure_static_assets ($application) {

@@ -27,7 +27,7 @@ sub dispatch ( $self, $message ) {
     my $payload =
       $self->payload_contract->normalize( $message->get_column('payload') );
     my @results  = $self->_handler_results($payload);
-    my $realtime = $self->_notify_realtime( $payload, \@results );
+    my $realtime = $self->_notify_realtime($payload);
 
     return {
         ok       => 1,
@@ -83,7 +83,7 @@ sub _run_idempotent ( $self, $key, $code, $event_id ) {
     return $outcome->{result};
 }
 
-sub _notify_realtime ( $self, $payload, $handler_results ) {
+sub _notify_realtime ( $self, $payload ) {
     if ( !$self->realtime_notifier ) {
         my $undefined;
         return $undefined;
@@ -91,16 +91,12 @@ sub _notify_realtime ( $self, $payload, $handler_results ) {
 
     my $key = $self->_realtime_key($payload);
     if ( !length $key ) {
-        return $self->_dispatch_realtime( $payload, $handler_results );
+        return $self->_dispatch_realtime($payload);
     }
 
-    return $self->_run_idempotent(
-        $key,
-        sub {
-            return $self->_dispatch_realtime( $payload, $handler_results );
-        },
-        $payload->{event_id}
-    );
+    return $self->_run_idempotent( $key,
+        sub { return $self->_dispatch_realtime($payload); },
+        $payload->{event_id} );
 }
 
 sub _realtime_key ( $self, $payload ) {
@@ -111,9 +107,10 @@ sub _realtime_key ( $self, $payload ) {
     return $self->catalog->realtime_key($payload);
 }
 
-sub _dispatch_realtime ( $self, $payload, $handler_results ) {
-    my @events =
-      $self->realtime_mapper->events_for_payload( $payload, $handler_results );
+# The domain event's hint only. A notification handler's badges were NOTIFYed
+# by the dispatcher that created them.
+sub _dispatch_realtime ( $self, $payload ) {
+    my @events = $self->realtime_mapper->events_for_payload($payload);
     if ( !@events ) {
         my $undefined;
         return $undefined;

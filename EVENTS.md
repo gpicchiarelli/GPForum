@@ -152,6 +152,28 @@ noted). The formal ADR catalog also lives in
   - payload: `report_id`, `target_id`, `target_type`, `resolution`,
     `resolved_at`
 
+### Search
+
+The search handler's own continuations: each carries one batch of work to
+the next outbox message, and only the search handler consumes them.
+
+- `search.rebuild_requested` / `search.rebuild_completed`
+  - producer: `GPForum::Service::Search::RebuildRun` (the console's
+    rebuild, one step per message)
+  - aggregate_type: `search_rebuild`; aggregate_id: `run_id`
+  - idempotency_key: `{event_type}:{run_id}:{stage}:{after}`, `start` for
+    either when absent
+  - payload: `entity_type`, `run_id`, `step`, `totals`, and `stage`,
+    `after` while steps remain
+- `search.thread_posts_requested`
+  - producer: `GPForum::Worker::Handler::SearchIndexing`, when a renamed,
+    moved or restored thread has more posts than one batch
+  - aggregate_type: `thread`; aggregate_id: `thread_id`; causation_id: the
+    message that asked for it
+  - idempotency_key: `search.thread_posts:{cause_event_id}:{after}`
+  - payload: `after` (the position the batch starts after),
+    `cause_event_id` (the thread event that started the chain), `thread_id`
+
 ## Realtime Propagation
 
 `GPForum::Service::Outbox::DomainEventTransport` can map domain events to

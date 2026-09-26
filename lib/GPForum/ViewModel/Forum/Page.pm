@@ -43,13 +43,21 @@ sub thread_page ( $self, %input ) {
 sub search_page ( $self, %input ) {
     my $results = $self->array_or_empty( $input{results} );
 
+    # ranking_capped: only the candidate_limit newest matches were ranked, so
+    # the page says the order is theirs, not the best of every match.
+    # degraded is for the template: rendering sets the stash's status to the
+    # HTTP code, so the page never saw status 'degraded' and a failed search
+    # read as "no results". JSON keeps status as it was.
     return {
-        filters    => $input{filters}  || {},
-        has_more   => $input{has_more} || 0,
-        limit      => $input{limit},
-        more_limit => $input{more_limit},
-        query      => $self->string( $input{query} ),
-        results    => [ map { $self->search_result($_) } @{$results} ],
+        candidate_limit => $input{candidate_limit},
+        degraded        => ( $input{status} // q{} ) eq 'degraded' ? 1 : 0,
+        filters         => $input{filters}  || {},
+        has_more        => $input{has_more} || 0,
+        limit           => $input{limit},
+        more_limit      => $input{more_limit},
+        query           => $self->string( $input{query} ),
+        ranking_capped  => $input{ranking_capped} ? 1 : 0,
+        results         => [ map { $self->search_result($_) } @{$results} ],
         $self->_optional_status( $input{status} ),
     };
 }
@@ -515,7 +523,8 @@ Returns a thread page with posts, attachments, and metadata.
 
 =head2 search_page
 
-Returns a search results payload.
+Returns a search results payload, with C<ranking_capped> true when only the
+newest C<candidate_limit> matches were ranked.
 
 =head2 autocomplete_response
 

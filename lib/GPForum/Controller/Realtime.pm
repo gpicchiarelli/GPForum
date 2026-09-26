@@ -180,13 +180,29 @@ sub _subscribe ( $self, $input ) {
         return $self->_subscription_denied( $input, $result );
     }
 
-    return $self->send(
+    $self->send(
         {
             json => GPForum::Web::RealtimePayload->subscribed(
                 channel => $result->{channel},
             ),
         }
     );
+
+    return $self->_send_badge_snapshot( $input->{connection_id},
+        $result->{channel} );
+}
+
+# There is no replay log (ADR 0110). A subscriber that has just connected,
+# to this node or after losing another, gets its current count at once
+# instead of waiting for the next change to correct it.
+sub _send_badge_snapshot ( $self, $connection_id, $channel ) {
+    if ( $self->realtime_access->channel_type($channel) ne 'notifications' ) {
+        return $self;
+    }
+
+    $self->gp_realtime_hub->send_badge_snapshot($connection_id);
+
+    return $self;
 }
 
 sub _subscription_denied ( $self, $input, $result ) {
@@ -297,6 +313,12 @@ rate-limit hashes, and plaintext handshake texts are decided by
 L<GPForum::Web::RealtimeAccess>. The rate limiter, hub registration,
 telemetry, and frames stay here.
 
+Any node accepts any client: nothing ties a user to a process. A subscription
+to C<notifications:E<lt>user_idE<gt>> is answered with C<subscribed> and then
+a C<notification.badge> snapshot of the current unread count. Other channels
+carry id-only hints, so a client that (re)connects refetches their canonical
+state from the C<fallback> endpoints and then applies hints.
+
 =head1 SUBROUTINES/METHODS
 
 =head2 stream
@@ -326,7 +348,9 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Websocket state is process-local. Polling remains the authoritative fallback.
+Websocket state is process-local and there is no server-side replay: events
+sent while a client was disconnected are not resent. Polling and the refetch
+on reconnect remain the authoritative fallback.
 
 =head1 AUTHOR
 

@@ -56,7 +56,7 @@ sub register ( $, %input ) {
     _register_attachment_helpers($application);
     _register_community_helpers($application);
     _register_notification_helpers($application);
-    _register_search_helpers($application);
+    _register_search_helpers( $application, $config );
 
     return;
 }
@@ -433,7 +433,7 @@ sub _register_notification_helpers {
                 preference_store  =>
                   $controller->gp_notification_preference_store,
                 readability        => $policy,
-                realtime_hub       => $controller->gp_realtime_hub,
+                realtime_notifier  => $controller->gp_realtime_pg_notifier,
                 schema             => $controller->gp_schema,
                 subscription_store => $controller->gp_subscription_store,
             );
@@ -465,18 +465,24 @@ sub _register_notification_helpers {
 }
 
 sub _register_search_helpers {
-    my ($application) = @_;
+    my ( $application, $config ) = @_;
 
+    # Search's own statement timeout and candidate cap (8.10): a word most
+    # documents hold is ranked over the newest matches only, and whatever
+    # still runs long is cancelled before it holds a web worker for the
+    # statement_timeout every other query gets.
     $application->helper(
         gp_search_service => sub {
             my ($controller) = @_;
 
             return GPForum::Service::Search::Searcher->new(
+                candidate_limit   => $config->search_candidate_limit,
                 permission_engine =>
                   GPForum::Service::Search::PermissionEngine->new(
                     schema => $controller->gp_schema
                   ),
-                schema => $controller->gp_schema,
+                schema               => $controller->gp_schema,
+                statement_timeout_ms => $config->search_statement_timeout_ms,
             );
         }
     );

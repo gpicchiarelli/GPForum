@@ -17,6 +17,7 @@ use GPForum::Config;
 use GPForum::Service::Clock;
 use GPForum::Service::Forum::PostingWorkflow;
 use GPForum::Test::CommandIdempotency;
+use GPForum::Test::CountingNotifier;
 use GPForum::Test::PostReader;
 use Mojolicious;
 
@@ -44,8 +45,8 @@ $application->helper(
         return $undefined;
     }
 );
-$application->helper(
-    gp_realtime_hub => sub { return GPForum::Test::RealtimeHub->new(); } );
+$application->helper( gp_realtime_pg_notifier =>
+      sub { return GPForum::Test::CountingNotifier->new(); } );
 
 GPForum::Bootstrap::Forum->register(
     application => $application,
@@ -1955,14 +1956,6 @@ sub new {
 
 sub uuid {
     return 'uuid-1';
-}
-
-package GPForum::Test::RealtimeHub;
-
-sub new {
-    my ($class) = @_;
-
-    return bless {}, $class;
 }
 
 1;

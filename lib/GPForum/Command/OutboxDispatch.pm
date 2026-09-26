@@ -71,7 +71,15 @@ sub _run ( $self, @arguments ) {
           if defined $options->{max_iterations}
           && $iterations >= $options->{max_iterations};
 
-        $self->sleeper->( $options->{sleep_seconds} );
+        # Sleep only once the backlog is drained. A full batch means more is
+        # waiting, and sleeping after every batch capped the dispatcher at
+        # --limit messages per --sleep seconds however far behind it was,
+        # holding realtime, notifications and cache purges behind any slow
+        # message. A failed message is not claimed again before its backoff,
+        # so a batch of failures cannot make this spin.
+        if ( ( $summary->{selected} // 0 ) < $options->{limit} ) {
+            $self->sleeper->( $options->{sleep_seconds} );
+        }
     }
 
     return 0;

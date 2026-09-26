@@ -99,7 +99,12 @@ PostgreSQL LISTEN/NOTIFY services expose local snapshots for degraded transport,
 notify failures, invalid payloads, duplicate event suppression, reconnect count,
 `listen_notify_received`, cursor-based outbox polling receives, delivered
 fanout count, supervisor running state, scheduled polls, poll failures and
-heartbeats.
+heartbeats. `realtime_listener.listener.notifications` is the process's one
+notification queue, shared by the listener and the L1 invalidation bus: its
+`gaps` and `relistens` count reconnects to a new backend (each clears L1 once
+and re-sends badge snapshots), `dropped` counts notifications on channels
+nobody registered, and each channel reports whether it is `listening`. See
+`docs/realtime.md`.
 
 Outbox metrics include pending rows, failed rows, ready retry backlog, and dead
 letter count. Failure classification is persisted as `failure_type` with the
@@ -253,8 +258,9 @@ Validated degradation behavior:
 * failed realtime delivery records a failed count and keeps SSR continuity;
 * PostgreSQL NOTIFY failure is classified as degraded transport and does not
   make canonical writes fail;
-* PostgreSQL LISTEN failure makes the listener degraded while cursor polling
-  fallback remains valid;
+* PostgreSQL LISTEN failure makes the listener poll the outbox backstop,
+  while the process has sockets, until the LISTEN is re-issued on the next
+  poll;
 * notification fanout records per-recipient failure without aborting the whole
   fanout;
 * core forum rendering does not depend on websocket availability;

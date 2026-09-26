@@ -21,9 +21,9 @@ our $VERSION = '0.001';
 # because the test doubles return the same object in either context.
 # search_rs returns a resultset in every context, so lib/ uses nothing else.
 #
-# The one allowed ->search( is the forum search service's own API.
-my %allowed = ( 'lib/GPForum/Controller/Forum/Search.pm' =>
-      qr/gp_search_service->search\s*[(]/msx );
+# The forum search service's own search() was the one exception; the search
+# page now asks it for ranked_search(), so there is none.
+my %allowed;
 
 my @violations;
 my $examined = 0;

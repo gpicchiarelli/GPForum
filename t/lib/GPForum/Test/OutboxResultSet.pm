@@ -80,10 +80,16 @@ sub _matches_any {
     return;
 }
 
+# A -or key is SQL::Abstract's nested OR, ANDed with the other keys: the
+# realtime backstop's keyset puts its tie-breaks there.
 sub _matches_all {
     my ( $row, $condition ) = @_;
 
     for my $column ( keys %{$condition} ) {
+        if ( $column eq '-or' ) {
+            return if !_matches_any( $row, $condition->{$column} );
+            next;
+        }
         return if !_matches_column( $row, $column, $condition->{$column} );
     }
 
@@ -99,17 +105,25 @@ sub _matches_column {
     return defined $value && $value eq $condition ? 1 : 0;
 }
 
+# Every operator in the hash has to hold, as SQL::Abstract ANDs them: the
+# realtime backstop bounds next_attempt_at from both sides in one hash.
 sub _matches_operator {
     my ( $value, $condition ) = @_;
 
-    return _matches_in( $value, $condition->{-in} )
-      if exists $condition->{-in};
-    return _matches_lte( $value, $condition->{'<='} )
-      if exists $condition->{'<='};
-    return _matches_gt( $value, $condition->{'>'} )
-      if exists $condition->{'>'};
+    my %matcher_for = (
+        '-in' => \&_matches_in,
+        '<='  => \&_matches_lte,
+        '>'   => \&_matches_gt,
+        '>='  => \&_matches_gte,
+    );
+    my @operators = grep { exists $condition->{$_} } sort keys %matcher_for;
+    return if !@operators;
 
-    return;
+    for my $operator (@operators) {
+        return if !$matcher_for{$operator}->( $value, $condition->{$operator} );
+    }
+
+    return 1;
 }
 
 sub _matches_in {
@@ -136,6 +150,14 @@ sub _matches_gt {
     return if !defined $value;
 
     return $value gt $minimum ? 1 : 0;
+}
+
+sub _matches_gte {
+    my ( $value, $minimum ) = @_;
+
+    return if !defined $value;
+
+    return $value ge $minimum ? 1 : 0;
 }
 
 sub _ordered_rows {

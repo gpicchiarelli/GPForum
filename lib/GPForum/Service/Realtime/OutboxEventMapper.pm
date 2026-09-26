@@ -11,7 +11,6 @@ use Mojo::Base -base, -signatures;
 
 use GPForum::Jobs::EventPayload;
 use GPForum::Service::Realtime::EventEnvelope;
-use GPForum::Service::Realtime::NotificationBadgeReader;
 
 our $VERSION = '0.001';
 
@@ -27,7 +26,6 @@ const my $POST_UPDATED                => 'post.updated';
 const my $POST_DELETED                => 'post.deleted';
 const my $POST_UNDELETED              => 'post.undeleted';
 const my $THREAD_UPDATE               => 'thread.update';
-const my $NOTIFICATION_BADGE          => 'notification.badge';
 const my $MODERATION_QUEUE_INVALIDATE => 'moderation.queue.invalidate';
 
 const my %THREAD_CONTENT => (
@@ -48,24 +46,20 @@ const my %POST_CONTENT => (
 );
 
 has payload_contract => sub { return GPForum::Jobs::EventPayload->new; };
-has schema           => undef;
-has notification_badge_reader => undef;
-has readability               => undef;
 has realtime_contract =>
   sub { return GPForum::Service::Realtime::EventEnvelope->new; };
 
-sub events_for_payload ( $self, $raw_payload, $handler_results = undef ) {
-    my $payload = $self->payload_contract->normalize($raw_payload);
-    my @events;
-
+# The id-only hint a domain event becomes. Badges are not mapped here: the
+# notification dispatcher NOTIFYs each count itself when it changes, from a
+# web request or from the worker's fanout alike, and a socket that missed one
+# gets a snapshot. Mapping them here as well sent every badge twice, and the
+# backstop's rebuild from the notification tables cost queries in every
+# worker for every polled post.
+sub events_for_payload ( $self, $raw_payload ) {
+    my $payload      = $self->payload_contract->normalize($raw_payload);
     my $domain_event = $self->_domain_realtime_event_for($payload);
-    if ($domain_event) {
-        push @events, $domain_event;
-    }
-    push @events,
-      $self->_notification_badge_events( $payload, $handler_results || [] );
 
-    return @events;
+    return $domain_event ? ($domain_event) : ();
 }
 
 sub _domain_realtime_event_for ( $self, $payload ) {
@@ -144,91 +138,6 @@ sub _moderation_event ( $self, $payload ) {
         payload        => { source_event_type => $payload->{event_type} },
         metadata       => { source_event_type => $payload->{event_type} },
     );
-}
-
-sub _notification_badge_events ( $self, $payload, $handler_results ) {
-    my %unread_count_for = _notification_badges($handler_results);
-    if ( !%unread_count_for ) {
-        %unread_count_for = $self->_notification_badges_from_source($payload);
-    }
-
-    my @user_ids = sort keys %unread_count_for;
-    my @events;
-
-    for my $user_id (@user_ids) {
-        push @events,
-          $self->_notification_badge_event( $payload, $user_id,
-            $unread_count_for{$user_id} );
-    }
-
-    return @events;
-}
-
-sub _notification_badges_from_source ( $self, $payload ) {
-    my $reader = $self->_notification_badge_reader;
-
-    # The caller assigns this to a hash, so the no-reader case must yield an
-    # empty list. Returning a single undef would make the assignment odd and
-    # silently pair a user id with nothing.
-    return () if !$reader;
-
-    return $reader->badges_for_payload($payload);
-}
-
-sub _notification_badge_reader ($self) {
-    return $self->notification_badge_reader if $self->notification_badge_reader;
-    my $undefined;
-    return $undefined if !$self->schema;
-
-    return GPForum::Service::Realtime::NotificationBadgeReader->new(
-        readability => $self->readability,
-        schema      => $self->schema,
-    );
-}
-
-sub _notification_badge_event ( $self, $payload, $user_id, $count ) {
-    return $self->realtime_contract->build(
-        event_id =>
-          join( q{:}, $payload->{event_id}, $NOTIFICATION_BADGE, $user_id ),
-        type           => $NOTIFICATION_BADGE,
-        aggregate_type => 'user',
-        aggregate_id   => $user_id,
-        actor_id       => $payload->{actor_id},
-        correlation_id => $payload->{correlation_id},
-        causation_id   => $payload->{event_id},
-        payload        => { unread_count      => $count },
-        metadata       => { source_event_type => $payload->{event_type} },
-    );
-}
-
-sub _notification_badges ($handler_results) {
-    my %unread_count_for;
-    for my $fanout ( _fanouts($handler_results) ) {
-        for my $delivery ( @{ $fanout->{created} || [] } ) {
-            my $user_id = _notification_user_id($delivery);
-            next if !defined $user_id;
-
-            $unread_count_for{$user_id} = $delivery->{unread_count};
-        }
-    }
-
-    return %unread_count_for;
-}
-
-sub _fanouts ($handler_results) {
-    return map { $_->{fanout} }
-      grep { ref $_ eq 'HASH' && ref $_->{fanout} eq 'HASH' }
-      @{$handler_results};
-}
-
-sub _notification_user_id ($delivery) {
-    my $undefined;
-    return $undefined if ref $delivery ne 'HASH';
-    return $undefined if !defined $delivery->{unread_count};
-
-    my $notification = $delivery->{notification} || {};
-
-    return $notification->{recipient_user_id};
 }
 
 sub _event_value ( $event, $name ) {

@@ -309,9 +309,12 @@ outbox-dispatched domain events emit bounded PostgreSQL `LISTEN/NOTIFY`
 messages on `gpforum_domain_events`, and every web process forwards matching
 events only to its locally connected websocket clients. PostgreSQL/outbox stays
 authoritative; if a process misses NOTIFY while offline or degraded, the
-listener falls back to bounded cursor polling over completed outbox rows.
-Notification badge fallback is rebuilt from PostgreSQL notification tables, and
-clients still receive polling fallback metadata in the websocket handshake.
+listener falls back to bounded cursor polling over completed outbox rows,
+which starts at the head of the outbox and runs only while the process has
+sockets. Notification badges are NOTIFYed by the notification dispatcher, so
+every process sees them; a missed one is healed by a snapshot of the unread
+count sent on subscribe and after a reconnect. Clients still receive polling
+fallback metadata in the websocket handshake.
 
 The rate limiter remains process-local. It is acceptable as a fallback and test
 boundary, but a PostgreSQL-backed limiter is the next production-grade step.

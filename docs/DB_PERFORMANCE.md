@@ -30,7 +30,7 @@ configured HTTP paths together.
 | `/` | The latest public thread list had no dedicated index matching `last_activity_at DESC, thread_id DESC`. | Added `idx_threads_public_activity`. |
 | `/c/:category_id` | The category thread index existed, but it only indexed `moderation_state = 'visible'` and omitted the `thread_id` keyset tie-breaker while the reader includes `locked` threads. | Added `idx_threads_category_activity_visible_locked`. |
 | `/t/:thread_id` | The visible post index existed, but it omitted the `post_id` keyset tie-breaker and covering columns used by the thread page prefetch path. | Added `idx_posts_visible_thread_position`. |
-| `/search` | DB-backed evidence showed medium-profile broad search and autocomplete could choose sequential scans over `search_documents`. | Added partial public/latest and public/title-prefix search indexes. |
+| `/search` | DB-backed evidence showed medium-profile broad search and autocomplete could choose sequential scans over `search_documents`. | Added partial public/latest and public/title-prefix search indexes. No statement could use them; migration 048 drops them and bounds search instead (see `idx_search_documents_created`). |
 
 ## Before / After
 
@@ -39,7 +39,7 @@ configured HTTP paths together.
 | `/` | Public latest threads depended on generic thread storage or unrelated category/profile indexes. | Dedicated partial covering index for public, live, readable latest threads. | `home:5`, unchanged |
 | `/c/:category_id` | Category order index did not match locked-readable semantics or full keyset order. | Dedicated partial covering index matches category, pinned, activity, and thread-id order. | `category_threads:5`, unchanged |
 | `/t/:thread_id` | Post order index matched thread and position only. | Dedicated partial covering index matches thread, position, and post-id order. | `thread_view:8`, unchanged |
-| `/search?q=performance` | GIN `search_vector` and trigram title indexes existed, but broad public searches could still seq-scan populated `search_documents`. | Partial public/latest and public/title-prefix indexes keep broad search/autocomplete bounded. | `search:2`, unchanged |
+| `/search?q=performance` | GIN `search_vector` and trigram title indexes existed, but broad public searches could still seq-scan populated `search_documents`. | Partial public/latest and public/title-prefix indexes, meant to keep broad search/autocomplete bounded; they were never usable (dropped in 048). | `search:2`, unchanged |
 
 Fixture p95 should not materially change from these SQL-only additions. The DB
 impact is expected to appear only in configured PostgreSQL runs through stable
@@ -160,33 +160,79 @@ Migration 013 built it for `moderation_state = 'visible'`, which the profile's
 `idx_threads_public_activity` -- every public thread on the site -- filtering
 by author. Migration 041 rebuilds it with the predicate the query states.
 
-### `idx_search_documents_public_latest`
+### `idx_search_documents_created`
 
-Supports broad public search queries that match many documents but still need a
-bounded latest-first result:
-
-```sql
-WHERE visibility = 'public'
-  AND permission_scope = 'public'
-ORDER BY indexed_at DESC
-```
-
-The index is partial because private/member-only search documents must never
-participate in public discovery paths.
-
-### `idx_search_documents_public_title_prefix`
-
-Supports permission-safe autocomplete prefix lookup:
+Search ranks only the newest matches (quality program 8.10). Ranking scores
+every candidate before the first page is known, so a word most documents hold
+was ranked over the whole corpus: 100 ms at 20,000 documents, and linear
+beyond. `Searcher` now takes its candidates in an inner query and ranks only
+those:
 
 ```sql
-WHERE visibility = 'public'
-  AND permission_scope = 'public'
-  AND title_normalized LIKE 'prefix%'
-ORDER BY title_normalized ASC
+SELECT me.*, <rank>, count(*) OVER () ...
+FROM (
+  SELECT me.* FROM search_documents me
+    JOIN categories category ... JOIN spaces space ...
+  WHERE <readable by the actor>
+    AND (<full text> OR <trigram> OR <title contains>)
+  ORDER BY me.source_created_at DESC, me.entity_id DESC
+  LIMIT 1000            -- GPFORUM_SEARCH_CANDIDATE_LIMIT
+) me ...
+ORDER BY <rank> DESC, me.source_created_at DESC, ...
+LIMIT 21
 ```
 
-This complements the trigram index. Trigram remains useful for fuzzy search;
-the prefix index is for deterministic autocomplete evidence.
+Migration 048 adds this index for the inner order. For a common word the
+planner walks it from the newest document and stops once it has the
+candidates; a rare word keeps the BitmapOr over the GIN and trigram indexes and
+sorts its few matches. `t/integration/postgres-search-plan.t` pins both plans
+on 20,000 documents. The index is not partial: readability is judged in the
+query, against the live category and space (ADR 0102). When every candidate
+slot was filled the page says the results were ranked among the most recent
+matches only, and that a word or a filter reaches older ones.
+
+The walk depends on statistics for `categories` and `spaces`: without them the
+planner cannot tell how many matches survive the readability join, and it
+reads and sorts every match again (32 ms rather than 4 ms at 30,000 documents
+on PostgreSQL 18). Both tables are small and written only by an administrator,
+so autovacuum's default threshold of 50 changed rows can leave them never
+analysed. Migration 048 analyses them and sets
+`autovacuum_analyze_threshold = 0` on both, so creating or editing a category
+or space gets them analysed within a minute. After restoring a dump, run
+`ANALYZE` as usual.
+
+Every search and autocomplete also runs under its own `statement_timeout`,
+`GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS` (2,000 ms by default), set with
+`set_config('statement_timeout', ?, true)` in the transaction the statement
+runs in, so it ends with it. A search that still runs long is cancelled and the
+page renders degraded, instead of holding one of the few web workers for the
+15 s every other query may take. Zero leaves search under
+`GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`.
+
+### Dropped: the partial `permission_scope` search indexes
+
+Migrations 017 and 018 built `idx_search_documents_public_latest`,
+`idx_search_documents_public_title_prefix`,
+`idx_search_documents_public_filter_rank` and
+`idx_search_documents_source_created`, each partial on `permission_scope`.
+PostgreSQL uses a partial index only when the query's `WHERE` implies its
+predicate, and no statement in `lib/` states `permission_scope`: search
+filters on `visibility` and the live category and space. The queries this
+section used to document were never sent.
+
+Checked on PostgreSQL 18.6 on 2026-09-26 against the statements `Searcher`
+sends -- search and autocomplete, anonymous and member, with every filter
+combination, 84 statements -- with the planner's own choice, with sequential
+scans disabled, and with every other `search_documents` index dropped: no plan
+used any of the four, and after running every statement `pg_stat_user_indexes`
+showed `idx_scan = 0` for each. They were write cost on every document the
+indexer writes, and migration 048 drops them. `script/query-plan-check`
+requires `idx_search_documents_created` in their place.
+
+Migration 048 is not `CONCURRENTLY`: building the index blocks the indexer's
+writes to `search_documents` (not searches) for its duration, and each
+`DROP INDEX` holds a brief `ACCESS EXCLUSIVE` lock. On a large forum apply it
+in a maintenance window.
 
 ## Query Budget Status
 
@@ -203,7 +249,7 @@ script/query-plan-check
 Local `script/query-plan-check` result:
 
 ```text
-query-plan-check status=ok indexes=25 offset_violations=0 db_evidence=ok
+query-plan-check status=ok indexes=26 offset_violations=0 db_evidence=ok
 ```
 
 The production evidence gate adds

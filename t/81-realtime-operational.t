@@ -22,6 +22,7 @@ use GPForum::Service::Realtime::SubscriptionPolicy;
 use GPForum::Test::RealtimeConnection;
 use GPForum::Test::RealtimePermissionEngine;
 use GPForum::Test::RealtimeReadability;
+use GPForum::Test::ScriptedParticipation;
 
 our $VERSION = '0.001';
 
@@ -120,6 +121,43 @@ is(
     )->{reason},
     'invisible_resource',
     'and without readability a thread channel fails closed'
+);
+
+# The suspension check ignored a failing store: while it errored, a member
+# suspended from participating could still subscribe. It fails closed now.
+for my $case (
+    [ 'errors',          sub { die "suspension store unavailable\n" } ],
+    [ 'answers nothing', sub { return; } ],
+    [ 'denies',          sub { return { ok => 0, reason => 'suspended' } } ],
+  )
+{
+    my ( $label, $answer ) = @{$case};
+    is(
+        GPForum::Service::Realtime::SubscriptionPolicy->new(
+            readability      => $readability,
+            schema           => $policy_schema,
+            suspension_store =>
+              GPForum::Test::ScriptedParticipation->new( answer => $answer ),
+        )->permits(
+            { user_id => 'user-1' }, 'realtime.subscribe',
+            { type    => 'thread', id => 'thread-1' }, {},
+        )->{reason},
+        'forbidden',
+        "a subscription is denied when the suspension store $label"
+    );
+}
+ok(
+    GPForum::Service::Realtime::SubscriptionPolicy->new(
+        readability      => $readability,
+        schema           => $policy_schema,
+        suspension_store => GPForum::Test::ScriptedParticipation->new(
+            answer => sub { return { ok => 1 } }
+        ),
+    )->permits(
+        { user_id => 'user-1' }, 'realtime.subscribe',
+        { type    => 'thread', id => 'thread-1' }, {},
+    )->{ok},
+    'and allowed when it says the member may participate'
 );
 
 # ADR 0102: every broadcast on a thread channel asks again who may read the
@@ -395,9 +433,17 @@ sub new {
     my ( $class, %input ) = @_;
 
     return bless {
+        AutoCommit => 1,
         notifies   => $input{notifies}   || [],
+        pg_pid     => $input{pg_pid}     || 1,
         statements => $input{statements} || [],
     }, $class;
+}
+
+sub quote_identifier {
+    my ( undef, $identifier ) = @_;
+
+    return q{"} . $identifier . q{"};
 }
 
 sub notifies {

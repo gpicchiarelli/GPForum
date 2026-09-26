@@ -42,6 +42,19 @@ sub build ( $self, %input ) {
     return $event;
 }
 
+# The one shape of a badge frame, whoever sends it: the dispatcher through
+# NOTIFY, the hub as a snapshot. They used to differ, one with the count at
+# the top level and one only in the payload.
+sub notification_badge ( $self, $user_id, $count ) {
+    return $self->build(
+        type           => 'notification.badge',
+        aggregate_type => 'user',
+        aggregate_id   => $user_id,
+        payload        => { unread_count => $count },
+        metadata       => { channel_type => 'notifications' },
+    );
+}
+
 sub validate ( $self, $event ) {
     return _invalid('malformed_payload') if ref $event ne 'HASH';
 

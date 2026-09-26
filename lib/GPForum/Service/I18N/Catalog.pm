@@ -698,7 +698,9 @@ sub default_catalogs {
             'search.pagination'      => 'Search pagination',
             'search.permission_note' =>
               'Snippets only include content you are allowed to read.',
-            'search.query'           => 'Search query',
+            'search.query'          => 'Search query',
+            'search.ranking_capped' =>
+'Results are ranked among the {limit} most recent matches only. Add a word or a filter to reach older ones.',
             'search.results'         => 'Search results',
             'search.results_summary' => '{count} results',
             'search.submit'          => 'Search',
@@ -1403,7 +1405,9 @@ sub default_catalogs {
             'search.pagination'      => 'Paginazione ricerca',
             'search.permission_note' =>
               'Gli estratti includono solo contenuti che puoi leggere.',
-            'search.query'           => 'Testo da cercare',
+            'search.query'          => 'Testo da cercare',
+            'search.ranking_capped' =>
+'I risultati sono ordinati solo tra le {limit} corrispondenze più recenti. Aggiungi una parola o un filtro per raggiungere quelle più vecchie.',
             'search.results'         => 'Risultati ricerca',
             'search.results_summary' => '{count} risultati',
             'search.submit'          => 'Cerca',

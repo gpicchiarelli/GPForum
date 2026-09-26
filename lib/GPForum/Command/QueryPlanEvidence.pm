@@ -486,8 +486,12 @@ sub _endpoint_definition ($endpoint) {
             },
         },
 
-        # Ordered by relevance: every match is scored before the first page
-        # is known, so a word most documents hold is read in full.
+        # Ordered by relevance over the newest candidate_limit matches only
+        # (8.10). For a word most documents hold the planner walks
+        # idx_search_documents_created and stops at the cap: at 30,000
+        # documents that all hold it, this records no sequential scan and no
+        # warning. That needs statistics on categories and spaces (migration
+        # 048); without them the planner reads and sorts every match again.
         search => {
             purpose         => 'permission-safe PostgreSQL search projection',
             ranked_relation => 'search_documents',

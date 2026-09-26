@@ -33,8 +33,7 @@ sub permits ( $self, $actor, $action, $resource, $context ) {    ## no critic (S
     return $self->_can_thread( $actor, $resource ) if $type eq 'thread';
     return $self->_can_privileged_channel( $actor, $resource )
       if $type eq 'admin' || $type eq 'moderation';
-    return $self->_can_feed( $actor, $resource )     if $type eq 'feed';
-    return $self->_can_presence( $actor, $resource ) if $type eq 'presence';
+    return $self->_can_feed( $actor, $resource ) if $type eq 'feed';
 
     return _deny('unknown_channel');
 }
@@ -74,18 +73,16 @@ sub _can_feed ( $self, $actor, $resource ) {
     return _deny('forbidden');
 }
 
-sub _can_presence ( $self, $actor, $resource ) {
-    return _allow('authenticated_presence') if length $resource->{id};
-
-    return _deny('malformed_channel');
-}
-
+# Fails closed. A suspension store that errors or answers nothing is not an
+# answer that the member may participate: a failure was ignored, so a
+# suspended member could subscribe whenever the store was unreachable.
 sub _actor_account_status ( $self, $actor ) {
     my $user_id = _user_id($actor);
     if ( $self->suspension_store ) {
         my $decision =
           eval { return $self->suspension_store->can_participate($user_id); };
-        return _deny('forbidden') if $decision && !$decision->{ok};
+        return _deny('forbidden')
+          if ref $decision ne 'HASH' || !$decision->{ok};
     }
 
     return _allow('account_active') if !$self->schema;

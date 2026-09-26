@@ -74,6 +74,12 @@ Recommended production posture:
   connect. Override with `GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`,
   `GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`, and
   `GPFORUM_DATABASE_LOCK_TIMEOUT_MS` (0 disables that timeout).
+- Search and autocomplete run under their own, shorter `statement_timeout`
+  (default 2s, `GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS`; 0 leaves them under
+  the connection's) and rank only the newest matches (default 1000,
+  `GPFORUM_SEARCH_CANDIDATE_LIMIT`). A search cut off by the timeout renders
+  the page as degraded and logs `search degraded`; it does not hold a web
+  worker.
 - `LimitNOFILE=65536` or equivalent OS limit.
 - `/metrics` restricted by reverse proxy allowlist or private network, with
   `GPFORUM_METRICS_TOKEN` set for app-level protection.
@@ -126,6 +132,8 @@ Optional but production-relevant:
 - `GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`
 - `GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`
 - `GPFORUM_DATABASE_LOCK_TIMEOUT_MS`
+- `GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS`
+- `GPFORUM_SEARCH_CANDIDATE_LIMIT`
 
 The built-in runtime defaults are the small-production professional profile:
 loopback listen behind a reverse proxy, `4` web processes, `2` worker

@@ -233,6 +233,7 @@ sub _helper_names {
       gp_password
       gp_permission_gate
       gp_permission_review
+      gp_pg_notifications
       gp_post_composer
       gp_post_position
       gp_post_reader

@@ -23,7 +23,7 @@
     <input type="hidden" name="limit" value="<%= $current_limit %>">
     <button type="submit"><%= t('search.submit') %></button>
   </form>
-  % if (defined $status && $status eq 'degraded') {
+  % if ($degraded) {
     <%= include 'components/status_banner',
       tone => 'warning',
       heading_id => 'search-status-heading',
@@ -32,6 +32,9 @@
   % }
   % if (@{$results}) {
     <p role="status"><%= t('search.results_summary', { count => $result_count }) %></p>
+    % if ($ranking_capped) {
+      <p id="search-ranking-capped"><%= t('search.ranking_capped', { limit => $candidate_limit }) %></p>
+    % }
     <p><%= t('search.permission_note') %></p>
     <ol class="ui-card-list" aria-label="<%= t('search.results') %>">
       % for my $result (@{$results}) {
@@ -66,6 +69,8 @@
       % my %next_params = (q => $query, %{$active_filters}, limit => $more_limit);
       <%= include 'components/pagination', label => t('search.pagination'), items => ui_next_page(href => url_for('forum_search')->query(%next_params), label => t('search.more_results')) %>
     % }
+  % } elsif ($degraded) {
+    %# The banner above says why there are no results; "no match" would be wrong.
   % } elsif (defined $query && length $query) {
     <%= include 'components/empty_state', heading_id => 'search-no-results-heading', component_title => t('search.no_results'), description => t('search.no_results_guidance') %>
   % } else {

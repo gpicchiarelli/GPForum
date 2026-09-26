@@ -17,6 +17,7 @@ our $VERSION = '0.001';
 
 const my $DEFAULT_LIMIT      => 20;
 const my $MAX_LIMIT          => 50;
+const my $DEFAULT_CANDIDATES => 1_000;
 const my $SNIPPET_RADIUS     => 80;
 const my $SNIPPET_MAX_LENGTH => 220;
 const my $EMPTY_TEXT         => q{};
@@ -56,17 +57,50 @@ const my $TRIGRAM_CONDITION => q{me.title_normalized % lower(?)};
 const my $TITLE_CONTAINS_CONDITION =>
   q{me.title_normalized LIKE lower(?) ESCAPE '\'};
 
+# How many candidates the ranked query was given, on every row it returns:
+# the window runs over the joined candidates before the outer LIMIT, and the
+# joins are one-to-one, so this is the count the inner LIMIT produced.
+const my $CANDIDATE_COUNT => q{count(*) OVER ()};
+
+# Transaction-local: it ends with the transaction search runs in, so the
+# connection goes back to the statement_timeout every other query gets.
+const my $SET_STATEMENT_TIMEOUT =>
+  q{SELECT set_config('statement_timeout', ?, true)};
+
+# How many of the newest matches are ranked (8.10). Ranking scores every
+# candidate before the first page is known, so without a cap a word most
+# documents hold -- "the", under the simple configuration -- was ranked over
+# the whole corpus: 100 ms at 20,000 documents, linear beyond.
+has candidate_limit   => $DEFAULT_CANDIDATES;
 has permission_engine => undef;
 has schema            => undef;
 
-sub search ( $self, $actor, $query, $options ) {
-    my $normalized = _normalized_query($query);
-    my $search     = $self->search_resultset( $actor, $query, $options );
+# Milliseconds. Zero or undef keeps the connection's own statement_timeout:
+# zero there would switch the timeout off for search, not relax it.
+has statement_timeout_ms => undef;
 
-    return [
-        map  { _decorate_result( $_, $normalized ) }
-        grep { $self->_can_render( $actor, $_ ) } _rows($search)
-    ];
+sub search ( $self, $actor, $query, $options ) {
+    return $self->ranked_search( $actor, $query, $options )->{results};
+}
+
+# The results, and whether the ranking was capped: when every candidate slot
+# was filled, older matches may exist that were never ranked, and the page
+# says so rather than presenting the order as the best of all matches.
+sub ranked_search ( $self, $actor, $query, $options ) {
+    my $normalized = _normalized_query($query);
+    my $rows       = $self->_timed_rows(
+        sub { return $self->search_resultset( $actor, $query, $options ); } );
+    my $candidates = @{$rows} ? _column( $rows->[0], 'candidate_count' ) : 0;
+
+    return {
+        candidate_limit => $self->candidate_limit,
+        ranking_capped  =>
+          ( ( $candidates || 0 ) >= $self->candidate_limit ? 1 : 0 ),
+        results => [
+            map  { _decorate_result( $_, $normalized ) }
+            grep { $self->_can_render( $actor, $_ ) } @{$rows}
+        ],
+    };
 }
 
 # The resultset search() executes, before it is executed -- search_rs, not
@@ -76,27 +110,34 @@ sub search ( $self, $actor, $query, $options ) {
 # the database chooses can be examined for the query the application actually
 # sends: the query-plan gate EXPLAINed a hand-written copy of this, and the
 # copy had none of the properties that made the real one a sequential scan.
+#
+# Two levels. The inner query finds the newest candidate_limit matches the
+# actor may read, newest first, which idx_search_documents_created can serve
+# by walking the table from the newest document and stopping at the limit --
+# the plan for a word most documents hold. A rare word keeps the BitmapOr over
+# the GIN and trigram indexes and sorts its few matches. The outer query ranks
+# only those candidates, in the order search has always used. The planner
+# picks the walk only with statistics on categories and spaces, which
+# migration 048 has autovacuum gather.
 sub search_resultset ( $self, $actor, $query, $options = undef ) {
     $options ||= {};
 
     my $limit      = _bounded_limit( $options->{limit} );
     my $normalized = _normalized_query($query);
 
-    return $self->schema->resultset('SearchDocument')->search_rs(
-        _search_query(
-            $self->_permission_condition($actor),
-            $normalized, $options
-        ),
+    return $self->_candidates( $actor, $normalized, $options )
+      ->as_subselect_rs->search_rs(
+        undef,
         {
             join      => [qw(author category space)],
             '+select' => [
                 _rank_expression($normalized), 'author.username',
                 'author.display_name',         'category.visibility',
-                'space.visibility',
+                'space.visibility',            \$CANDIDATE_COUNT,
             ],
             '+as' => [
                 qw(rank_score author_username author_display_name
-                  category_visibility space_visibility)
+                  category_visibility space_visibility candidate_count)
             ],
             rows     => $limit,
             order_by => [
@@ -107,14 +148,19 @@ sub search_resultset ( $self, $actor, $query, $options = undef ) {
                 { -desc => 'me.entity_id' },
             ],
         }
-    );
+      );
 }
 
 sub autocomplete ( $self, $actor, $prefix, $options ) {
+    my $rows = $self->_timed_rows(
+        sub {
+            return $self->autocomplete_resultset( $actor, $prefix, $options );
+        }
+    );
+
     return [
         map  { _decorate_autocomplete_result($_) }
-        grep { $self->_can_render( $actor, $_ ) }
-          _rows( $self->autocomplete_resultset( $actor, $prefix, $options ) )
+        grep { $self->_can_render( $actor, $_ ) } @{$rows}
     ];
 }
 
@@ -155,6 +201,53 @@ sub autocomplete_resultset ( $self, $actor, $prefix, $options = undef ) {
             ],
         }
     );
+}
+
+# The matches the actor may read, newest first, at most candidate_limit of
+# them. Only category and space are joined: the permission condition reads
+# their visibility, and the author is for display, joined by the outer query.
+sub _candidates ( $self, $actor, $query, $options ) {
+    return $self->schema->resultset('SearchDocument')->search_rs(
+        _search_query( $self->_permission_condition($actor), $query, $options ),
+        {
+            join     => [qw(category space)],
+            order_by => [
+                { -desc => 'me.source_created_at' },
+                { -desc => 'me.entity_id' },
+            ],
+            rows => $self->candidate_limit,
+        }
+    );
+}
+
+# The rows of the resultset $build returns, read under search's own
+# statement_timeout. set_config(..., true) is SET LOCAL: it needs a transaction
+# to be local to, and ends with it. A failure -- the timeout's own
+# cancellation included -- rolls it back and is rethrown for the controller,
+# which renders the page degraded instead of holding the worker.
+sub _timed_rows ( $self, $build ) {
+    my $timeout = $self->statement_timeout_ms;
+    return [ _rows( $build->() ) ] if !$timeout;
+
+    return $self->schema->txn_do(
+        sub {
+            $self->_set_statement_timeout($timeout);
+            return [ _rows( $build->() ) ];
+        }
+    );
+}
+
+sub _set_statement_timeout ( $self, $timeout ) {
+    my $storage = $self->schema->storage;
+    return if !$storage->can('dbh_do');
+
+    $storage->dbh_do(
+        sub ( $, $dbh ) {
+            return $dbh->do( $SET_STATEMENT_TIMEOUT, undef, $timeout );
+        }
+    );
+
+    return;
 }
 
 # Anonymous callers keep the simple public predicate. Everyone else gets the

@@ -7,6 +7,7 @@ use strict;
 use warnings;
 
 use Mojo::Base -base;
+use Scalar::Util qw(looks_like_number);
 
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Test::SearchRow;
@@ -53,7 +54,8 @@ sub search {
         return $skipped;
     }
 
-    my @rows = grep { _matches_query( $_, $query ) } @{ $self->rows };
+    my @rows = _ordered_page( $attrs,
+        grep { _matches_query( $_, $query ) } @{ $self->rows } );
 
     return GPForum::Test::SearchSearch->new(
         resultset => $self,
@@ -269,8 +271,22 @@ sub _matches_field {
     if ( ref $expected eq 'HASH' ) {
         return _matches_hash_operator( $actual, $expected );
     }
+    if ( ref $expected eq 'REF' ) {
+        return _matches_any( $actual, ${$expected} );
+    }
 
     return defined $actual && $actual eq $expected;
+}
+
+# column = ANY(?), with the array bound as DBIx::Class takes it:
+# \[ '= ANY(?)', [ {} => \@values ] ].
+sub _matches_any {
+    my ( $actual, $literal ) = @_;
+
+    my ( $sql, $bind ) = @{$literal};
+    return 0 if $sql !~ /\A = [ ] ANY [(]/msx;
+
+    return grep { defined $actual && $actual eq $_ } @{ $bind->[1] };
 }
 
 sub _matches_hash_operator {
@@ -278,6 +294,10 @@ sub _matches_hash_operator {
 
     if ( exists $expected->{-in} ) {
         return grep { defined $actual && $actual eq $_ } @{ $expected->{-in} };
+    }
+
+    if ( exists $expected->{q{>}} ) {
+        return defined $actual && _compare( $actual, $expected->{q{>}} ) > 0;
     }
 
     if ( exists $expected->{-like} ) {
@@ -295,6 +315,36 @@ sub _matches_hash_operator {
     }
 
     return 1;
+}
+
+# order_by => { -asc => column } and rows, the keyset page a batch reads.
+# Any other ordering is left as the rows were given.
+sub _ordered_page {
+    my ( $attrs, @rows ) = @_;
+
+    my $order = ref $attrs eq 'HASH' ? $attrs->{order_by} : undef;
+    if ( ref $order eq 'HASH' && defined $order->{-asc} && !ref $order->{-asc} )
+    {
+        my $column = _base_column( $order->{-asc} );
+        @rows =
+          sort { _compare( $a->get_column($column), $b->get_column($column) ) }
+          @rows;
+    }
+    my $limit = ref $attrs eq 'HASH' ? $attrs->{rows} : undef;
+    if ( $limit && @rows > $limit ) {
+        splice @rows, $limit;
+    }
+
+    return @rows;
+}
+
+sub _compare {
+    my ( $one, $other ) = @_;
+
+    return $one <=> $other
+      if looks_like_number($one) && looks_like_number($other);
+
+    return $one cmp $other;
 }
 
 sub _base_column {

@@ -21,7 +21,7 @@ my $session_secret_prefix =
   qr/GPFORUM_SESSION_SECRETS [ ] must [ ] not [ ] include/msx;
 my $session_secret_suffix = qr/the [ ] development [ ] default/msx;
 
-const my $EXPECTED_TESTS             => 110;
+const my $EXPECTED_TESTS             => 117;
 const my $DEFAULT_LOG_LEVEL          => 'info';
 const my $DEFAULT_RUNTIME_LISTEN     => 'http://127.0.0.1:8080';
 const my $DEFAULT_RUNTIME_BACKLOG    => 256;
@@ -59,6 +59,10 @@ const my $DEFAULT_STATEMENT_TIMEOUT_MS => 15_000;
 const my $DEFAULT_IDLE_IN_TXN_MS       => 10_000;
 const my $DEFAULT_LOCK_TIMEOUT_MS      => 3_000;
 const my $CUSTOM_STATEMENT_TIMEOUT_MS  => 7_000;
+const my $DEFAULT_SEARCH_TIMEOUT_MS    => 2_000;
+const my $DEFAULT_SEARCH_CANDIDATES    => 1_000;
+const my $CUSTOM_SEARCH_TIMEOUT_MS     => 500;
+const my $CUSTOM_SEARCH_CANDIDATES     => 250;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -327,6 +331,50 @@ throws_ok(
     },
     qr/\A database_statement_timeout_ms [ ] must [ ] be [ ] >= [ ] 0/msx,
     'negative statement timeout fails validation',
+);
+
+# Search's own budget (8.10): a statement timeout well under the one every
+# query gets, and how many of the newest matches it ranks.
+is( $default_config->search_statement_timeout_ms,
+    $DEFAULT_SEARCH_TIMEOUT_MS, 'search has its own statement timeout' );
+is( $default_config->search_candidate_limit,
+    $DEFAULT_SEARCH_CANDIDATES, 'search ranks the newest 1,000 matches' );
+
+my $search_config = GPForum::Config->from_environment(
+    {
+        %environment,
+        GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS => $CUSTOM_SEARCH_TIMEOUT_MS,
+        GPFORUM_SEARCH_CANDIDATE_LIMIT      => $CUSTOM_SEARCH_CANDIDATES,
+    }
+);
+is( $search_config->search_statement_timeout_ms,
+    $CUSTOM_SEARCH_TIMEOUT_MS, 'search statement timeout loads from env' );
+is( $search_config->search_candidate_limit,
+    $CUSTOM_SEARCH_CANDIDATES, 'search candidate limit loads from env' );
+
+throws_ok(
+    sub {
+        GPForum::Config->new( search_statement_timeout_ms => -1 )->validate;
+    },
+    qr/\A search_statement_timeout_ms [ ] must [ ] be [ ] >= [ ] 0/msx,
+    'negative search statement timeout fails validation',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( search_candidate_limit => 0 )->validate;
+    },
+    qr/\A search_candidate_limit [ ] must [ ] be [ ] >= [ ] 1/msx,
+    'a search that ranks no candidate fails validation',
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->from_environment(
+            { GPFORUM_SEARCH_CANDIDATE_LIMIT => 'all' } );
+    },
+    qr/\A GPFORUM_SEARCH_CANDIDATE_LIMIT [ ] must [ ] be [ ] an [ ] integer/msx,
+    'a non-integer search candidate limit fails validation',
 );
 
 throws_ok(

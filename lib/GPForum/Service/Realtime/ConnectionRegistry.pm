@@ -12,25 +12,27 @@ use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
 
-has clock                    => sub { return GPForum::Service::Clock->new; };
-has connections              => sub { return {}; };
-has max_connections_per_user => 8;
+has clock       => sub { return GPForum::Service::Clock->new; };
+has connections => sub { return {}; };
+
+# Per process, not per user across the cluster: a memory bound on what one
+# user can hold open in one worker, so a user may have this many sockets on
+# every worker of every node. The cross-node control is the PostgreSQL-backed
+# realtime.connect rate limit. Counting cluster-wide would need a shared
+# presence table, which ADR 0067 rules out.
+has max_connections_per_user         => 8;
 has max_subscriptions_per_connection => 32;
-has idle_timeout_seconds             => 300;
 
 sub register ( $self, $connection_id, $actor, $connection ) {
     my $undefined;
     return $undefined if !$self->can_register($actor);
 
-    my $epoch = $self->clock->now_epoch;
-    my $row   = {
-        connection_id   => $connection_id,
-        actor           => $actor,
-        connection      => $connection,
-        connected_at    => $self->clock->now_iso8601,
-        last_seen_at    => $self->clock->now_iso8601,
-        last_seen_epoch => $epoch,
-        subscriptions   => {},
+    my $row = {
+        connection_id => $connection_id,
+        actor         => $actor,
+        connection    => $connection,
+        connected_at  => $self->clock->now_iso8601,
+        subscriptions => {},
     };
     $self->connections->{$connection_id} = $row;
 
@@ -54,20 +56,8 @@ sub subscribe ( $self, $connection_id, $channel ) {
     }
 
     $row->{subscriptions}{$channel} = 1;
-    $self->touch($connection_id);
 
     return { ok => 1, row => $row };
-}
-
-sub touch ( $self, $connection_id ) {
-    my $row = $self->connection($connection_id);
-    my $undefined;
-    return $undefined if !$row;
-
-    $row->{last_seen_at}    = $self->clock->now_iso8601;
-    $row->{last_seen_epoch} = $self->clock->now_epoch;
-
-    return $row;
 }
 
 sub connection ( $self, $connection_id ) {
@@ -77,6 +67,20 @@ sub connection ( $self, $connection_id ) {
 sub subscribers ( $self, $channel ) {
     return
       grep { $_->{subscriptions}{$channel} } values %{ $self->connections };
+}
+
+# Connections with at least one channel of a family, such as notifications.
+sub subscribers_of_family ( $self, $family ) {
+    my $prefix = $family . q{:};
+
+    return grep {
+        grep { index( $_, $prefix ) == 0 }
+          keys %{ $_->{subscriptions} }
+    } values %{ $self->connections };
+}
+
+sub count ($self) {
+    return scalar keys %{ $self->connections };
 }
 
 sub snapshot ($self) {
@@ -106,23 +110,6 @@ sub can_register ( $self, $actor ) {
     }
 
     return $count < $self->max_connections_per_user ? 1 : 0;
-}
-
-sub cleanup_stale ($self) {
-    my $now     = $self->clock->now_epoch;
-    my $removed = 0;
-
-    for my $connection_id ( keys %{ $self->connections } ) {
-        my $row = $self->connections->{$connection_id};
-        next
-          if $now - ( $row->{last_seen_epoch} || $now ) <=
-          $self->idle_timeout_seconds;
-
-        delete $self->connections->{$connection_id};
-        $removed++;
-    }
-
-    return $removed;
 }
 
 sub _user_id ($actor) {

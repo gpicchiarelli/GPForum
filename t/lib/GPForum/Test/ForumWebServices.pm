@@ -1167,6 +1167,22 @@ sub search {
     ];
 }
 
+# What the search page asks for. 'capped' answers as a forum whose word filled
+# every candidate slot; 'timeout' as a search the database cancelled.
+sub ranked_search {
+    my ( $self, $actor, $query, $options ) = @_;
+
+    if ( $query eq 'timeout' ) {
+        die "canceling statement due to statement timeout\n";
+    }
+
+    return {
+        candidate_limit => 1_000,
+        ranking_capped  => $query eq 'capped' ? 1 : 0,
+        results         => $self->search( $actor, $query, $options ),
+    };
+}
+
 sub autocomplete {
     return [
         {

@@ -7,7 +7,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
-use List::Util qw(all any);
+use List::Util qw(all any first none);
 use Test::More;
 
 use lib 'lib';
@@ -20,6 +20,7 @@ use GPForum::Service::Search::PermissionEngine;
 use GPForum::Service::Search::Searcher;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
+use GPForum::Test::SearchEventRecorder;
 use GPForum::Test::SearchIndexer;
 use GPForum::Test::SearchPermissionEngine;
 use GPForum::Test::SearchResultSet;
@@ -35,6 +36,12 @@ const my $SEARCH_MAX            => 50;
 const my $POST_SOURCE_VERSION   => 3;
 const my $BUMPED_SOURCE_VERSION => 4;
 const my $REVERSAL_CALL_INDEX   => 4;
+const my $LONG_THREAD_POSTS     => 5;
+const my $SMALL_BATCH           => 2;
+const my $TWO_BATCHES           => 2 * $SMALL_BATCH;
+
+# The thread's own transaction and one per batch of its posts.
+const my $REMOVAL_TRANSACTIONS => 4;
 
 my $category = GPForum::Test::SearchRow->new(
     data => {
@@ -266,17 +273,21 @@ ok( $removed_thread->{ok}, 'thread removal succeeds' );
 is( $removed_thread->{posts_removed},
     1, 'thread removal also removes post documents' );
 ok(
-    _deleted_entity( $indexed_documents->deleted, 'post', 'post-1' ),
+    !_document_for( $indexed_documents, 'post', 'post-1' ),
     'thread removal deletes post search documents in the thread'
 );
-ok( _deleted_entity( $indexed_documents->deleted, 'thread', 'thread-1' ),
-    'thread removal still deletes the thread document' );
+ok(
+    !_document_for( $indexed_documents, 'thread', 'thread-1' ),
+    'thread removal still deletes the thread document'
+);
 
 my $reindexed_posts = $indexer->index_thread_posts('thread-1');
-is( scalar @{$reindexed_posts},
+is( $reindexed_posts->{indexed},
     1, 'thread post reindex indexes posts in the thread' );
-is( $reindexed_posts->[0]{entity_type},
-    'post', 'thread post reindex persists post documents' );
+ok(
+    _document_for( $indexed_documents, 'post', 'post-1' ),
+    'thread post reindex persists post documents'
+);
 ok(
     _deleted_entity( $indexed_documents->created, 'post', 'post-1' ),
     'thread post reindex recreates post search documents'
@@ -620,12 +631,241 @@ for my $case (
         "$label reindexes the posts in it" );
 }
 
+# A thread's posts are removed, and indexed again, a batch at a time. The
+# removal was one transaction holding an advisory lock per post, and a thread
+# of a few thousand posts could not get them from PostgreSQL's shared lock
+# table: the removal was retried until it was dead-lettered, and the posts of
+# the hidden thread stayed searchable.
+my $long_thread = GPForum::Test::SearchRow->new(
+    category => $category,
+    data     => { %{ $thread->data }, thread_id => 'thread-long' },
+);
+my @long_posts =
+  map { _long_post( $long_thread, $post, $_ ) } reverse 1 .. $LONG_THREAD_POSTS;
+my $long_documents = GPForum::Test::SearchResultSet->new( rows => [] );
+my $long_schema    = GPForum::Test::SearchSchema->new(
+    resultsets => {
+        Post => GPForum::Test::SearchResultSet->new(
+            rows => [ @long_posts, $post ]
+        ),
+        SearchDocument => $long_documents,
+        Thread         => GPForum::Test::SearchResultSet->new(
+            rows => [ $long_thread, $thread ]
+        ),
+    },
+);
+my $long_indexer = GPForum::Service::Search::Indexer->new(
+    clock              => $clock,
+    id_service         => GPForum::Test::Id->new,
+    rebuild_batch_size => $SMALL_BATCH,
+    schema             => $long_schema,
+);
+$long_indexer->index_thread('thread-long');
+$long_indexer->index_post('post-1');
+is( $long_indexer->index_thread_posts('thread-long')->{indexed},
+    $LONG_THREAD_POSTS, 'a thread\'s posts are indexed, a batch at a time' );
+is_deeply(
+    [
+        map {
+            $long_indexer->index_thread_posts_batch( 'thread-long', $_ )
+              ->{next_after}
+        } ( undef, $SMALL_BATCH, $TWO_BATCHES )
+    ],
+    [ $SMALL_BATCH, $TWO_BATCHES, undef ],
+    'a full batch says at which position the next starts, the last says none'
+);
+
+( first { $_->get_column('post_id') eq 'long-post-3' } @long_posts )
+  ->update( { moderation_state => 'hidden' } );
+is_deeply(
+    [
+        @{
+            $long_indexer->index_thread_posts_batch( 'thread-long',
+                $SMALL_BATCH )
+        }{qw(indexed pruned unchanged)}
+    ],
+    [ 0, 1, 1 ],
+    'a batch removes the document of a post that died'
+);
+
+my $transactions = $long_schema->transaction_count;
+my $long_removed = $long_indexer->remove_thread('thread-long');
+is( $long_schema->transaction_count - $transactions,
+    $REMOVAL_TRANSACTIONS,
+    'removing it takes one transaction for the thread and one per batch' );
+is_deeply(
+    _removed_post_batches($long_documents),
+    [
+        [qw(long-post-1 long-post-2)], [qw(long-post-3 long-post-4)],
+        ['long-post-5']
+    ],
+    'each batch at most the batch size, in position order, dead posts included'
+);
+is(
+    $long_removed->{posts_removed},
+    $LONG_THREAD_POSTS - 1,
+    'the documents removed are counted, not the one already gone'
+);
+ok(
+    (
+        none { $_->get_column('entity_id') =~ /long/msx }
+          @{ $long_documents->rows }
+    ),
+    'and no document of the thread or its posts is left'
+);
+ok( _document_for( $long_documents, 'post', 'post-1' ),
+    'another thread\'s posts keep theirs' );
+
+# Renaming, moving or restoring a thread re-derives its posts one batch per
+# outbox message: the first with the event, each next one recorded as its own
+# event. All of them in the one message held the dispatcher -- and every
+# reply's realtime push, notifications and cache purge behind it -- for as
+# long as a large thread took.
+my $batching_indexer = GPForum::Test::SearchIndexer->new(
+    batch_size   => $SMALL_BATCH,
+    thread_posts => { 'thread-long' => $LONG_THREAD_POSTS },
+);
+my $recorder = GPForum::Test::SearchEventRecorder->new;
+my $batching = GPForum::Worker::Handler::SearchIndexing->new(
+    indexer  => $batching_indexer,
+    recorder => $recorder,
+);
+my %moved = (
+    actor_id       => 'user-1',
+    aggregate_id   => 'thread-long',
+    aggregate_type => 'thread',
+    correlation_id => 'correlation-1',
+    event_id       => 'event-moved',
+    event_type     => 'thread.moved',
+);
+is( $batching->handle( \%moved )->{indexed}{posts_indexed}{indexed},
+    $SMALL_BATCH, 'a moved thread indexes one batch of its posts' );
+is( scalar @{ $recorder->events }, 1, 'and records one event for the next' );
+is_deeply(
+    _event_fields( $recorder->events->[0] ),
+    {
+        aggregate_id    => 'thread-long',
+        aggregate_type  => 'thread',
+        causation_id    => 'event-moved',
+        correlation_id  => 'correlation-1',
+        event_type      => 'search.thread_posts_requested',
+        idempotency_key => "search.thread_posts:event-moved:$SMALL_BATCH",
+        payload         => {
+            after          => $SMALL_BATCH,
+            cause_event_id => 'event-moved',
+            thread_id      => 'thread-long',
+        },
+    },
+    'its own event on the thread, naming where the next batch starts'
+);
+$batching->handle( \%moved );
+is( scalar @{ $recorder->events }, 1, 'a retried event records nothing new' );
+
+_deliver_chain( $batching, $recorder );
+is_deeply(
+    [
+        map  { $_->[2] }
+        grep { $_->[0] eq 'thread_posts' } @{ $batching_indexer->calls }
+    ],
+    [ undef, undef, $SMALL_BATCH, $TWO_BATCHES ],
+    'each batch starts where the one before ended'
+);
+is( scalar @{ $recorder->events },
+    2, 'until the thread is done, when nothing more is recorded' );
+is_deeply(
+    [ @{ $recorder->events->[1] }{qw(idempotency_key causation_id)} ],
+    [ "search.thread_posts:event-moved:$TWO_BATCHES", 'recorded-1' ],
+    'every link keyed by the event that started the chain'
+);
+$batching->handle( $recorder->events->[0] );
+is( scalar @{ $recorder->events }, 2, 'a retried batch records nothing new' );
+ok(
+    (
+        none { $_->{event_type} eq 'search.rebuild_requested' }
+          @{ $recorder->events }
+    ),
+    'and none is a console rebuild step: the last rebuild shown stays as it was'
+);
+
+$batching->handle(
+    {
+        aggregate_id   => 'action-2',
+        aggregate_type => 'moderation_action',
+        domain_payload => {
+            target_id   => 'thread-long',
+            target_type => 'thread',
+        },
+        event_id   => 'event-reversed',
+        event_type => 'moderation_action.reversed',
+    }
+);
+is(
+    $recorder->events->[-1]{idempotency_key},
+    "search.thread_posts:event-reversed:$SMALL_BATCH",
+    'a reversed thread moderation starts a chain of its own'
+);
+
 done_testing();
 
 sub _deleted_entity {
     my ( $rows, $type, $id ) = @_;
 
     return any { _entity_is( $_, $type, $id ) } @{$rows};
+}
+
+sub _document_for {
+    my ( $documents, $type, $id ) = @_;
+
+    return any { _entity_is( $_->data, $type, $id ) } @{ $documents->rows };
+}
+
+sub _long_post {
+    my ( $parent, $template, $position ) = @_;
+
+    return GPForum::Test::SearchRow->new(
+        current_body => $template->current_body,
+        thread       => $parent,
+        data         => {
+            %{ $template->data },
+            position  => $position,
+            post_id   => "long-post-$position",
+            thread_id => $parent->get_column('thread_id'),
+        },
+    );
+}
+
+# The post ids of each batch delete, as bound to entity_id = ANY(?).
+sub _removed_post_batches {
+    my ($documents) = @_;
+
+    return [
+        map  { [ @{ ${ $_->{entity_id} }->[1][1] } ] }
+        grep { ref $_->{entity_id} } @{ $documents->deleted }
+    ];
+}
+
+sub _event_fields {
+    my ($event) = @_;
+
+    return {
+        map { $_ => $event->{$_} }
+          qw(aggregate_id aggregate_type causation_id correlation_id
+          event_type idempotency_key payload)
+    };
+}
+
+# Every recorded event, delivered once and in order, as the outbox would,
+# including those recorded along the way.
+sub _deliver_chain {
+    my ( $indexing, $recorded ) = @_;
+
+    my $delivered = 0;
+    while ( $delivered < @{ $recorded->events } ) {
+        $indexing->handle( $recorded->events->[$delivered] );
+        $delivered++;
+    }
+
+    return $delivered;
 }
 
 sub _entity_is {

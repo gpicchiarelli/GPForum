@@ -319,6 +319,25 @@ creates `/run/gpforum` with `RuntimeDirectory=gpforum` (mode `0750`, owned by
 the service user). Other supervisors must create that directory with safe
 ownership before start.
 
+## Realtime
+
+Every web process LISTENs on PostgreSQL and serves only its own websockets;
+nodes need no sticky sessions and share no presence state. See
+`docs/realtime.md`.
+
+- Keep `GPFORUM_REALTIME_LISTENER_ENABLED=1` (the default) on every web
+  process. Notification badges reach sockets only through NOTIFY and the
+  listener, including those changed by the same process.
+- The connection quota (8 per user) is counted per worker process. The
+  cross-node limit is the PostgreSQL-backed `realtime.connect` rate limit
+  (30 per minute per user).
+- After a PostgreSQL restart or failover, each web process clears its L1
+  cache once, on its next cache read, and re-sends notification badge counts
+  to its sockets: expect a short rise in queries.
+- After a deploy or a worker recycle, the outbox backstop starts at the head
+  of the outbox; nothing is replayed. It runs only in processes that have
+  websocket connections.
+
 ## GlifiStore (required L2)
 
 Staging and production fail closed when `GPFORUM_GLIFISTORE_URL` is missing.
@@ -379,6 +398,10 @@ Minimum recommended posture:
   (`GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS`);
 - `lock_timeout` defaults to 3s on app connect
   (`GPFORUM_DATABASE_LOCK_TIMEOUT_MS`);
+- search and autocomplete set their own `statement_timeout` of 2s for the
+  transaction they run in (`GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS`; 0 leaves
+  them under the 15s above) and rank only the newest 1000 matches
+  (`GPFORUM_SEARCH_CANDIDATE_LIMIT`);
 - `application_name=gpforum` is set on connect;
 - backups and restore tests exist before production launch.
 

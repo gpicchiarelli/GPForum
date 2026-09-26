@@ -12,20 +12,23 @@ use Test::More;
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::Id;
 use GPForum::Service::Admin::Maintenance;
 use GPForum::Service::Outbox::Dispatcher;
 use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Service::Search::Indexer;
 use GPForum::Service::Search::RebuildRun;
+use GPForum::Test::LongThread;
 use GPForum::Test::PostgresHarness;
 use GPForum::Test::TagCache;
 use GPForum::Worker::Handler::SearchIndexing;
 
 our $VERSION = '0.001';
 
-const my $BATCH      => 5;
-const my $MAX_PASSES => 200;
+const my $BATCH        => 5;
+const my $MAX_PASSES   => 200;
+const my $THREAD_POSTS => 12;
 
 if ( !$ENV{GPFORUM_DATABASE_DSN} ) {
     plan skip_all => 'set GPFORUM_DATABASE_DSN to run the search rebuild run';
@@ -70,30 +73,19 @@ my $requested =
 ok( $requested->{run_id}, 'a run is requested' );
 is( _pending(), 1, 'as one outbox message' );
 
+my $search_handler = GPForum::Worker::Handler::SearchIndexing->new(
+    indexer     => $indexer,
+    rebuild_run => $run,
+);
 my $dispatcher = GPForum::Service::Outbox::Dispatcher->new(
     id_service => GPForum::Infrastructure::Id->new,
     schema     => $schema,
     transport  => GPForum::Service::Outbox::DomainEventTransport->new(
-        handlers => [
-            GPForum::Worker::Handler::SearchIndexing->new(
-                indexer     => $indexer,
-                rebuild_run => $run,
-            )
-        ],
+        handlers => [$search_handler],
     ),
 );
-my $passes = 0;
 
-while ( _pending() && $passes < $MAX_PASSES ) {
-
-    # The dispatcher's clock reads whole seconds and a new step's message is
-    # due now, to the microsecond: it becomes claimable in the next second.
-    # The test does not wait for it.
-    $dbh->do( q{UPDATE outbox_messages SET next_attempt_at = now()}
-          . q{ - interval '1 second' WHERE status = 'pending'} );
-    $dispatcher->dispatch_pending(1);
-    $passes++;
-}
+_drain();
 is( _pending(), 0, 'the run drains the outbox' );
 cmp_ok( _steps( $requested->{run_id} ), q{>}, 2, "in several steps of $BATCH" );
 
@@ -122,6 +114,78 @@ $run->step(
 );
 is( _steps( $requested->{run_id} ),
     $steps, 'a repeated step does not fork the run' );
+
+# Moving a thread re-derives its posts, which carry its title and category,
+# a batch per outbox message: the first with the event, the rest as events
+# of their own. Not as rebuild steps: the console's last rebuild stays as it
+# was, and no prune of the whole index follows.
+my $rebuilt = $run->latest;
+my ($moved) =
+  $dbh->selectrow_array( q{SELECT thread_id FROM threads}
+      . q{ WHERE deleted_at IS NULL AND moderation_state = 'visible'}
+      . q{ ORDER BY thread_id DESC LIMIT 1} );
+GPForum::Test::LongThread::grow( $dbh, $moved, $THREAD_POSTS );
+$dbh->do( 'UPDATE threads SET title = ? WHERE thread_id = ?',
+    undef, 'Moved and renamed', $moved );
+my $recorder = GPForum::Infrastructure::EventRecorder->new( schema => $schema );
+$schema->txn_do(
+    sub {
+        return $recorder->record_event(
+            actor_id       => $admin,
+            aggregate_id   => $moved,
+            aggregate_type => 'thread',
+            event_type     => 'thread.moved',
+            payload        => { thread_id => $moved },
+        );
+    }
+);
+_drain();
+is( _pending(), 0, 'a moved thread drains the outbox' );
+is(
+    scalar $dbh->selectrow_array(
+        q{SELECT count(*) FROM search_documents d JOIN posts p}
+          . q{ ON p.post_id = d.entity_id WHERE d.entity_type = 'post'}
+          . q{ AND p.thread_id = ? AND d.title = ?},
+        undef,
+        $moved,
+        'Moved and renamed'
+    ),
+    $THREAD_POSTS,
+    'every post of it carries the new title'
+);
+my $batches = $dbh->selectall_arrayref(
+    q{SELECT event_id, payload::text AS payload FROM event_log}
+      . q{ WHERE event_type = 'search.thread_posts_requested'}
+      . q{ AND aggregate_id = ? ORDER BY (payload->>'after')::integer},
+    { Slice => {} },
+    $moved
+);
+is_deeply(
+    [ map { $recorder->json->decode( $_->{payload} )->{after} } @{$batches} ],
+    [ $BATCH, 2 * $BATCH ],
+    "in batches of $BATCH: the first with the event, two as their own events"
+);
+is_deeply( $run->latest, $rebuilt,
+    'and the last rebuild the console shows is unchanged' );
+
+$search_handler->handle(
+    {
+        domain_payload => $recorder->json->decode( $batches->[0]{payload} ),
+        event_id       => $batches->[0]{event_id},
+        event_type     => 'search.thread_posts_requested',
+    }
+);
+is(
+    scalar $dbh->selectrow_array(
+        q{SELECT count(*) FROM event_log}
+          . q{ WHERE event_type = 'search.thread_posts_requested'}
+          . q{ AND aggregate_id = ?},
+        undef,
+        $moved
+    ),
+    scalar @{$batches},
+    'a batch delivered again records its successor once'
+);
 
 # The console's side: each write audited, the purge reaching the cache.
 my $cache       = GPForum::Test::TagCache->new;
@@ -165,6 +229,21 @@ $schema->storage->disconnect;
 GPForum::Test::PostgresHarness::drop_database($database);
 
 done_testing();
+
+# Delivers every pending message, one per pass. The dispatcher's clock reads
+# whole seconds and a new step's message is due now, to the microsecond: it
+# becomes claimable in the next second. The test does not wait for it.
+sub _drain {
+    my $passes = 0;
+    while ( _pending() && $passes < $MAX_PASSES ) {
+        $dbh->do( q{UPDATE outbox_messages SET next_attempt_at = now()}
+              . q{ - interval '1 second' WHERE status = 'pending'} );
+        $dispatcher->dispatch_pending(1);
+        $passes++;
+    }
+
+    return $passes;
+}
 
 sub _pending {
     return

@@ -21,6 +21,22 @@ bound on how far search is behind. A lag that keeps growing while `pending`
 does not fall means the dispatcher is stopped or failing: see
 [scheduled jobs](scheduled-jobs.md) and [dead letters](dead-letters.md).
 
+## Large threads
+
+A post's document carries its thread's title and category, so renaming,
+moving or restoring a thread indexes its posts again. The handler does the
+thread and its first 500 posts with the event, then each next 500 as an
+outbox message of its own (`search.thread_posts_requested`), so replies,
+notifications and realtime are delivered between the batches. Those
+messages count in `pending` until the thread is done; a retried one does not
+start a second chain.
+
+A hidden or deleted thread leaves search in one message: its title first,
+out of the suggestions at once, then its posts 500 to a transaction. No
+transaction holds more than 500 document locks, however long the thread. A
+removal that fails part way keeps what it removed, and the retry removes the
+rest.
+
 ## From the console
 
 `/admin/jobs` shows the same lag and the last rebuild started from the

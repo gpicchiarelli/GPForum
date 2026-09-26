@@ -13,8 +13,13 @@ our $VERSION = '0.001';
 
 const my $THREAD_PREFIX       => 'thread';
 const my $NOTIFICATION_PREFIX => 'notifications';
+
+# No presence family: nothing published to it, so any user could subscribe to
+# presence:<anything> and receive nothing. A cluster-wide presence would need
+# a shared registry, which ADR 0067 rules out; a node-local one would show
+# each viewer a different forum.
 const my %SUPPORTED_CHANNELS => map { $_ => 1 }
-  qw(thread notifications moderation admin feed presence);
+  qw(thread notifications moderation admin feed);
 
 has permission_engine => undef;
 
