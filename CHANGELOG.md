@@ -254,6 +254,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **`docs/THREAT_MODEL.md`**: what GPForum protects, from whom, the trust
+  boundaries, and at each one the mitigation and the test that pins it, with
+  the residual risks said plainly.
+
 - **Search and cache maintenance on the console.** `/admin/jobs` shows
   whether search is behind and how the last console rebuild went, rebuilds
   the index through the outbox (one batch per message, retried like any

@@ -67,6 +67,7 @@ starting work on any of the areas below.
 
 | Document | What it covers |
 | --- | --- |
+| [THREAT_MODEL.md](THREAT_MODEL.md) | Assets, actors, trust boundaries, and the mitigation and test at each |
 | [SECURITY_BASELINE.md](SECURITY_BASELINE.md) · [SECURITY_HARDENING.md](SECURITY_HARDENING.md) | Security baseline and abuse hardening |
 | [ENGINEERING_CORRECTNESS.md](ENGINEERING_CORRECTNESS.md) | Engineering correctness freeze |
 | [audit/](audit) | Audits of transactional correctness, failure modes, and the email lifecycle |

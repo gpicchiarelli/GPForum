@@ -132,7 +132,7 @@ An outside review finds nothing serious.
 | Logins throttled per account and per address; `trusted_proxies` explicit; unknown accounts cost an Argon2 verification; session checks fail closed | done | `t/203`, `t/53`, `t/111`, `t/177` |
 | A reply re-checks the thread's lock and state under its row lock | done (ADR 0111) | `postgres-concurrency.t` |
 | A post edit re-checks the post and the thread's lock under its row lock | not yet | a PostgreSQL race test |
-| A written threat model, and a penetration test by someone outside | none | — |
+| A written threat model, and a penetration test by someone outside | threat model written (`docs/THREAT_MODEL.md`, 2026-09-30: every mitigation cites its test); no outside test | — |
 
 ### What only reality can certify
 
