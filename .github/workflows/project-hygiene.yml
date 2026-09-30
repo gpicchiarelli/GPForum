@@ -59,7 +59,7 @@ jobs:
           test -f .github/workflows/performance.yml
           test -f .github/workflows/release.yml
           test -f .github/actions/setup-gpforum-perl/action.yml
-          test -f .github/parameters/gha-install-macports.yaml
+          test -f .github/parameters/Brewfile
           test -f .gitleaks.toml
           test -f .shellcheckrc
           test -f etc/cpan-audit-ignore.txt

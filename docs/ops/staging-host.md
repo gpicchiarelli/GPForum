@@ -35,8 +35,8 @@ HTTP health endpoints answer.
 Use a CI-green commit on `main`. On the staging host:
 
 1. Checkout the commit; install deps with the OS system Perl
-   (`make install-deps-postgres`). On macOS MacPorts hosts,
-   `eval "$(script/gpforum-macports-env)"` first.
+   (`make install-deps-postgres`). On macOS hosts,
+   `eval "$(script/gpforum-homebrew-env)"` first.
 2. Create `/etc/gpforum/gpforum.env` (mode `0640`, owner root:`gpforum`) with at
    least:
    - `GPFORUM_SESSION_SECRET`

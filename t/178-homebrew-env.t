@@ -14,18 +14,18 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $HELPER         => 'script/gpforum-macports-env';
+const my $HELPER         => 'script/gpforum-homebrew-env';
 const my $EXPECTED_TESTS => 12;
 
 plan tests => $EXPECTED_TESTS;
 
-ok( -x $HELPER, 'gpforum-macports-env is executable' );
+ok( -x $HELPER, 'gpforum-homebrew-env is executable' );
 
 my $helper_src = path($HELPER)->slurp;
 like(
     $helper_src,
-    qr/GPFORUM_MACPORTS_ROOT|\/opt\/local/msx,
-    'helper knows MacPorts root'
+    qr/GPFORUM_HOMEBREW_PREFIX|opt\/postgresql[@]/msx,
+    'helper knows the Homebrew prefix and its PostgreSQL kegs'
 );
 like( $helper_src, qr/psql|pg_dump|pg_config/msx,
     'helper checks PostgreSQL client tools' );
@@ -36,16 +36,16 @@ like(
 );
 
 {
-    local $ENV{GPFORUM_UNAME}         = 'Linux';
-    local $ENV{GPFORUM_MACPORTS_ROOT} = '/nonexistent-macports-root';
+    local $ENV{GPFORUM_UNAME}           = 'Linux';
+    local $ENV{GPFORUM_HOMEBREW_PREFIX} = '/nonexistent-homebrew-prefix';
     my ( $out, $err, $code ) = _run_helper('--exports');
     is( $code, 0,  'Linux --exports exits 0' );
     is( $out,  '', 'Linux --exports prints nothing' );
 }
 
 {
-    local $ENV{GPFORUM_UNAME}         = 'Linux';
-    local $ENV{GPFORUM_MACPORTS_ROOT} = '/nonexistent-macports-root';
+    local $ENV{GPFORUM_UNAME}           = 'Linux';
+    local $ENV{GPFORUM_HOMEBREW_PREFIX} = '/nonexistent-homebrew-prefix';
     my ( $out, $err, $code ) = _run_helper('--check');
     is( $code, 0, 'Linux --check exits 0 (CI-safe skip)' );
     like( $out, qr/^skip:/msx, 'Linux --check prints skip line' );
@@ -53,23 +53,22 @@ like(
 
 {
     my $root   = tempdir( CLEANUP => 1 );
-    my $pg_bin = path($root)->child( 'lib', 'postgresql16', 'bin' );
+    my $pg_bin = path($root)->child( 'opt', 'postgresql@16', 'bin' );
     $pg_bin->make_path;
-    path($root)->child('bin')->make_path;
     for my $tool (qw(psql pg_dump pg_config)) {
         my $tool_path = $pg_bin->child($tool);
         $tool_path->spew("#!/bin/sh\necho $tool\n");
         chmod 0755, "$tool_path" or croak "chmod $tool_path: $!";
     }
 
-    local $ENV{GPFORUM_UNAME}         = 'Darwin';
-    local $ENV{GPFORUM_MACPORTS_ROOT} = $root;
+    local $ENV{GPFORUM_UNAME}           = 'Darwin';
+    local $ENV{GPFORUM_HOMEBREW_PREFIX} = $root;
     my ( $exports, $err, $code ) = _run_helper('--exports');
     is( $code, 0, 'Darwin mock --exports exits 0' );
     like(
         $exports,
         qr{export [ ] PATH="\Q$pg_bin\E:}msx,
-        'Darwin mock --exports prepends MacPorts PostgreSQL bin'
+        'Darwin mock --exports prepends the Homebrew PostgreSQL keg'
     );
 
     my ( $check_out, $check_err, $check_code ) = _run_helper('--check');
@@ -77,7 +76,7 @@ like(
     like(
         $check_out,
         qr/ok: [ ] psql [ ] ->/msx,
-        'Darwin mock --check resolves psql under MacPorts'
+        'Darwin mock --check resolves psql under Homebrew'
     );
 }
 

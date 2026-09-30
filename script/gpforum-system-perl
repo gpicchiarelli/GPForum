@@ -74,16 +74,18 @@ is_denied_path() {
 
 is_system_prefix() {
     candidate=$1
-    # Distro system Perl uses Config prefix /usr (Linux, macOS),
-    # /usr/local (FreeBSD packages), or /opt/local (MacPorts). Accept
-    # those without broader OS probes so architecture OS rules stay
-    # behind lib/GPForum/OS*.pm.
+    # A packaged Perl: Config prefix /usr (Linux distros), /usr/local
+    # (FreeBSD packages), or Homebrew's keg (/opt/homebrew/opt/perl on
+    # Apple silicon, /usr/local/opt/perl on Intel). Accept those without
+    # broader OS probes so architecture OS rules stay behind
+    # lib/GPForum/OS*.pm.
     "$candidate" -MConfig -e '
         my $prefix = $Config{prefix} // q{};
         exit(
             (   $prefix eq "/usr"
                 || $prefix eq "/usr/local"
-                || $prefix eq "/opt/local"
+                || $prefix eq "/opt/homebrew/opt/perl"
+                || $prefix eq "/usr/local/opt/perl"
             ) ? 0 : 1
         );
     '
@@ -124,11 +126,11 @@ validate_system_perl() {
 reject_invalid() {
     candidate=$1
     if is_denied_path "$candidate"; then
-        reject "refusing version-manager or custom Perl at $candidate (use distro /usr/bin/perl or MacPorts /opt/local/bin/perl)"
+        reject "refusing version-manager or custom Perl at $candidate (use distro /usr/bin/perl or Homebrew perl)"
     fi
     if ! is_system_prefix "$candidate"; then
         prefix=$("$candidate" -MConfig -e 'print $Config{prefix}')
-        reject "refusing non-system Perl at $candidate (Config prefix=$prefix); install distro or MacPorts perl"
+        reject "refusing non-system Perl at $candidate (Config prefix=$prefix); install distro perl, or on macOS: brew install perl"
     fi
     if ! meets_version "$candidate"; then
         version=$("$candidate" -e 'print $]')
@@ -145,13 +147,11 @@ resolve_candidate() {
         return 0
     fi
 
-    # Prefer distro paths; fall through so an old Apple /usr/bin/perl does
-    # not block MacPorts /opt/local/bin/perl when that meets 5.38+.
-    # MacPorts ships versioned binaries (perl5.42) and only creates the
-    # unversioned symlink through `port select`, so probe the versioned
-    # names too, newest first.
-    versioned=$(ls /opt/local/bin/perl5.[0-9]* 2>/dev/null | sort -t. -k2,2nr || true)
-    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/local/bin/perl $versioned; do
+    # Prefer distro paths; fall through so macOS's old /usr/bin/perl does
+    # not block Homebrew's perl when that meets 5.38+. Homebrew links it as
+    # /opt/homebrew/bin/perl (Apple silicon) or /usr/local/bin/perl (Intel);
+    # canonicalize resolves the link to the keg in the Cellar.
+    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/homebrew/bin/perl; do
         if [ -x "$candidate" ]; then
             canonical=$(canonicalize "$candidate")
             if validate_system_perl "$canonical"; then
@@ -169,7 +169,7 @@ resolve_candidate() {
     return 1
 }
 
-perl_bin=$(resolve_candidate) || reject "no system Perl found (/usr/bin/perl, /usr/local/bin/perl, or MacPorts /opt/local/bin/perl)"
+perl_bin=$(resolve_candidate) || reject "no system Perl found (/usr/bin/perl, /usr/local/bin/perl, or Homebrew /opt/homebrew/bin/perl)"
 perl_bin=$(canonicalize "$perl_bin")
 
 # GPFORUM_PERL and PATH fallbacks still need hard rejection messages.

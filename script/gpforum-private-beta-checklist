@@ -56,10 +56,10 @@ print_banner() {
 print_commands() {
     print_banner
     cat <<'EOF'
-# 1. System Perl + MacPorts PATH (macOS)
+# 1. System Perl + Homebrew PostgreSQL PATH (macOS)
 script/gpforum-system-perl --preflight
-eval "$(script/gpforum-macports-env)"
-script/gpforum-macports-env --check
+eval "$(script/gpforum-homebrew-env)"
+script/gpforum-homebrew-env --check
 
 # 1b. Carton local/ (use --rebuild-local if Const::Fast / deps missing)
 script/bootstrap-deps --postgres --rebuild-local
@@ -121,7 +121,7 @@ print_status() {
     print_banner
     printf 'entrypoint\tlabel\tpath\n'
     status_line script/gpforum-system-perl system-perl
-    status_line script/gpforum-macports-env macports-env
+    status_line script/gpforum-homebrew-env homebrew-env
     status_line bin/gpforum-migrate migrate
     status_line script/query-budget query-budget
     status_line script/staging-drill staging-drill

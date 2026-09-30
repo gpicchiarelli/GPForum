@@ -106,7 +106,7 @@ for my $required_file (
     script/benchmark-http
     script/cpan-license-check
     script/gpforum-carton
-    script/gpforum-macports-env
+    script/gpforum-homebrew-env
     script/gpforum-system-perl
     script/perl-syntax-check
     script/perltidy-check
@@ -435,8 +435,8 @@ like(
     'staging drills docs cover attachment/deploy rehearsal entrypoint'
 );
 like( path('docs/ops/staging-drills.md')->slurp,
-    qr/gpforum-macports-env/msx,
-    'staging drills docs cover MacPorts PATH helper' );
+    qr/gpforum-homebrew-env/msx,
+    'staging drills docs cover the Homebrew PATH helper' );
 like(
     path('docs/ops/staging-host.md')->slurp,
     qr/script\/staging-host-verify/msx,

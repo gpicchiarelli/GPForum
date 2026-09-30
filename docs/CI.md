@@ -17,13 +17,13 @@ documented host instructions work, not that CI has a private path.
 | Ubuntu (primary quality gate) | [ci.yml](../.github/workflows/ci.yml) | `ubuntu-latest`, system `/usr/bin/perl` | every push and pull request to `main` | yes |
 | Debian stable | [platform-debian.yml](../.github/workflows/platform-debian.yml) | `debian:trixie` container | code paths on `main`, weekly, manual | no |
 | FreeBSD | [platform-freebsd.yml](../.github/workflows/platform-freebsd.yml) | FreeBSD VM on an Ubuntu runner | OS/rc paths on `main`, weekly, manual | no |
-| macOS developer host | [platform-macos.yml](../.github/workflows/platform-macos.yml) | `macos-latest` with MacPorts | OS/launchd paths on `main`, weekly, manual | no |
+| macOS developer host | [platform-macos.yml](../.github/workflows/platform-macos.yml) | `macos-latest` with Homebrew | OS/launchd paths on `main`, weekly, manual | no |
 
 Debian and FreeBSD are the deployment platforms named in the README and in
 [deploy/](../deploy); macOS is the supported developer host. The macOS workflow
-splits into a fast MacPorts system-Perl contract job and a scheduled full gate,
-because MacPorts publishes no `App::cpanminus` or Carton port for Perl 5.38+ and
-the laptop path has to bootstrap Carton from MetaCPAN with core `CPAN.pm`.
+splits into a fast Homebrew system-Perl contract job and a scheduled full gate,
+because building the locked tree for Homebrew's Perl compiles every XS
+dependency and takes much longer than the contract checks.
 
 ## Database targets
 

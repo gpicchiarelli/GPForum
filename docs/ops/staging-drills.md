@@ -42,29 +42,26 @@ export GPFORUM_DATABASE_USER='gpforum_migrator'
 export GPFORUM_DATABASE_PASSWORD='…'
 ```
 
-On macOS with MacPorts PostgreSQL, install a server port such as
-`postgresql16-server` (and matching client tools), then put MacPorts binaries
-ahead of other installs on `PATH` via `script/gpforum-macports-env`:
+On macOS, Homebrew installs a versioned PostgreSQL keg-only; put its
+binaries ahead of other installs on `PATH` via `script/gpforum-homebrew-env`:
 
 ```sh
-# example: PostgreSQL 16 from MacPorts
-sudo port install postgresql16-server postgresql16
-eval "$(script/gpforum-macports-env)"   # prints export PATH=...
-script/gpforum-macports-env --check     # psql / pg_dump / pg_config under /opt/local
-# data directory is typically under /opt/local/var/db/postgresql16
+brew install postgresql@18
+eval "$(script/gpforum-homebrew-env)"   # prints export PATH=...
+script/gpforum-homebrew-env --check     # psql / pg_dump / pg_config under $(brew --prefix)
 ```
 
-The helper is a no-op on Linux (and when MacPorts is absent), so it is safe to
-document in shared runbooks. Prefer MacPorts `/opt/local` over Homebrew when
-both are present on the operator Mac.
+The helper is a no-op on Linux (and when Homebrew is absent), so it is safe
+to document in shared runbooks.
 
-If the MacPorts `postgresql*-server` launchd job is not loaded (no sudo), a
-**user-space** instance is enough for throwaway drills: `initdb` a data
-directory under `$HOME`, start on a non-default port, and point the DSN at it.
-Example with the MacPorts 18 client tools already on `PATH`:
+A **user-space** instance is enough for throwaway drills, with no service to
+load: `initdb` a data directory under `$HOME`, start on a non-default port,
+and point the DSN at it. The postmaster needs a valid locale on macOS, or it
+stops with "postmaster became multithreaded during startup":
 
 ```sh
-eval "$(script/gpforum-macports-env)"
+eval "$(script/gpforum-homebrew-env)"
+export LC_ALL=en_US.UTF-8
 mkdir -p "$HOME/gpforum-pgdata"
 initdb -D "$HOME/gpforum-pgdata" --auth-local=trust --auth-host=trust
 pg_ctl -D "$HOME/gpforum-pgdata" -l "$HOME/gpforum-pgdata/logfile" \
@@ -74,7 +71,7 @@ export GPFORUM_DATABASE_USER="$USER"
 # password empty when using trust on localhost
 ```
 
-You still need OS system Perl 5.38+ (MacPorts `/opt/local/bin/perl` or distro
+You still need OS system Perl 5.38+ (Homebrew's `perl` or distro
 `/usr/bin/perl`) and `make install-deps-postgres` before `script/staging-drill`.
 Stop with `pg_ctl -D "$HOME/gpforum-pgdata" stop` when finished.
 

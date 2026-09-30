@@ -126,9 +126,10 @@ find_pg_config() {
         return 0
     fi
     for candidate in \
-        /opt/local/lib/postgresql18/bin/pg_config \
-        /opt/local/lib/postgresql17/bin/pg_config \
-        /opt/local/lib/postgresql16/bin/pg_config \
+        /opt/homebrew/opt/postgresql@18/bin/pg_config \
+        /opt/homebrew/opt/postgresql@17/bin/pg_config \
+        /opt/homebrew/opt/postgresql@16/bin/pg_config \
+        /usr/local/opt/postgresql@18/bin/pg_config \
         /opt/homebrew/opt/libpq/bin/pg_config \
         /usr/local/opt/libpq/bin/pg_config \
         /Applications/Postgres.app/Contents/Versions/latest/bin/pg_config

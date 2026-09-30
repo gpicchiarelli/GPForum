@@ -25,18 +25,12 @@ perl_dir=$(dirname "$perl_bin")
 PATH="$perl_dir:$PATH"
 export PATH
 
-if [ -x "$perl_dir/carton" ]; then
-    exec "$perl_dir/carton" "$@"
-fi
-
-if "$perl_bin" -S carton version >/dev/null 2>&1; then
-    exec "$perl_bin" -S carton "$@"
-fi
-
-# Carton is the only supported INSTALLER, so `install` still fails hard when
-# it is missing. `exec` only needs the locked tree on @INC, which local/ already
-# provides, so reproduce `carton exec` rather than blocking every quality gate
-# on a host where Carton itself is not packaged for the system Perl.
+# `exec` only needs the locked tree on @INC, which local/ already provides, so
+# it is reproduced here whether or not Carton is installed. Real `carton exec`
+# parses the options that follow the command as its own: `exec prove -v`
+# printed Carton's version instead of running the tests. Reproducing it also
+# pins every Perl tool to the validated interpreter. Carton itself is the only
+# supported INSTALLER, so `install` and `check` still need it (below).
 if [ "${1:-}" = "exec" ] && [ -d "$root/local/lib/perl5" ]; then
     shift
     PERL5LIB="$root/local/lib/perl5${PERL5LIB:+:$PERL5LIB}"
@@ -55,9 +49,10 @@ if [ "${1:-}" = "exec" ] && [ -d "$root/local/lib/perl5" ]; then
     if [ "${1:-}" = "--" ]; then
         shift
     fi
-    # MacPorts ships only versioned binaries, so a bare `perl`, `prove` or
-    # other Perl tool found on PATH can belong to an older interpreter than
-    # the one that validated above. Pin every Perl tool to $perl_bin.
+    # A bare `perl`, `prove` or other Perl tool found on PATH can belong to
+    # an older interpreter than the one that validated above (macOS keeps
+    # its own /usr/bin/perl next to Homebrew's). Pin every Perl tool to
+    # $perl_bin.
     command_name=${1:-}
     case "$command_name" in
         */*)
@@ -84,6 +79,14 @@ if [ "${1:-}" = "exec" ] && [ -d "$root/local/lib/perl5" ]; then
         exec "$perl_bin" -S "$command_name" "$@"
     fi
     exec "$@"
+fi
+
+if [ -x "$perl_dir/carton" ]; then
+    exec "$perl_dir/carton" "$@"
+fi
+
+if "$perl_bin" -S carton version >/dev/null 2>&1; then
+    exec "$perl_bin" -S carton "$@"
 fi
 
 echo "gpforum-carton: Carton was not found for system Perl $perl_bin." >&2

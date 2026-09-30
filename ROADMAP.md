@@ -52,9 +52,9 @@ places it at:
 - Web access, workflow, and event boundaries recorded in [ADRs](docs/adr).
 - OS system Perl gate for bootstrap, Carton, make, and CI
   (`script/gpforum-system-perl`; distro `/usr/bin/perl` / FreeBSD path /
-  MacPorts `/opt/local/bin/perl`; refuse version managers).
-- macOS MacPorts PATH helper for PostgreSQL client tools
-  (`script/gpforum-macports-env`; no-op on Linux).
+  Homebrew's perl on macOS; refuse version managers).
+- macOS Homebrew PATH helper for PostgreSQL client tools
+  (`script/gpforum-homebrew-env`; no-op on Linux).
 - PostgreSQL two-connection integration evidence (skip unless
   `GPFORUM_DATABASE_DSN`): concurrency races in
   `t/integration/postgres-concurrency.t`, idempotency/reputation in
@@ -63,7 +63,7 @@ places it at:
   `postgres.t`). Audits treat those residuals as evidence-closed.
 - Operator staging DB drill: `script/staging-drill` /
   `docs/ops/staging-drills.md` for fresh migrate, upgrade-from-previous, and
-  `pg_dump`/`pg_restore` on throwaway databases (MacPorts PostgreSQL path
+  `pg_dump`/`pg_restore` on throwaway databases (Homebrew PostgreSQL path
   notes included).
 - Attachment filesystem + deploy checklist drill:
   `script/staging-drill-attachments` (populated throwaway `var/attachments`
@@ -78,7 +78,7 @@ places it at:
   `docs/ops/stress-load.md` with profiles `smoke` / `100` / `500` / `1000`
   (live Hypnotoad+PG VM appendix recorded; staging target numbers still open).
 - Operator private-beta go/no-go checklist aggregating system-perl,
-  macports-env, migrate, query-budget, staging-drill,
+  homebrew-env, migrate, query-budget, staging-drill,
   staging-drill-attachments, stress-load, and mail-check:
   `docs/ops/private-beta-checklist.md` plus print-only
   `script/gpforum-private-beta-checklist` (does not claim readiness).

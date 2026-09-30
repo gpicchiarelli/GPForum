@@ -24,9 +24,9 @@ on a real target, and operator runbook evidence.
 
 | Phase | Tool | Docs | What PASS means here |
 | --- | --- | --- | --- |
-| System Perl | `script/gpforum-system-perl --preflight` | `CONTRIBUTING.md`, `Makefile` | Interpreter is OS/distro (or MacPorts) Perl 5.38+, not a version manager |
+| System Perl | `script/gpforum-system-perl --preflight` | `CONTRIBUTING.md`, `Makefile` | Interpreter is OS/distro (or Homebrew) Perl 5.38+, not a version manager |
 | Carton deps | `script/bootstrap-deps --postgres` (`--rebuild-local` if `local/` incomplete) | `script/bootstrap-deps`, `Makefile` | `script/gpforum-carton exec perl -MConst::Fast -e 1` succeeds |
-| MacPorts PATH | `script/gpforum-macports-env` | `docs/ops/staging-drills.md` | On macOS, `psql` / `pg_dump` / `pg_config` resolve under `/opt/local` (no-op skip on Linux) |
+| Homebrew PATH | `script/gpforum-homebrew-env` | `docs/ops/staging-drills.md` | On macOS, `psql` / `pg_dump` / `pg_config` resolve under Homebrew's `postgresql@NN` keg (no-op skip on Linux) |
 | Migrations | `script/gpforum-carton exec bin/gpforum-migrate --apply` via `script/gpforum-carton` | `docs/DEPLOYMENT.md` | Target DB schema at current migration head (`001`–`036` on `main`) |
 | Query budget | `script/query-budget --sync` then `--check` | `docs/QUERY_BUDGET_POLICY.md` | Catalog synced; readiness not 503 for empty budgets |
 | Staging DB drill | `script/staging-drill` | `docs/ops/staging-drills.md` | Fresh migrate, upgrade path, dump/restore on throwaway DBs |
@@ -62,9 +62,9 @@ private-beta verdict from this checklist alone.
 ```sh
 script/gpforum-system-perl --preflight
 make system-perl
-# macOS MacPorts PostgreSQL clients (safe no-op elsewhere):
-eval "$(script/gpforum-macports-env)"
-script/gpforum-macports-env --check
+# macOS Homebrew PostgreSQL clients (safe no-op elsewhere):
+eval "$(script/gpforum-homebrew-env)"
+script/gpforum-homebrew-env --check
 # Carton tree (rename broken local/ aside if modules are missing):
 script/bootstrap-deps --postgres --rebuild-local
 ```
@@ -156,7 +156,7 @@ commit on the **staging** target (not only laptop smoke):
 | Gate | GO when | Still open if |
 | --- | --- | --- |
 | CI | Green on the candidate commit | Red or skipped |
-| System Perl / MacPorts | Preflight (and MacPorts `--check` on Darwin) recorded | Version-manager Perl, missing `pg_dump` on Mac |
+| System Perl / Homebrew | Preflight (and Homebrew `--check` on Darwin) recorded | Version-manager Perl, missing `pg_dump` on Mac |
 | Migrate + query budget | `--apply`, `--sync`, `--check` on staging DB | Fresh install never applied; readiness 503 |
 | Staging DB drill | `script/staging-drill --json` `status=pass` | Fail or only local throwaway without notes |
 | Attachments + deploy | Attachments phase pass; deploy static pass; host verify noted | No attachment evidence; live systemd/nginx install never attempted |

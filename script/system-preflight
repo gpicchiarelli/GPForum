@@ -19,10 +19,10 @@ need() {
 }
 
 if ! script/gpforum-system-perl --preflight; then
-    echo "missing: system Perl 5.38+ (/usr/bin/perl, FreeBSD /usr/local, or MacPorts /opt/local)"
+    echo "missing: system Perl 5.38+ (/usr/bin/perl, FreeBSD /usr/local, or Homebrew perl)"
     echo "Debian/Ubuntu: apt install perl build-essential cpanminus libpq-dev"
     echo "FreeBSD: pkg install perl5 p5-App-cpanminus postgresql16-client"
-    echo "macOS MacPorts: port install perl5.38; eval \"\$(script/gpforum-macports-env)\""
+    echo "macOS (Homebrew): brew install perl postgresql@18; eval \"\$(script/gpforum-homebrew-env)\""
     missing=1
 else
     perl_bin=$(script/gpforum-system-perl --print)
@@ -60,7 +60,15 @@ else
     missing=1
 fi
 
-need perlcritic
+# perlcritic is a develop dependency in local/, run through the wrapper
+# like every other gate; a bare `perlcritic` on PATH is neither needed nor
+# the one the gates use.
+if script/gpforum-carton exec -- perlcritic --version >/dev/null 2>&1; then
+    printf 'ok: perlcritic -> %s\n' "$(script/gpforum-carton exec -- perlcritic --version)"
+else
+    echo "missing: perlcritic (a develop dependency: script/bootstrap-deps without --production)"
+    missing=1
+fi
 
 find_pg_config() {
     if [ -n "${GPFORUM_PG_CONFIG:-}" ] && [ -x "${GPFORUM_PG_CONFIG}" ]; then
@@ -72,9 +80,10 @@ find_pg_config() {
         return 0
     fi
     for candidate in \
-        /opt/local/lib/postgresql18/bin/pg_config \
-        /opt/local/lib/postgresql17/bin/pg_config \
-        /opt/local/lib/postgresql16/bin/pg_config \
+        /opt/homebrew/opt/postgresql@18/bin/pg_config \
+        /opt/homebrew/opt/postgresql@17/bin/pg_config \
+        /opt/homebrew/opt/postgresql@16/bin/pg_config \
+        /usr/local/opt/postgresql@18/bin/pg_config \
         /opt/homebrew/opt/libpq/bin/pg_config \
         /usr/local/opt/libpq/bin/pg_config \
         /Applications/Postgres.app/Contents/Versions/latest/bin/pg_config
@@ -95,16 +104,15 @@ else
     echo "Install PostgreSQL client development files before enabling the cpanfile postgres feature."
     echo "Debian/Ubuntu: apt install libpq-dev"
     echo "FreeBSD: pkg install postgresql16-client"
-    echo "macOS (MacPorts): eval \"\$(script/gpforum-macports-env)\" then re-run preflight"
-    echo "macOS: install PostgreSQL or libpq and ensure pg_config is in PATH"
+    echo "macOS (Homebrew): brew install postgresql@18; eval \"\$(script/gpforum-homebrew-env)\" then re-run preflight"
     missing=1
 fi
 
-if [ "$(uname -s 2>/dev/null || echo unknown)" = Darwin ] && [ -d /opt/local ]; then
-    if script/gpforum-macports-env --check >/dev/null 2>&1; then
-        echo "ok: macports_pg -> $(script/gpforum-macports-env --print-path)"
+if [ "$(uname -s 2>/dev/null || echo unknown)" = Darwin ] && command -v brew >/dev/null 2>&1; then
+    if script/gpforum-homebrew-env --check >/dev/null 2>&1; then
+        echo "ok: homebrew_pg -> $(script/gpforum-homebrew-env --print-path)"
     else
-        echo "hint: macOS MacPorts detected; run eval \"\$(script/gpforum-macports-env)\" for psql/pg_dump/pg_config"
+        echo "hint: macOS Homebrew detected; run eval \"\$(script/gpforum-homebrew-env)\" for psql/pg_dump/pg_config"
     fi
 fi
 

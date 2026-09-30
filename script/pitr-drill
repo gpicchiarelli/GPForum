@@ -55,7 +55,7 @@ USAGE
 done
 
 if ! command -v initdb >/dev/null 2>&1; then
-    eval "$(script/gpforum-macports-env 2>/dev/null || true)"
+    eval "$(script/gpforum-homebrew-env 2>/dev/null || true)"
 fi
 for tool in initdb pg_ctl pg_basebackup psql; do
     command -v "$tool" >/dev/null 2>&1 || {

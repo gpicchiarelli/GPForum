@@ -87,7 +87,7 @@ qr/requires [ ] GPFORUM_ANTIVIRUS_COMMAND/msx,
 my %PACKAGED = (
     linux   => '/var/run/clamav/clamd.ctl',
     freebsd => '/var/run/clamav/clamd.sock',
-    darwin  => '/opt/local/var/run/clamav/clamd.socket',
+    darwin  => '/opt/homebrew/var/run/clamav/clamd.sock',
 );
 for my $name ( sort keys %PACKAGED ) {
     my $os = GPForum::OS->from_name($name);

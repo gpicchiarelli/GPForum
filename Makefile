@@ -1,4 +1,4 @@
-.PHONY: help install-deps-production pitr-drill partition-maintenance antivirus-check architecture bootstrap check cpan-audit critic dead-letter-check evidence-archive-check evidence-live evidence-meta evidence-validate install-deps install-deps-postgres macports-env mail-check mail-lifecycle-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test integration tidy
+.PHONY: help install-deps-production pitr-drill partition-maintenance antivirus-check architecture bootstrap check cpan-audit critic dead-letter-check evidence-archive-check evidence-live evidence-meta evidence-validate install-deps install-deps-postgres homebrew-env mail-check mail-lifecycle-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test integration tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -21,8 +21,8 @@ help:
 system-perl: ## Verify the OS system Perl satisfies the floor
 	script/gpforum-system-perl --preflight
 
-macports-env: ## Check the MacPorts environment this host needs
-	script/gpforum-macports-env --check
+homebrew-env: ## Check the Homebrew PostgreSQL tools this macOS host needs
+	script/gpforum-homebrew-env --check
 
 syntax: ## Compile every Perl file
 	script/gpforum-carton exec script/perl-syntax-check

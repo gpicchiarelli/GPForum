@@ -34,19 +34,31 @@ service clamav_clamd start
 Socket: `/var/run/clamav/clamd.sock`. The `gpforum` rc.d script requires
 `clamav_clamd`.
 
-### macOS (MacPorts)
+### macOS (Homebrew)
 
 ```sh
-port install clamav clamav-server -scan_schedule_access -sanesecurity
-port load clamav-server
+brew install clamav
+etc="$(brew --prefix)/etc/clamav"
+cp "$etc/freshclam.conf.sample" "$etc/freshclam.conf"
+cp "$etc/clamd.conf.sample" "$etc/clamd.conf"
+sed -i '' 's/^Example/#Example/' "$etc/freshclam.conf" "$etc/clamd.conf"
+mkdir -p "$(brew --prefix)/var/run/clamav"
+printf 'LocalSocket %s\nStreamMaxLength 26M\n' \
+    "$(brew --prefix)/var/run/clamav/clamd.sock" >> "$etc/clamd.conf"
+freshclam
+sudo brew services start clamav
 ```
 
-Without those two variants off, `clamav-server` also installs a scheduled
-scan of the whole disk that moves what it finds into a quarantine directory,
-an on-access scan of users' Downloads and Desktop, and third-party signatures
-more prone to false positives. GPForum needs only clamd and freshclam.
+The formula ships both configuration files only as samples, each with an
+`Example` line that stops the daemon until it is removed, and `clamd.conf`
+declares no socket; the lines above give it the one GPForum expects.
+`brew services` runs clamd; freshclam has no service of its own, so schedule
+it (for example `0 */4 * * * $(brew --prefix)/bin/freshclam --quiet` in the
+crontab of the user that owns Homebrew).
 
-Socket: `/opt/local/var/run/clamav/clamd.socket`.
+Socket: `/opt/homebrew/var/run/clamav/clamd.sock` (on an Intel Mac Homebrew
+lives under `/usr/local`: set `GPFORUM_ANTIVIRUS_SOCKET` to
+`/usr/local/var/run/clamav/clamd.sock`).
 
 ### Other systems
 

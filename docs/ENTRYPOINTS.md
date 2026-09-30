@@ -26,7 +26,7 @@ one a new command belongs in. It is enforced by `check_entrypoint_layout` in
   **without** the `gpforum-` prefix: `script/stress-load` wraps
   `bin/gpforum-stress-load`. The `gpforum-` prefix inside `script/` is
   reserved for standalone tools that have no `bin/` counterpart:
-  `gpforum-carton`, `gpforum-system-perl`, `gpforum-macports-env`,
+  `gpforum-carton`, `gpforum-system-perl`, `gpforum-homebrew-env`,
   `gpforum-private-beta-checklist`, `gpforum-evidence-live`.
 
 - **Invariant.** No basename appears in both `bin/` and `script/`.
@@ -56,8 +56,9 @@ calling bare `carton exec` without changing to the repository root
 `scheduled-jobs`, `query-plan-evidence`) have all been moved to
 `script/gpforum-carton`; the only script that invokes `carton` directly is
 `script/gpforum-carton` itself. Bare `carton` would bypass the system-Perl gate
-in `script/gpforum-system-perl`, and on MacPorts it is usually not on `PATH` at
-all, so documentation uses `script/gpforum-carton exec` throughout.
+in `script/gpforum-system-perl`, and on macOS the `carton` found first on
+`PATH` can belong to another Perl, so documentation uses
+`script/gpforum-carton exec` throughout.
 
 ## Legacy collisions
 

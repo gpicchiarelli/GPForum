@@ -35,7 +35,7 @@ Malware Detect) or are rule engines without their own signatures (YARA).
   | --- | --- | --- |
   | Debian, Ubuntu | `clamav-daemon`, `clamav-freshclam` | `/var/run/clamav/clamd.ctl` |
   | FreeBSD | `clamav` (`clamav_clamd`, `clamav_freshclam`) | `/var/run/clamav/clamd.sock` |
-  | macOS (MacPorts) | `clamav`, `clamav-server` | `/opt/local/var/run/clamav/clamd.socket` |
+  | macOS (Homebrew) | `clamav` | `/opt/homebrew/var/run/clamav/clamd.sock` |
 
   Content is streamed with `INSTREAM`, so clamd needs no access to GPForum's
   storage.

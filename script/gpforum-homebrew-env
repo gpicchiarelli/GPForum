@@ -1,0 +1,153 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+# Print PATH exports for Homebrew's PostgreSQL client tools on macOS.
+# Homebrew installs a versioned PostgreSQL (postgresql@18) keg-only: its
+# psql, pg_dump and pg_config live under $(brew --prefix)/opt/postgresql@NN/bin
+# and are not on PATH until put there. Safe no-op on Linux CI and on hosts
+# without Homebrew (exit 0).
+
+usage() {
+    cat <<'USAGE'
+Usage: script/gpforum-homebrew-env [--exports|--print-path|--check|--help]
+
+  --exports     print `export PATH=...` for eval (default)
+  --print-path  print the Homebrew PostgreSQL bin dir only
+  --check       verify psql / pg_dump / pg_config resolve under Homebrew
+  --help        show this help
+
+Environment:
+  GPFORUM_HOMEBREW_PREFIX  Homebrew prefix (default: `brew --prefix`, else
+                           /opt/homebrew, else /usr/local); for tests
+  GPFORUM_HOMEBREW_PG_BIN  a PostgreSQL bin dir to use as is
+  GPFORUM_UNAME            override `uname -s` (default from uname); for tests
+
+On non-Darwin hosts, or when Homebrew is absent, --exports/--print-path print
+nothing and exit 0. --check prints a skip line and exits 0 so Linux CI stays
+green. Operators on macOS:
+
+  eval "$(script/gpforum-homebrew-env)"
+  script/gpforum-homebrew-env --check
+USAGE
+}
+
+mode=exports
+for argument in "$@"; do
+    case "$argument" in
+        --exports)
+            mode=exports
+            ;;
+        --print-path)
+            mode=print_path
+            ;;
+        --check)
+            mode=check
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-homebrew-env: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+default_prefix() {
+    if command -v brew >/dev/null 2>&1; then
+        brew --prefix 2>/dev/null && return 0
+    fi
+    for candidate in /opt/homebrew /usr/local; do
+        if [ -x "$candidate/bin/brew" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    printf '%s\n' /opt/homebrew
+}
+
+uname_s=${GPFORUM_UNAME:-$(uname -s 2>/dev/null || echo unknown)}
+
+skip() {
+    if [ "$mode" = check ]; then
+        printf 'skip: %s\n' "$*"
+    fi
+    exit 0
+}
+
+if [ "$uname_s" != Darwin ]; then
+    skip "not Darwin (uname=$uname_s); Homebrew PATH helper is a no-op"
+fi
+
+prefix=${GPFORUM_HOMEBREW_PREFIX:-$(default_prefix)}
+
+if [ ! -d "$prefix" ]; then
+    skip "Homebrew prefix missing: $prefix"
+fi
+
+find_pg_bin() {
+    if [ -n "${GPFORUM_HOMEBREW_PG_BIN:-}" ] && [ -d "${GPFORUM_HOMEBREW_PG_BIN}" ]; then
+        printf '%s\n' "${GPFORUM_HOMEBREW_PG_BIN}"
+        return 0
+    fi
+    for candidate in \
+        "$prefix/opt/postgresql@18/bin" \
+        "$prefix/opt/postgresql@17/bin" \
+        "$prefix/opt/postgresql@16/bin" \
+        "$prefix/opt/postgresql@15/bin" \
+        "$prefix/opt/postgresql@14/bin"
+    do
+        if [ -d "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+pg_bin=$(find_pg_bin) || {
+    if [ "$mode" = check ]; then
+        echo "gpforum-homebrew-env: no Homebrew PostgreSQL under $prefix/opt/postgresql@NN/bin" >&2
+        echo "Install e.g. brew install postgresql@18" >&2
+        exit 1
+    fi
+    exit 0
+}
+
+case "$mode" in
+    print_path)
+        printf '%s\n' "$pg_bin"
+        ;;
+    exports)
+        printf 'export PATH="%s:$PATH"\n' "$pg_bin"
+        ;;
+    check)
+        PATH="$pg_bin:$PATH"
+        export PATH
+        missing=0
+        for tool in psql pg_dump pg_config; do
+            resolved=$(command -v "$tool" 2>/dev/null || true)
+            case "$resolved" in
+                "$prefix"/*)
+                    printf 'ok: %s -> %s\n' "$tool" "$resolved"
+                    ;;
+                *)
+                    echo "missing or non-Homebrew: $tool -> ${resolved:-absent}" >&2
+                    missing=1
+                    ;;
+            esac
+        done
+        if [ "$missing" -ne 0 ]; then
+            echo "gpforum-homebrew-env: put Homebrew PostgreSQL bins on PATH first:" >&2
+            echo "  eval \"\$(script/gpforum-homebrew-env)\"" >&2
+            exit 1
+        fi
+        printf 'ok: homebrew_prefix -> %s\n' "$prefix"
+        printf 'ok: homebrew_pg_bin -> %s\n' "$pg_bin"
+        ;;
+esac

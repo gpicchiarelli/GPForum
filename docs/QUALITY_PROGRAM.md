@@ -19,7 +19,8 @@ when it could not confirm the claim first-hand. Nine findings were refuted and
 are not recorded here. What remains survived that pass.
 
 Measurements were taken with the project's own toolchain
-(`script/gpforum-carton exec …`, MacPorts perl 5.42.2) against a real
+(`script/gpforum-carton exec …`; perl 5.42.2 until 2026-09-30, Homebrew's
+perl 5.44.0 since the macOS host moved from MacPorts to Homebrew) against a real
 PostgreSQL 18 database with migrations applied and the benchmark dataset
 seeded, and the running application was driven through a browser.
 
@@ -407,8 +408,10 @@ The owner decided how: assume the free antivirus the operating system's
 package manager installs, and bundle nothing. ClamAV is that antivirus on
 every supported system, and the OS layer knows where each package puts its
 daemon's socket — verified against the packages themselves: Debian's
-`/var/run/clamav/clamd.ctl`, the FreeBSD port's `/var/run/clamav/clamd.sock`,
-MacPorts' `/opt/local/var/run/clamav/clamd.socket`.
+`/var/run/clamav/clamd.ctl`, the FreeBSD port's `/var/run/clamav/clamd.sock`.
+Homebrew's formula ships `clamd.conf` only as a sample with no socket, so on
+macOS `docs/ops/antivirus.md` has the operator set
+`/opt/homebrew/var/run/clamav/clamd.sock`, the path the OS layer expects.
 
 - `clamd` (default in staging and production) is scanned over `INSTREAM`
   inside the upload request; `command` runs any system scanner that follows
@@ -1938,8 +1941,8 @@ system server, and says plainly that `make check` needs no database while the
 integration tests want one they may create and drop databases on.
 
 Fifty-six documented commands in 18 files called bare `carton exec`, which works
-only where Carton landed on `PATH` — on MacPorts it usually does not, which is
-why `script/gpforum-carton` exists. All of them now go through the wrapper.
+only where Carton landed on `PATH` — on the macOS host it usually did not, which
+is why `script/gpforum-carton` exists. All of them now go through the wrapper.
 `docs/ENTRYPOINTS.md` still said nine named wrappers called bare `carton`; none
 has for some time, and the paragraph now says so.
 

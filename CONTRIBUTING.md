@@ -5,12 +5,13 @@ PostgreSQL-authoritative, operable, and explicit.
 
 ## Development loop
 
-1. Use the OS **system Perl** (`/usr/bin/perl` / distro package, or MacPorts
-   `/opt/local/bin/perl`). Version managers and custom PREFIX builds are
+1. Use the OS **system Perl** (`/usr/bin/perl` / distro package, or
+   Homebrew's `perl` on macOS). Version managers and custom PREFIX builds are
    unsupported. On Debian/Ubuntu install `perl`, `build-essential`,
    `cpanminus`, and `libpq-dev`; then
-   `cpanm -M https://cpan.metacpan.org/ Carton`. On macOS with MacPorts,
-   `eval "$(script/gpforum-macports-env)"` before client-tool checks.
+   `cpanm -M https://cpan.metacpan.org/ Carton`. On macOS,
+   `brew install perl cpanminus postgresql@18`, install Carton for that perl,
+   and `eval "$(script/gpforum-homebrew-env)"` before client-tool checks.
    Confirm with `make system-perl` (`which perl`, `perl -v`, `perl -V`).
 2. Install dependencies with `make install-deps` (`script/bootstrap-deps`).
    That runs `carton install --deployment` from `cpanfile.snapshot` over

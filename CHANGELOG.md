@@ -15,6 +15,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Operator action required
 
+- **macOS hosts use Homebrew, not MacPorts.** Install `brew install perl
+  cpanminus postgresql@18`, install Carton for that perl, and rebuild the
+  locked tree (`script/bootstrap-deps --postgres --rebuild-local`): its XS
+  modules are built for one Perl. `script/gpforum-macports-env` is now
+  `script/gpforum-homebrew-env` (`make homebrew-env`). ClamAV on macOS comes
+  from `brew install clamav`, with the socket at
+  `/opt/homebrew/var/run/clamav/clamd.sock` (`docs/ops/antivirus.md`).
+
 - **A reverse proxy on another host must be listed in
   `GPFORUM_RUNTIME_TRUSTED_PROXIES`** (for example `10.0.0.5` or
   `10.0.0.0/8`). Only the loopback is trusted by default; the shipped nginx
@@ -649,6 +657,13 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- **`script/gpforum-carton exec prove -v` printed Carton's version** once
+  Carton was installed: real `carton exec` took the command's options as its
+  own, so `make integration` ran nothing. The wrapper now runs `exec` itself
+  in every case, pinned to the validated Perl.
+- **`script/system-preflight` reported perlcritic missing** on hosts where it
+  lives in `local/`, as the gates run it. It now asks the wrapper.
 
 - **A reply no longer lands in a thread locked or hidden while it was being
   sent.** The reply re-reads the thread under its lock and is refused with

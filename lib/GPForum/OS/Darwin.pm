@@ -20,17 +20,17 @@ sub supports_sendfile {
     return 1;
 }
 
-# MacPorts: clamav provides clamd, clamav-server its launchd items and a
-# clamd.conf with LocalSocket /opt/local/var/run/clamav/clamd.socket. Its
-# default variants add a whole-disk scheduled scan that moves what it finds and
-# third-party signatures; GPForum needs neither, so they are turned off.
+# Homebrew: one clamav formula provides clamd and freshclam. Its clamd.conf
+# ships only as a sample, with no socket; docs/ops/antivirus.md has the
+# operator enable LocalSocket at the path below. `brew services` runs clamd
+# (homebrew.mxcl.clamav); freshclam has no service of its own and is
+# scheduled separately.
 sub antivirus_packaging {
     return {
-        packages => [qw(clamav clamav-server)],
-        services => [qw(org.macports.clamd org.macports.freshclam)],
-        socket   => '/opt/local/var/run/clamav/clamd.socket',
-        install  =>
-'port install clamav clamav-server -scan_schedule_access -sanesecurity',
+        packages => [qw(clamav)],
+        services => [qw(homebrew.mxcl.clamav)],
+        socket   => '/opt/homebrew/var/run/clamav/clamd.sock',
+        install  => 'brew install clamav',
     };
 }
 

@@ -143,8 +143,13 @@ sub _assert_system_perl {
     );
     like( $helper, qr/\/usr\/bin\/perl/msx,
         'system-perl helper prefers /usr/bin/perl' );
-    like( $helper, qr/\/opt\/local/msx,
-        'system-perl helper accepts MacPorts /opt/local prefix' );
+    like(
+        $helper,
+        qr/\/opt\/homebrew\/opt\/perl/msx,
+        'system-perl helper accepts the Homebrew perl keg'
+    );
+    unlike( $helper, qr/\/opt\/local/msx,
+        'and no longer MacPorts, which macOS hosts no longer use' );
     like( $helper, qr/5[.]038/msx, 'system-perl helper requires Perl 5.38+' );
     like(
         $bootstrap,
@@ -222,8 +227,8 @@ sub _assert_operator_surface {
         qr/system [ ] Perl|\/usr\/bin\/perl/msx,
         'DEPLOYMENT documents system Perl'
     );
-    like( $deployment, qr/gpforum-macports-env/msx,
-        'DEPLOYMENT documents MacPorts PATH helper' );
+    like( $deployment, qr/gpforum-homebrew-env/msx,
+        'DEPLOYMENT documents the Homebrew PostgreSQL PATH helper' );
     unlike(
         $deployment,
 qr/live [ ] next [ ] to [ ] `perl` [ ] [(]perlbrew[)]|plenv [ ]install/msx,
