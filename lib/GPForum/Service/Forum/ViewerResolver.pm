@@ -17,7 +17,12 @@ use GPForum::Service::Forum::Viewer;
 
 our $VERSION = '0.001';
 
-const my %MEMBER_STATUS => ( active => 1, pending => 1 );
+# Only an active account is a member. A pending one has not confirmed its
+# e-mail: it cannot sign in (Identity::AuthStore), and confirming makes it
+# active, so a session for it is an anomaly and reads what an anonymous
+# visitor reads. It used to count as a member, on the premise -- true once,
+# no longer -- that verification never moved an account to active.
+const my %MEMBER_STATUS => ( active => 1 );
 
 # One statement per request: the account's status, whether a suspension is in
 # force, and the scopes of its category.read grants (ADR 0102, Viewers). A

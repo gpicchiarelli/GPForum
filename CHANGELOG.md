@@ -94,6 +94,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **An account that has not confirmed its e-mail is no longer a member.**
+  Effective visibility (ADR 0102) counted `pending` accounts as members, so a
+  session for one read members-only categories and threads. Such an account
+  cannot sign in and confirming makes it `active`, so it now reads what an
+  anonymous visitor reads.
+
 - **Email::Sender 2.603** (was 2.601): CVE-2026-93012, command execution
   through an envelope address on Windows. GPForum does not run on Windows;
   the lock takes the fix anyway, and the `cpanfile` floor now requires it.

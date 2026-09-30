@@ -65,12 +65,13 @@ access.
 - **non-participating account**: a session user whose row is missing,
   deleted, in `suspended` status, or under an active `suspensions` row. It is
   treated exactly like an anonymous viewer (public content only);
-- **member**: any other signed-in account. This deliberately matches
-  `SuspensionStore::can_participate`, the gate that already lets `active` and
-  `pending` (not yet e-mail-verified) accounts sign in and post. GPForum never
-  moves a verified account from `pending` to `active`, so requiring the
-  literal `active` status would lock every registered user out of `members`
-  content; the resolver is the single place to tighten this later;
+- **member**: a signed-in account in `active` status. A `pending` account
+  (e-mail not yet confirmed) is non-participating: it cannot sign in
+  (`Identity::AuthStore` answers `unverified`), and confirming the e-mail
+  makes it `active`. Until 2026-09-30 `pending` counted as a member, on the
+  premise that verification never moved an account to `active`; that stopped
+  being true, and the resolver -- the single place for this rule -- now
+  requires `active`;
 - **grant holder**: a member holding `category.read` through
   `PermissionGate` for a scope (see below).
 
@@ -237,7 +238,6 @@ admins through the existing catalog.
   visible set on that page happens to be identical.
 - Moderation queues and privacy exports are out of scope and still show
   reported or requested content to authorized staff.
-- `pending` accounts count as members (see Viewers).
 
 ### Repository note
 

@@ -75,10 +75,15 @@ ok( $thread_in{ $staff->{category_id} } && $thread_in{ $club->{category_id} },
 
 my @users = @{
     $dbh->selectcol_arrayref(
-q{SELECT id FROM users WHERE status = 'active' ORDER BY username LIMIT 4}
+q{SELECT id FROM users WHERE status = 'active' ORDER BY username LIMIT 5}
     )
 };
-my ( $author, $member, $granted, $suspended ) = @users;
+my ( $author, $member, $granted, $suspended, $pending ) = @users;
+
+# An account that has not confirmed its e-mail. It cannot sign in, so a
+# session for it is an anomaly; it reads what an anonymous visitor reads.
+$dbh->do( q{UPDATE users SET status = 'pending' WHERE id = ?}, undef,
+    $pending );
 
 # A private thread in the open category, by $author.
 my ($private_thread) = $dbh->selectrow_array(
@@ -147,16 +152,24 @@ my %expect       = (
             $HTTP_NOT_FOUND, $HTTP_NOT_FOUND
         ]
     },
+    pending => {
+        categories_list => [ 0, 0 ],
+        pages           => [
+            $HTTP_NOT_FOUND, $HTTP_NOT_FOUND, $HTTP_NOT_FOUND,
+            $HTTP_NOT_FOUND, $HTTP_NOT_FOUND
+        ]
+    },
 );
 my %user_for = (
     anonymous => undef,
     author    => $author,
     granted   => $granted,
     member    => $member,
+    pending   => $pending,
     suspended => $suspended,
 );
 
-for my $who (qw(anonymous member author granted suspended)) {
+for my $who (qw(anonymous member author granted suspended pending)) {
     my $client = Test::Mojo->new('GPForum');
     my $routes = $client->app->routes;
     $routes->get('/__test/session/:user_id')->to(
