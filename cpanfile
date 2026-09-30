@@ -6,20 +6,20 @@ requires 'Minion', '12.0';
 requires 'JSON::MaybeXS', '1.004008';
 # Never loaded by name: it is the XS backend JSON::MaybeXS selects at runtime,
 # and the floor is what keeps it from falling back to the pure-Perl one.
-requires 'Cpanel::JSON::XS', '4.52';
+requires 'Cpanel::JSON::XS', '4.53';
 requires 'Try::Tiny', '0.32';
 requires 'DateTime', '1.67';
 # Named directly by the date formatter and the time zone preference (9.3).
-requires 'DateTime::TimeZone', '2.69';
+requires 'DateTime::TimeZone', '2.71';
 requires 'Crypt::Argon2', '0.032';
 requires 'Crypt::URandom', '0.55';
-requires 'Email::Sender', '2.601';
+requires 'Email::Sender', '2.603';
 requires 'Email::Address::XS', '1.05';
 requires 'Email::Simple', '2.218';
 requires 'Const::Fast', '0.014';
 
 # Security floors for transitive dependencies with published CPANSA advisories.
-requires 'DBI', '1.653';
+requires 'DBI', '1.655';
 
 # What the suite loads. Carton cannot install without the test phase (and
 # Menlo installs a cpanfile's direct test requirements even under --notest),

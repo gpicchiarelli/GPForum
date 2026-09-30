@@ -94,6 +94,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **Email::Sender 2.603** (was 2.601): CVE-2026-93012, command execution
+  through an envelope address on Windows. GPForum does not run on Windows;
+  the lock takes the fix anyway, and the `cpanfile` floor now requires it.
+  DBI 1.655, Cpanel::JSON::XS 4.53 and DateTime::TimeZone 2.71 are updated
+  too. 34 distributions nothing requires any more (Email::MIME, the
+  WWW::Mechanize test stack, DateTime::Format::Pg and others) left the lock.
+  `script/cpan-audit` reports no unexcluded advisory.
+
 - **`X-Forwarded-For` is believed only from trusted proxies.** Any sender's
   header was believed, so a client that reached the application directly
   could name its own address, and with it its rate-limit bucket. Hypnotoad
