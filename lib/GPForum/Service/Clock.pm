@@ -52,7 +52,15 @@ Returns the current epoch time.
 
 =head2 now_iso8601
 
-Returns the current UTC timestamp in ISO-8601 format.
+Returns the current UTC timestamp in ISO-8601 format, to the second, as
+C<YYYY-MM-DDTHH:MM:SSZ>. It is derived from C<now_epoch>, so a test clock
+that overrides C<now_epoch> moves it too.
+
+=head2 epoch_plus_iso8601
+
+Takes a number of seconds, which may be negative, and returns the UTC
+timestamp that many seconds after C<now_epoch>, in the same format as
+C<now_iso8601>.
 
 =head1 DIAGNOSTICS
 

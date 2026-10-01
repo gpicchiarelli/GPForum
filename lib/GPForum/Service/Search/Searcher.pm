@@ -518,3 +518,154 @@ sub _profile_label ($username) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Search::Searcher - Full-text search and title autocomplete over the search documents.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $searcher = GPForum::Service::Search::Searcher->new(
+        candidate_limit      => 1_000,
+        permission_engine    => $permission_engine,
+        schema               => $schema,
+        statement_timeout_ms => 2_000,
+    );
+    my $page = $searcher->ranked_search( $actor, 'release notes',
+        { limit => 20, category_id => $category_id } );
+    for my $result ( @{ $page->{results} } ) {
+        print $result->{title}, ': ', $result->{snippet}, "\n";
+    }
+    my $suggestions = $searcher->autocomplete( $actor, 'rel', { limit => 5 } );
+
+=head1 DESCRIPTION
+
+Searches C<search_documents>, the rows L<GPForum::Service::Search::Indexer>
+keeps from L<GPForum::Service::Search::DocumentBuilder>. A document
+matches a query when its search vector matches it as a web-search
+C<tsquery>, when its normalized title is similar to it (the trigram C<%>
+operator, under the session's C<pg_trgm.similarity_threshold> that
+L<GPForum::Config> sets on connect), or when its title contains it. All
+three arms can use an index, so the planner can combine the GIN and
+trigram indexes instead of reading every row. The text-search
+configuration is a bind parameter, the builder's own
+(L<GPForum::Service::Search::DocumentBuilder/search_config>).
+
+Only the newest C<candidate_limit> matches (default 1000) are ranked. An
+inner query finds them, newest first, and an outer query ranks those by
+the greater of the C<ts_rank_cd> score and a fifth of the title
+similarity, then by age. Ranking is not done over the whole corpus: a word
+most documents hold used to be ranked over every one of them. When every
+candidate slot is filled, older matches may exist that were never ranked,
+and C<ranked_search> says so.
+
+What the actor may read is decided in the C<WHERE> clause, before
+C<LIMIT>, so a page is not silently short. Without a C<permission_engine>
+only C<public> documents are searched. With one, its C<search_condition>
+is used (or, for an engine without one, the visibilities its
+C<search_visibility_for> lists), and each returned row is checked again
+with its C<permits> for C<search.view> before it is shown.
+
+When C<statement_timeout_ms> is set and not zero, the query runs in a
+transaction of its own with that C<statement_timeout> set locally, so the
+connection goes back to its usual timeout afterwards. Zero or undef keeps
+the connection's own timeout.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 search
+
+Takes an actor, a query string and a hash reference of options (or
+undef), as for C<search_resultset>. Returns the C<results> array
+reference of C<ranked_search>.
+
+=head2 ranked_search
+
+Takes the same arguments as C<search>. Returns a hash reference with
+C<results>, C<candidate_limit> and C<ranking_capped> (1 when the
+candidates filled the limit, so the order is the best of the newest
+matches rather than of all of them). Each result is a hash reference with
+C<entity_type>, C<entity_id>, C<category_id>, C<author_user_id>,
+C<author_username>, C<author_display_name>, C<author_profile_label>
+(C<@> and the username, or undef), C<title>, C<body>, C<visibility>,
+C<rank_score>, C<source_created_at>, C<indexed_at>, C<highlight_terms>
+(the query's distinct lower-cased words), C<snippet> (up to 220
+characters of the body's plain text around the first matching word, with
+C<...> where it was cut) and C<snippet_html> (the snippet HTML-escaped,
+each matching word in C<< <mark> >>).
+
+=head2 search_resultset
+
+Takes an actor, a query string and an optional hash reference with
+C<limit> (1 to 50, default 20; anything else is 20, and more than 50 is
+50), C<category_id>, C<author_user_id>, and C<from> and C<to> (bounds on
+C<source_created_at>, inclusive). Returns the unexecuted resultset that
+C<ranked_search> runs, with the author, category and space joined and
+C<rank_score>, C<author_username>, C<author_display_name>,
+C<category_visibility>, C<space_visibility> and C<candidate_count>
+selected. The query is trimmed and its whitespace collapsed first. Public
+so the query-plan evidence examines the query the application sends.
+
+=head2 autocomplete
+
+Takes an actor, a prefix and a hash reference of options (or undef), as
+for C<autocomplete_resultset>. Returns an array reference of suggestions,
+each a hash reference with C<entity_type>, C<entity_id>, C<category_id>,
+C<author_user_id>, C<author_username>, C<author_display_name>,
+C<author_profile_label>, C<title>, C<visibility> and
+C<source_created_at>.
+
+=head2 autocomplete_resultset
+
+Takes an actor, a prefix and an optional hash reference with C<limit> (as
+for C<search_resultset>). Returns the unexecuted resultset of the thread
+documents the actor may read whose normalized title starts with the
+prefix (lower-cased, its C<LIKE> wildcards escaped), ordered by title and
+then newest first. Only threads are suggested: a post's document carries
+its thread's title, and a thread with many replies used to fill every
+suggestion with the same title.
+
+=head1 DIAGNOSTICS
+
+A database error is rethrown. Under C<statement_timeout_ms>, a query the
+timeout cancels dies too, after its transaction is rolled back; the
+search controller then renders the page degraded.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+The application builds it from C<search_candidate_limit>
+(C<GPFORUM_SEARCH_CANDIDATE_LIMIT>) and C<search_statement_timeout_ms>
+(C<GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS>) in L<GPForum::Config>.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<Mojo::Util>,
+L<GPForum::Infrastructure::Row>,
+L<GPForum::Service::Search::DocumentBuilder>, PostgreSQL with C<pg_trgm>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+A match older than the newest C<candidate_limit> is never ranked, however
+well it would score; C<ranking_capped> reports when that may have
+happened.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

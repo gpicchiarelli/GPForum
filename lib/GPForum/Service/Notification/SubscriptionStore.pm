@@ -306,3 +306,155 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Notification::SubscriptionStore - Saves, mutes and revokes a member's subscriptions and lists a target's subscribers.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Notification::SubscriptionStore->new(
+        schema => $schema,
+    );
+    my $saved = $store->save_subscription(
+        {
+            user_id     => $user_id,
+            target_type => 'thread',
+            target_id   => $thread_id,
+            preference  => 'mentions',
+        }
+    );
+    my $status = $store->status_for_user_target( $user_id, 'thread', $thread_id );
+    $store->mute_for_user_target(
+        { user_id => $user_id, target_type => 'thread', target_id => $thread_id } );
+    my @user_ids = $store->subscribers_for( 'thread', $thread_id,
+        { notification_type => 'reply' } );
+
+=head1 DESCRIPTION
+
+A member has at most one C<subscriptions> row per target
+(C<subscriptions_unique_target>). Muting stamps C<muted_at> and revoking
+(unsubscribing) stamps C<revoked_at>; neither deletes the row, and saving
+the subscription again clears both and sets the new C<preference> on the
+same row. Saving a subscription that is already active with the same
+preference writes nothing and is reported as C<skipped>.
+
+The C<preference> is C<all> (the default), C<mentions> or C<none>, as the
+table's check constraint allows. C<subscribers_for> honours it: C<all>
+receives everything, C<none> nothing, and any other value only
+notifications of type C<mention>.
+
+A new subscription is inserted inside a savepoint. If the insert loses a
+race on the member's target, the row the other request inserted is
+restored instead. If it collides on the subscription id
+(C<subscriptions_pkey>), the target is looked up again and, when there is
+still no row, the insert is retried once with a fresh id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 save_subscription
+
+Takes a hash reference with C<user_id>, C<target_type>, C<target_id> and an
+optional C<preference> (C<all> when omitted). Creates the subscription, or
+restores the member's existing one for that target. Returns a hash
+reference with C<subscription_id>, C<user_id>, C<target_type>,
+C<target_id>, C<preference>, C<created_at>, and C<muted_at> and
+C<revoked_at> (both undef), plus C<< skipped => 1 >> when the subscription
+was already active with that preference.
+
+=head2 subscribe
+
+Takes the same hash reference and inserts a new row with a fresh uuid and
+the clock's time, with no check for an existing one. Returns the inserted
+fields as a hash reference. Used by C<save_subscription>; a unique conflict
+propagates from here.
+
+=head2 find_for_user_target
+
+Takes a user id, a target type and a target id. Returns that member's
+C<Subscription> row for the target, whatever its state, or undef.
+
+=head2 status_for_user_target
+
+Takes a user id, a target type and a target id. Returns
+C<< { subscribed => 0, muted => 0 } >> when there is no user id, no row or
+a revoked one; otherwise C<< subscribed => 1 >>, C<muted> (1 when
+C<muted_at> is set), C<subscription_id> and C<preference>.
+
+=head2 mute
+
+Takes a subscription id and stamps its C<muted_at> with the clock's time.
+Returns C<< { ok => 1, subscription_id, muted_at } >>, with
+C<< skipped => 1 >> and the earlier C<muted_at> when it was already muted.
+
+=head2 revoke
+
+Takes a subscription id and stamps its C<revoked_at>, returning
+C<< { ok => 1, subscription_id, revoked_at } >> as C<mute> does, with
+C<< skipped => 1 >> when it was already revoked.
+
+=head2 mute_for_user_target
+
+Takes a hash reference with C<user_id>, C<target_type> and C<target_id>.
+Returns C<< { ok => 0, error => 'not_found' } >> when the member has no
+subscription to the target; otherwise the result of C<mute> for that row.
+
+=head2 revoke_for_user_target
+
+Takes the same hash reference. Returns
+C<< { ok => 0, error => 'not_found' } >> when the member has no
+subscription to the target; otherwise the result of C<revoke> for that
+row.
+
+=head2 subscribers_for
+
+Takes a target type, a target id and an optional hash reference with
+C<notification_type>. Returns the list (not a reference) of user ids
+subscribed to the target, neither muted nor revoked, whose preference
+allows that notification type. Without a C<notification_type> only
+C<all> subscribers are listed.
+
+=head1 DIAGNOSTICS
+
+C<save_subscription> croaks with the database error when the insert fails
+for any reason other than a unique conflict, when a target conflict leaves
+no row to restore, and when the retry after an id collision fails too.
+C<mute> and C<revoke> die when no subscription has the given id, calling
+C<update> on undef. Other database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<clock> and C<id_service> default to L<GPForum::Service::Clock> and
+L<GPForum::Infrastructure::Id>; tests pass fixed ones.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The preference is not validated here; a value outside the check
+constraint fails at the database.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

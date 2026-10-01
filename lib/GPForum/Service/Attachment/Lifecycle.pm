@@ -304,11 +304,22 @@ Returns the idempotent scan hash from the stored row.
 
 =head2 replayed_scan
 
-Returns the idempotent scan hash when status and state already match.
+Returns the idempotent scan hash when status and state already match,
+otherwise undef.
 
 =head2 scan_matches
 
 True when stored scan status and derived state match the input.
+
+=head2 replaceable_verdicts
+
+Takes the incoming scan status and returns an array reference of the
+C<< { scan_status, state } >> pairs a stored row may hold for that verdict to
+replace it, for the C<-or> of the scan C<UPDATE>. Verdicts only tighten: an
+upload still C<pending> and C<uploaded> takes any verdict, and a C<clean>
+and C<available> file may become infected or failed when a later scan finds
+something. Nothing becomes clean over an infected or failed verdict, which
+is what a slow clean racing a fast infected would otherwise do.
 
 =head2 scan_changes
 

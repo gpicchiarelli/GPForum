@@ -70,10 +70,71 @@ __END__
 
 GPForum::Service::Operations::OSPreflight - Operations service wrapper for OS preflight.
 
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $report = GPForum::Service::Operations::OSPreflight->new(
+        runtime                   => $runtime,
+        min_recommended_workers   => 2,
+        max_open_file_descriptors => 65_536,
+    )->check;
+    print "$report->{status}\n";    # ok, degraded or fail
+
 =head1 DESCRIPTION
 
 Delegates OS posture validation to L<GPForum::OS::Preflight> while preserving
 the operations service boundary used by readiness, metrics, and platform
 checks.
+
+The two thresholds it passes on are taken, in order, from this object's
+attributes, from the runtime's C<os_preflight_settings>, and otherwise from
+the defaults: one recommended worker and 65 536 open file descriptors.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 check
+
+Takes no arguments. Returns the C<report> of L<GPForum::OS::Preflight>
+for C<runtime>: a hash reference with C<status> (C<ok>, C<degraded> or
+C<fail>), C<checks>, and the C<os>, C<runtime>, C<resources>,
+C<recommendations>, C<features>, C<sockets> and C<processes> it judged.
+Without a C<runtime> it inspects nothing and returns C<status> C<fail>
+with a single check, C<runtime>, failed for the reason
+C<runtime unavailable>.
+
+=head1 DIAGNOSTICS
+
+None of its own. An exception from the runtime or from
+L<GPForum::OS::Preflight> propagates.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None read directly. The thresholds come from the runtime's configuration
+(C<os_preflight_settings>) unless set on the object.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<GPForum::OS::Preflight>; the C<runtime>
+is a L<GPForum::Runtime>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
 
 =cut

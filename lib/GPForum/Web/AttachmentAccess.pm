@@ -135,7 +135,7 @@ __END__
 
 =head1 NAME
 
-GPForum::Web::AttachmentAccess - Attachment upload limits and HTTP policy.
+GPForum::Web::AttachmentAccess - Attachment rate limits and HTTP policy.
 
 =head1 VERSION
 
@@ -143,42 +143,63 @@ Version 0.001.
 
 =head1 SYNOPSIS
 
-    my $check = $access->upload_rate_input($user_id);
+    my $access   = GPForum::Web::AttachmentAccess->new;
+    my $upload   = $access->upload_rate_input($user_id);
+    my $download = $access->download_rate_input($actor_key);
+    my $header   = $access->content_disposition( $attachment->{filename} );
 
 =head1 DESCRIPTION
 
-Owns the attachment upload rate-limit hash, download filename sanitizing,
-content-disposition values, workflow failure status mapping, and Guard
-payloads for invalid uploads and rate limits. It does not render HTTP
-responses or load attachments. L<GPForum::Controller::Attachments::Base>
-still checks CSRF, sessions, and Guard errors.
+Owns the attachment upload and download rate-limit hashes, download
+filename sanitizing, content-disposition values, workflow failure status
+mapping, and Guard payloads for invalid uploads and rate limits. It does
+not render HTTP responses or load attachments.
+L<GPForum::Controller::Attachments::Base> still checks CSRF, sessions, and
+Guard errors.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 upload_rate_input
 
-Returns the C<forum_http> rate-limit arguments for C<attachment.upload>.
+Takes a user id. Returns the C<forum_http> rate-limit arguments for
+C<attachment.upload>: 20 uploads per 60 seconds for that user.
+
+=head2 download_rate_input
+
+Takes the actor key to limit: the controller passes the user id when there
+is a session and C<address:> with the peer address otherwise, since
+downloads are reachable without one. Returns the C<forum_http> rate-limit
+arguments for C<attachment.download>: 120 downloads per 60 seconds for
+that key.
 
 =head2 safe_filename
 
-Returns a download filename with quotes and line breaks replaced.
+Takes a filename. Returns it with each double quote, carriage return and
+line feed replaced by an underscore, or C<attachment> when it is undef or
+empty.
 
 =head2 content_disposition
 
-Returns the C<Content-Disposition> header value.
+Takes a filename. Returns the C<Content-Disposition> header value,
+C<attachment; filename="..."> with the name made safe by
+C<safe_filename>.
 
 =head2 is_failed
 
-True when the workflow status is C<failed>.
+Takes a workflow result hash reference. Returns 1 when its status is
+C<failed>, else 0.
 
 =head2 failure_status
 
-Returns C<not_found>, C<invalid>, or C<forbidden> when those statuses are
-present. C<conflict> maps to C<invalid>.
+Takes a workflow result hash reference. Returns its status when it is
+C<not_found>, C<invalid> or C<forbidden>, C<invalid> for C<conflict>, and
+undef for any other status.
 
 =head2 invalid_request
 
-Returns the Guard bad-request payload for an invalid upload.
+Takes the validation errors hash reference (or undef). Returns the Guard
+bad-request payload for an invalid upload: C<error>, C<title> and
+C<errors> (an empty hash when none were given).
 
 =head2 rate_limited_payload
 
@@ -194,8 +215,9 @@ Returns C<deleted>.
 
 =head2 write_flash_key
 
-Returns the i18n catalog key for a successful HTML write, or undef when the
-status has no flash copy.
+Takes a write status. Returns the i18n catalog key for a successful HTML
+write (C<forum.attachment_uploaded> or C<forum.attachment_deleted>), or
+undef when the status has no flash copy.
 
 =head1 DIAGNOSTICS
 

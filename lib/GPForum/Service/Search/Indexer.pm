@@ -692,3 +692,175 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Search::Indexer - Keeps the search_documents projection in step with threads and posts, and rebuilds it.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $indexer = GPForum::Service::Search::Indexer->new( schema => $schema );
+
+    $indexer->index_thread($thread_id);
+    $indexer->index_post($post_id);
+    $indexer->remove_thread($thread_id);
+
+    my $batch = $indexer->index_thread_posts_batch( $thread_id, $after );
+    # next batch from $batch->{next_after}, until it is undef
+
+    my $summary = $indexer->rebuild( { entity_type => 'all' } );
+    my $step    = $indexer->rebuild_batch( { entity_type => 'post' } );
+    my $lag     = $indexer->observe_lag;
+
+=head1 DESCRIPTION
+
+C<search_documents> is a projection of the canonical rows (ADR 0062): one
+document per live thread (visible or locked) and per visible post in such
+a thread, as L<GPForum::Service::Search::DocumentBuilder> builds it, with a
+weighted C<tsvector> of title (A) and body (B) in the document's language.
+The document id is derived from the entity type and id, so it is stable.
+
+Each thread or post is indexed in its own transaction: the source row is
+read and the document written or removed under a transaction-scoped
+advisory lock on the document's name, so a rebuild and the live search
+handler cannot interleave and leave a stale document. A document whose
+fields are unchanged is not rewritten. A source that is gone, deleted or
+hidden has its document removed.
+
+Work that can be large runs in batches of C<rebuild_batch_size> (500) and
+never in one transaction: a thread's posts by position, a rebuild by id.
+The search handler and the console's rebuild run one batch per outbox
+message, so neither holds the dispatcher for long. Removing a thread
+removes its own document first, then its posts' documents a batch at a
+time, each batch rechecking under its locks that the thread is still dead,
+so a removal delivered after a restore deletes nothing the restore indexed.
+
+Without a database handle that can C<dbh_do> (a test double), the advisory
+locks are skipped and the prune step finds nothing.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 observe_lag
+
+Takes no arguments. Returns how far search may be behind the forum. When
+the indexer was built with a projection tracker
+(L<GPForum::Service::Projection::OffsetTracker>), that tracker's
+C<observe_lag('search_documents')>. Otherwise from the outbox, which every search update passes through:
+C<< { projection_name => 'search_documents', pending, oldest_pending_at,
+lag_seconds, status } >>, C<pending> the outbox messages still pending,
+running or failed, C<lag_seconds> the age of the oldest, and C<status>
+C<behind> or C<current>.
+
+=head2 index_thread
+
+Takes a thread id and indexes it in a transaction. Returns the written
+document row as a hash reference (its fields, C<search_document_id>,
+C<indexed_at> and C<search_vector>); C<< { skipped => 1, entity_type,
+entity_id, indexed_at, source_version } >> when the stored document is
+already current; or, when the thread is missing or not live,
+C<< { ok => 1, removed => 1, deleted, entity_type, entity_id } >>,
+C<deleted> being the number of documents removed. It does not touch the
+thread's posts.
+
+=head2 index_thread_posts
+
+Takes a thread id and reindexes every post of the thread, whatever its
+state, batch after batch, each post in its own transaction. Returns
+C<< { indexed, pruned, unchanged } >>: posts written, documents removed,
+and posts skipped as current or with no document to remove.
+
+=head2 index_thread_posts_batch
+
+Takes a thread id and an optional position (the last post done). Reindexes
+up to C<rebuild_batch_size> posts after it, as C<index_thread_posts> does.
+Returns C<< { indexed, pruned, unchanged, thread_id, next_after } >>,
+C<next_after> the position to pass next, or undef when this batch was the
+last.
+
+=head2 index_post
+
+Takes a post id and indexes it in a transaction. Returns as
+C<index_thread> does; a post is removed when it is missing, not visible,
+or in a thread that is not live.
+
+=head2 remove_post
+
+Takes a post id and deletes its document in a transaction, without
+reading the post. Returns C<< { ok => 1, removed => 1, deleted,
+entity_type => 'post', entity_id } >>.
+
+=head2 remove_thread
+
+Takes a thread id. Indexes the thread again, which removes its document
+when the thread is dead, then removes the documents of its posts a batch
+at a time, stopping as soon as the thread is found live again. Returns
+C<index_thread>'s result with C<posts_removed>, the number of post
+documents deleted. A failure part way leaves removed what went; a retry
+removes the rest.
+
+=head2 rebuild
+
+Takes a hash reference with C<entity_type>: C<thread>, C<post> or C<all>
+(the default). Runs C<rebuild_batch> until it is done: every live thread
+and post of that type is indexed again, then documents whose source is
+gone, deleted or hidden are pruned. Returns
+C<< { ok => 1, entity_type, indexed, pruned, unchanged } >>.
+
+=head2 rebuild_batch
+
+Takes a cursor hash reference with C<entity_type>, and optionally C<stage>
+(the type being indexed, or C<prune>) and C<after> (the last id done).
+Indexes up to C<rebuild_batch_size> live ids of the stage's type, or, at
+the C<prune> stage, removes orphaned documents: those of the rebuilt type
+and always those of posts, so a dead thread's posts go with it. Each prune
+candidate is indexed again under its lock, so one restored since is kept.
+Returns C<< { indexed, pruned, unchanged, next } >>, C<next> the cursor
+for the following step or undef when the rebuild is done.
+
+=head1 DIAGNOSTICS
+
+C<rebuild> and C<rebuild_batch> croak with C<unknown rebuild entity type:>
+or C<unknown rebuild stage:> for a cursor they cannot follow. A document
+insert that fails for any reason other than a unique conflict, or whose
+conflict leaves no row to update, croaks with the database error. Other
+database errors propagate and roll back the entity's transaction.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<builder>, C<clock> and C<id_service> default to
+L<GPForum::Service::Search::DocumentBuilder>, L<GPForum::Service::Clock>
+and L<GPForum::Infrastructure::Id>; C<rebuild_batch_size> defaults to 500.
+
+=head1 DEPENDENCIES
+
+L<Carp>, L<Const::Fast>, L<Digest::SHA>, L<List::Util>, L<Mojo::Base>,
+L<GPForum::Infrastructure::CountedQuery>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>, L<GPForum::Service::Search::DocumentBuilder>;
+PostgreSQL for the advisory locks and C<to_tsvector>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+C<observe_lag> without a projection tracker counts every outbox message not
+yet delivered, not only those for search, so it is an upper bound.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

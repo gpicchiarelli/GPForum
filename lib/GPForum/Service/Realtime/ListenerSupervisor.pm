@@ -214,3 +214,119 @@ sub _remove_timer ( $self, $attribute ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Realtime::ListenerSupervisor - Keeps the realtime PostgreSQL listener polled and reconnected.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $supervisor = GPForum::Service::Realtime::ListenerSupervisor->new(
+        listener                   => $pg_listener,
+        logger                     => $app->log,
+        poll_interval_seconds      => 1,
+        heartbeat_interval_seconds => 30,
+        reconnect_backoff_seconds  => 5,
+    );
+    $supervisor->start;
+    my $health = $supervisor->snapshot;
+
+=head1 DESCRIPTION
+
+Realtime events cross processes and nodes as PostgreSQL notifications, which
+L<GPForum::Service::Realtime::PgListener> receives. This supervisor drives
+that listener from the Mojo::IOLoop: it starts it, polls it on a recurring
+timer and logs a debug heartbeat. A failed start is retried after
+C<reconnect_backoff_seconds>; a failed poll reconnects at once, and then
+every C<reconnect_backoff_seconds> until a reconnect succeeds. Once started,
+it stops the listener and its timers when the IOLoop finishes.
+
+A listener that fails does not take the request down: its C<start>, C<stop>,
+C<poll_once> and C<reconnect> calls are wrapped in C<eval>. A failed start or
+poll is reported as a C<degraded> status, and the supervisor counts what
+it does in C<stats> (C<starts>, C<stops>, C<polls>, C<poll_failures>,
+C<reconnects>, C<degraded>, C<heartbeats>, C<scheduled_polls>).
+
+The C<listener> attribute must answer C<start>, C<stop>, C<poll_once> and
+C<reconnect> with a hash reference whose C<ok> is true on success, and may
+answer C<snapshot>. C<enabled> (default 1) turns the whole supervisor off.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 start
+
+Takes an optional hash reference; C<without_timers> starts the listener
+without scheduling the poll, heartbeat or reconnect timers. Returns
+C<< { ok => 0, status => 'disabled', reason => 'disabled' } >> when
+disabled, C<< { ok => 1, status => 'running', idempotent => 1 } >> when
+already running, C<< { ok => 1, status => 'running', listener => $result } >>
+when the listener started, and
+C<< { ok => 0, degraded => 1, status => 'degraded', reason => $reason } >>
+when it did not (C<$reason> is the listener's, or C<listener_failed> when it
+died); a reconnect is then scheduled unless C<without_timers> was given.
+
+=head2 stop
+
+Removes the timers, stops the listener (ignoring its errors), marks the
+supervisor not running, and returns C<< { ok => 1, status => 'stopped' } >>.
+
+=head2 poll_once
+
+Polls the listener once, starting it first (without timers) when it is not
+running. Returns the disabled hash when disabled, the failed start's hash
+when starting failed, the listener's own result on success, and
+C<< { ok => 0, degraded => 1, status => 'degraded', reason => $reason } >>
+when the poll failed (C<$reason> is the listener's, or C<poll_failed>), after
+trying one reconnect.
+
+=head2 snapshot
+
+Returns C<enabled>, C<running>, a copy of C<stats>, and the listener's own
+C<snapshot> (or an empty hash when it has none).
+
+=head1 DIAGNOSTICS
+
+None. Listener failures are caught and returned as C<degraded>; when the
+listener dies, its message is not kept.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+The module reads no environment itself. L<GPForum::Bootstrap::Core> builds it
+from C<GPFORUM_REALTIME_LISTENER_ENABLED>,
+C<GPFORUM_REALTIME_LISTENER_POLL_INTERVAL_SECONDS>,
+C<GPFORUM_REALTIME_LISTENER_HEARTBEAT_INTERVAL_SECONDS> and
+C<GPFORUM_REALTIME_LISTENER_RECONNECT_BACKOFF_SECONDS> through
+L<GPForum::Config>, and, when the listener is enabled, calls L</start> before
+each request is dispatched.
+
+=head1 DEPENDENCIES
+
+L<Mojo::IOLoop>,
+L<Scalar::Util>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The heartbeat only logs at debug level and counts; it does not probe the
+listener. The reconnect backoff is fixed, not exponential. L</snapshot> calls
+the listener's C<snapshot> without an C<eval>, so an error there propagates.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

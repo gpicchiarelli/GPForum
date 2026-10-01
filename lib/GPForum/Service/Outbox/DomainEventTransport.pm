@@ -125,3 +125,89 @@ sub _dispatch_realtime ( $self, $payload ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Outbox::DomainEventTransport - Delivers one outbox event to its handlers and to realtime.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $transport = GPForum::Service::Outbox::DomainEventTransport->new(
+        handlers          => [ $search_handler, $notification_handler ],
+        job_runner        => $idempotent_job_runner,
+        realtime_notifier => $pg_notifier,
+    );
+    my $summary = $transport->dispatch($outbox_message);
+
+=head1 DESCRIPTION
+
+The transport L<GPForum::Service::Outbox::Dispatcher> hands each claimed
+outbox message to. It normalizes the message's payload with
+L<GPForum::Jobs::EventPayload>, runs every handler that supports the event,
+and then sends the realtime hint the event maps to.
+
+With a C<job_runner>, each handler run and the realtime hint go through it
+under an idempotency key from L<GPForum::Service::Outbox::HandlerIdempotency>
+(handler prefix or realtime prefix, plus the event id). A message that is
+delivered again after a partial failure then skips the work already marked
+done instead of repeating it. Without a job runner, or for a handler or event
+that has no key, the work simply runs.
+
+Attributes: C<handlers> (objects with C<supports($payload)> and
+C<handle($payload)>), C<job_runner> (optional; C<run($key, $code,
+$event_id)>), C<realtime_notifier> (optional; C<notify($event)>),
+C<realtime_mapper>, C<catalog> and C<payload_contract>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 dispatch
+
+Takes the outbox message row (anything with C<get_column('payload')>).
+Returns C<< { ok => 1, handlers => $count, results => \@results } >>, one
+result per handler that ran (C<< { skipped => 1, idempotency_key => $key } >>
+for one the job runner had already done), plus C<realtime> when a realtime
+notifier is set and the event maps to at least one realtime event:
+C<< { events => $count, results => \@results } >>, or the skipped hash.
+
+=head1 DIAGNOSTICS
+
+A handler's or notifier's exception propagates. Under a job runner, a failed
+run croaks with the runner's error, or C<idempotent handler failed> when it
+gives none. The dispatcher records either as a failed delivery attempt.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. L<GPForum::Bootstrap::Workers> builds it with the application's
+handlers, job runner and PostgreSQL notifier.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Jobs::EventPayload>,
+L<GPForum::Service::Outbox::HandlerIdempotency>,
+L<GPForum::Service::Realtime::OutboxEventMapper>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Handlers run one after another in the order given; one that dies stops the
+rest and the realtime hint for that delivery.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

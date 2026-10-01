@@ -149,3 +149,107 @@ sub _event_value ( $event, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Realtime::OutboxEventMapper - The realtime hint a domain event becomes.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $mapper = GPForum::Service::Realtime::OutboxEventMapper->new;
+    my @events = $mapper->events_for_payload( $outbox_message_payload );
+    # () or ( { type => 'thread.update', ... } )
+
+=head1 DESCRIPTION
+
+Maps an outbox domain event to at most one realtime frame, built with
+L<GPForum::Service::Realtime::EventEnvelope>. The frame is a hint: it
+carries ids only and is idempotent, so a duplicate or a late one is
+harmless (F<docs/realtime.md>). The worker's
+transport (L<GPForum::Service::Outbox::DomainEventTransport>) sends it
+once per event, and L<GPForum::Service::Realtime::PgListener>'s outbox
+backstop maps the messages it polls the same way.
+
+=over 4
+
+=item *
+
+C<post.created>, C<post.updated>, C<post.deleted> and C<post.undeleted>
+become C<thread.update> on the post's thread, with
+C<< payload => { post_id, thread_id } >>. The thread id is read from the
+event, or from its domain payload; without one there is no frame.
+
+=item *
+
+C<thread.created>, C<thread.updated>, C<thread.deleted>, C<thread.moved>,
+C<thread.hidden>, C<thread.restored> and C<thread.undeleted> become
+C<thread.update> on the thread, with C<< payload => { thread_id } >>.
+
+=item *
+
+Any C<moderation.*> or C<report.*> event becomes
+C<moderation.queue.invalidate> on the event's aggregate, with the source
+event type as its payload.
+
+=item *
+
+Every other event maps to nothing.
+
+=back
+
+Each frame keeps the domain event's C<event_id>, C<actor_id> and
+C<correlation_id>, takes the event id as its C<causation_id>, and records
+the source event type in C<metadata>. Notification badges are not mapped:
+the notification dispatcher sends each count itself when it changes, and
+mapping them here as well sent every badge twice.
+
+The attributes are C<payload_contract> (a L<GPForum::Jobs::EventPayload>)
+and C<realtime_contract> (a L<GPForum::Service::Realtime::EventEnvelope>).
+
+=head1 SUBROUTINES/METHODS
+
+=head2 events_for_payload
+
+Takes an outbox message payload, normalized first with the C<normalize>
+method of L<GPForum::Jobs::EventPayload> (anything but a hash reference
+becomes an empty one). Returns a list of zero or one realtime frame
+hash references. The frame is built, not validated.
+
+=head1 DIAGNOSTICS
+
+None. An event it does not map, or a post event without a thread id,
+yields an empty list.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<GPForum::Jobs::EventPayload>,
+L<GPForum::Service::Realtime::EventEnvelope>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

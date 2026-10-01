@@ -667,3 +667,222 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Notification::Dispatcher - Delivers notifications to a member's inbox, lists it, marks it read and counts what is unread.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $policy = GPForum::Service::Notification::RecipientPolicy->new(
+        schema => $schema );
+    my $dispatcher = GPForum::Service::Notification::Dispatcher->new(
+        permission_engine  => $policy,
+        preference_store   => $preference_store,
+        readability        => $policy,
+        realtime_notifier  => $pg_notifier,
+        schema             => $schema,
+        subscription_store => $subscription_store,
+    );
+    my $delivery = $dispatcher->create_notification(
+        {
+            recipient_user_id => $user_id,
+            notification_type => 'mention',
+            source_type       => 'post',
+            source_id         => $post_id,
+            payload           => { thread_id => $thread_id },
+        }
+    );
+    my $fanout = $dispatcher->fanout_to_subscribers(
+        {
+            target_type                => 'thread',
+            target_id                  => $thread_id,
+            source_type                => 'post',
+            source_id                  => $post_id,
+            notification_type          => 'reply',
+            excluded_recipient_user_id => $author_id,
+            idempotency_key            => "notification.reply:$event_id",
+            payload                    => { event_id => $event_id },
+        }
+    );
+    my $page = $dispatcher->list_page_for_user( $user_id,
+        { after => $cursor, limit => 25, viewer => $viewer } );
+    $dispatcher->mark_read( $notification_id, $user_id );
+    my $unread = $dispatcher->unread_count_for_user( $user_id, $viewer );
+
+=head1 DESCRIPTION
+
+A notification is a C<notifications> row and the recipient's
+C<notification_inbox> row; reading it adds a C<notification_reads> row and
+stamps the inbox's C<read_at>.
+
+Delivery is idempotent. Each delivery has an idempotency key: the caller's
+C<idempotency_key> joined with the recipient, or, without one, the
+recipient, type, source and the payload's C<event_id>. Unless the caller
+passes a C<notification_id>, the id is a uuid derived from the SHA-1 of
+that key, so a retried delivery finds the inbox row it made the first time
+and is reported as a C<duplicate> instead of notifying twice. The outbox
+relies on this to retry a fan-out safely. Inserts run inside savepoints; a
+unique conflict with a concurrent delivery is resolved by reading the row
+that won.
+
+A recipient is notified only if the C<permission_engine> agrees (ADR 0102:
+only about a source they can read) and their C<in_app> channel is enabled
+in the C<preference_store>. The inbox and the unread count keep only
+notifications whose source the reader can still read, judged by
+C<readability> in the query.
+
+After a delivery or a read commits, the recipient's new unread count is
+sent as a C<notification.badge> event through C<realtime_notifier>, a
+L<GPForum::Service::Realtime::PgNotifier>, so it reaches the member's
+sockets on every node. Under an outer transaction PostgreSQL holds that
+NOTIFY until the outer commit. The count is capped: past 99 it stops at
+100, which the inbox shows as "more than 99".
+
+Every collaborator but C<schema> is optional: without C<permission_engine>
+or C<preference_store> everyone is notified, without C<readability> nothing
+is filtered, and without C<realtime_notifier> no badge is sent.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 create_notification
+
+Takes a hash reference with C<recipient_user_id>, C<notification_type>,
+C<source_type>, C<source_id>, an optional C<payload> hash reference and
+optional C<idempotency_key>, C<notification_id> and C<rank_score> (default
+0). Returns C<< { ok => 0, skipped => 'permission_denied' } >> when the
+C<permission_engine>'s C<can_notify> refuses, and
+C<< { ok => 0, skipped => 'channel_disabled', channel => 'in_app' } >> when
+the recipient turned the channel off. Otherwise writes the rows in a
+transaction and returns C<< { ok => 1, duplicate, idempotency_key,
+notification, inbox, unread_count } >>: C<notification> and C<inbox> are
+hash references of the stored fields, the notification's C<payload>
+carrying the C<idempotency_key>. C<duplicate> is 1 when the recipient
+already had this notification; then nothing is written and no badge is
+sent, though C<unread_count> is still read.
+
+=head2 fanout_to_subscribers
+
+Takes the same hash reference as C<create_notification>, without
+C<recipient_user_id> but with C<target_type> and C<target_id>, whose
+subscribers (as the C<subscription_store>'s C<subscribers_for> lists them
+for this C<notification_type>) are the recipients, and an optional
+C<excluded_recipient_user_id> (the actor) left out. Notifies each in turn;
+one that dies does not stop the others. Returns
+C<< { ok => 1, attempted, created, duplicates, failed, skipped } >>:
+C<attempted> a count, the others array references of the per-recipient
+results, C<failed> holding C<< { recipient_user_id, error } >>.
+
+=head2 list_for_user
+
+Takes a user id and a row limit (default 25). Returns an array reference of
+the member's C<NotificationInbox> rows, newest first, with their
+notification prefetched, judged readable for the member.
+
+=head2 list_page_for_user
+
+Takes a user id and a hash reference with C<after> (the cursor string from
+the URL), C<limit> (bounded by L<GPForum::Service::Forum::PageWindow>, 25
+by default) and C<viewer> (the reader to judge readability for). Returns
+the page hash reference from L<GPForum::Service::Forum::PageWindow/page>:
+C<items>, C<has_next> and C<next_cursor>, the cursor over C<created_at>
+and C<notification_id>. A cursor that does not decode gives the first
+page.
+
+=head2 mark_read
+
+Takes a notification id and the recipient's user id, and marks that
+notification read in a transaction. Returns
+C<< { ok => 0, error => 'not_found' } >> when the id is not a uuid or the
+recipient has no such notification. Otherwise returns
+C<< { ok => 1, duplicate, notification_id, recipient_user_id, read_at,
+unread_count } >>, with C<duplicate> 1 and the earlier C<read_at> when it
+was already read. A badge with the new count is sent in both cases.
+
+=head2 mark_all_read
+
+Takes the recipient's user id and marks every unread notification the
+inbox shows read, with one timestamp, in a transaction. Notifications whose
+source the member can no longer read stay unread. Returns
+C<< { ok => 1, duplicate, marked_count, read_at, recipient_user_id,
+unread_count } >>, C<duplicate> being 1 when there was nothing to mark,
+and sends a badge.
+
+=head2 unread_count_for_user
+
+Takes a user id and an optional viewer (defaults to the user id). Returns
+the number of unread notifications the inbox would show, at most 100.
+
+=head2 unread_resultset
+
+Takes a user id and an optional viewer. Returns the unexecuted
+C<NotificationInbox> resultset that C<unread_count_for_user> counts: the
+member's unread rows with a readable source, only C<notification_id>, at
+most 100 rows. Public so tests and the query-plan evidence see the SQL that
+runs.
+
+=head2 inbox_resultset
+
+Takes a user id and a hash reference with optional C<viewer>, C<after> (an
+already decoded C<< { sort_value, id } >>) and C<limit> (default 25).
+Returns the unexecuted C<NotificationInbox> resultset of an inbox page:
+the member's notifications with a readable source, ordered by
+C<created_at> and then C<notification_id>, descending, with the
+notification prefetched. Public so the query-plan evidence EXPLAINs what
+runs.
+
+=head1 DIAGNOSTICS
+
+C<create_notification> croaks with the database error when an insert fails
+for any reason other than a unique conflict, or when a conflict on the
+inbox leaves no row to reuse; a conflict on the C<notifications> row
+itself (C<notifications_pkey>) is accepted, the row being already there.
+C<mark_read> and C<mark_all_read> croak likewise when a C<notification_reads>
+insert fails and no stored read can be reused. A failed badge NOTIFY is
+not raised: the rows are written and the next snapshot corrects the badge.
+C<fanout_to_subscribers> dies when C<subscription_store> is not set. Other
+database errors propagate; in a transaction they roll it back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<clock>, C<id_service>, C<event_contract> and C<page_window> default
+to L<GPForum::Service::Clock>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Realtime::EventEnvelope> and
+L<GPForum::Service::Forum::PageWindow>.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Digest::SHA>, L<Mojo::Base>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Keyset>,
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>, L<GPForum::Service::Forum::PageWindow>,
+L<GPForum::Service::Realtime::EventEnvelope>; passed in:
+L<GPForum::Service::Notification::RecipientPolicy> (as C<permission_engine>
+and C<readability>), L<GPForum::Service::Notification::PreferenceStore>,
+L<GPForum::Service::Notification::SubscriptionStore>,
+L<GPForum::Service::Realtime::PgNotifier>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+A preference store that dies is read as the channel being enabled.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

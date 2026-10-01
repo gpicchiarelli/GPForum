@@ -534,3 +534,141 @@ sub _role_permission_columns {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Admin::RoleCatalog - Creates roles and permissions and attaches one to the other.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $catalog = GPForum::Service::Admin::RoleCatalog->new( schema => $schema );
+    my $role = $catalog->create_role(
+        {
+            actor_user_id => $admin_id,
+            name          => 'moderator',
+            description   => 'Moderates the public categories',
+        }
+    );
+    my $permission = $catalog->create_permission(
+        {
+            actor_user_id => $admin_id,
+            name          => 'thread.hide',
+            resource_type => 'thread',
+            action        => 'hide',
+        }
+    );
+    $catalog->attach_permission(
+        {
+            actor_user_id => $admin_id,
+            role_id       => $role->{role_id},
+            permission_id => $permission->{permission_id},
+        }
+    );
+    my $roles = $catalog->list_roles( { limit => 50 } );
+
+=head1 DESCRIPTION
+
+The persistence behind the console's role catalog: C<roles>,
+C<permissions> and C<role_permissions>, each write with its audit entry
+(C<role.created>, C<permission.created>, C<role_permission.attached>).
+L<GPForum::Service::Admin::Workflow> calls it for the console's commands.
+It opens no transaction around a row and its audit entry: that is the
+caller's.
+
+Every write is idempotent. A role is found by name, a permission by
+resource type and action, an attachment by role and permission; when the
+row is already there it is returned as it is, marked C<idempotent>, and
+the audit entry is written only if none exists yet, so a command that
+stopped between its row and its audit is completed rather than repeated.
+
+A new row is inserted inside a savepoint
+(L<GPForum::Infrastructure::UniqueConflict/attempt>). When the insert
+loses a race on the natural key, the row the other request inserted is
+returned instead. When it collides on the generated id, the natural key is
+looked up again and, if there is still no row, the insert is retried once
+with a fresh id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 create_role
+
+Takes a hash reference with C<name>, an optional C<description> (empty
+when omitted) and the C<actor_user_id> to audit. Returns a hash reference
+with C<role_id>, C<name>, C<description> and C<created_at>; for a role
+that already had that name, the existing row's values with
+C<< idempotent => 1 >>.
+
+=head2 create_permission
+
+Takes a hash reference with C<name>, C<resource_type>, C<action> and the
+C<actor_user_id> to audit. Returns a hash reference with
+C<permission_id>, C<name>, C<resource_type>, C<action> and C<created_at>;
+for a resource type and action that already had a permission, the
+existing row's values with C<< idempotent => 1 >>.
+
+=head2 attach_permission
+
+Takes a hash reference with C<role_id>, C<permission_id> and the
+C<actor_user_id> to audit. Returns a hash reference with C<role_id>,
+C<permission_id> and C<created_at>; for a pair already attached, the
+existing row's values with C<< idempotent => 1 >>.
+
+=head2 list_roles
+
+Takes a hash reference (or undef) with an optional C<limit>; without one
+every role is returned. Returns an array reference of C<Role> rows ordered
+by name.
+
+=head2 list_permissions
+
+Takes a hash reference (or undef) with an optional C<limit>; without one
+every permission is returned. Returns an array reference of C<Permission>
+rows ordered by resource type, action and name.
+
+=head1 DIAGNOSTICS
+
+A database error, and any unique violation that cannot be resolved to an
+existing row, is rethrown with L<Carp/croak>: a second id collision, or a
+permission name already used for a different resource type and action.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Admin::Event>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Repeating C<create_role> with a different description returns the
+existing role unchanged; nothing is updated.
+
+The missing-audit check for an existing attachment looks for any
+C<role_permission.attached> entry on the role, not on the pair, so an
+attachment whose audit was lost is not completed when another attachment
+of the same role was audited.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -120,3 +120,112 @@ sub _deny ($reason) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Realtime::SubscriptionPolicy - Who may subscribe to a thread, feed, admin or moderation channel.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $policy = GPForum::Service::Realtime::SubscriptionPolicy->new(
+        permission_gate  => $permission_gate,
+        readability      => $readability,
+        schema           => $schema,
+        suspension_store => $suspension_store,
+    );
+    my $decision = $policy->permits( $actor, 'realtime.subscribe',
+        { type => 'thread', id => $thread_id }, {} );
+    # { ok => 1, reason => 'thread_readable' }
+
+=head1 DESCRIPTION
+
+The rule L<GPForum::Service::Realtime::ChannelAuthorizer> asks before a
+socket joins a channel (notification channels it decides itself). The
+account comes first: the actor must be signed in, allowed to participate by
+the suspension store, and an C<active> user. Then the channel type decides:
+
+=over 4
+
+=item thread
+
+Open to whoever can read the thread -- its space, category and thread, live
+and not hidden -- as every other surface judges it (ADR 0102), through
+L<GPForum::Service::Forum::Readability>.
+
+=item admin, moderation
+
+Need the C<admin.view> or C<moderation.review> permission from the
+permission gate.
+
+=item feed
+
+Only the actor's own feed: the id must be the actor's user id or
+C<personal>.
+
+=back
+
+It fails closed. A suspension store that errors or gives no answer denies,
+since ignoring that failure once let a suspended member subscribe whenever
+the store was unreachable; a missing readability service or permission gate
+denies too.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 permits
+
+Takes the actor (a hash reference with C<user_id>, or a bare user id), the
+action, the resource (C<< { type => ..., id => ... } >>) and a context that
+is not read. Named C<permits> rather than C<can>, which would override
+C<UNIVERSAL::can>.
+
+Returns C<< { ok => 1, reason => $reason } >> with C<thread_readable>,
+C<permission_allowed> or C<own_feed>, or
+C<< { ok => 0, reason => $reason } >> with C<forbidden> (an action other
+than C<realtime.subscribe>, a suspended or inactive account, or a refused
+permission or feed),
+C<authentication_required> (no user id, no such user, or a user lookup that
+died),
+C<invisible_resource> (a thread the actor cannot read) or C<unknown_channel>.
+
+=head1 DIAGNOSTICS
+
+None. Errors from the suspension store and the user lookup are caught and
+deny.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Forum::Readability>,
+L<GPForum::Service::Admin::PermissionGate>,
+L<GPForum::Service::Moderation::SuspensionStore>, all passed in by
+L<GPForum::Bootstrap::Core>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Without a C<suspension_store> suspensions are not checked, and without a
+C<schema> the account status is not. Errors from the readability service and
+the permission gate are not caught.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

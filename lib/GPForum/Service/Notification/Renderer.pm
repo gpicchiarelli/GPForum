@@ -134,3 +134,99 @@ sub _value ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Notification::Renderer - Localized text for notifications and mentions.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $renderer = GPForum::Service::Notification::Renderer->new(
+        i18n => $i18n,
+    );
+    my $item = $renderer->render_inbox_item( 'it', $notification );
+    my $mail = $renderer->render_email( 'en', $notification );
+    my $card = $renderer->render_mention( 'it', $mention );
+
+=head1 DESCRIPTION
+
+Turns a stored notification or mention into the strings the inbox and the
+e-mail show, in the reader's locale. Every string comes from the message
+catalog through L<GPForum::Service::I18N/translate>, with the
+notification's ids as placeholder variables; nothing here is English
+text.
+
+The catalog key is built from the notification type: lower-cased, every
+run of characters other than C<a-z> and C<0-9> turned into one underscore,
+and the leading and trailing underscores dropped. A type that is not
+C<follow>, C<mention>, C<notification> or C<reply> is rendered with the
+generic C<notification> messages, so an unknown type never reaches the
+catalog as a key of its own.
+
+The C<i18n> attribute defaults to a new L<GPForum::Service::I18N>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 render_inbox_item
+
+Takes a locale and a notification hash reference (C<notification_type>,
+C<source_type>, C<source_id> and a C<payload> with C<actor_id>,
+C<mentioned_username>, C<post_id> and C<thread_id>). Returns a hash
+reference with C<type_key> (the normalized type), C<type_label>,
+C<title>, C<summary>, C<action_label> and C<email> (as C<render_email>).
+
+=head2 render_email
+
+Takes a locale and a notification hash reference, as for
+C<render_inbox_item>. Returns a hash reference with C<subject> and
+C<text_body>, from the C<notifications.email_subject.*> and
+C<notifications.email_body.*> messages.
+
+=head2 render_mention
+
+Takes a locale and a mention hash reference (C<source_type>, C<source_id>
+and the actor's C<actor_profile_label>, C<actor_display_name>,
+C<actor_username> and C<actor_id>). Returns a hash reference with
+C<title>, C<by_label>, C<summary>, C<actor_label>, C<action_label> and an
+C<email> hash reference of C<subject> and C<text_body>. The actor is
+named by the first of profile label, display name and username that is
+not empty, and by the actor id when all three are.
+
+=head1 DIAGNOSTICS
+
+None. A missing message renders as its key, as
+L<GPForum::Service::I18N> does for any lookup; an absent value renders as
+an empty string.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<GPForum::Service::I18N>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

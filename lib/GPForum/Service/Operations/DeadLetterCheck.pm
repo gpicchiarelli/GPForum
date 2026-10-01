@@ -507,8 +507,180 @@ Version 0.001.
 
 Automates the staging check in F<docs/ops/dead-letters.md> against an
 in-memory dispatcher stack (C<simulate>) or prints the plan (C<dry_run>).
-Emits EvidenceMeta JSON. Does not claim private-beta readiness; C<--live>
-against staging PostgreSQL remains a residual.
+Emits EvidenceMeta JSON. Does not claim private-beta readiness. This module
+has no live mode: a C<--live> run against staging PostgreSQL remains a
+residual gap.
+
+The other packages in this file are the in-memory stand-ins of the
+C<simulate> stack, built only by L</run>: C<ProbeFailure>,
+C<ProbeTransport>, C<ProbeRow>, C<ProbeSearch>, C<ProbeOutbox>,
+C<ProbeLetters>, C<ProbeSchema>, C<ProbeClock> and C<ProbeId>, all under
+C<GPForum::Service::Operations::DeadLetterCheck::>. The real
+L<GPForum::Service::Outbox::Dispatcher> and its collaborators call most of
+their methods as the schema, row, clock, id and transport interfaces; they
+are listed after the module's own methods.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes C<< { mode => $mode } >>: C<simulate> (the default) or C<dry_run>.
+C<dry_run> returns C<pass> with the plan of four steps. C<simulate> builds
+the stack -- from C<dispatcher_factory> when set, otherwise one pending
+outbox row whose delivery fails permanently, behind a dispatcher allowed five
+attempts -- and runs the steps:
+
+=over 4
+
+=item force_permanent_failure
+
+The first C<dispatch_pending(1)> dead-letters the row and reports no plain
+failure.
+
+=item assert_dead_letter_and_cancelled
+
+There is exactly one dead letter, of failure type C<permanent>, and the
+outbox row is C<cancelled>.
+
+=item redispatch_selected_zero
+
+A second dispatch selects nothing.
+
+=item fresh_row_survives_retention_cutoff
+
+Purging with a cutoff in the past deletes nothing: the fresh dead letter is
+kept.
+
+=back
+
+The status is C<pass> when every step passes, otherwise C<fail>; an
+exception during the run gives C<fail> with its message in C<error>. The
+result goes through C<evidence_finalize> from
+L<GPForum::Service::Operations::EvidenceMeta>, which marks it redacted, sets
+C<private_beta_claimed> to 0 and de-duplicates C<residual_gaps>.
+
+C<dispatcher_factory>, when given, is called with the options and must return
+C<< { dispatcher, dead_letters, message } >>: a dispatcher with
+C<dispatch_pending>, a dead-letter store with C<created> and
+C<purge_older_than>, and the outbox row with C<get_column>.
+
+=head2 format_evidence
+
+Takes the evidence and a format, finalizes the evidence again, and returns
+L</human_text> for C<human> and one line of JSON for anything else (C<json>
+is the default).
+
+=head2 human_text
+
+Returns the evidence as text: the status, the mode, a line per step, the
+error when there is one, and a line per residual gap.
+
+=head2 exit_status
+
+Returns 0 when the status is C<pass>, otherwise 1.
+
+=head2 new (ProbeFailure)
+
+C<< ProbeFailure->new( $message, $failure_type ) >>: an exception object
+that stringifies to its message (C<probe failure> when none is given).
+
+=head2 throw (ProbeFailure)
+
+C<< ProbeFailure->throw( $message, $failure_type ) >>: dies with a new
+probe failure.
+
+=head2 failure_type (ProbeFailure)
+
+Returns the declared failure type. L<GPForum::Service::Outbox::FailureType>
+uses a declared type before it falls back to matching the message.
+
+=head2 dispatch (ProbeTransport)
+
+Takes an outbox row. For a C<outbox_id> listed in C<fail_ids>, throws a probe
+failure of the type in C<fail_types>; otherwise returns nothing.
+
+=head2 update (ProbeRow)
+
+Records the changes in C<updates>, applies them to C<data>, and returns the
+row.
+
+=head2 get_column (ProbeRow)
+
+Returns the column's value from C<data>.
+
+=head2 all (ProbeSearch)
+
+Returns the matched rows as a list.
+
+=head2 search_rs (ProbeOutbox)
+
+Takes a condition and attributes and returns a C<ProbeSearch> of the rows
+that match, at most C<< $attrs->{rows} >> of them. It understands only what
+the dispatcher's claim query uses: equality, C<-in>, C<< <= >> (as a string
+comparison) and an array reference of alternatives. C<order_by> is ignored.
+
+=head2 create (ProbeLetters)
+
+Stores a dead-letter row under its C<source_table> and C<source_id>,
+appends it to C<created>, and returns it.
+
+=head2 find (ProbeLetters)
+
+Returns the row stored for a C<source_table> and C<source_id>, or C<undef>.
+
+=head2 purge_older_than (ProbeLetters)
+
+Removes the rows whose C<last_failed_at> is set and sorts before the cutoff,
+and returns how many it removed.
+
+=head2 resultset (ProbeSchema)
+
+Returns the probe outbox for C<OutboxMessage>, the probe letters for
+C<DeadLetter>, and C<undef> for any other name.
+
+=head2 txn_do (ProbeSchema)
+
+Runs the code and returns its result; there is no transaction.
+
+=head2 now_iso8601 (ProbeClock)
+
+Returns the fixed time C<2026-09-21T12:00:00Z>.
+
+=head2 epoch_plus_iso8601 (ProbeClock)
+
+Returns C<2026-09-21T12:01:00Z> for any non-zero number of seconds, and the
+fixed time otherwise.
+
+=head2 uuid (ProbeId)
+
+Returns C<dead-letter-id-1>, C<dead-letter-id-2>, and so on.
+
+=head1 DIAGNOSTICS
+
+L</run> croaks C<Unsupported dead-letter-check mode: $mode> for any mode
+other than C<simulate> and C<dry_run>. Any other error during a run is
+reported as C<fail> evidence with an C<error>, not thrown.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. Simulate mode runs in memory and touches no database.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Outbox::Dispatcher>,
+L<GPForum::Service::Operations::EvidenceMeta>,
+L<JSON::MaybeXS>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Simulate mode runs the real dispatcher against stand-ins, not PostgreSQL:
+the dispatcher takes its portable claim path rather than the PostgreSQL one,
+and the retention step exercises the probe's own C<purge_older_than>. There
+is no live mode.
 
 =head1 AUTHOR
 

@@ -301,3 +301,101 @@ sub _has_text ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Admin::Bootstrapper - Grants the first administrator the owner role.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $bootstrapper =
+      GPForum::Service::Admin::Bootstrapper->new( schema => $schema );
+    my $result = $bootstrapper->bootstrap( { user_id => $user_id } );
+    printf "created %d binding(s)\n", $result->{counts}{bindings_created};
+
+=head1 DESCRIPTION
+
+A new install has no administrator, and the console refuses everyone until
+someone holds a role with its permissions. This is what
+L<GPForum::Command::AdminBootstrap> runs to break that circle: in one
+transaction it makes sure the owner role exists, that it carries every
+permission in L</default_permissions>, and that the given user holds it
+globally (no resource, no space, not revoked).
+
+Each step finds what is already there before it creates anything, so running
+it again on a bootstrapped install changes nothing and reports zero
+creations. The role and permissions are created through
+L<GPForum::Service::Admin::RoleCatalog> and the binding through
+L<GPForum::Service::Admin::RoleBindingStore>, so they are audited as any
+console change is.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 bootstrap
+
+Takes a hash reference: C<user_id> (required), C<actor_user_id> (recorded
+as the actor; defaults to C<user_id>), C<role_name> (defaults to
+C<gpforum_owner>) and C<role_description> (used only when the role is
+created; defaults to C<Full GPForum administrative governance>).
+
+Runs inside C<< $schema->txn_do >> and returns a hash reference with C<role>
+(C<role_id>, C<name>, C<description>, C<created_at>), C<permissions> (one
+entry per default permission: the C<permission> row, and C<created> and
+C<attached> flags saying whether this run made it and linked it to the
+role), C<binding> (the global binding's columns) and C<counts>
+(C<roles_created>, C<permissions_created>, C<role_permissions_attached>,
+C<bindings_created>).
+
+=head2 default_permissions
+
+Returns an array reference of the permissions the owner role is given, each
+a hash reference with C<name> (C<resource_type.action>), C<resource_type> and
+C<action>: C<admin_console> view and manage; C<category> read; C<report>
+view_queue, assign and resolve; C<post> and C<thread> moderate;
+C<moderation_action> view and reverse; C<suspension> view; C<user> suspend;
+C<privacy_rights> view and manage.
+
+=head1 DIAGNOSTICS
+
+Croaks C<admin bootstrap requires user_id> when C<user_id> is missing or
+empty. Database errors propagate, and the transaction rolls back everything
+the run had created.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. The caller supplies the schema.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Admin::RoleCatalog>,
+L<GPForum::Service::Admin::RoleBindingStore>,
+L<GPForum::Service::Clock>,
+L<GPForum::Infrastructure::Id>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The role is found by name alone: an existing role of that name is used as it
+is, and its description is not updated. Permissions are only ever added, so
+one removed from L</default_permissions> stays attached on an install that
+already has it. The user id is not checked against the users table here.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

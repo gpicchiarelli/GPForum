@@ -678,12 +678,129 @@ GPForum::Service::Operations::StagingHostVerify - Non-destructive staging host v
 
 Version 0.001.
 
+=head1 SYNOPSIS
+
+    my $verify   = GPForum::Service::Operations::StagingHostVerify->new;
+    my $evidence = $verify->run(
+        {
+            env_file   => '/etc/gpforum/gpforum.env',
+            systemd    => 1,
+            unit_dir   => '/etc/systemd/system',
+            nginx_conf => '/etc/nginx/sites-enabled/gpforum',
+            base_url   => 'https://staging.example',
+        }
+    );
+    print $verify->format_evidence( $evidence, 'human' );
+    exit $verify->exit_status($evidence);
+
 =head1 DESCRIPTION
 
 Probes repository prerequisites and, when asked, staging env-file key presence
 (values redacted), systemd unit activity, installed unit-file and nginx
 site contracts, HTTP health endpoints, and https TLS scheme observe. Never
 installs units, reloads nginx, or starts Hypnotoad.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes a hash reference of options and returns the evidence hash reference:
+C<check> (C<staging_host_verify>), C<status>, one entry per phase, and
+C<residual_gaps>, finalized by C<evidence_finalize> from
+L<GPForum::Service::Operations::EvidenceMeta>. Each phase has a C<status> of
+C<pass>, C<fail> or C<skipped>; all but the first are skipped unless their
+option is given.
+
+=over 4
+
+=item prerequisites
+
+Always run: the deploy units, nginx site, launcher scripts and ops documents
+must exist under C<repo_root>.
+
+=item env_file
+
+C<env_file>: which of C<GPFORUM_SESSION_SECRET>, C<GPFORUM_DATABASE_DSN>,
+C<GPFORUM_DATABASE_USER> and C<GPFORUM_METRICS_TOKEN> the file sets to a
+non-empty value. Only the key names are reported.
+
+=item systemd
+
+C<systemd> (true): C<systemctl is-active --quiet> for C<gpforum.service>,
+C<gpforum-outbox.service> and C<gpforum-scheduled-jobs.timer>; skipped when
+C<systemctl> is not on C<PATH>.
+
+=item unit_files
+
+C<unit_dir>: the installed unit files compared with the in-repo contracts of
+L<GPForum::Service::Operations::DeployContract>.
+
+=item nginx_conf
+
+C<nginx_conf>: passes when the installed site matches either nginx template
+contract, TCP or Unix socket.
+
+=item health
+
+C<base_url>: C<GET /health/live> and C<GET /health/ready>, and C</metrics>
+with the C<X-GPForum-Metrics-Token> header when C<metrics_token> is given. A
+status from 200 to 399 passes. C<timeout> sets the connect and request
+timeouts (5 seconds by default).
+
+=item tls
+
+C<base_url>: passes and records host and port for an C<https> URL, is
+skipped for C<http>, and fails for anything else.
+
+=back
+
+The run is C<fail> when any phase that ran failed, otherwise C<pass>. A
+phase that dies stops the run, which is then C<fail> with the message in
+C<error>.
+
+=head2 format_evidence
+
+Takes the evidence and a format. C<json>, the default, returns one line of
+JSON; anything else returns text: the status, a line per phase, and the
+error when there is one.
+
+=head2 exit_status
+
+Returns 0 when the status is C<pass> or C<degraded>, otherwise 1.
+
+=head1 DIAGNOSTICS
+
+None thrown. A phase that dies -- C<repository root not found> when no
+directory above the module holds a F<cpanfile>, a file that cannot be read,
+or a failure to close a command's handles -- becomes C<fail> evidence with
+an C<error>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Searches C<PATH> for C<systemctl>. The C<repo_root> and C<user_agent>
+attributes default to the checkout this module sits in and a
+L<Mojo::UserAgent> that follows no redirects.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Operations::DeployContract>,
+L<GPForum::Service::Operations::EvidenceMeta>,
+L<Mojo::UserAgent>,
+L<Mojo::File>,
+L<IPC::Open3>,
+L<JSON::MaybeXS>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The TLS phase records the URL's scheme only: it does not inspect the
+certificate, pin CAs, check HSTS or run ACME. Redirects are not followed and
+count as healthy. The env-file reader does not recognize lines written as
+C<export KEY=value>. Live systemd install, nginx reload, Hypnotoad start and
+TLS termination remain operator steps.
 
 =head1 AUTHOR
 

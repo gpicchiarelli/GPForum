@@ -117,3 +117,101 @@ sub _body_text ($body) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Search::DocumentBuilder - The search document of a thread or a post.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $builder  = GPForum::Service::Search::DocumentBuilder->new;
+    my $document = $builder->build_post($post_row);
+    # undef: the post, or its thread, is not searchable; remove its document
+
+    my $config = GPForum::Service::Search::DocumentBuilder->search_config;
+
+=head1 DESCRIPTION
+
+Turns a thread or post row into the fields of its C<search_documents> row,
+for L<GPForum::Service::Search::Indexer>. It reads rows and returns a hash;
+it writes nothing.
+
+Only what a reader could find is built. A thread is searchable while it is
+not deleted and its moderation state is C<visible> or C<locked>; a post
+while it is not deleted, its state is C<visible> and its thread is
+searchable. For anything else the builder returns undef, and the indexer
+removes the document.
+
+A thread's document has its title as both title and body. A post's has its
+thread's title and its current body: the sanitized rendering when there is
+one, else the source text. Both carry the thread's category and space
+(the thread's own C<space_id> column when it has one, else its
+category's), the row's author and visibility, its visibility and
+permission versions, its version and creation time, and a
+C<permission_scope> that is the row's visibility or C<public>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 search_config
+
+A class method. Returns the text-search configuration every document is
+built with, C<simple>. L<GPForum::Service::Search::Searcher> binds the same
+value into its query, so the query and the stored vectors cannot disagree
+about how text was tokenised, and as a bind parameter rather than a column
+of the row it leaves the planner free to use the GIN index on
+C<search_vector>.
+
+=head2 build_thread
+
+Takes a C<Thread> row (or undef). Returns undef when the thread is not
+searchable; otherwise a hash reference with C<entity_type> C<thread>,
+C<entity_id>, C<category_id>, C<author_user_id>, C<space_id>,
+C<visibility>, C<permission_scope>, C<visibility_version>,
+C<permission_version>, C<language>, C<title>, C<body>, C<source_version>
+and C<source_created_at>.
+
+=head2 build_post
+
+Takes a C<Post> row (or undef). Returns undef when the post or its thread
+is not searchable; otherwise a hash reference with the same fields as
+C<build_thread>, C<entity_type> C<post>, the post's own id, author,
+visibility, versions and creation time, and its thread's category, space
+and title.
+
+=head1 DIAGNOSTICS
+
+None of its own. Reading a relation (the thread, the body, the category)
+dies when the database does.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

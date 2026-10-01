@@ -165,3 +165,125 @@ sub _invalid ($reason) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Realtime::EventEnvelope - Builds, checks and encodes realtime event frames.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $contract = GPForum::Service::Realtime::EventEnvelope->new;
+    my $event = $contract->build(
+        type           => 'thread.update',
+        aggregate_type => 'thread',
+        aggregate_id   => $thread_id,
+        payload        => { thread_id => $thread_id },
+    );
+    my $encoded = $contract->serialize($event);
+    die $encoded->{reason} if !$encoded->{ok};
+
+    my $decoded = $contract->deserialize( $encoded->{json} );
+    my $frame   = $decoded->{ok} ? $decoded->{event} : undef;
+
+=head1 DESCRIPTION
+
+The one shape of an event sent to browsers over the realtime channel,
+used by whoever writes a frame (L<GPForum::Service::Realtime::PgNotifier>,
+L<GPForum::Service::Notification::Dispatcher>,
+L<GPForum::Service::Realtime::OutboxEventMapper>) and by whoever reads one
+(L<GPForum::Service::Realtime::PgListener>,
+L<GPForum::Service::Realtime::Hub>).
+
+A frame is a hash reference with C<event_id>, C<type>, C<schema_version>,
+C<occurred_at>, C<correlation_id>, C<causation_id>, C<aggregate_type>,
+C<aggregate_id>, C<actor_id>, C<payload> and C<metadata>. A valid frame
+has a non-empty C<event_id>, C<type>, C<schema_version>, C<occurred_at>
+and C<payload>; a C<type> of two or more dot-separated lower-case words
+(letters, digits and underscores, starting with a letter); a whole
+C<schema_version> of at least 1; a hash reference C<payload>; a hash
+reference C<metadata> when it is present; and a JSON encoding no longer
+than C<max_payload_bytes> (default 8192).
+
+Validation does not die: it returns C<< { ok => 0, reason => ... } >>,
+the reason one of C<malformed_payload>, C<missing_event_id>,
+C<missing_type>, C<missing_schema_version>, C<missing_occurred_at>,
+C<missing_payload>, C<invalid_type>, C<invalid_schema_version>,
+C<invalid_payload>, C<invalid_metadata> or C<payload_too_large>.
+
+The attributes are C<clock> and C<id_service>, which supply the defaults
+of C<build>, and C<max_payload_bytes>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 build
+
+Takes a hash of the frame's fields. Returns a new frame hash reference:
+C<event_id> defaults to a fresh uuid, C<occurred_at> to the clock's time
+and C<schema_version> to 1 (also when the one given is not a whole number
+of at least 1); C<payload> and C<metadata> are shallow copies, or empty
+hashes when not hash references. It does not validate the frame.
+
+=head2 notification_badge
+
+Takes a user id and an unread count. Returns the C<notification.badge>
+frame for that user: aggregate C<user>, C<< payload => { unread_count } >>
+and C<< metadata => { channel_type => 'notifications' } >>. The dispatcher
+and the hub both send this frame, so a badge has one shape whoever sends
+it.
+
+=head2 validate
+
+Takes a frame. Returns C<< { ok => 1, bytes => $size } >>, the size of
+its JSON encoding, when the frame is valid; otherwise
+C<< { ok => 0, reason => $reason } >>.
+
+=head2 serialize
+
+Takes a frame. Returns C<< { ok => 1, bytes, json } >> with the frame's
+JSON encoding when it is valid, or the failed validation.
+
+=head2 deserialize
+
+Takes a JSON string. Returns C<< { ok => 1, event, bytes } >> when it
+decodes to a valid frame; otherwise C<< { ok => 0, reason } >>, with
+C<payload_too_large> for a string longer than C<max_payload_bytes>
+(checked before decoding) and C<malformed_payload> for one that does not
+decode to a hash reference.
+
+=head1 DIAGNOSTICS
+
+None: every rejection is a C<reason> in the returned hash.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<Mojo::JSON>, L<GPForum::Service::Clock>,
+L<GPForum::Infrastructure::Id>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

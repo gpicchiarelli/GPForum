@@ -270,6 +270,78 @@ through C<Identity::Mailer> under C<Email::Sender::Transport::Test>. Emits
 EvidenceMeta JSON and scrubs probe tokens. Does not claim private-beta
 readiness; staging SMTP C<--send> remains a residual.
 
+The simulation sends each of the three messages to one address, then
+checks that the transport holds exactly three deliveries and that each
+body carries its link: C</password/reset/>, C</email/confirm/> and
+C</email/verify/>, each followed by that kind's probe token. The run
+passes only when every step does.
+
+The attributes are C<mailer> (used as it is, with its own transport),
+C<transport_factory> (a code reference returning the transport, when
+there is no mailer; an L<Email::Sender::Transport::Test> otherwise) and
+C<config> (the from address and public base URL of the mailer it builds;
+when unset, C<noreply@localhost> and C<http://127.0.0.1:3000>).
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes a hash reference (or undef) with C<mode> (C<simulate>, the default,
+or C<dry_run>) and C<to> (default C<mail-lifecycle@localhost>). In
+C<dry_run> mode nothing is sent, and the evidence is a passing plan that
+lists the three kinds. In C<simulate> mode it returns the evidence with
+C<check> (C<mail_lifecycle_check>), C<status>, C<mode>, C<to>,
+C<delivery_count> and C<steps>: one per kind, with its error when the
+mailer died, then C<delivery_count> (expected 3) and C<identity_links>
+(one check per kind). Either way the evidence is finalized with
+L<GPForum::Service::Operations::EvidenceMeta>, the probe tokens scrubbed,
+and carries C<residual_gaps> for what a simulation cannot prove: staging
+SMTP or C<sendmail> delivery, and the seeded database identity flows.
+
+=head2 format_evidence
+
+Takes an evidence hash reference (or undef) and a format (C<human>, or
+C<json> by default). Finalizes the evidence again, then returns
+C<human_text> of it, or its JSON encoding followed by a newline.
+
+=head2 human_text
+
+Takes an evidence hash reference. Returns its plain-text form: the status
+and mode, a C<step name=status> line per step, the error if any, and a
+C<residual:> line per residual gap.
+
+=head2 exit_status
+
+Takes an evidence hash reference. Returns 0 when its status is C<pass>,
+else 1.
+
+=head1 DIAGNOSTICS
+
+C<run> croaks C<Unsupported mail-lifecycle-check mode: ...> for a mode
+other than C<simulate> or C<dry_run>. Anything that dies during the run
+itself is returned as failing evidence with the error, not rethrown.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. It does not read L<GPForum::Config> from the environment: without a
+C<config> it builds a C<test> configuration of its own.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<JSON::MaybeXS>, L<Mojo::Base>,
+L<Email::Sender::Transport::Test>, L<GPForum::Config>,
+L<GPForum::Service::Identity::Mailer>,
+L<GPForum::Service::Operations::EvidenceMeta>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The delivery and link checks read C<deliveries> from the transport, so a
+transport without that method fails the run even when it sent the mail.
+
 =head1 AUTHOR
 
 Giacomo Picchiarelli.

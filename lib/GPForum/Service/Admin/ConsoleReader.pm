@@ -255,3 +255,156 @@ sub _has_text ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Admin::ConsoleReader - Read-only queries behind the administration console.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader = GPForum::Service::Admin::ConsoleReader->new(
+        metrics_snapshot => $metrics_snapshot,
+        readiness        => $readiness,
+        schema           => $schema,
+    );
+    my $summary = $reader->dashboard_summary( { limit => 10 } );
+    my $users   = $reader->list_users( { status => 'active', limit => 50 } );
+    my $jobs    = $reader->async_jobs( { limit => 25 } );
+    my $email   = $reader->email_of($admin_user_id);
+
+=head1 DESCRIPTION
+
+Everything the console's dashboard and lists read: members, open reports,
+outbox messages, dead letters and the health of the running system. It
+writes nothing.
+
+Every list is bounded by C<limit> (default 25) and selects only the
+columns it returns, each row as a plain hash reference. The queue depth and
+the dead-letter total are counted, not measured from those lists: the
+dashboard used to count a list already cut to its limit, so both totals
+stopped at the limit whatever the real number was.
+
+A dead letter carries its replay status from the same statement (see
+L<GPForum::Service::Outbox::DeadLetterReplay/replay_status_sql>), so the
+page does not spend a query per row on it.
+
+The health block never fails the page: readiness, metrics and query budget
+each fall back to a placeholder when their collector dies or is not set.
+The attributes are C<schema>, which every query needs, C<readiness> and
+C<metrics_snapshot>, both optional, and C<query_budget>, which defaults to
+a L<GPForum::Service::Operations::QueryBudget> over the schema.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 dashboard_summary
+
+Takes a hash reference (or undef) with an optional C<limit>. Returns a hash
+reference with C<async> (as C<async_jobs>), C<health> (as
+C<operations_status>), C<< moderation => { reports => [...] } >> (the open
+reports) and C<users> (as C<list_users>), each list bounded by the limit.
+
+=head2 list_users
+
+Takes a hash reference (or undef) with optional C<status> and C<limit>.
+Returns an array reference of the members not deleted, newest first and
+then by username, each a hash reference of C<id>, C<username>,
+C<display_name>, C<email_normalized>, C<status>, C<trust_level>,
+C<email_verified_at>, C<created_at>, C<updated_at> and C<deleted_at>.
+
+=head2 email_of
+
+Takes a user id. Returns that member's normalized address, or undef when
+there is no such member or the account is deleted. It is the only address
+a console action may mail on an administrator's behalf: their own, for
+L<GPForum::Service::Admin::Diagnostics>' test message.
+
+=head2 list_reports
+
+Takes a hash reference (or undef) with optional C<status> (default
+C<open>) and C<limit>. Returns an array reference of the reports in that
+status, oldest first, each a hash reference of C<report_id>,
+C<reporter_user_id>, C<target_type>, C<target_id>, C<reason>, C<details>,
+C<status>, C<assigned_moderator_user_id>, C<created_at>, C<resolved_at>
+and C<resolution>.
+
+=head2 async_jobs
+
+Takes a hash reference (or undef) of the options C<list_outbox> and
+C<list_dead_letters> take. Returns a hash reference with C<dead_letters>
+and C<outbox_messages> (the two lists) and C<dead_letter_total> and
+C<outbox_message_total> (the full counts).
+
+=head2 count_dead_letters
+
+Returns the number of rows in C<dead_letters>, or 0 when the count fails.
+
+=head2 count_outbox
+
+Returns the number of rows in C<outbox_messages>, whatever their status, or
+0 when the count fails.
+
+=head2 list_outbox
+
+Takes a hash reference (or undef) with optional C<status> and C<limit>.
+Returns an array reference of outbox messages, newest first, each a hash
+reference of its queue, job, lock, attempt and error columns.
+
+=head2 list_dead_letters
+
+Takes a hash reference (or undef) with an optional C<limit>. Returns an
+array reference of dead letters, the most recently failed first, each a
+hash reference of its source, error and retry columns plus
+C<replay_status>: the replay message's status while it is kept,
+C<replayed> once only the audit log remembers it, undef when it was never
+replayed.
+
+=head2 operations_status
+
+Returns a hash reference with C<readiness> (the readiness check, or
+C<< { status => 'unknown', checks => [] } >>), C<metrics> (the metrics
+snapshot, or an empty hash), C<query_budgets> (the query budget snapshot,
+or C<< { endpoints => {} } >>), C<query_budget_drift> (the drift report, or
+C<< { status => 'unknown' } >>) and C<benchmark>, which names the
+benchmark commands and reports C<manual>: no benchmark baseline is
+persisted.
+
+=head1 DIAGNOSTICS
+
+The lists and C<email_of> die when the database does. The counts return 0
+instead, and C<operations_status> returns its placeholders, so a failing
+collector does not take the dashboard with it.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Mojo::Base>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Service::Outbox::DeadLetterReplay>,
+L<GPForum::Service::Operations::QueryBudget>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+A count that fails reads as 0, the same as an empty queue.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

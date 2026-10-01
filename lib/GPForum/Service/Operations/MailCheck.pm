@@ -476,6 +476,93 @@ C<test>, C<smtp>, and C<sendmail> transports. Evidence is finalized with
 C<secrets_redacted>, explicit C<residual_gaps>, and scrubbed error text.
 Does not claim private-beta readiness.
 
+In C<dry_run> mode (the default) nothing reaches a real mailbox: the
+C<test> transport takes the verification probe in memory and reports how
+many messages it holds; for C<smtp> a TCP connection to the configured
+host and port is opened, with a five-second timeout, and closed without
+speaking SMTP; for C<sendmail> an executable C<sendmail> is looked for in
+C</usr/sbin>, C</usr/lib>, C</usr/bin> and then on C<PATH>. In C<send>
+mode an identity verification message carrying a probe token is mailed
+through the configured transport to the C<to> address, which is required.
+
+Before any probe the settings themselves are checked: C<mail_transport>
+must be C<test>, C<smtp> or C<sendmail>, C<mail_from> and
+C<public_base_url> must be set, and C<smtp> needs C<smtp_host>.
+
+The attributes are C<config> (a L<GPForum::Config>; read from the
+environment when unset), C<mailer> (built from the configuration when
+unset), and C<smtp_connector> and C<sendmail_resolver>, code references
+that replace the TCP connection and the C<sendmail> lookup.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes a hash reference (or undef) with C<mode> (C<dry_run>, the default,
+or C<send>) and C<to> (the recipient; required with C<send>, and
+C<mail-check@localhost> for a C<dry_run> on the C<test> transport when
+omitted). Returns the finalized evidence hash reference: C<check>
+(C<mail_delivery>), C<status> (C<pass> or C<fail>), C<mode>, C<config>
+(the transport, from address, public base URL, environment, and SMTP host,
+port, SSL flag and whether a username is set; never the password),
+C<probe> (what was tried and how it went), C<error> when it failed, and the
+L<GPForum::Service::Operations::EvidenceMeta> fields C<secrets_redacted>,
+C<private_beta_claimed> (0) and C<residual_gaps>. The residual gaps say
+what this run does not prove: a dry run still needs a controlled send, the
+C<test> transport proves nothing about staging mail, and one probe is not
+the identity-mail lifecycle.
+
+=head2 format_evidence
+
+Takes an evidence hash reference (or undef) and a format (C<human>, or
+C<json> by default). Finalizes the evidence again, then returns
+C<human_text> of it, or its JSON encoding followed by a newline.
+
+=head2 human_text
+
+Takes an evidence hash reference. Returns its plain-text form, one
+C<key=value> line each for the status, mode, transport, from address and
+public base URL, the SMTP settings when the transport is C<smtp>, and the
+probe's action, status, detail and error.
+
+=head2 exit_status
+
+Takes an evidence hash reference. Returns 0 when its status is C<pass>,
+else 1.
+
+=head1 DIAGNOSTICS
+
+C<run> reports failures in the evidence rather than dying: an unknown
+mode (C<mode must be dry_run or send>), a configuration that cannot be
+loaded or is invalid, a failed connection, a missing C<sendmail>, or a
+send the transport refused. The SMTP password and the probe token are
+replaced by C<[redacted]> wherever they appear, and so is any field whose
+name mentions a password, secret, token, authorization or credential.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Without a C<config>, the settings come from
+L<GPForum::Config/from_environment>: C<GPFORUM_MAIL_TRANSPORT>,
+C<GPFORUM_MAIL_FROM>, C<GPFORUM_PUBLIC_BASE_URL>, C<GPFORUM_SMTP_HOST>,
+C<GPFORUM_SMTP_PORT>, C<GPFORUM_SMTP_SSL>, C<GPFORUM_SMTP_USERNAME> and
+C<GPFORUM_SMTP_PASSWORD>. The C<sendmail> lookup reads C<PATH>.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<JSON::MaybeXS>, L<Mojo::Base>, L<IO::Socket::IP> (for
+the SMTP connection), L<GPForum::Config>,
+L<GPForum::Service::Identity::Mailer>,
+L<GPForum::Service::Operations::EvidenceMeta>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The C<smtp> dry run proves only that the port accepts a TCP connection,
+not that the server would accept the message or the credentials.
+
 =head1 AUTHOR
 
 Giacomo Picchiarelli.

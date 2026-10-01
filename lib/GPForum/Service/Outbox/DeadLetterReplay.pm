@@ -178,6 +178,8 @@ Version 0.001.
 
 =head1 SYNOPSIS
 
+    my $replay = GPForum::Service::Outbox::DeadLetterReplay->new(
+        schema => $schema );
     my $outcome = $replay->replay(
         {
             actor_user_id  => $admin_id,
@@ -199,13 +201,34 @@ audit log records the replay with its actor.
 
 =head2 replay
 
-Returns C<{ status =E<gt> 'replayed', replayed =E<gt> {...} }>, or a refusal:
-C<not_found> when there is no such dead letter, C<conflict> when it was
-already replayed, does not name its event, or is not an outbox dead letter.
+Takes a hash reference with C<dead_letter_id>, C<actor_user_id> (recorded
+as the audit row's actor) and an optional C<via> (C<web> when omitted),
+recorded in the audit metadata. In one transaction, holding the dead
+letter's row lock, it inserts a C<pending> outbox message due at once,
+whose payload is the dead letter's envelope and whose idempotency key is
+C<replay_key>, and writes the C<outbox.dead_letter_replayed> audit row.
+Returns C<{ status =E<gt> 'replayed', replayed =E<gt> {...} }>, the inner
+hash holding C<dead_letter_id>, C<event_id>, C<outbox_id> and
+C<source_id>. A refusal is C<{ status, error }>, C<error> a message:
+C<not_found> when the id is not a uuid or there is no such dead letter,
+C<conflict> when it was already replayed (the message names when and as
+which outbox message), does not name its event, or is not an outbox dead
+letter.
 
 =head2 replay_key
 
-The idempotency key of the message that replays a given dead letter.
+A class method. Takes a dead letter id and returns the idempotency key of
+the message that replays it: C<dead-letter-replay:> followed by the id.
+
+=head2 replay_status_sql
+
+A class method. Takes the SQL name of a column holding a dead letter id
+and returns a literal SQL expression with its bind values (a reference to
+an array reference, for a C<+select>) giving that dead letter's replay
+status: the status of its replay message while retention keeps it, then
+C<replayed> while the audit log holds the replay, and NULL when it was
+never replayed. The column name is interpolated into the SQL, so it must
+come from the code, never from a request.
 
 =head1 DIAGNOSTICS
 

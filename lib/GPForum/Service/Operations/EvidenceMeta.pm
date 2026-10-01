@@ -118,6 +118,67 @@ verify, stress-load, staging drills, and evidence-validate: C<secrets_redacted>,
 C<private_beta_claimed=0>, deduplicated C<residual_gaps>, and optional secret
 scrubbing. Never claims private-beta readiness.
 
+The four functions are exported on request only.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 evidence_finalize
+
+Takes an evidence hash reference (or undef) and the options C<secrets>
+(an array reference of strings to scrub) and C<extra_gaps> (an array
+reference of residual gaps to add). Returns a new hash reference: the
+evidence scrubbed with C<evidence_scrub_structure> when there are
+secrets, else a shallow copy, with C<residual_gaps> set to its own gaps
+followed by the extra ones, the default private-beta gap appended when no
+gap mentions private-beta readiness, duplicates and empty entries
+dropped; C<private_beta_claimed> set to 0; and C<secrets_redacted> set to
+a JSON true (C<\1>), whether or not anything was scrubbed.
+
+=head2 evidence_unique_gaps
+
+Takes an array reference of gaps (or undef). Returns a new array
+reference of its defined, non-empty entries, each once, in the order they
+first appear.
+
+=head2 evidence_scrub_structure
+
+Takes a value and an array reference of secrets. Returns a copy of the
+value: a hash with every key whose name mentions a password, secret,
+token, authorization or credential (case-insensitively, except
+C<secrets_redacted>, C<secrets_leaked> and C<username_configured>) set to
+C<[redacted]> and every other value scrubbed in turn; an array with each
+element scrubbed; a plain scalar through C<evidence_scrub_text>; and any
+other reference, including an object, as it is.
+
+=head2 evidence_scrub_text
+
+Takes a string and an array reference of secrets (or undef). Returns the
+string with every occurrence of each non-empty secret, matched literally,
+replaced by C<[redacted]>.
+
+=head1 DIAGNOSTICS
+
+None. The functions do not die on missing input: an undef evidence, gap
+list or secret list counts as empty.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Exporter>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Without secrets, C<evidence_finalize> copies only the top level: nested
+hashes and arrays are shared with the caller's evidence, and no key is
+redacted by name.
+
 =head1 AUTHOR
 
 Giacomo Picchiarelli.

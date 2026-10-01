@@ -402,6 +402,74 @@ evidence family, rejects obvious secret material and private-beta readiness
 claims, and optionally requires modern redaction markers with C<--strict>.
 Never claims private-beta readiness.
 
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes C<< { paths => \@paths, strict => $bool } >> and returns the evidence
+hash reference: C<check> (C<evidence_validate>), C<status>, C<strict>,
+C<files>, C<findings> (every file's, together), C<residual_gaps>,
+C<private_beta_claimed> (0) and C<secrets_redacted> (true). With no paths it
+returns C<status> C<fail> and an C<error> asking for them.
+
+Each entry of C<files> holds C<path>, C<status>, C<detected_type> and
+C<findings>, each finding a C<severity> (C<fail> or C<warn>), C<code> and
+C<message>. A file that is missing (C<missing_file>), unreadable
+(C<read_error>) or not a JSON object (C<invalid_json>) fails at once.
+Otherwise the file fails on a forbidden key anywhere in it (C<secret_key>:
+C<password>, C<smtp_password>, or a name ending in C<secret>, C<passwd>,
+C<credential> or C<authorization>, other than C<secrets_redacted> and
+C<secrets_leaked>), on raw text matching a secret pattern
+(C<secret_pattern>), or on a private-beta readiness claim
+(C<private_beta_claim>).
+
+The type is read from C<check>, and failing that from C<drill>, C<mode>,
+C<plan.profile> or the keys a staging drill writes. Every known family needs
+a C<status> of C<pass>, C<ok>, C<degraded>, C<fail>, C<skipped> or
+C<dry-run> (C<missing_status>, a failure). All but C<evidence_validate> also
+need C<secrets_redacted> true, C<private_beta_claimed> 0 and a non-empty
+C<residual_gaps>; each missing one is a warning, or a failure when strict. An
+unclassified file is a warning, or a failure when strict.
+
+A file, and then the whole run, is C<fail> with any failure, C<degraded>
+with any warning, and C<pass> otherwise.
+
+=head2 format_evidence
+
+Takes the evidence and a format. C<json>, the default, returns one line of
+JSON; anything else returns text: the status, the file count, and a line for
+each file and each finding.
+
+=head2 exit_status
+
+Returns 0 when the status is C<pass> or C<degraded>, otherwise 1.
+
+=head1 DIAGNOSTICS
+
+None. A file that cannot be read or parsed is a finding, not an exception.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. Strictness comes from C<run>'s options, which
+L<GPForum::Command::EvidenceValidate> sets from C<--strict>.
+
+=head1 DEPENDENCIES
+
+L<JSON::MaybeXS>,
+L<Mojo::File>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The secret and readiness checks match key names and raw text against fixed
+patterns, so they find obvious material only. Passing means the archived
+JSON is well-formed and free of obvious secrets; staging TLS, SMTP sends and
+unit enablement remain operator evidence. The C<strict> attribute is not
+read; only C<run>'s option is.
+
 =head1 AUTHOR
 
 Giacomo Picchiarelli.

@@ -307,3 +307,114 @@ sub _record_audit ( $self, $input ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Admin::RoleBindingStore - Grants and revokes role bindings, with their audit rows.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store =
+      GPForum::Service::Admin::RoleBindingStore->new( schema => $schema );
+    my $bound = $store->bind_role(
+        {
+            actor_user_id => $admin_id,
+            user_id       => $user_id,
+            role_id       => $role_id,
+            resource_type => 'global',
+            resource_id   => undef,
+            space_id      => undef,
+        }
+    );
+    $store->revoke_binding( $bound->{binding}{binding_id}, $admin_id );
+
+=head1 DESCRIPTION
+
+A role binding gives a user a role over a scope: a resource type, optionally
+one resource, optionally one space. This store writes those rows for the
+console (through L<GPForum::Service::Admin::Workflow>) and for the first
+administrator (through L<GPForum::Service::Admin::Bootstrapper>), and records
+a C<role_binding.created> or C<role_binding.revoked> audit row with each.
+
+Granting is idempotent: the same user, role and scope that already hold an
+active binding get that binding back. The database's unique index on active
+bindings decides a race between two grants, and the loser returns the
+winner's row rather than an error. A binding found without its audit row --
+one written before a crash, or by older code -- has the row written when it
+is next granted. Revoking stamps C<revoked_at>; the row is kept.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 bind_role
+
+Takes a hash reference with C<user_id>, C<role_id>, C<resource_type>,
+C<resource_id>, C<space_id> and C<actor_user_id>; the scope columns are
+matched as given, so C<undef> means "none". Runs inside
+C<< $schema->txn_do >> when the schema has one.
+
+Returns C<< { ok => 1, binding => \%binding } >> for a new binding, or
+C<< { ok => 1, idempotent => 1, binding => \%binding } >> when an active one
+already existed or a concurrent grant made it first. C<%binding> holds
+C<binding_id>, C<user_id>, C<role_id>, C<resource_type>, C<resource_id>,
+C<space_id>, C<created_by_user_id>, C<created_at> and C<revoked_at>.
+
+The insert runs under a savepoint. When it collides on the primary key the
+store looks again for an active binding and otherwise retries once with a new
+id; a second failure is rethrown.
+
+=head2 revoke_binding
+
+Takes a binding id and the acting user's id. Returns C<undef> when there is
+no such binding, C<< { binding_id, idempotent => 1, revoked_at } >> with the
+earlier time when it was already revoked, and
+C<< { binding_id, revoked_at } >> when this call revoked it and wrote the
+audit row.
+
+=head1 DIAGNOSTICS
+
+Rethrows any insert error that is not a unique conflict on
+C<role_bindings_pkey> or C<idx_role_bindings_active_unique>, and a conflict
+on the active index when no active binding can then be found. Other
+database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Admin::Event>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+No input is validated here; L<GPForum::Service::Admin::Workflow> checks the
+required fields first. C<revoke_binding> reads the binding without locking
+it, so two revocations racing on one binding can both pass the
+already-revoked check: the later one then overwrites C<revoked_at> and
+records a second audit row.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

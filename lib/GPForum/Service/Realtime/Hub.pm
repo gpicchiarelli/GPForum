@@ -310,3 +310,171 @@ sub _moderation_channels ($event) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Realtime::Hub - Holds this process's realtime sockets and subscriptions and broadcasts events to them.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $hub = GPForum::Service::Realtime::Hub->new(
+        authorizer    => $channel_authorizer,
+        badge_counter => $notification_dispatcher,
+        readability   => GPForum::Service::Forum::Readability->new(
+            schema => $schema,
+        ),
+    );
+    $hub->register_connection( $connection_id, { user_id => $user_id },
+        $websocket );
+    my $subscribed = $hub->subscribe(
+        {
+            actor         => { user_id => $user_id },
+            channel       => "notifications:$user_id",
+            connection_id => $connection_id,
+            context       => { transport => 'websocket' },
+        }
+    );
+    $hub->send_badge_snapshot($connection_id);
+    my $summary = $hub->broadcast_event($event);
+    $hub->disconnect($connection_id);
+
+=head1 DESCRIPTION
+
+One hub per process, kept by the C<gp_realtime_hub> helper. The websocket
+controller registers each socket and its subscriptions here; the PostgreSQL
+listener hands it every event that arrives from any node. Connections and
+subscriptions live in the C<registry>, a
+L<GPForum::Service::Realtime::ConnectionRegistry>, so they are local to the
+process.
+
+A subscription is granted by the C<authorizer>. Access to a thread is asked
+again at every broadcast (ADR 0102): when C<readability> is set, a
+C<thread:> channel's subscribers are narrowed to those who may read the
+thread now, and an event whose payload names a C<post_id> to those who may
+read that post. A subscriber filtered out stays subscribed and receives
+the thread again once access comes back.
+
+An event goes to channels by its type: C<thread.update> to
+C<< thread:<aggregate_id> >>, C<notification.badge> to
+C<< notifications:<aggregate_id> >>, C<moderation.queue.invalidate> to
+C<moderation:queue>. Any other type goes nowhere.
+
+Badges carry an absolute unread count, so one snapshot corrects whatever a
+socket missed. The count comes from C<badge_counter> (the notification
+dispatcher's C<unread_count_for_user>); without one, no badge is sent.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 register_connection
+
+Takes a connection id, an actor (a hash reference with C<user_id>, or the
+user id) and the connection object, which must have a C<send> method.
+Returns the registry's row, or undef when the user already holds the
+registry's per-process maximum of sockets.
+
+=head2 disconnect
+
+Takes a connection id. Removes it and its subscriptions; returns the
+removed row, or undef when there was none.
+
+=head2 subscribe
+
+Takes a hash reference with C<actor>, C<channel>, C<connection_id> and an
+optional C<context>. Returns the authorizer's refusal when it refuses, the
+registry's refusal (C<connection_not_found> or
+C<subscription_quota_exceeded>) when that fails, and otherwise
+C<< { ok => 1, channel, reason } >> with the authorizer's reason.
+
+=head2 broadcast
+
+Takes a channel name and the event to send, and sends it as JSON to every
+subscriber of the channel left after the readability filters. Returns
+C<< { ok => 1, channel, delivered, failed } >>; a send that dies or returns
+false counts as failed and is not raised.
+
+=head2 send_badge_snapshot
+
+Takes a connection id and sends that connection its user's unread count as
+a C<notification.badge> event. Returns
+C<< { ok => 0, reason => 'connection_not_found' } >> when there is no such
+connection or it has no user, C<< { ok => 0, reason => 'badge_unavailable' } >>
+when there is no C<badge_counter> or it died, and otherwise
+C<< { ok, unread_count } >> with C<ok> 0 when the send failed.
+
+=head2 resend_badge_snapshots
+
+Takes no arguments. Sends a badge to every connection subscribed to at
+least one C<notifications:> channel, reading each user's count once
+however many sockets they hold. Returns the number of badges sent. The
+listener calls it after a gap in notifications.
+
+=head2 connection_count
+
+Returns the number of connections registered in this process.
+
+=head2 broadcast_event
+
+Takes an event. Returns the C<event_contract>'s refusal
+C<< { ok => 0, reason } >> when it does not validate; otherwise
+C<< { ok => 1, delivered, failed, channels } >>, the counts summed over the
+channels the event maps to, with an empty C<channels> when it maps to
+none.
+
+=head2 fallback_state
+
+Returns what a client without a socket should do: C<realtime_required> 0,
+C<poll_after_seconds> 30, and the C<notifications> and C<thread> endpoints
+to poll.
+
+=head2 snapshot
+
+Returns the registry's snapshot (C<connections>, C<subscriptions> and the
+two limits) merged with the hub's counters: C<badge_snapshots>,
+C<broadcast> and C<broadcasts>, C<delivered>, C<failed> and
+C<broadcast_failures>, C<malformed> and C<malformed_events>. The paired
+counters are kept equal.
+
+=head1 DIAGNOSTICS
+
+None raised. Failed sends and badge counts are returned and counted. An
+exception from the authorizer or from C<readability> propagates.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None read directly. The registry's per-user and per-connection limits are
+its own attributes.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<List::Util>, L<Mojo::Base>,
+L<GPForum::Service::Realtime::ChannelAuthorizer>,
+L<GPForum::Service::Realtime::ConnectionRegistry>,
+L<GPForum::Service::Realtime::EventEnvelope>;
+L<GPForum::Service::Forum::Readability> (passed in as C<readability>).
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The state is per process; a node reaches the sockets of another only
+through the PostgreSQL listener. Without C<readability>, thread and post
+events go to every subscriber of the channel.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

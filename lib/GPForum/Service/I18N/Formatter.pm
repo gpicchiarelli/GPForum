@@ -261,38 +261,62 @@ Version 0.001.
 =head1 SYNOPSIS
 
     my $date = $formatter->format_date( 'it', $epoch );
+    my $when = $formatter->format_datetime( 'en', '2026-05-23T12:00:00Z',
+        'Europe/Rome' );
+    my $sum  = $formatter->format_number( 'it', 1234567.5 );
 
 =head1 DESCRIPTION
 
-Owns date, time, datetime, and number formatting plus the one/other plural
-category. Locale metadata comes from L<GPForum::Service::I18N::Locale>.
-L<GPForum::Service::I18N> remains the public facade.
+Owns date, time, datetime, and number formatting, the one/other plural
+category, and the time zone name checks. Locale metadata comes from
+L<GPForum::Service::I18N::Locale>. L<GPForum::Service::I18N> remains the
+public facade.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 format_date
 
-Formats an epoch with the locale date pattern.
+Takes a locale, a timestamp and an optional IANA time zone, and formats the
+timestamp with the locale's date pattern. The timestamp is an epoch, or an
+ISO-8601 string in either shape the application produces (Clock's
+C<2026-05-23T12:00:00Z> or PostgreSQL's C<2026-05-23 12:00:00+00>). Without
+a zone it formats in UTC; with one it converts, and an unknown zone name
+reads as UTC. Returns nothing (undef in scalar context) when the timestamp
+is missing or cannot be parsed, so the caller can show its own placeholder.
 
 =head2 format_time
 
-Formats an epoch with the locale time pattern.
+As L</format_date>, with the locale's time pattern. With a zone, the zone
+abbreviation is appended so the reader knows which zone is shown.
 
 =head2 format_datetime
 
-Formats an epoch with the locale datetime pattern.
+As L</format_time>, with the locale's datetime pattern.
 
 =head2 format_number
 
-Formats a decimal with locale thousand and decimal marks.
+Takes a locale and a number and returns it with two decimals and the
+locale's thousand and decimal marks. A value that is not a plain decimal
+number formats as zero.
 
 =head2 plural_category
 
 Returns C<one> for count 1 and C<other> otherwise.
 
+=head2 valid_time_zone
+
+Returns 1 when the name is non-empty and L<DateTime::TimeZone> accepts it
+(C<is_valid_name>), otherwise 0.
+
+=head2 time_zone_names
+
+Returns an array reference of C<< DateTime::TimeZone->all_names >>, the
+canonical zone names; the settings page lists them.
+
 =head1 DIAGNOSTICS
 
-Undefined epochs and non-numeric values format as zero.
+None. A missing or unparseable timestamp formats as nothing, a non-numeric
+number as zero, and an unknown time zone as UTC.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -300,7 +324,8 @@ Requires a C<locale_table> that can return locale metadata.
 
 =head1 DEPENDENCIES
 
-Uses L<POSIX> C<strftime>.
+Uses L<POSIX> C<strftime>, L<Time::Local>, L<DateTime> and
+L<DateTime::TimeZone>.
 
 =head1 INCOMPATIBILITIES
 

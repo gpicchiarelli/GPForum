@@ -269,3 +269,125 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Notification::PreferenceStore - A member's notification channel preferences.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Notification::PreferenceStore->new(
+        schema => $schema );
+    $store->set_preference(
+        {
+            user_id          => $user_id,
+            channel          => 'email',
+            enabled          => 0,
+            digest_frequency => 'daily',
+        }
+    );
+    my $rows  = $store->preferences_for_user($user_id);
+    my $email = $store->channel_enabled( $user_id, 'email' );
+
+=head1 DESCRIPTION
+
+One row per member and channel in C<notification_preferences>, for the three
+channels C<in_app>, C<email> and C<digest>. A member with no row has the
+defaults: in-app on and immediate, email on with a daily digest frequency,
+digest off and daily. The settings page reads and writes through this store,
+and the notification dispatcher asks it whether a channel is on.
+
+Input is coerced rather than refused: an unknown channel is treated as
+C<in_app>, an unknown digest frequency as C<daily>, and C<enabled> as a
+boolean. A write that would store what is already stored is skipped, and an
+insert that loses a race with a concurrent one for the same member and
+channel falls back to the row that won.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 set_preference
+
+Takes a hash reference with C<user_id>, C<channel>, C<enabled> and
+C<digest_frequency>, coerced as above. Returns the hash reference written
+(C<user_id>, C<channel>, C<enabled>, C<digest_frequency>, C<updated_at>), or,
+when the stored row already says the same, that row's values with
+C<< skipped => 1 >> and nothing written. A new row is inserted under a
+savepoint.
+
+=head2 set_preferences
+
+Takes C<user_id> and C<preferences>, an array reference of hashes as for
+L</set_preference> (the outer C<user_id> wins), applies each in order, and
+returns L</preferences_for_user> for that member.
+
+=head2 preferences_for_user
+
+Takes a user id and returns an array reference with one hash per channel, in
+the order C<in_app>, C<email>, C<digest>: C<channel>, C<enabled>,
+C<digest_frequency>, C<user_id> (only when a row is stored), and the i18n
+keys C<label_key> and C<description_key>. Stored values override the
+defaults; a stored row for an unknown channel is ignored, and an unknown
+stored frequency reads as C<daily>.
+
+=head2 channel_enabled
+
+Takes a user id and a channel (unknown reads as C<in_app>) and returns 1 or
+0, from the stored row or the channel's default.
+
+=head2 channel_names
+
+Returns an array reference of the channel names. Needs no instance.
+
+=head2 digest_frequency_options
+
+Returns an array reference of C<< { value, label_key } >> for C<immediate>,
+C<daily>, C<weekly> and C<never>. Needs no instance.
+
+=head2 enabled_channels
+
+Takes a user id and returns a list of the channel names whose stored row has
+C<enabled> set. Unlike the methods above it applies no defaults and no
+channel filter: a member with no stored rows gets an empty list.
+
+=head1 DIAGNOSTICS
+
+L</set_preference> rethrows an insert error that is not a unique conflict,
+and a unique conflict after which no row can be found. Other database errors
+propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+A misspelt channel is written to C<in_app>, not refused. Nothing in
+F<lib/> calls L</enabled_channels>, whose results differ from
+L</channel_enabled> for a member without stored rows.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

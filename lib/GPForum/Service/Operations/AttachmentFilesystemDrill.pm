@@ -270,6 +270,71 @@ tree, wipes the source, restores into the same C<var/attachments> path, and
 verifies SHA-256 digests and object bytes. Does not mutate a live operator
 attachment root and does not claim private-beta readiness.
 
+The C<staging-drill-attachments> command runs it as its attachments phase.
+The workspace is a fresh temporary directory, removed when the drill ends
+unless the caller asks to keep it.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes a hash reference of options, of which only C<keep_workspace> is read.
+Runs the drill and returns its evidence hash reference, finalized by
+L<GPForum::Service::Operations::EvidenceMeta/evidence_finalize>:
+C<check> and C<drill> (both C<attachment_filesystem>), C<status> (C<pass>
+or C<fail>), C<keep_workspace>, C<residual_gaps>, C<secrets_redacted> and
+C<private_beta_claimed> (0). On a pass, C<attachments> holds the files
+counted, the sample object keys, the backup and restore paths and the
+flags C<covered>, C<sha256_match> and C<wiped_before_restore>. On a
+failure, C<error> holds the message and C<attachments> is absent. It does
+not die: a failed step becomes a C<fail> status.
+
+=head2 format_evidence
+
+Takes an evidence hash reference and a format. Returns it as one line of
+JSON when the format is C<json>; otherwise as text: a
+C<staging-drill-attachments status=...> line, an C<attachments> line with
+C<covered>, C<files> and C<layout>, and an C<error=> line when there is
+one. Each form ends with a newline.
+
+=head2 exit_status
+
+Takes an evidence hash reference. Returns 0 when its C<status> is C<pass>,
+1 otherwise.
+
+=head1 DIAGNOSTICS
+
+C<run> reports, as C<error>, a step that died: C<expected 2 attachment
+files, found N>, C<backup file list mismatch> or C<restore file list
+mismatch>, C<backup digest mismatch for KEY> or C<restore digest mismatch
+for KEY>, C<source tree was not emptied before restore>, C<restored object
+A content mismatch> (or B), C<failed to read>, C<failed to close> or
+C<failed to copy> with the system error, and any error of the attachment
+storage.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None read directly. The workspace is created under the system temporary
+directory (C<TMPDIR>).
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Digest::SHA>, L<File::Copy>, L<File::Find>,
+L<File::Path>, L<File::Temp>, L<JSON::MaybeXS>, L<Mojo::Base>,
+L<Mojo::File>, L<GPForum::Service::Attachment::FilesystemStorage>,
+L<GPForum::Service::Operations::EvidenceMeta>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+It rehearses the filesystem backend on two sample objects only; live
+attachment trees and object storage are outside it, as its residual gaps
+say. The C<root_name> attribute is not read: the layout is always
+C<var/attachments>.
+
 =head1 AUTHOR
 
 Giacomo Picchiarelli.

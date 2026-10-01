@@ -701,11 +701,15 @@ Version 0.001.
 
 =head1 SYNOPSIS
 
+    my $lifecycle = GPForum::Service::Operations::PartitionLifecycle->new;
+
     my $plans = $lifecycle->plan_window(
         { now_epoch => time, horizon_months => 3 } );
 
     my $result = $lifecycle->ensure_partitions(
         { dbh => $dbh, lookahead_months => 3 } );
+
+    my $horizon = $lifecycle->horizon_report( $dbh, time );
 
 =head1 DESCRIPTION
 
@@ -716,7 +720,9 @@ C<PARTITION BY RANGE (created_at)> with a DEFAULT partition
 
 The boundary plans monthly windows, creates the corresponding range partitions
 ahead of time, records them in C<partition_registry>, recommends retention
-transitions, and emits restore evidence.
+transitions, and emits restore evidence. For readiness it reports how far
+ahead each table has partitions and whether rows have spilled into a DEFAULT
+partition.
 
 Month boundaries are computed in UTC with C<gmtime>. Every emitted bound is an
 explicit C<TIMESTAMPTZ 'YYYY-MM-DD 00:00:00+00'> literal so the DDL does not
@@ -801,7 +807,11 @@ Returns the DEFAULT partition name for a validated table.
 =head2 plan_window
 
 Plans monthly partitions from the current month through the requested horizon.
-Each plan row carries the UTC window in both ISO-8601 (C<range_start>,
+Takes a hash reference with C<now_epoch>, whose UTC month comes first, and
+C<horizon_months> (default 1); without C<now_epoch> the plan starts at
+January 1970. Returns an array reference with one plan row per table and
+month. Each plan row carries C<table_name>, C<partition_name>, C<state>
+(C<planned>) and the UTC window in both ISO-8601 (C<range_start>,
 C<range_end>) and SQL literal (C<range_start_sql>, C<range_end_sql>) form, plus
 the C<create_sql> that would be executed.
 
@@ -818,6 +828,11 @@ default-partition overlap.
 =head2 conflict_report
 
 Builds the actionable C<default_partition_overlap> report for a plan row.
+Takes the plan row, the number of overlapping rows (undef when unknown,
+reported as -1) and an optional detail, PostgreSQL's own message. Returns a
+hash reference with C<table_name>, C<partition_name>, C<default_partition>,
+C<range_start>, C<range_end>, C<conflicting_rows>, C<error>, C<message>,
+C<remediation> (from L</remediation_steps>) and, when given, C<detail>.
 
 =head2 ensure_partitions
 
@@ -827,19 +842,59 @@ C<apply>; with C<< apply => 0 >> nothing is written and the missing partitions
 are returned under C<planned>. Returns C<ok>, C<created>, C<existing>,
 C<planned>, C<conflicts>, and C<errors>.
 
+C<horizon_months> is accepted in place of C<lookahead_months>, and both
+default to the C<lookahead_months> attribute; C<now_epoch> defaults to the
+current time. A partition that already exists is listed under C<existing>
+and its registry row upserted too. The result also carries C<applied>,
+C<lookahead_months> and C<policy_version>; C<ok> is 0 when there is any
+conflict or error. Before writing, the session's C<lock_timeout> is set to
+C<lock_timeout_ms>.
+
+=head2 horizon_report
+
+Takes a database handle and the current epoch. Reads, in one catalog query,
+the latest upper bound among each table's range partitions, and asks of each
+table's DEFAULT partition whether it holds any row. Returns the result of
+L</evaluate_horizon> for those facts. Database errors propagate.
+
+=head2 evaluate_horizon
+
+Takes a hash reference with C<now_epoch> and C<tables>, an array reference
+of C<< { table, horizon_epoch, default_rows } >>; a partitioned table
+missing from it is judged as having no range partition. Returns
+C<< { status, problems, tables, warning_days } >>: C<tables> holds, for
+each partitioned table, C<days_left> and C<horizon> (a C<YYYY-MM-DD> date;
+both undef when there is no range partition) and C<default_rows> (0 or 1);
+C<problems> is a list of operator messages, one for a table with no range
+partition or fewer than C<warning_days> (45) days left, and one for a
+DEFAULT partition holding rows; C<status> is C<degraded> when there is any
+problem, C<ok> otherwise.
+
 =head2 next_state
 
 Returns the next registry state for C<planned>, C<created>, C<detached>, or
-C<archived>.
+C<archived> (C<created>, C<detached>, C<archived>, C<dropped>), and undef for
+any other state.
 
 =head2 retention_due
 
 Returns created partitions whose range has aged past the retention cutoff, with
-a recommended C<detached> state.
+a recommended C<detached> state. Takes a hash reference with C<now_epoch>,
+C<retention_days> and C<partitions>, the registry rows as hash references
+with at least C<state> and C<range_end>. A row is due when its C<state> is
+C<created> and its C<range_end> is not after the cutoff, C<now_epoch> less
+C<retention_days>; the comparison is on the text, against a
+C<YYYY-MM-DDTHH:MM:SSZ> cutoff. Returns an array reference of copies of the
+due rows with C<recommended_state>.
 
 =head2 restore_evidence
 
-Summarizes registry rows for restore and archival evidence.
+Summarizes registry rows for restore and archival evidence. Takes a hash
+reference with C<partitions>, the registry rows. Returns
+C<< { ok, restore_ready, partition_counts, policy_version, tables } >>:
+C<partition_counts> counts the rows per state (a row without one counts as
+C<planned>), and C<ok> and C<restore_ready> are 1 when at least one
+partition is C<created>.
 
 =head1 DIAGNOSTICS
 
@@ -867,6 +922,15 @@ A range bound is not a C<YYYY-MM-DD HH:MM:SS+00> literal.
 
 C<ensure_partitions> was called without C<dbh>, C<< $self->dbh >>, or a schema.
 
+=item C<partition lifecycle: lookahead_months must be a positive integer>
+
+The lookahead given to C<ensure_partitions> is not a whole number from 1 to
+999.
+
+=item C<partition lifecycle: lock_timeout_ms must be a positive integer>
+
+C<lock_timeout_ms> is not made of digits; checked only when applying.
+
 =item C<partition lifecycle: default partition probe failed for ...>
 
 The overlap probe could not be run; the partition is left untouched.
@@ -876,18 +940,20 @@ The overlap probe could not be run; the partition is left untouched.
 Everything C<ensure_partitions> raises per partition, including that probe
 failure, is caught and returned in C<conflicts> or C<errors>, so one bad table
 does not stop the maintenance run. Only the whole-run problems above
-(validation, missing handle) propagate.
+(missing handle, lookahead, lock timeout) propagate, as do the validation
+errors raised by the public methods called directly.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Horizon and retention days come from L<GPForum::Service::Operations::Profile>.
-C<lookahead_months> defaults to three months and C<lock_timeout_ms> to five
-seconds, so a scheduled run gives up instead of queueing behind live traffic
-while holding an ACCESS EXCLUSIVE lock request.
+Horizon months and retention days are arguments; the scheduled jobs take them
+from L<GPForum::Service::Operations::Profile>. C<lookahead_months> defaults to
+three months and C<lock_timeout_ms> to five seconds, so a scheduled run gives
+up instead of queueing behind live traffic while holding an ACCESS EXCLUSIVE
+lock request.
 
 =head1 DEPENDENCIES
 
-Uses L<Carp>, L<Const::Fast>, L<English>, and L<Mojo::Base>.
+Uses L<Carp>, L<Const::Fast>, L<English>, L<POSIX>, and L<Mojo::Base>.
 
 =head1 INCOMPATIBILITIES
 
@@ -898,7 +964,8 @@ None known.
 Detach, archive, and drop stay operator-owned: this boundary creates
 partitions and records state, and only recommends the retention transitions.
 Clearing a default-partition overlap is also manual, because it needs an
-ACCESS EXCLUSIVE maintenance window.
+ACCESS EXCLUSIVE maintenance window. A failure to set C<lock_timeout> is not
+reported; the run goes on with the session's own timeout.
 
 =head1 AUTHOR
 

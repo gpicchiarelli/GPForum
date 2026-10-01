@@ -514,6 +514,81 @@ and runs C<nginx -t>. Missing host tools mark those phases C<skipped> and
 the overall evidence C<degraded> while static checks still pass. Does not
 start Hypnotoad or claim private-beta readiness.
 
+The templates and the directives each must contain come from
+L<GPForum::Service::Operations::DeployContract>. The
+C<staging-drill-attachments> command runs this drill as its deploy phase.
+Rendered files go to a temporary workspace that is removed when the drill
+ends.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes a hash reference of options; C<format> and C<keep_workspace> are
+copied into the evidence (as C<format_hint> and C<keep_workspace>), nothing
+else is read. Runs the drill against C<repo_root> and returns its evidence
+hash reference, finalized by
+L<GPForum::Service::Operations::EvidenceMeta/evidence_finalize>: C<check>
+and C<drill> (both C<deploy_checklist>), C<status>, C<residual_gaps>,
+C<secrets_redacted>, C<private_beta_claimed> (0) and C<deploy_checklist>,
+which holds C<repo_root>, the per-file results C<systemd_units> and
+C<nginx_configs> (C<exists>, C<matched>, C<missing>, C<status>),
+C<host_validation> (its C<status> and the C<systemd> and C<nginx> phases,
+each C<pass>, C<fail> or C<skipped>) and C<optional_tools>. C<status> is
+C<fail> when a static check fails or a host check fails, C<degraded> when
+the static checks pass but a host tool is missing, C<pass> otherwise. It
+does not die: an error becomes C<< status => 'fail' >> with C<error> set,
+and C<deploy_checklist> absent.
+
+=head2 format_evidence
+
+Takes an evidence hash reference and a format. Returns it as one line of
+JSON when the format is C<json>; otherwise as text: a
+C<staging-drill-deploy status=...> line, one C<NAME status=...> line per
+unit and nginx file, a C<host_validation> line with the C<systemd> and
+C<nginx> statuses, and an C<error=> line when there is one. Each form ends
+with a newline.
+
+=head2 exit_status
+
+Takes an evidence hash reference. Returns 0 when its C<status> is C<pass>
+or C<degraded>, 1 otherwise.
+
+=head1 DIAGNOSTICS
+
+C<run> reports, as C<error>: C<repository root not found> when C<repo_root>
+is empty; C<failed to chmod PATH>, C<failed to close host-check stdin> and
+C<failed to close host-check handle> with the system error; and an error
+from L<IPC::Open3> or L<Mojo::File> when a tool cannot be started or a
+template cannot be read.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+C<PATH> is searched for C<systemd-analyze> and C<nginx>. The workspace is
+created under the system temporary directory (C<TMPDIR>). C<repo_root>
+defaults to the nearest directory holding a C<cpanfile>, walking up at most
+eight levels from this module, else the current directory.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<File::Path>, L<File::Temp>, L<IPC::Open3>,
+L<JSON::MaybeXS>, L<Mojo::Base>, L<Mojo::File>, L<Symbol>,
+L<GPForum::Service::Operations::DeployContract>,
+L<GPForum::Service::Operations::EvidenceMeta>; optionally
+C<systemd-analyze> and C<nginx>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+C<keep_workspace> is recorded in the evidence but not honoured: the
+workspace is always removed. When a host tool is present, a missing
+template makes the whole run fail with the read error instead of a
+per-file result. Installing units, reloading nginx, starting Hypnotoad and
+TLS remain operator steps, as the residual gaps say.
+
 =head1 AUTHOR
 
 Giacomo Picchiarelli.

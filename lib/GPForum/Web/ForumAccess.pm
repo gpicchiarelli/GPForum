@@ -390,7 +390,8 @@ and Guard errors.
 
 =head2 read_rate_input
 
-Returns the C<forum_retrieval> rate-limit arguments.
+Returns the C<forum_retrieval> rate-limit arguments: 60 requests per 60
+seconds, or the C<GPFORUM_FORUM_READ_RATE_LIMIT> override.
 
 =head2 write_rate_input
 
@@ -403,7 +404,8 @@ Returns 5 for reports, 10 for bookmark/subscription churn, otherwise 20.
 =head2 requires_participation
 
 True for C<thread.create>, C<reply.create>, C<post.edit>, C<post.delete>,
-C<thread.edit>, C<thread.delete>, and C<thread.move>.
+C<post.restore>, C<thread.edit>, C<thread.delete>, C<thread.move>, and
+C<thread.restore>.
 
 =head2 report_field_errors
 
@@ -499,6 +501,10 @@ Returns C<post_updated>.
 
 Returns C<post_deleted>.
 
+=head2 post_restored_status
+
+Returns C<post_restored>.
+
 =head2 read_marked_status
 
 Returns C<read_marked>.
@@ -548,7 +554,9 @@ None. HTTP rendering stays on the forum controllers.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-None.
+C<GPFORUM_FORUM_READ_RATE_LIMIT>, when set to a positive integer, replaces
+the default C<forum_retrieval> limit of 60 requests per window, for
+capacity runs from one address. Any other value is ignored.
 
 =head1 DEPENDENCIES
 
