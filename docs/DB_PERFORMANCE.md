@@ -220,14 +220,18 @@ predicate, and no statement in `lib/` states `permission_scope`: search
 filters on `visibility` and the live category and space. The queries this
 section used to document were never sent.
 
-Checked on PostgreSQL 18.6 on 2026-09-26 against the statements `Searcher`
-sends -- search and autocomplete, anonymous and member, with every filter
-combination, 84 statements -- with the planner's own choice, with sequential
-scans disabled, and with every other `search_documents` index dropped: no plan
-used any of the four, and after running every statement `pg_stat_user_indexes`
-showed `idx_scan = 0` for each. They were write cost on every document the
-indexer writes, and migration 048 drops them. `script/query-plan-check`
-requires `idx_search_documents_created` in their place.
+Checked on PostgreSQL 18.6 on 2026-09-26, and again on 2026-10-01 against the
+statements `Searcher` sends with newest-first candidates. The four were
+recreated on a migrated database holding 20,000 documents and every statement
+was EXPLAINed: search (a common word, a rare one, a full-text and a fuzzy-title
+query) and autocomplete, anonymous and member, with every combination of the
+four filters -- 134 statements, 670 plans. Under the planner's own choice, with
+sequential scans disabled, with sorts disabled too, and with every other
+`search_documents` index dropped, with and without bitmap scans, no plan used
+any of the four; after running every statement `pg_stat_user_indexes` showed
+`idx_scan = 0` for each. They were write cost on every document the indexer
+writes, and migration 048 drops them. `script/query-plan-check` requires
+`idx_search_documents_created` in their place.
 
 Migration 048 is not `CONCURRENTLY`: building the index blocks the indexer's
 writes to `search_documents` (not searches) for its duration, and each

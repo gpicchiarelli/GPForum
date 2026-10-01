@@ -26,14 +26,14 @@ like(
     'query plan check passes'
 );
 
-# 26: the 26 left once the gate stopped requiring five indexes migration 037
-# drops -- it had matched migration text rather than the schema the
-# migrations leave behind -- plus the two migration 041 adds for signed-in
-# category pages and the profile's thread list, less three of the partial
-# search indexes migration 048 drops, plus the one it adds. The dropped ones
-# were partial on permission_scope, which no statement states, so the planner
-# could never use them; search now takes its candidates newest first through
-# idx_search_documents_created (quality program 8.10).
+# 26. The gate stopped requiring five indexes migration 037 drops -- it had
+# matched migration text rather than the schema the migrations leave behind --
+# which left 26; migration 041 added two, for signed-in category pages and the
+# profile's thread list (28). Migration 048 drops four partial search indexes,
+# three of which the gate required, and adds the one search now takes its
+# candidates through, newest first: idx_search_documents_created (quality
+# program 8.10). The dropped ones were partial on permission_scope, which no
+# statement states, so the planner could never use them.
 like( $output, qr/indexes=26/msx,
     'query plan check covers required hot path indexes' );
 like( $output, qr/db_evidence=skipped/msx,

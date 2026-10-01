@@ -1075,12 +1075,8 @@ secrets.
 Reads C<GPFORUM_*> environment variables, including PostgreSQL connection
 settings (C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>,
 C<GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS>,
-C<GPFORUM_DATABASE_LOCK_TIMEOUT_MS>), search's own statement timeout
-(C<GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS>, 2000 by default; zero leaves search
-under C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>) and the number of newest
-matches it ranks (C<GPFORUM_SEARCH_CANDIDATE_LIMIT>, 1000 by default, at least
-1), session rotation
-(C<GPFORUM_SESSION_SECRET>, comma-separated
+C<GPFORUM_DATABASE_LOCK_TIMEOUT_MS>), search's bounds (below), session
+rotation (C<GPFORUM_SESSION_SECRET>, comma-separated
 C<GPFORUM_SESSION_SECRETS>), metrics scrape tokens
 (C<GPFORUM_METRICS_TOKEN>, comma-separated C<GPFORUM_METRICS_TOKENS>),
 and mail delivery (C<GPFORUM_MAIL_TRANSPORT>, C<GPFORUM_MAIL_FROM>,
@@ -1093,6 +1089,15 @@ production and C<none> elsewhere. Staging and production reject the development 
 in both the current secret and C<GPFORUM_SESSION_SECRETS>, and require a
 non-empty C<GPFORUM_METRICS_TOKEN> so the C</metrics> scrape endpoint is
 never left unauthenticated.
+
+Search and autocomplete run under their own C<statement_timeout>,
+C<GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS> (C<search_statement_timeout_ms>, 2000
+by default), set for the transaction each one runs in; a search it cancels
+renders degraded. Zero leaves them under
+C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>. Search ranks only the newest
+C<GPFORUM_SEARCH_CANDIDATE_LIMIT> matches (C<search_candidate_limit>, 1000 by
+default) and the page says when it did. L</validate> refuses a negative timeout
+and a limit below 1.
 
 =head1 DEPENDENCIES
 

@@ -18,7 +18,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 246;
+const my $EXPECTED_TESTS   => 255;
 const my $FORM_SNIPPET     => 800;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FOUND       => 302;
@@ -183,6 +183,37 @@ $test->element_exists('section[aria-labelledby="search-status-heading"]');
 $test->content_like(qr/Search [ ] is [ ] temporarily [ ] degraded/msx);
 $test->element_exists_not(
     'section[aria-labelledby="search-no-results-heading"]');
+
+# The same cancellation as JSON, and in autocomplete: nothing found, and a
+# status that says why. The log line keeps the reason and drops the statement
+# DBI appends, whose bind values are what the visitor typed: a cancelled search
+# is routine under load, and each one logged several kilobytes of it.
+my @degraded_lines;
+my $log_subscriber = $test->app->log->on(
+    message => sub {
+        my ( undef, undef, @lines ) = @_;
+        push @degraded_lines, grep { /degraded/msx } @lines;
+    }
+);
+$test->get_ok( '/search?q=timeout' => { Accept => 'application/json' } );
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'  => 'degraded' );
+$test->json_is( '/results' => [] );
+$test->get_ok('/search/autocomplete?q=timeout');
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'      => 'degraded' );
+$test->json_is( '/suggestions' => [] );
+$test->app->log->unsubscribe( message => $log_subscriber );
+
+my $cancelled =
+    'DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: '
+  . 'DBD::Pg::st execute failed: ERROR:  canceling statement due to '
+  . 'statement timeout';
+is_deeply(
+    \@degraded_lines,
+    [ "search degraded: $cancelled", "autocomplete degraded: $cancelled" ],
+    'a degraded search logs why, without the statement or what was typed'
+);
 
 $test->get_ok('/__test/session/user-1');
 $test->status_is($HTTP_OK);

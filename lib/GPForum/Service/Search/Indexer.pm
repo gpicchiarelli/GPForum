@@ -8,7 +8,7 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
-use List::Util  qw(none uniq);
+use List::Util  qw(any none uniq);
 use Digest::SHA qw(sha1_hex);
 use Mojo::Base -base, -signatures;
 
@@ -212,12 +212,15 @@ sub remove_post ( $self, $post_id ) {
 # thousand: a thread that large failed to leave, retried until it was
 # dead-lettered, and its posts stayed searchable. A failure part way leaves
 # removed whatever went; the retry removes the rest.
+#
+# Each step reads the thread again under its locks and removes only while it
+# is still dead: the thread's document is indexed again, which removes it
+# from a dead thread, and a batch of posts stops at a live one. Two
+# dispatchers can deliver a hide and the restore after it in either order,
+# and a removal that came second deleted what the restore had just indexed:
+# the restored thread stayed out of search until the next rebuild.
 sub remove_thread ( $self, $thread_id ) {
-    my $result = $self->schema->txn_do(
-        sub {
-            return $self->_remove_document( 'thread', $thread_id );
-        }
-    );
+    my $result = $self->index_thread($thread_id);
     $result->{posts_removed} = $self->_remove_posts_for_thread($thread_id);
 
     return $result;
@@ -372,8 +375,11 @@ sub _remove_posts_for_thread ( $self, $thread_id ) {
         my $posts = $self->_thread_post_batch( $thread_id, $after );
         last if !@{$posts};
 
-        $removed +=
-          $self->_remove_post_batch( [ map { $_->{post_id} } @{$posts} ] );
+        my $deleted = $self->_remove_post_batch( $thread_id,
+            [ map { $_->{post_id} } @{$posts} ] );
+        last if !defined $deleted;
+
+        $removed += $deleted;
         $after = _next_position( $posts, $self->rebuild_batch_size );
         last if !defined $after;
     }
@@ -382,12 +388,18 @@ sub _remove_posts_for_thread ( $self, $thread_id ) {
 }
 
 # One transaction per batch: the batch's document locks in one statement,
-# then one delete. However large the thread, a transaction holds at most
-# rebuild_batch_size advisory locks.
-sub _remove_post_batch ( $self, $post_ids ) {
+# then the thread read again, then one delete. However large the thread, a
+# transaction holds at most rebuild_batch_size advisory locks. A thread live
+# again by then was restored: its restore committed before these locks were
+# taken, or its reindex waits for them, so nothing is deleted and undef stops
+# the removal.
+sub _remove_post_batch ( $self, $thread_id, $post_ids ) {
     return $self->schema->txn_do(
         sub {
             $self->_lock_documents( 'post', $post_ids );
+            my $undefined;
+            return $undefined if $self->_thread_is_live($thread_id);
+
             my $documents = $self->schema->resultset('SearchDocument');
             my $deleted   = $documents->search_rs(
                 {
@@ -399,6 +411,17 @@ sub _remove_post_batch ( $self, $post_ids ) {
             return 0 + ( $deleted // 0 );
         }
     );
+}
+
+# Whether the document builder would index the thread: live, visible or
+# locked. Read afresh, so under a batch's locks it sees every restore that
+# committed before them.
+sub _thread_is_live ( $self, $thread_id ) {
+    my $thread = $self->schema->resultset('Thread')->find($thread_id);
+    return 0 if !$thread || defined _column( $thread, 'deleted_at' );
+
+    my $state = _column( $thread, 'moderation_state' ) // q{};
+    return ( any { $_ eq $state } @{ $LIVE_STATES{thread} } ) ? 1 : 0;
 }
 
 # Up to rebuild_batch_size posts of a thread, by position after $after:

@@ -43,9 +43,13 @@ broker.
 ### High
 
 4. Search broad queries need continued DB evidence.
-   Existing GIN/trigram/partial indexes are present. Keep broad public search
-   under query-plan evidence and add production `pg_stat_statements` review for
-   high-frequency terms.
+   GIN and trigram indexes serve the match. Since quality program 8.10 a
+   search ranks only the newest `GPFORUM_SEARCH_CANDIDATE_LIMIT` matches,
+   walked through `idx_search_documents_created`, under its own statement
+   timeout; the partial indexes were never usable and migration 048 drops them
+   (`docs/DB_PERFORMANCE.md`). Keep broad public search under query-plan
+   evidence and add production `pg_stat_statements` review for high-frequency
+   terms.
 
 5. Realtime must remain accessory.
    LISTEN/NOTIFY plus outbox polling fallback is correct. Keep event envelopes

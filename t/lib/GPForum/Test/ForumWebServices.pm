@@ -1173,7 +1173,7 @@ sub ranked_search {
     my ( $self, $actor, $query, $options ) = @_;
 
     if ( $query eq 'timeout' ) {
-        die "canceling statement due to statement timeout\n";
+        _cancel($query);
     }
 
     return {
@@ -1183,7 +1183,27 @@ sub ranked_search {
     };
 }
 
+# A search the database cancelled at its statement timeout, worded as
+# DBIx::Class reports it: DBI appends the statement and its bind values, and
+# those are what the visitor typed.
+sub _cancel {
+    my ($query) = @_;
+
+    die 'DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception: '
+      . 'DBD::Pg::st execute failed: ERROR:  canceling statement due to '
+      . 'statement timeout [for Statement "SELECT me.title FROM '
+      . 'search_documents me WHERE me.title_normalized LIKE ?" with '
+      . "ParamValues: 1='$query%'] at lib/GPForum/Service/Search/Searcher.pm "
+      . "line 1.\n";
+}
+
 sub autocomplete {
+    my ( $self, $actor, $prefix ) = @_;
+
+    if ( ( $prefix // q{} ) eq 'timeout' ) {
+        _cancel($prefix);
+    }
+
     return [
         {
             entity_type          => 'thread',

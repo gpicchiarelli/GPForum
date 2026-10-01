@@ -106,10 +106,10 @@ sub ranked_search ( $self, $actor, $query, $options ) {
 # The resultset search() executes, before it is executed -- search_rs, not
 # search, because DBIx::Class's search returns every row in list context and a
 # caller passing this straight into a function call would get rows. Public so
-# the plan
-# the database chooses can be examined for the query the application actually
-# sends: the query-plan gate EXPLAINed a hand-written copy of this, and the
-# copy had none of the properties that made the real one a sequential scan.
+# the plan the database chooses can be examined for the query the application
+# actually sends: the query-plan gate EXPLAINed a hand-written copy of this,
+# and the copy had none of the properties that made the real one a sequential
+# scan.
 #
 # Two levels. The inner query finds the newest candidate_limit matches the
 # actor may read, newest first, which idx_search_documents_created can serve

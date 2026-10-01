@@ -94,6 +94,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **A cancelled search no longer logs the visitor's search text.** The
+  degraded-search log line carried the whole database error, with the SQL
+  and its bound values; it now holds only the error.
+
 - **An account that has not confirmed its e-mail is no longer a member.**
   Effective visibility (ADR 0102) counted `pending` accounts as members, so a
   session for one read members-only categories and threads. Such an account
@@ -489,6 +493,20 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- **Search runs under its own statement timeout and ranks a capped set**
+  (quality program 8.10). `GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS` (2000) cancels
+  a slow search, which then shows a degraded page instead of holding a web
+  worker; `GPFORUM_SEARCH_CANDIDATE_LIMIT` (1000) ranks only the newest
+  matches, walked through a new index, and the page says when it did.
+  Migration 048 drops four partial search indexes no query could use
+  (checked on 134 statements, 670 plans). It is not concurrent: on a large
+  forum, apply it in a maintenance window.
+- **A large thread's search work is bounded**: removing it deletes its
+  documents 500 per transaction, title first; renaming, moving or restoring
+  it reindexes 500 posts at once and the rest as
+  `search.thread_posts_requested` outbox messages. The outbox dispatcher no
+  longer sleeps between full batches.
+
 - **Replies lock their thread with `FOR NO KEY UPDATE`.** A reader's first
   "mark as read" on a busy thread no longer waits for the replies in flight;
   replies are still numbered in commit order. The concurrent-reply test that
@@ -695,6 +713,25 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- **Realtime and cache invalidation no longer steal each other's
+  notifications** (ADR 0111). The cache bus and the realtime listener read
+  the same connection's notification queue and took each other's messages: a
+  purge the listener took left hidden content in that process's cache. One
+  queue per process now routes by channel. After a reconnect -- including to
+  a backend that reuses the old PID, as a PostgreSQL restarted in a fresh
+  container does -- it listens again, clears the local cache once and
+  re-sends badge counts. A process that cannot listen (pointed at a standby)
+  clears its local cache on every read until it can (`listen_failures` in
+  `/metrics`).
+- **Every badge reaches every process and node**, through `NOTIFY`; a badge
+  changed by a web request used to reach only that process's sockets.
+- **The realtime backstop no longer replays seven days of events** after a
+  deploy or worker recycle: it starts at the head, polls only while the
+  process has sockets, and a failed poll keeps its place.
+- **A thread restored after being hidden no longer drops out of search**
+  when two dispatchers deliver the hide after the restore: each removal step
+  reads the thread again under its locks.
 
 - **`script/gpforum-carton exec prove -v` printed Carton's version** once
   Carton was installed: real `carton exec` took the command's options as its

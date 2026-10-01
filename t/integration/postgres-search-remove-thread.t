@@ -109,6 +109,22 @@ is_deeply(
     'removing it again finds nothing left to delete'
 );
 
+# Two dispatchers can deliver a hide and the restore after it in either
+# order. The removal deleted without reading the thread again, so one that
+# came second removed what the restore had just indexed, and the restored
+# thread stayed out of search until the next rebuild. Each step now reads the
+# thread under its locks and leaves a live thread's documents alone.
+$dbh->do(
+    q{UPDATE threads SET moderation_state = 'visible' WHERE thread_id = ?},
+    undef, $thread );
+$indexer->index_thread($thread);
+$indexer->index_thread_posts($thread);
+my $late = $indexer->remove_thread($thread);
+is( $late->{posts_removed},
+    0, 'a removal delivered after the restore removes no post document' );
+is( _documents($thread), 1 + $POSTS,
+    'and the restored thread keeps every document' );
+
 $schema->storage->disconnect;
 GPForum::Test::PostgresHarness::drop_database($database);
 

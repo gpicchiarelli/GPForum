@@ -52,7 +52,7 @@ sub _search_results ( $self, $query, $filters, $limit ) {
     };
 
     if ($EVAL_ERROR) {
-        $self->app->log->warn("search degraded: $EVAL_ERROR");
+        $self->app->log->warn( 'search degraded: ' . _reason($EVAL_ERROR) );
         return $self->_search_page(
             {
                 filters => $filters,
@@ -158,11 +158,24 @@ sub _autocomplete_lookup ( $self, $query ) {
     };
 
     if ($EVAL_ERROR) {
-        $self->app->log->warn("autocomplete degraded: $EVAL_ERROR");
+        $self->app->log->warn(
+            'autocomplete degraded: ' . _reason($EVAL_ERROR) );
         return $self->_autocomplete_payload( $query, [], 'degraded' );
     }
 
     return $self->_autocomplete_payload( $query, $rows );
+}
+
+# Why a search failed, for the log. DBI appends the statement and its bind
+# values to its error, and those carry what the visitor typed and a member's
+# id. A search cancelled at its own statement timeout is routine under load,
+# so each one logged several kilobytes of that; the reason before it is what
+# an operator acts on.
+sub _reason ($error) {
+    my ($reason) = split /\s* \[for [ ] Statement [ ]/msx, "$error", 2;
+    $reason =~ s/\s+ \z//msx;
+
+    return $reason;
 }
 
 sub _autocomplete_payload ( $self, $query, $suggestions, $status = undef ) {
@@ -213,7 +226,10 @@ Returns JSON autocomplete suggestions for a query prefix.
 
 =head1 DIAGNOSTICS
 
-Search backend failures are logged and rendered as degraded empty results.
+Search backend failures are rendered as degraded empty results and logged as
+C<search degraded: REASON> or C<autocomplete degraded: REASON>. The reason is
+the error without the statement and bind values DBI appends to it, which carry
+what the visitor typed.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

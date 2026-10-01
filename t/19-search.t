@@ -43,6 +43,9 @@ const my $TWO_BATCHES           => 2 * $SMALL_BATCH;
 # The thread's own transaction and one per batch of its posts.
 const my $REMOVAL_TRANSACTIONS => 4;
 
+# The thread's own transaction and the first batch, which finds it live.
+const my $LATE_REMOVAL_TRANSACTIONS => 2;
+
 my $category = GPForum::Test::SearchRow->new(
     data => {
         category_id => 'category-1',
@@ -268,7 +271,9 @@ ok(
     'post rebuild filters deleted rows'
 );
 
+$thread->update( { moderation_state => 'hidden' } );
 my $removed_thread = $indexer->remove_thread('thread-1');
+$thread->update( { moderation_state => 'visible' } );
 ok( $removed_thread->{ok}, 'thread removal succeeds' );
 is( $removed_thread->{posts_removed},
     1, 'thread removal also removes post documents' );
@@ -688,6 +693,7 @@ is_deeply(
     'a batch removes the document of a post that died'
 );
 
+$long_thread->update( { moderation_state => 'hidden' } );
 my $transactions = $long_schema->transaction_count;
 my $long_removed = $long_indexer->remove_thread('thread-long');
 is( $long_schema->transaction_count - $transactions,
@@ -715,6 +721,23 @@ ok(
 );
 ok( _document_for( $long_documents, 'post', 'post-1' ),
     'another thread\'s posts keep theirs' );
+
+# Two dispatchers can deliver a hide and the restore after it in either
+# order. A removal that came second deleted what the restore had just
+# indexed; it now reads the thread again under its locks and stops.
+$long_thread->update( { moderation_state => 'visible' } );
+$long_indexer->index_thread('thread-long');
+$long_indexer->index_thread_posts('thread-long');
+my $restored_documents = _long_documents($long_documents);
+$transactions = $long_schema->transaction_count;
+my $late_removal = $long_indexer->remove_thread('thread-long');
+is( $late_removal->{posts_removed},
+    0, 'a removal delivered after the restore removes no post document' );
+is( _long_documents($long_documents),
+    $restored_documents, 'and the restored thread keeps every document' );
+is( $long_schema->transaction_count - $transactions,
+    $LATE_REMOVAL_TRANSACTIONS,
+    'it stops at the first batch that finds the thread live' );
 
 # Renaming, moving or restoring a thread re-derives its posts one batch per
 # outbox message: the first with the event, each next one recorded as its own
@@ -817,6 +840,14 @@ sub _document_for {
     my ( $documents, $type, $id ) = @_;
 
     return any { _entity_is( $_->data, $type, $id ) } @{ $documents->rows };
+}
+
+sub _long_documents {
+    my ($documents) = @_;
+
+    return
+      scalar grep { $_->get_column('entity_id') =~ /long/msx }
+      @{ $documents->rows };
 }
 
 sub _long_post {

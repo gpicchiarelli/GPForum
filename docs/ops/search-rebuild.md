@@ -35,7 +35,9 @@ A hidden or deleted thread leaves search in one message: its title first,
 out of the suggestions at once, then its posts 500 to a transaction. No
 transaction holds more than 500 document locks, however long the thread. A
 removal that fails part way keeps what it removed, and the retry removes the
-rest.
+rest. Each step reads the thread again under its locks, so a removal that
+reaches a thread restored meanwhile -- two dispatchers can deliver a hide
+and its restore in either order -- leaves its documents alone.
 
 ## From the console
 
