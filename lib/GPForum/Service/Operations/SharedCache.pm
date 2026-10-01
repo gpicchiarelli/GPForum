@@ -722,3 +722,274 @@ sub _error_category ($error) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::SharedCache - The GlifiStore L2 cache: fail-open, tag invalidation by token.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $cache = GPForum::Service::Operations::SharedCache->connect_required(
+        {
+            namespace   => 'gpforum',
+            ttl_seconds => 30,
+            url         => 'tcp://127.0.0.1:7379',
+        }
+    );
+    $cache->put( 'category:42', $category, { tags => ['categories'] } );
+    my $value = $cache->get('category:42');
+
+    my $ticket = $cache->ticket( ['forum:public-html'] );
+    my $page   = render_page();
+    $cache->put( 'page:/', $page,
+        { tags => ['forum:public-html'], ticket => $ticket } );
+
+    $cache->invalidate_tag('categories');
+
+=head1 DESCRIPTION
+
+The shared cache layer every web and worker process reaches: L2 under
+L<GPForum::Service::Operations::TieredCache>, built by
+L<GPForum::Service::Operations::CacheFactory> whenever C<glifistore_url> is
+set (ADR 0048). It stores JSON in a GlifiStore server through
+C<GlifiStore::Client>. Like every cache here it is disposable: PostgreSQL
+stays the source of truth, and nothing read from GlifiStore is
+authoritative.
+
+Each entry is stored under C<E<lt>namespaceE<gt>:entry:E<lt>keyE<gt>> as a
+JSON object holding the value, its tags, the token of each tag it was
+written under, and its expiry (C<expires_at_epoch>); GlifiStore is given the
+same expiry. A value must therefore encode as JSON: a blessed object, such
+as a L<DBIx::Class> row, does not, and is not stored.
+
+B<Tags.> Each tag has a token, 32 random hexadecimal characters, under
+C<E<lt>namespaceE<gt>:tag:E<lt>tagE<gt>>, minted by the first write, or
+minting L</ticket>, that finds none, and kept for a day. An entry is
+current while each of its tags still holds the token it was written under,
+so invalidating a tag is one ERASE of its token, and every entry written
+under it misses from then on.
+An existing token is never written again, not even to extend it: a write
+that read it just before an invalidation erased it would put it back, and
+the entries the invalidation retired would be current again. The tag used
+to keep a list of its entries, rewritten by every put; two concurrent puts
+lost one key, a purge then missed it, and a hidden post came back from L2.
+An entry written before tokens existed carries none and misses, and a tag
+key that still holds the old list is replaced by a token on the next write.
+
+B<Tickets.> A value computed from the database should be stored under the
+tokens its tags had before the computation read anything (L</ticket>), not
+those current when it is stored: read at the put, a page with a post hidden
+meanwhile was stored under the token minted after the purge, and stayed
+current in L2 until its TTL.
+
+B<Failures.> Every call is fail-open: a GlifiStore error never reaches the
+caller, it reads as a miss, an unstored value or nothing erased. A failed
+call is counted in C<stats.failures> and, by GlifiStore error category
+(client-semantics-v1, section 3), drops the connection and pauses L2
+(C<transport>, C<protocol>, C<internal>, C<indeterminate>, C<unavailable>,
+and any unknown category), pauses it but keeps the connection (C<overloaded>:
+reconnecting every process only adds load), or does neither
+(C<invalid_argument>, C<permission_denied>: refused on their merits).
+C<not_found> is not a failure: a GET of an absent key is a miss, and an
+ERASE of an absent key has done what was asked. While paused, for fifteen
+seconds, every call skips GlifiStore and counts in C<stats.skipped>:
+handlers are synchronous, and a hung server would otherwise cost every
+call its connect and request timeouts. Invalidations and L</ping> are skipped
+too; an invalidation skipped then leaves the entry current until its TTL, the
+bound ADR 0067 relies on. After the pause a dropped connection is rebuilt
+through C<connector> and C<endpoint>; a failed reconnect pauses again.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor; L</connect_required> is the usual way in. Accepts
+C<client> (a connected GlifiStore client, or none to connect through
+C<connector> on the first call), C<connector> (a code reference that takes
+the endpoint hash and returns a client) and C<endpoint> (a hash from
+L</parse_endpoint>); without both of the last two, a lost client is never
+replaced. Optional C<clock>
+(L<GPForum::Service::Clock>, read through C<now_epoch>), C<codec>
+(L<JSON::MaybeXS>, canonical, UTF-8), C<namespace> (C<gpforum>),
+C<ttl_seconds> (60), C<retry_after_epoch> (the end of the current pause, or
+C<undef>) and C<stats>.
+
+=head2 connect_required
+
+Class method. Takes a hash reference with C<url> (required) and optional
+C<connector>, C<clock>, C<namespace> (used when not empty) and
+C<ttl_seconds> (used when true). Parses the URL with L</parse_endpoint>,
+tries to connect once, and returns an instance. The default connector loads
+C<GlifiStore::Client> and calls its C<connect> with the endpoint's fields.
+A failed connect is not an error: the instance has no client, is not
+paused, and tries again on its first call, so a process that starts before
+GlifiStore still starts. Croaks when the URL is missing or malformed.
+
+=head2 try_connect
+
+Class method. Takes the options of L</connect_required>. Returns C<undef>
+when C<url> is undefined or empty, or when L</connect_required> dies (a
+malformed URL); otherwise the instance L</connect_required> returns, which
+is also the case when the server could not be reached. Never croaks. The
+application builds its cache with L</connect_required> instead (ADR 0048).
+
+=head2 parse_endpoint
+
+Takes a URL (callable on the class or an instance). Returns a hash
+reference for C<GlifiStore::Client-E<gt>connect>: for C<unix://path>,
+C<unix_socket_path>; for C<tcp://host:port> or C<host:port>, C<host> and
+C<port>. Both carry C<connect_timeout> and C<request_timeout>, one second
+each. Croaks for anything else.
+
+=head2 lookup
+
+Takes a key. Returns the stored entry, a hash reference with C<value>,
+C<tags>, C<tokens> and C<expires_at_epoch>, when it is present, decodes as
+a JSON object, has not expired, and each of its tags still holds the token
+it was written under, counted as a hit. Otherwise returns C<undef>, counted
+as a miss; an entry that has expired or does not decode is erased. One GET
+reads the entry and one more reads each of its tags. This is the read
+L<GPForum::Service::Operations::TieredCache> fills L1 from.
+
+=head2 get
+
+Takes a key. Returns the entry's value as L</lookup> finds it, or C<undef>.
+
+=head2 put
+
+Takes a key, a value and an optional hash reference with C<tags> (an array
+reference; empty and repeated tags are dropped), C<ttl_seconds> (the
+instance's when absent or zero) and C<ticket> (from L</ticket>). Without a
+ticket, the entry is written under each tag's current token, minted when the
+tag has none. With one, it is written under the ticket's tokens, and not
+written at all when the ticket failed or holds no token for one of the
+tags; such a tag gets a token now, for the next value. Returns the value
+when it was stored (counted in C<stats.writes>), or C<undef> when it was
+not: L2 paused or failing, a tag token that could not be read or minted, a
+refused ticket, or a value that does not encode as JSON.
+
+=head2 get_or_set
+
+Takes a key, a code reference and the options of L</put>. Returns the
+cached value on a hit. On a miss it takes a minting L</ticket> for the tags
+before calling the code reference with no arguments, then stores the result
+under that ticket (replacing any C<ticket> in the options) and returns it,
+whether or not it was stored. Errors from the code reference propagate, and
+nothing is stored.
+
+=head2 ticket
+
+Takes an array reference of tags and an optional hash reference with
+C<mint>. Reads each distinct non-empty tag's current token before the
+caller computes a value, and returns C<< { tokens => { $tag => $token } } >>
+to pass to L</put> as C<ticket>. With C<mint>, a tag with no token gets one
+now, which is safe since nothing has been read yet: for a caller that
+always stores (L</get_or_set>). Without it, a tag with no token is recorded
+as C<undef>, and the put mints one but does not store the value, since a
+purge in between had nothing to erase and nothing tells whether the value
+predates it. That is for a caller that may store nothing, such as a page
+that turns out not to exist: minting for it would let any thread id in a
+URL write a key that lives a day. Returns C<< { failed => 1 } >> when a
+token could not be read or minted (L2 paused or failing); L</put> stores
+nothing under that ticket.
+
+=head2 invalidate
+
+Takes a key and erases its entry. Returns 1 when an entry was erased, 0
+when there was none or L2 was paused or failed; the result is added to
+C<stats.invalidations>.
+
+=head2 invalidate_tag
+
+Takes a tag and erases its token, which retires every entry written under
+it: they miss from then on and GlifiStore drops them at their expiry.
+Returns 1 when the tag's key was erased, 0 for an undefined or empty tag,
+a tag whose key is absent, or L2 paused or failed; the result is added to
+C<stats.invalidations>.
+
+=head2 purge_expired
+
+Does nothing and returns 0: GlifiStore is given each entry's expiry and
+drops it itself. Present because
+L<GPForum::Service::Operations::TieredCache> calls it on both layers.
+
+=head2 clear
+
+Does nothing and returns 0: the shared store is not emptied from a process.
+Present because L<GPForum::Service::Operations::TieredCache> calls it on
+both layers.
+
+=head2 snapshot
+
+Returns a hash reference with C<namespace>, C<layer> (C<shared>),
+C<retry_after_epoch> (C<undef> unless paused), C<ttl_seconds> and a copy of
+C<stats> (C<hits>, C<misses>, C<writes>, C<invalidations>, C<failures>,
+C<skipped>). C</metrics> shows it under C<local_caches[0].l2>.
+
+=head2 ping
+
+Returns 1 when GlifiStore answers a PING, 0 when L2 is paused, no client
+could be connected, or the PING failed (counted and handled as any failed
+call). The readiness check reaches it through
+L<GPForum::Service::Operations::TieredCache/ping>.
+
+=head1 DIAGNOSTICS
+
+L</connect_required> croaks with C<glifistore_url is required> when the URL
+is undefined or empty, and L</connect_required> and L</parse_endpoint>
+croak with
+C<glifistore_url must be tcp://host:port, unix://path, or host:port> for a
+malformed one. L</lookup>, L</get>, L</put>, L</get_or_set> and
+L</invalidate> croak with C<cache key is required> for an undefined or
+empty key. GlifiStore errors never propagate: they are counted in
+C<stats.failures> and handled as L</DESCRIPTION> says, and C<stats.skipped>
+counts the calls a pause skipped. C<stats.failures> also counts a reconnect
+that fails (which pauses L2), a value that does not encode as JSON and a
+stored entry that does not decode (neither of which touches the connection).
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None read directly. L<GPForum::Service::Operations::CacheFactory> passes the
+configuration's C<glifistore_url> (C<GPFORUM_GLIFISTORE_URL>) as C<url>,
+C<gpforum> as C<namespace>, and C<category_cache_ttl_seconds> as
+C<ttl_seconds>. C<GlifiStore::Client> is not a C<cpanfile> pin: the
+operator installs it on the Perl that runs the application (see
+F<docs/DEPLOYMENT.md>).
+
+=head1 DEPENDENCIES
+
+L<Mojo::Base>, L<Const::Fast>, L<Crypt::URandom>, L<JSON::MaybeXS>,
+L<List::Util>, L<GPForum::Service::Clock>, and C<GlifiStore::Client>, loaded
+at run time by the default connector.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+A host is letters, digits, dots, underscores and hyphens, so an IPv6
+literal address is not accepted. The connect and request timeouts are fixed
+at one second, and the pause after a failure at fifteen seconds. A hit costs
+one GET for the entry and one per tag. A tag's token lapses after a day;
+the entries under it then miss once and the next write mints a new one. Two
+writes that both find a tag without a token each mint one: the later wins
+and the other's entry misses, which is only a wasted write. The counters in
+C<stats> are per process.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -220,3 +220,205 @@ sub _require_layers ($self) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::TieredCache - A process-local L1 in front of a shared L2, kept coherent across workers.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $cache = GPForum::Service::Operations::TieredCache->new(
+        l1 => GPForum::Service::Operations::LocalCache->new,
+        l2 => $shared_cache,
+    );
+    $cache->bus($invalidation_bus);
+
+    my $categories = $cache->get_or_set(
+        'categories:list:anonymous:50',
+        sub { return load_categories() },
+        { tags => ['forum:categories'], ttl_seconds => 60 },
+    );
+    $cache->invalidate_tag('forum:categories');
+
+=head1 DESCRIPTION
+
+The application cache L<GPForum::Service::Operations::CacheFactory> builds
+when GlifiStore is configured. L1 is a
+L<GPForum::Service::Operations::LocalCache> private to the process; L2 is a
+L<GPForum::Service::Operations::SharedCache> every process shares. A read
+tries L1 first and falls back to L2, copying an L2 hit into L1; a write and
+an invalidation go to both layers. PostgreSQL stays the source of truth:
+either layer may lose an entry at any time.
+
+L1 belongs to one process, so an invalidation raised in one Hypnotoad worker
+would leave the others serving the old entry, a hidden or deleted post among
+them, until it expired. With a
+L<GPForum::Service::Operations::CacheInvalidationBus> attached as C<bus>,
+every invalidation and clear is published on it, and every L</get> first
+applies what the other workers published. It applies it to L1 only: the
+publisher already invalidated L2, and invalidating it again would turn one
+write into one per worker.
+
+An entry copied from L2 into L1 keeps only the lifetime it has left in L2,
+so a missed invalidation stays bounded by one TTL, the recovery ADR 0067
+counts on. L</get_or_set> takes L2's tag tokens (L</ticket>) before it
+computes the value, so a purge that lands while the value is computed
+retires it instead of being missed.
+
+L1 is used through C<get>, C<put>, C<invalidate>, C<invalidate_tag>,
+C<purge_expired>, C<clear>, C<snapshot> and C<clock>; L2 through C<lookup>,
+C<put>, C<invalidate>, C<invalidate_tag>, C<purge_expired>, C<clear>,
+C<snapshot>, C<ping> and, when it has one, C<ticket>. A LocalCache can serve
+as L2: its entries report no expiry, so a copy into L1 takes L1's default
+TTL.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<l1> and C<l2> are the two layers; they are not
+checked here but every method except L</absorb_remote_invalidations>
+requires both. C<bus> is optional: an invalidation bus with C<publish>,
+C<drain> and C<snapshot>. C<stats> is a hash reference of counters
+(C<hits>, C<misses>, C<l2_fills>, C<writes>, C<invalidations>,
+C<remote_invalidations>), all starting at zero.
+
+=head2 get
+
+Takes a key. First applies the bus's pending invalidations
+(L</absorb_remote_invalidations>), then returns L1's value when it holds a
+defined one. Otherwise looks the key up in L2: a live entry is copied into
+L1 with its tags and the seconds it has left in L2 (L1's default TTL when L2
+reports no expiry), counted as a hit and an L2 fill, and its value is
+returned. Returns C<undef> on a miss, which includes an L2 entry with no
+time left by L1's clock; that entry is not copied.
+
+=head2 put
+
+Takes a key, a value and an options hash reference, which must be passed
+but may be C<undef>: C<tags>, C<ttl_seconds> and C<ticket>, handed unchanged
+to both layers. Counts a write and returns the value, also when L2 failed
+to store it. Publishes nothing on the bus.
+
+=head2 get_or_set
+
+Takes a key, a code reference and the optional options of L</put>. Returns
+the cached value on a hit (L</get>). On a miss takes a ticket for the
+options' C<tags> with C<mint> set (L</ticket>), calls the code reference with
+no arguments, stores its result with L</put> under that ticket when there is
+one, and returns it.
+
+=head2 ticket
+
+Takes an array reference of tags and an optional options hash reference
+(C<mint>), and returns L2's C<ticket> for them, to be passed to L</put> as
+its C<ticket> option once the value is computed. With SharedCache that is
+C<< { tokens => {...} } >>, or C<< { failed => 1 } >> when GlifiStore could
+not read or mint a token. Returns C<undef> when L2 has no C<ticket>
+method. L1 takes no ticket: a purge from another process reaches it on the
+bus at the next L</get>, which drops the entry if it is already written.
+
+=head2 invalidate
+
+Takes a key. Removes it from L1 and L2 and publishes C<< { keys => [$key] } >>
+on the bus. Returns what L1 removed (1 or 0), which is added to
+C<invalidations>.
+
+=head2 invalidate_tag
+
+Takes a tag. Invalidates it in L1 and L2 and publishes
+C<< { tags => [$tag] } >> on the bus. Returns the number of L1 entries
+removed, which is added to C<invalidations>.
+
+=head2 absorb_remote_invalidations
+
+Drains the bus and applies each request to L1 only: a C<clear> request
+empties L1; otherwise each of the request's C<keys> and C<tags> is
+invalidated. Returns the number of L1 entries removed, which is added to
+C<remote_invalidations>, or 0 when there is no bus. L</get> calls it on
+every read.
+
+=head2 purge_expired
+
+Calls C<purge_expired> on both layers and returns how many entries L1
+removed. With SharedCache as L2 only L1 is purged: SharedCache's
+C<purge_expired> does nothing, and GlifiStore drops an entry at its expiry
+itself.
+
+=head2 clear
+
+Empties L1, calls L2's C<clear> and publishes C<< { clear => 1 } >>, so the
+other workers empty their L1 too. Returns the number of L1 entries removed,
+which is added to C<invalidations>.
+
+=head2 snapshot
+
+Returns a hash reference with C<layer> (C<tiered>), C<namespace> (L1's),
+C<l1> and C<l2> (each layer's snapshot), C<bus> (the bus's snapshot, or
+C<undef> without a bus) and a copy of C<stats>.
+
+=head2 ping
+
+Returns L2's C<ping>. With SharedCache that is 1 when GlifiStore answers,
+and 0 when it does not or is being skipped after a failed call.
+
+=head1 DIAGNOSTICS
+
+Every method except L</absorb_remote_invalidations> croaks with
+C<tiered cache requires l1 and l2 layers> when either layer is missing.
+Errors raised by a layer propagate: LocalCache croaks with
+C<cache key is required> for an undefined or empty key in C<get> and C<put>,
+and SharedCache does in C<invalidate>. L</ping> dies when L2 has no C<ping>
+method, which LocalCache lacks. An error from the code reference given to
+L</get_or_set> propagates and nothing is stored. A GlifiStore failure does
+not throw: SharedCache turns it into a miss, a write not made or an
+invalidation skipped.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None directly. L<GPForum::Service::Operations::CacheFactory> builds it when
+C<glifistore_url> is set, and L<GPForum::Bootstrap::Operations> attaches the
+bus when the application has a database schema.
+
+=head1 DEPENDENCIES
+
+L<Carp>, L<Mojo::Base>. It works with
+L<GPForum::Service::Operations::LocalCache>,
+L<GPForum::Service::Operations::SharedCache> and
+L<GPForum::Service::Operations::CacheInvalidationBus>, which it does not
+load.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Only invalidations and clears travel on the bus. A L</put> that replaces a
+key leaves other processes' L1 copy of it in place until it expires or is
+invalidated. Without a bus, an invalidation reaches no other process's L1
+at all. The bus delivers nothing while the process's database transaction
+is open, so a L</get> made inside one can still return an entry another
+worker invalidated.
+
+With SharedCache as L2, L</clear> and L</purge_expired> touch L1 only:
+SharedCache's C<clear> and C<purge_expired> do nothing. GlifiStore entries
+live until their TTL or a key or tag invalidation, and the next L</get>
+copies them back into L1.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

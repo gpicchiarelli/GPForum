@@ -142,3 +142,140 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::CategoryReader - The categories a viewer can read, with the anonymous list cached.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader = GPForum::Service::Forum::CategoryReader->new(
+        cache             => $cache,
+        cache_ttl_seconds => 30,
+        schema            => $schema,
+    );
+    my $categories =
+      $reader->list_categories( { limit => 50, viewer => $viewer } );
+    my $category = $reader->find_category( $category_id, $viewer );
+    my $rs       = $reader->categories_resultset( 100, $viewer );
+
+=head1 DESCRIPTION
+
+The read side of forum categories: the category index, the home page, the
+sitemap, the new thread form and a thread's move form list them through this
+module, the category page finds its category with it, and the posting
+workflow checks with it the category a thread is created in or moved to.
+
+Visibility follows ADR 0102. A category is listed or found only when the
+viewer can read both the category and its space, judged by
+L<GPForum::Service::Forum::Visibility>. The list applies that rule in the
+query, before the row limit, so a page is never short of readable
+categories. A deleted category (C<deleted_at> set) is never returned.
+
+Only the anonymous list is cached: it is the one list every anonymous reader
+shares, while a signed-in viewer's list depends on their grants. Each limit
+is its own entry, under C<categories:list:anonymous:E<lt>limitE<gt>>, tagged
+C<categories> and C<forum-index>, for C<cache_ttl_seconds>. The cached
+elements are plain hashes of the category's columns, not rows: the shared
+layer (GlifiStore, through L<GPForum::Service::Operations::TieredCache>)
+holds JSON, and a row does not encode, so a list of rows never reached it
+and every fill counted as a shared cache failure. The outbox's cache
+invalidation handler (L<GPForum::Worker::Handler::CacheInvalidation>) and
+the console's purge (L<GPForum::Service::Admin::Maintenance>) drop the list
+through those tags. A single category (L</find_category>) is never cached.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is the L<DBIx::Class> schema whose
+C<Category> result source joins its C<space>. C<cache> is optional: any
+object with C<get_or_set( $key, $code, { tags =E<gt> [...], ttl_seconds
+=E<gt> $n } )>, such as L<GPForum::Service::Operations::LocalCache> or
+L<GPForum::Service::Operations::TieredCache>; without one nothing is cached.
+C<cache_ttl_seconds> is the anonymous list's lifetime (30 by default).
+
+=head2 list_categories
+
+Takes a hash reference with C<limit> and C<viewer>; the argument must be
+passed but may be C<undef>, which reads as the default limit and an
+anonymous viewer. The limit is bounded: absent, not made only of digits, or
+below 1 gives 100, and above 200 gives 200. The viewer is a
+L<GPForum::Service::Forum::Viewer>; none reads as anonymous.
+
+Returns an array reference of the readable, non-deleted categories ordered
+by position, title and category id. For an anonymous viewer when a cache is
+set, the list comes from the cache (computed and stored on a miss) and its
+elements are plain hashes of the category's columns; otherwise it is read
+from the database and its elements are C<Category> rows. Its readers (the
+view models, the home page, the sitemap) take either shape.
+
+=head2 find_category
+
+Takes a category id and an optional viewer: a
+L<GPForum::Service::Forum::Viewer>, a bare user id (read as a non-member
+with that id), or nothing for anonymous
+(L<GPForum::Service::Forum::Viewer/from>). Returns the C<Category> row, with
+its space's visibility as the extra column C<space_visibility>, when the
+category exists, is not deleted and the viewer can read it and its space.
+Otherwise, and for an undefined or empty id, returns C<undef>, so the caller
+answers 404 and does not confirm that the category exists.
+
+=head2 categories_resultset
+
+Takes a row limit and an optional L<GPForum::Service::Forum::Viewer>
+(nothing reads as anonymous). Returns, unexecuted, the resultset
+L</list_categories> executes: non-deleted categories joined to their space,
+restricted by L<GPForum::Service::Forum::Visibility/readable_condition>,
+ordered by position, title and category id, with the limit as its row
+count. The limit is used as given, not bounded. Public so that the query
+plan evidence (L<GPForum::Command::QueryPlanEvidence>) EXPLAINs the query
+that actually runs.
+
+=head1 DIAGNOSTICS
+
+Dies when the database does. Errors from the cache propagate from
+L</list_categories>, which also dies when called with no argument, or with
+a true argument that is not a hash reference. A viewer given to
+L</list_categories> or L</categories_resultset> must be a
+L<GPForum::Service::Forum::Viewer> object: only L</find_category> converts
+a bare user id, and either method dies on one.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None directly. L<GPForum::Bootstrap::Forum> sets C<cache> to the
+application cache and C<cache_ttl_seconds> from the configuration's
+C<category_cache_ttl_seconds>.
+
+=head1 DEPENDENCIES
+
+L<Mojo::Base>, L<Const::Fast>, L<GPForum::Service::Forum::Viewer>,
+L<GPForum::Service::Forum::Visibility>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The list's shape depends on whether it came from the cache: plain hashes
+for a cached anonymous list, C<Category> rows otherwise. A change to a
+category whose invalidation is missed leaves the cached anonymous list stale
+for up to C<cache_ttl_seconds>.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -175,3 +175,156 @@ sub _cache_control ($ttl_seconds) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Web::PublicHttpCache - Serve anonymous public pages from the application cache, with HTTP validators.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $http_cache = GPForum::Web::PublicHttpCache->new(
+        cache       => $c->gp_local_cache,
+        ttl_seconds => 60,
+    );
+
+    my $options = {
+        key  => 'forum-ssr:categories:en:light:/categories:limit=50',
+        tags => [ 'forum:public-html', 'forum:categories' ],
+    };
+    return if $http_cache->serve_cached( $c, $options );
+
+    my $categories = load_categories();    # the page's queries
+    return $http_cache->render(
+        controller => $c,
+        payload    => { categories => $categories },
+        status     => 200,
+        template   => 'forum/categories',
+        %{$options},
+    );
+
+=head1 DESCRIPTION
+
+Renders a public HTML page through the application cache (a
+L<GPForum::Service::Operations::TieredCache>, or a LocalCache without
+GlifiStore), so anonymous visitors share one rendering of it. A cached entry
+holds the rendered body, its status and its validators: a weak C<ETag> (the
+SHA-1 of the body), C<Last-Modified> (when it was rendered) and
+C<Cache-Control: public, max-age=N, stale-while-revalidate=N>. A request
+whose C<If-None-Match> or C<If-Modified-Since> matches the entry gets a 304
+with an empty body.
+
+Whether a request may use the cache is L<GPForum::Web::PublicCacheAccess>'s
+call: only a GET or HEAD from a visitor who is not signed in. Any other
+request, and every request when no cache is set, is rendered as usual with
+none of the cache headers.
+
+A page asks L</serve_cached> before its queries run, so a hit spares them.
+On a miss it hands the same options to L</render>, which then stores the page
+without looking the key up again: each miss used to look it up twice, and
+while GlifiStore hangs every lookup costs the request a timeout. The miss
+also carries the cache's ticket for the page's tags, taken before the
+queries, so a moderation purge that lands while they run retires the page
+L</render> stores instead of missing it.
+
+A response served through the cache carries C<Cache-Control>, C<ETag>,
+C<Last-Modified>, C<Vary: Accept, Accept-Language, Cookie>,
+C<X-GPForum-Source: public-http-cache> and C<X-GPForum-Cache>: C<hit> or
+C<miss>, or for a 304 C<revalidated> or C<miss-revalidated>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<cache> is the application cache, with C<get>,
+C<put> and optionally C<ticket>; without one nothing is cached.
+C<cache_access> defaults to a L<GPForum::Web::PublicCacheAccess>.
+C<ttl_seconds> is both the lifetime of a stored entry and the C<max-age>
+sent to clients; 30 by default.
+
+=head2 render
+
+Takes a hash: C<controller>, C<key> (the cache key), C<template> and
+C<status>, all required; C<payload>, a hash reference of template values
+(empty by default), passed to the controller's C<render_to_string> or
+C<render> beside C<template>, so a key Mojolicious reads as a render option
+(C<text>, C<json>, C<data>, C<layout>, C<format> and the like) acts as one;
+C<tags>, an array reference stored with the entry (empty by default); and
+C<known_miss> and C<ticket>, as L</serve_cached> leaves them on its
+options. When the request is not cacheable, renders the template with
+the payload and status and nothing more. Otherwise serves the entry cached
+under the key, unless C<known_miss> says there is none. On a miss it renders
+the template to a string, stores the entry with the tags, C<ttl_seconds> and
+the ticket if there is one, and serves it. Serving sets the headers above and
+renders the body as HTML with the entry's status, or an empty 304 when the
+client's copy is fresh. Returns what the controller's C<render> returns.
+
+=head2 serve_cached
+
+Takes the controller and the page's cache options (C<key>, C<tags>). Returns
+1 after serving the entry cached under C<key>, as L</render> serves it.
+Returns 0, having rendered nothing, when the options or their C<key> are
+missing, the request is not cacheable, or the key is not cached. A miss sets
+C<known_miss> on the options and, when the cache has a C<ticket> method,
+C<ticket> to its ticket for the options' C<tags>.
+
+=head1 DIAGNOSTICS
+
+L</render> croaks with C<controller is required>, C<cache key is required> or
+C<template is required> when that input is undefined or empty (checked in
+that order), and with C<status is required> when no status is given. These
+are checked before whether the request is cacheable. Errors from the cache
+and from rendering the template propagate, and so does
+C<Wide character in subroutine entry> from L<Digest::SHA> when a page
+rendered for the cache holds a character above U+00FF (see
+L</BUGS AND LIMITATIONS>).
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None directly. The C<gp_public_http_cache> helper
+(L<GPForum::Bootstrap::Forum>) builds one per call over the
+C<gp_local_cache> application cache, with C<category_cache_ttl_seconds> as
+C<ttl_seconds>.
+
+=head1 DEPENDENCIES
+
+L<Carp>, L<Const::Fast>, L<Digest::SHA>, L<Mojo::Base>, L<Mojo::Date>,
+L<GPForum::Web::Access>, L<GPForum::Web::PublicCacheAccess>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The cache key is the caller's (L<GPForum::Web::ForumAccess> builds it from
+the page, locale, theme, path and limit); a variation of the body the key
+does not name is served to every visitor. The entry is stored with whatever
+status the page renders, and C<Last-Modified> is when the entry was
+rendered, not when its content changed.
+
+The body is the character string C<render_to_string> returns, never
+encoded to UTF-8: it is hashed and sent as it is. A page holding a
+character above U+00FF (an em dash, a curly quote, an emoji in a thread
+title) dies in C<sha1_hex> and the visitor gets a 500. A page whose
+non-ASCII characters are all Latin-1, such as the Italian categories page
+with its C<IdentitE<agrave>> label, is sent as Latin-1 bytes under
+C<text/html;charset=UTF-8>, which is not valid UTF-8, so the browser shows
+replacement characters. A signed-in visitor's page, which is not cached, is
+encoded as usual.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut
