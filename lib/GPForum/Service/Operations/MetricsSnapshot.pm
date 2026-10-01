@@ -241,3 +241,100 @@ sub _degraded_rate_limiter_active ( $snapshot, $stats ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::MetricsSnapshot - The process, runtime and database snapshot behind the metrics endpoint.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
+        runtime            => $runtime,
+        runtime_policy     => $runtime_policy,
+        schema             => $schema,
+        db_query_stats     => $db_query_stats,
+        realtime_hub       => $realtime_hub,
+        rate_limiter       => $rate_limiter,
+        security_telemetry => $security_telemetry,
+        local_caches       => [$local_cache],
+    );
+
+    my $snapshot = $metrics->collect;
+
+=head1 DESCRIPTION
+
+Gathers, in one hash, what the operations metrics endpoint reports: the
+process id and uptime, the runtime and its OS profile (snapshot, features,
+sockets, processes and preflight check), runtime enforcement, local caches,
+the realtime hub and its listener supervisor, rate limits, security
+telemetry, projection lag, database query statistics, query budgets and
+their drift, database readiness and the outbox backlog. Each collaborator is
+optional: a section whose collaborator is not set comes back empty.
+
+The database section times a C<SELECT 1>; the outbox and query budget drift
+sections are guarded too, so a database that cannot answer turns them empty
+or C<fail> rather than failing the whole snapshot. The rate limit section
+adds C<rate_limit_allowed>, C<rate_limit_blocked> and
+C<degraded_rate_limiter_active>, which is 1 when the limiter reports
+C<degraded> or has used its fallback store.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 collect
+
+Returns the snapshot hash reference with the keys C<generated_at>,
+C<process> (C<pid>, C<uptime_seconds> since C<started_at>), C<runtime>,
+C<os>, C<os_features>, C<os_sockets>, C<os_processes>, C<os_preflight>,
+C<runtime_enforcement>, C<local_caches>, C<realtime>,
+C<realtime_listener>, C<rate_limits>, C<security>, C<projections>,
+C<db_query_stats>, C<query_budgets>, C<query_budget_drift>, C<database>
+(C<status> C<ok> or C<fail>, and C<ready_latency_ms>) and C<outbox>
+(C<pending>, C<failed>, C<retry_backlog>, C<dead_letters>).
+
+=head2 retry_backlog_resultset
+
+Returns the resultset of outbox messages that are C<pending> or C<failed>
+and due for another attempt (C<next_attempt_at> not after now). It is public
+so the query-plan evidence EXPLAINs the query the outbox section counts.
+Needs C<schema>.
+
+=head1 DIAGNOSTICS
+
+The database, outbox and query budget drift sections catch their own
+errors. Errors from the other collaborators' snapshots propagate from
+C<collect>. C<retry_backlog_resultset> dies without a C<schema>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None read here; the bootstrap passes the runtime and its policy.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Operations::OSPreflight>,
+L<GPForum::Service::Operations::QueryBudget>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

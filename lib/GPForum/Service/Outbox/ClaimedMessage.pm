@@ -54,3 +54,93 @@ sub _payload ($self) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Outbox::ClaimedMessage - An outbox row claimed with plain SQL, behaving enough like a DBIx::Class row.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $message = GPForum::Service::Outbox::ClaimedMessage->new(
+        row            => $row_hash,
+        update_handler => sub {
+            my ( $message, $changes ) = @_;
+            # write $changes to outbox_messages
+        },
+    );
+
+    my $payload = $message->get_column('payload');
+    $message->update( { status => 'done' } );
+
+=head1 DESCRIPTION
+
+On PostgreSQL, L<GPForum::Service::Outbox::Dispatcher> claims a batch of
+outbox rows with one SQL statement and gets plain hashes back. This class
+wraps each hash so the transports and the dispatcher can treat it as a row:
+C<get_column> reads a column (decoding C<payload> from JSON), and C<update>
+hands the changes to C<update_handler> and then copies them into the hash.
+C<is_direct_outbox_message> lets the dispatcher recognise a batch made only
+of such messages and mark it done in a single statement.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 get_column
+
+Takes a column name. Returns that column's value from C<row>. For
+C<payload> it returns a hash reference: the value itself when it is already
+a reference, the decoded JSON when it decodes to a hash, and an empty hash
+when it is undefined, empty, invalid JSON or not a JSON object.
+
+=head2 update
+
+Takes a hash reference of column changes. Calls C<update_handler>, when one
+is set, with the message and the changes, then applies the changes to
+C<row>. Returns the message.
+
+=head2 apply_columns
+
+Takes a hash reference of column changes and copies them into C<row>
+without calling C<update_handler>. Returns the message. The dispatcher uses
+it after a batch update it has already written.
+
+=head2 is_direct_outbox_message
+
+Returns 1.
+
+=head1 DIAGNOSTICS
+
+None of its own: invalid JSON in C<payload> reads as an empty hash, and
+whatever C<update_handler> dies with propagates from C<update>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<JSON::MaybeXS>, L<Mojo::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -54,3 +54,87 @@ sub _object_path ( $self, $object_key ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Attachment::Delivery - Authorize an attachment download and hand back a path to stream.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $delivery = GPForum::Service::Attachment::Delivery->new(
+        storage => GPForum::Service::Attachment::FilesystemStorage->new,
+        store   => $attachment_store,
+    );
+
+    my $download = $delivery->download(
+        {
+            attachment_id  => $attachment_id,
+            viewer         => $viewer,
+            viewer_user_id => $user_id,
+        }
+    );
+    # $download->{object_path} to stream, or $download->{error} when !ok
+
+=head1 DESCRIPTION
+
+Authorized downloads used to come back with the whole object in a scalar,
+which kept a 20 MB attachment in a worker for the whole request, once in the
+scalar and again in the response buffer. Now the access decision comes from
+L<GPForum::Service::Attachment::Store> and, when it allows the download, the
+storage backend is asked for a path that the caller streams. Only a backend
+without C<path_for> has its object read into memory, and none of the shipped
+backends takes that branch.
+
+The C<path_for> check uses C<UNIVERSAL::can> by name rather than
+C<< $storage->can >>, so a storage double that defines its own C<can> is not
+asked the wrong question.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 download
+
+Takes the hash reference that
+L<GPForum::Service::Attachment::Store/download_for> takes (C<attachment_id>,
+C<viewer>, C<viewer_user_id>). When the store refuses, returns its decision
+unchanged (C<< ok => 0 >> with C<error> set to C<not_found> or
+C<forbidden>). When it allows, returns the decision with C<object_path> added
+when the storage can name a path, or C<content> (the object's bytes)
+otherwise.
+
+=head1 DIAGNOSTICS
+
+Refusals are returned, not thrown. Errors from the store or from the
+storage's C<path_for> or C<read_object> propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Attachment::Store>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

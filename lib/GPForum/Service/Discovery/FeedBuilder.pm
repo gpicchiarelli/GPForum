@@ -81,3 +81,90 @@ sub _xml_escape ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Discovery::FeedBuilder - The public Atom feed of threads.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $builder = GPForum::Service::Discovery::FeedBuilder->new(
+        canonical_url => GPForum::Service::Discovery::CanonicalUrl->new(
+            base_url => 'https://forum.example',
+        ),
+    );
+
+    my $items = $builder->thread_items($threads);
+    my $atom  = $builder->render_atom(
+        {
+            id      => 'https://forum.example/feed.atom',
+            title   => 'Public discussions',
+            url     => 'https://forum.example/feed.atom',
+            updated => '2026-05-23T12:00:00Z',
+            items   => $items,
+        }
+    );
+
+=head1 DESCRIPTION
+
+Turns thread rows into feed items and feed items into an Atom document. Only
+threads that L<GPForum::Service::Discovery::VisibilityPolicy> calls public
+become items, and an item carries a summary built from the thread's
+C<safe_excerpt>, never the full body: tags are replaced by spaces, whitespace
+is collapsed, and the text is cut to 240 characters. Every value written into
+the XML is escaped.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 thread_items
+
+Takes an array reference of thread hashes. Returns an array reference of
+items, one per public thread, each with C<id> (the thread id), C<title>,
+C<url> (from C<< canonical_url->thread_url >>), C<updated>
+(C<last_activity_at>, or C<created_at>), C<summary> and C<full_body>, which is
+always undef.
+
+=head2 render_atom
+
+Takes a hash reference with C<id>, C<title>, C<url>, C<updated> and
+C<items>. Returns the Atom XML as a string: the feed header with a C<self>
+link, then one C<entry> per item using its C<url> as id and link, its
+C<title>, C<updated> and C<summary>.
+
+=head1 DIAGNOSTICS
+
+None. Undefined values render as empty elements.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None here: C<canonical_url> carries the public base URL.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Discovery::VisibilityPolicy>,
+L<GPForum::Service::Discovery::CanonicalUrl>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

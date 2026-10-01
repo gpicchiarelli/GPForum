@@ -61,3 +61,81 @@ sub _safe_metadata ($metadata) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::SecurityTelemetry - Per-process counters of security events for the metrics snapshot.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $telemetry = GPForum::Service::Operations::SecurityTelemetry->new;
+
+    $telemetry->record(
+        'session_validation_unavailable',
+        { reason => 'store_error', route => 'forum_home', status => 503 },
+    );
+
+    my $snapshot = $telemetry->snapshot;
+    # { total => 1, events => { session_validation_unavailable => {...} } }
+
+=head1 DESCRIPTION
+
+Counts security-relevant events (rate limit hits, session validation
+failures and the like) by event type, in memory, for the life of the
+process. Each type keeps its count, when it was last seen, and the metadata
+of its last occurrence. Only a fixed set of metadata keys is kept --
+C<action>, C<route>, C<status>, C<store>, C<degraded>, C<reason>,
+C<channel_type> and C<payload_size> -- so nothing personal reaches the
+metrics endpoint through this class.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 record
+
+Takes an event type and a metadata hash reference (or undef). Increments the
+type's count and the total, stamps C<last_seen_at> from the clock, and keeps
+the allowed metadata keys that are defined. Returns
+C<< { ok => 1, event_type => $type, count => $count } >>.
+
+=head2 snapshot
+
+Returns C<< { total => $n, events => { TYPE => { count, last_seen_at,
+last_metadata } } } >>, with a shallow copy of each event's hash.
+
+=head1 DIAGNOSTICS
+
+None.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The counters live in one process: under several workers each keeps its own,
+and a restart clears them.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut
