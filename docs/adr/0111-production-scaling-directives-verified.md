@@ -90,10 +90,15 @@ configuration.
 *Decided.*
 
 - There is one notification queue per process handle
-  (`Infrastructure::PgNotifications`), which routes by channel. Connection
-  identity is the backend PID. After a reconnect it re-`LISTEN`s every
-  channel and reports a gap. On a gap, the cache bus clears L1 and the
-  listener re-sends badge snapshots.
+  (`Infrastructure::PgNotifications`), which routes by channel. A
+  connection is known by its backend PID and its handle together: a
+  PostgreSQL restarted in a fresh container hands out the same PIDs again,
+  so the PID alone missed reconnects (amended 2026-10-01, after review).
+  After a reconnect it re-`LISTEN`s every channel and reports a gap. A
+  `LISTEN` that could not be issued -- no handle yet, a transaction open, or
+  refused, as by a standby -- reports a gap on every take until it succeeds.
+  On a gap, the cache bus clears L1 and the listener re-sends badge
+  snapshots.
 - The outbox backstop runs only while the process has sockets. It starts at
   the head, and reads rows only once they have settled for 5 seconds.
 - Every badge goes through `NOTIFY`, so every process and node sees it. One
