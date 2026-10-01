@@ -254,6 +254,15 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **A streaming standby and failover** (ADR 0112,
+  `docs/ops/standby-and-failover.md`): the standby follows through a
+  replication slot, `GPFORUM_DATABASE_DSN` names both servers with
+  `target_session_attrs=read-write`, and failover is a manual promotion.
+  `script/standby-drill` (`make standby-drill`) rehearses it on throwaway
+  clusters: on PostgreSQL 18.6 a write reached the standby in about 50 ms,
+  promotion took about 160 ms, and a connected application reconnected to
+  the new primary by itself.
+
 - **`/health/ready` names the runbook for every check that is not ok**
   (`runbook`, a path in the repository), so a degraded or failed check says
   what to do about it.

@@ -21,7 +21,7 @@ use GPForum::Service::Operations::DeployContract qw(
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 23;
+const my $EXPECTED_TESTS => 29;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -90,6 +90,24 @@ for my $setting (
 {
     like( $drill, qr/\Q$setting\E/msx, "the drill exercises $setting" );
 }
+
+# ADR 0112: the standby, the multi-host DSN the application connects with,
+# and a drill that holds the application's own connection across a failover.
+ok( -x 'script/standby-drill', 'the standby and failover drill is executable' );
+my $standby_drill = path('script/standby-drill')->slurp;
+for my $step (
+    qw(pg_create_physical_replication_slot target_session_attrs=read-write
+    promote GPForum::Schema)
+  )
+{
+    like( $standby_drill, qr/\Q$step\E/msx,
+        "the standby drill exercises $step" );
+}
+like(
+    path('docs/ops/standby-and-failover.md')->slurp,
+    qr/target_session_attrs=read-write/msx,
+    'the failover runbook gives the multi-host DSN'
+);
 
 my $runbook = path('docs/ops/backup-and-restore.md')->slurp;
 like( $runbook, qr/recovery_target_time/msx,

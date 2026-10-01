@@ -108,12 +108,14 @@ writes to, or to the PostgreSQL major version.
 
 ## What this does not give you
 
-Replication. ADR 0050 asks for that too, and nothing here sets up a standby.
-An archive plus base backups is a recovery story, not a availability story:
-recovering means downtime measured in however long the replay takes.
+Availability. An archive plus base backups is a recovery story: recovering
+means downtime measured in however long the replay takes. The streaming
+standby that ADR 0050 also asks for, and the failover to it, are in
+[standby-and-failover.md](standby-and-failover.md) (ADR 0112).
 
 ## Related
 
 - `docs/ops/staging-drills.md` — the logical dump and restore drill
+- `docs/ops/standby-and-failover.md` — the streaming standby and failover
 - `docs/ops/reload-and-restart.md` — stopping and starting the service
 - `docs/adr/0050-infrastructure-distributed-systems.md` — the requirement

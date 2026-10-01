@@ -1,4 +1,4 @@
-.PHONY: help install-deps-production pitr-drill partition-maintenance antivirus-check architecture bootstrap check cpan-audit critic dead-letter-check evidence-archive-check evidence-live evidence-meta evidence-validate install-deps install-deps-postgres homebrew-env mail-check mail-lifecycle-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test integration tidy
+.PHONY: help install-deps-production pitr-drill standby-drill partition-maintenance antivirus-check architecture bootstrap check cpan-audit critic dead-letter-check evidence-archive-check evidence-live evidence-meta evidence-validate install-deps install-deps-postgres homebrew-env mail-check mail-lifecycle-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test integration tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -106,6 +106,9 @@ mail-lifecycle-check: ## Exercise the mail lifecycle end to end
 # Optional dead-letter staging check (in-memory simulate). Not part of make check.
 pitr-drill: ## Rehearse point-in-time recovery on a throwaway cluster
 	script/pitr-drill
+
+standby-drill: ## Rehearse a streaming standby and a failover on throwaway clusters
+	script/standby-drill
 
 partition-maintenance: ## Plan next month's log partitions (add --apply to run)
 	script/gpforum-carton exec bin/gpforum-partition-maintenance --plan

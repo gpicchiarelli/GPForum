@@ -145,7 +145,7 @@ the runbooks alone, and is warned before anything runs out.
 | Every readiness warning names its runbook | done: a check that is not ok carries its `runbook` path | `t/33-health-readiness.t` (every check has one, and the file exists) |
 | Each supported platform installed and run from its unit files | Debian units checked statically; FreeBSD rc script never run on FreeBSD | the platform workflows (CI not running) |
 | Upgrades are rehearsed: migrate forward from the previous release on a copy | `script/staging-drill` covers it on throwaway databases | the drill, against a release tag (none yet) |
-| A standby, or a written decision that there is none | no replication | an ADR |
+| A standby, or a written decision that there is none | done: a streaming standby through a slot, a multi-host DSN, manual failover (ADR 0112); rehearsed, with a connected application reconnecting by itself (`docs/ops/evidence/2026-10-01-standby-drill/`) | `script/standby-drill` |
 
 ### Admin console
 
