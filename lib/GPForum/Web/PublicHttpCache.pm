@@ -13,11 +13,13 @@ use GPForum::Web::Access;
 use GPForum::Web::PublicCacheAccess;
 use Mojo::Base -base, -signatures;
 use Mojo::Date;
+use Mojo::Util qw(encode);
 
 our $VERSION = '0.001';
 
 const my $DEFAULT_TTL_SECONDS => 30;
 const my $HTTP_NOT_MODIFIED   => 304;
+const my $BODY_ENCODING       => 'UTF-8';
 
 has cache        => undef;
 has cache_access => sub { return GPForum::Web::PublicCacheAccess->new; };
@@ -45,7 +47,7 @@ sub serve_cached ( $self, $controller, $options ) {
     return 0 if !$options || !$options->{key};
     return 0 if !$self->_is_cacheable($controller);
 
-    my $entry = $self->cache->get( $options->{key} );
+    my $entry = $self->_current_entry( $options->{key} );
     if ( !$entry ) {
         $options->{known_miss} = 1;
         if ( $self->cache->can('ticket') ) {
@@ -91,7 +93,7 @@ sub _is_cacheable ( $self, $controller ) {
 
 sub _render_cached ( $self, $input ) {
     my $entry =
-      $input->{known_miss} ? undef : $self->cache->get( $input->{key} );
+      $input->{known_miss} ? undef : $self->_current_entry( $input->{key} );
     if ($entry) {
         return $self->_render_entry( $input->{controller}, $entry, 'hit' );
     }
@@ -113,16 +115,36 @@ sub _store_and_render ( $self, $input ) {
     return $self->_render_entry( $input->{controller}, $entry, 'miss' );
 }
 
+# The page is kept, hashed and sent as UTF-8 bytes. It was kept as the
+# characters render_to_string returns: a title with a character past U+00FF
+# failed the page with "Wide character", and an accented one reached the
+# browser as Latin-1 under a UTF-8 header.
+# An entry cached before bodies were bytes holds characters: rebuilt, not
+# served.
+sub _current_entry ( $self, $key ) {
+    my $entry = $self->cache->get($key);
+    if ( !$entry || ( $entry->{encoding} // q{} ) ne $BODY_ENCODING ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    return $entry;
+}
+
 sub _build_entry ( $self, $input ) {
-    my $body = q{}
-      . $input->{controller}->render_to_string(
-        template => $input->{template},
-        %{ $input->{payload} },
-      );
+    my $body = encode(
+        $BODY_ENCODING,
+        q{}
+          . $input->{controller}->render_to_string(
+            template => $input->{template},
+            %{ $input->{payload} },
+          )
+    );
     my $epoch = time;
 
     return {
         body                => $body,
+        encoding            => $BODY_ENCODING,
         cache_control       => _cache_control( $self->ttl_seconds ),
         etag                => 'W/"' . sha1_hex($body) . q{"},
         last_modified       => Mojo::Date->new($epoch)->to_string,

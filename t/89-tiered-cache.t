@@ -487,6 +487,16 @@ is( $page->res->headers->header('X-GPForum-Cache'),
 ok( $http_cache->serve_cached( $page, { key => 'forum-ssr:categories:en' } ),
     'the page it stored is served next time' );
 
+# Before bodies were bytes, an entry held the page as characters. One left in
+# the cache by the previous release is rebuilt, never served.
+$http_cache->cache->put(
+    'forum-ssr:old',
+    { body => "caf\N{LATIN SMALL LETTER E WITH ACUTE}", status => $HTTP_OK },
+    { tags => [$PUBLIC_TAG] }
+);
+ok( !$http_cache->serve_cached( $page, { key => 'forum-ssr:old' } ),
+    'an entry cached as characters is not served' );
+
 # A value is computed from the database, then stored. A moderation purge that
 # lands between the two used to be lost: the store read the tag's token after
 # the purge (or minted one where the purge had left none), so the page with

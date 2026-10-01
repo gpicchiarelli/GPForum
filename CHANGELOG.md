@@ -729,6 +729,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A cached public page with a character past Latin-1 failed with a 500**
+  (a dash, a curly quote or an emoji in a thread title: "Wide character"),
+  and accented text on cached pages reached the browser as Latin-1 under a
+  UTF-8 header, so Italian visitors saw broken letters. The page cache now
+  keeps, hashes and sends UTF-8 bytes; entries cached by the previous
+  release are rebuilt on their next request.
+
 - **A moderation purge that landed while a page was being computed could
   leave the hidden content in GlifiStore until its TTL.** Tag tokens are now
   read before the computation (a ticket), so a purge in between retires the

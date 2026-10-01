@@ -18,6 +18,7 @@ use GPForum::Test::PostgresHarness;
 our $VERSION = '0.001';
 
 # A thread list's page size, which the category index's key used to name.
+const my $HTTP_OK          => 200;
 const my $THREAD_PAGE_SIZE => 25;
 
 if ( !$ENV{GPFORUM_DATABASE_DSN} ) {
@@ -122,6 +123,24 @@ _get( "/c/$category", 'en' );
 delete $dbh->{Callbacks};
 is( _state(), 'hit', 'a cached category page is a hit' );
 is( $sent,    0,     'and costs no query' );
+
+# A cached page is bytes. It was kept as characters: a title with a
+# character past U+00FF (a dash, a curly quote, an emoji) failed the page
+# with a 500, and an accented one reached the browser as Latin-1 under a
+# UTF-8 header.
+my $title = "Identit\N{LATIN SMALL LETTER A WITH GRAVE} \N{EM DASH} prova"
+  . " \N{CHECK MARK}";
+$dbh->do( 'UPDATE threads SET title = ? WHERE category_id = ?',
+    undef, $title, $category );
+my $page_cache = $client->app->build_controller->gp_local_cache;
+$page_cache->invalidate_tag('forum:public-html');
+for my $round (qw(miss hit)) {
+    _get( "/c/$category", 'it' );
+    $client->status_is( $HTTP_OK, "a title past Latin-1, served on a $round" );
+    is( _state(), $round, "($round)" );
+    like( $client->tx->res->text,
+        qr/\Q$title\E/msx, "and it reads as written on a $round" );
+}
 
 $storage->disconnect;
 GPForum::Test::PostgresHarness::drop_database($database);
