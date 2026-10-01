@@ -82,7 +82,7 @@ decides.
 | --- | --- | --- |
 | Reading restricted content through any surface | one readability rule, applied to pages, lists, search, feeds, notifications, mentions, bookmarks, attachments, realtime and caches | `t/integration/postgres-effective-visibility.t`, `t/200-readable-lists.t` |
 | A pending or suspended account reading as a member | only `active` accounts without a suspension in force are members; resolution failures read as anonymous | `t/integration/postgres-effective-visibility.t` |
-| Replying into a thread locked or hidden meanwhile | the reply re-checks the thread under its row lock | `t/integration/postgres-concurrency.t` |
+| Replying into, or editing in, a thread locked or hidden meanwhile | replies and an author's post edits, deletes, restores and title edits re-check the thread (and post) under their row locks | `t/integration/postgres-concurrency.t` |
 | Hidden content served from a cache | moderation purges page and category caches in every process; the L2 invalidates by tag token; an L1 copy expires with its L2 entry | `t/89-tiered-cache.t`, `t/integration/postgres-public-cache.t` |
 | Console actions without the role | the permission gate on every admin and moderation route, denials logged | `t/44-admin-web.t`, `t/55-security-abuse-hardening.t` |
 
@@ -119,9 +119,10 @@ decides.
 - **Moderation writes ignore scoped role bindings.** A moderator bound to one
   category can act beyond it through the console's write paths. This is an
   owner decision, recorded in the quality program.
-- **Post and thread-title edits** check the thread's lock outside the row
-  lock, so an edit can race a moderator's lock; the fix is in progress
-  (ADR 0111 follow-up).
+- **A thread's delete, restore and move by its author** re-check only the
+  thread's existence under their lock, so they can race a moderator's lock
+  or hide (ADR 0111 follow-up). Post edits, deletes and restores and title
+  edits re-check everything.
 - **The audit chain's forum-wide advisory lock** serialises every audited
   write; under load it is an availability risk (ADR 0020, ADR 0111).
 - **Per-process realtime quotas.** The per-user connection limit is a memory

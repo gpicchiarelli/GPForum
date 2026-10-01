@@ -64,11 +64,22 @@ Retry is command-id replay, which exists.
   other and against moderation, which takes `FOR UPDATE`. It no longer blocks
   the `FOR KEY SHARE` that foreign-key checks take, so a reader's first
   read-marker insert does not wait behind a reply.
-- Under the lock, the reply re-reads the thread's `locked_at` and moderation
-  state, and refuses a thread locked or hidden since the workflow's first
-  check. ADR 0061's "locked threads reject replies" was racy before this.
-- A PostgreSQL test races concurrent replies to one thread and asserts
-  contiguous, unique positions. It closes the go-live item in `docs/MVP.md`.
+- Under the lock, the reply re-reads the thread's `locked_at`, moderation
+  state and deletion, and refuses a thread locked, hidden or deleted (by
+  someone other than the replier, who may answer their own deleted thread)
+  since the workflow's first check. ADR 0061's "locked threads reject
+  replies" was racy before this.
+- The same holds for an author's post edit, delete and restore and a thread
+  title edit (2026-10-01): the thread row (`FOR KEY SHARE`), then the post
+  row (`FOR UPDATE`), then the workflow's checks again in its own order and
+  words. The order is the reply's and moderation's, so there is no lock
+  cycle; a stress run of edits, replies, moderation and activity bumps saw
+  no deadlock and, replayed in commit order, no write that should have been
+  refused.
+- PostgreSQL tests race concurrent replies to one thread -- four queued on a
+  held thread row, asserting contiguous, unique positions -- and each edit
+  against an uncommitted lock, hide or delete. They close the go-live item in
+  `docs/MVP.md`.
 
 ### 2. Realtime: each process listens and fans out locally, on one queue per handle
 
@@ -184,8 +195,9 @@ number of web processes times nodes, per key and TTL: the fail-open cost ADR
     needs its own ADR amending 0020.
   - `thread_counter_shards` is written on a constant shard and read by
     nothing.
-  - Edits of a thread's title and of a post do not re-check `locked_at` under
-    a lock.
+  - A thread's delete, restore and move by its author re-check only the
+    thread's existence and deletion under their lock, not a lock or hide
+    committed meanwhile.
 - **Verification.** Each decision is pinned by a test, on PostgreSQL where
   the behaviour is PostgreSQL's (the reply race, the lock mode, the
   notification routing, the search plans). `docs/QUALITY_PROGRAM.md` records

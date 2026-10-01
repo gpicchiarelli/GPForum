@@ -729,6 +729,18 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A post edit, delete or restore, or a thread title edit, no longer lands
+  after a moderator locked the thread or hid the post** (or its author
+  deleted it) between the check and the write. Under the row locks the store
+  checks again and answers as the first check would: 403 `thread is locked`
+  or `post is hidden`, 404 `post not found` or `thread not found`, recorded
+  against the command id so a retry gets the same answer. An edit waits for
+  moderation on its thread, never for replies in flight.
+- **A reply waiting while the thread's author deleted the thread is
+  refused** with 404 instead of landing in the deleted thread (with its
+  mentions and feed items). The author can still reply to their own deleted
+  thread.
+
 - **A cached public page with a character past Latin-1 failed with a 500**
   (a dash, a curly quote or an emoji in a thread title: "Wide character"),
   and accented text on cached pages reached the browser as Latin-1 under a
