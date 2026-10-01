@@ -125,7 +125,7 @@ is_deeply(
         [ categories => 'autovacuum_analyze_threshold=0' ],
         [ spaces     => 'autovacuum_analyze_threshold=0' ],
     ],
-    'categories and spaces are analysed whenever they change'
+    'categories and spaces are analysed on the scale factor alone'
 );
 
 my $member = $dbh->selectrow_array('SELECT id FROM users ORDER BY id LIMIT 1');
@@ -256,11 +256,14 @@ for my $call (
 $holder->rollback;
 $holder->disconnect;
 
-is( $dbh->selectrow_array('SHOW statement_timeout'),
-    $SESSION_TIMEOUT,
-    'the timeout was local: the connection keeps the one every query gets' );
+# Only a search that commits can show the setting was local. A cancelled one
+# rolls back, and a rollback undoes a session-wide set_config too, so checking
+# after the two above passed with the timeout set for the whole connection.
 ok( scalar @{ $timed->search( undef, 'the', { limit => $LIMIT } ) },
-    'and the next search runs' );
+    'the next search runs' );
+is( $dbh->selectrow_array('SHOW statement_timeout'), $SESSION_TIMEOUT,
+    'and its timeout was local: the connection keeps the one every query gets'
+);
 
 $schema->storage->disconnect;
 GPForum::Test::PostgresHarness::drop_database($database);

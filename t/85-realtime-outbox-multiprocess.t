@@ -17,6 +17,7 @@ use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Service::Realtime::ChannelAuthorizer;
 use GPForum::Service::Realtime::ConnectionRegistry;
+use GPForum::Service::Realtime::EventEnvelope;
 use GPForum::Service::Realtime::Hub;
 use GPForum::Service::Realtime::PgListener;
 use GPForum::Service::Realtime::PgNotifier;
@@ -44,6 +45,7 @@ const my $PROCESS_B_PID    => 202;
 const my $STAMP_LATE_ROW   => 3;
 const my $STAMP_EARLY_ROW  => 4;
 const my $SEEN_BEFORE_LATE => 6;
+const my $SMALL_MEMORY     => 2;
 
 _assert_thread_update_crosses_processes();
 _assert_badges_cross_processes();
@@ -54,6 +56,7 @@ _assert_backstop_cursor_advances();
 _assert_backstop_reads_a_late_commit();
 _assert_cursor_survives_reconnect();
 _assert_backstop_survives_a_failed_query();
+_assert_badges_leave_the_dedup_memory_alone();
 
 done_testing();
 
@@ -336,6 +339,51 @@ sub _assert_backstop_survives_a_failed_query {
         'with no LISTEN either, the poll reports itself degraded' );
     is_deeply( $listener->outbox_poll_cursor,
         $cursor, 'and the cursor stays where it was' );
+
+    return;
+}
+
+# The dedup memory is for the hints both paths carry. A badge only ever
+# comes by NOTIFY, yet each took a place in it: the badges of one reply's
+# fanout pushed out every hint NOTIFYed before them, and the backstop sent
+# those hints a second time to every subscriber.
+sub _assert_badges_leave_the_dedup_memory_alone {
+    my $bus        = GPForum::Test::RealtimeBusDbh->new;
+    my $outbox     = GPForum::Test::OutboxResultSet->new;
+    my $now        = $NOW;
+    my $connection = GPForum::Test::RealtimeConnection->new;
+    my $listener   = GPForum::Service::Realtime::PgListener->new(
+        db_now          => sub { return $now; },
+        hub             => _hub_for( 'thread:thread-memory', $connection ),
+        max_seen_events => $SMALL_MEMORY,
+        schema          => GPForum::Test::RealtimeBusSchema->new(
+            dbh              => $bus,
+            outbox_resultset => $outbox,
+        ),
+    );
+    my $notifier = GPForum::Service::Realtime::PgNotifier->new(
+        schema => GPForum::Test::RealtimeBusSchema->new( dbh => $bus ) );
+    my $row = _done_row( 'memory', 'thread-memory', 1 );
+
+    $listener->start;
+    $listener->poll_once;
+    _transport_for_bus($bus)
+      ->dispatch( _outbox_message( $row->get_column('payload') ) );
+    for my $user_id (qw(user-a user-b user-c)) {
+        $notifier->notify(
+            GPForum::Service::Realtime::EventEnvelope->new->notification_badge(
+                $user_id, 1
+            )
+        );
+    }
+    $listener->poll_once;
+
+    push @{ $outbox->rows }, $row;
+    $now += $PAST_THE_SETTLE;
+    $listener->poll_once;
+
+    is( scalar @{ $connection->sent },
+        1, 'a hint NOTIFYed before a burst of badges is not sent again' );
 
     return;
 }

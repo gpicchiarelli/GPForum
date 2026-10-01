@@ -62,7 +62,10 @@ A LISTEN that fails (a standby refuses it) reports a gap on every take until
 one succeeds, and on the take that issues it. The cache bus therefore clears
 L1 on every read while it cannot hear invalidations, and serves from L2 and
 the database instead; the listener waits until its LISTEN is in effect and
-re-sends the badges once.
+re-sends the badges once. A channel registered when no LISTEN could be
+issued -- the database unreachable at a worker's first cache read, or a
+transaction open -- reports a gap on the take that finally issues it, so L1
+drops what it filled from L2 while nobody was listening.
 
 Each channel's queue holds at most 1000 notifications; an overflow drops the
 oldest and reports a gap the same way.
@@ -85,7 +88,10 @@ that never arrived:
   is read once; a query that fails leaves the cursor where it was, and the
   next poll asks again.
 
-Event ids from both paths are de-duplicated with a bounded memory.
+Event ids from both paths are de-duplicated with a bounded memory (1000 ids
+per process). Badges come only by NOTIFY and take no place in it, so the
+badges of a large fanout do not push out the hints the backstop is about to
+read again.
 
 ## Listener Lifecycle
 
@@ -274,6 +280,7 @@ message bodies or private resource contents.
 | malformed NOTIFY payload | listener rejects payload and increments invalid counters |
 | duplicate NOTIFY payload | listener suppresses recent duplicate event ids with bounded best-effort memory |
 | websocket send failure | hub records failed delivery and does not affect canonical writes |
+| readability query fails at a broadcast | that event counts as a broadcast failure and is left to the outbox backstop; the rest of the poll, and a gap's badge snapshots, still go out |
 | process restart | websocket state is lost; the new process's backstop starts at the head of the outbox; clients reconnect and refetch canonical state |
 
 ## Scaling Guidance

@@ -24,9 +24,10 @@ our $VERSION = '0.001';
 
 const my $EXIT_USAGE => 2;
 
-const my $EXPECTED_TESTS     => 47;
-const my $DEFAULT_ENDPOINTS  => 13;
-const my $RECORDED_ENDPOINTS => 3;
+const my $EXPECTED_TESTS        => 48;
+const my $DEFAULT_ENDPOINTS     => 13;
+const my $RECORDED_ENDPOINTS    => 3;
+const my $CONFIGURED_CANDIDATES => 300;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -516,6 +517,27 @@ is( $outbox_claim->{endpoints}[0]{status},
         [ ( 'begin', 'rollback' ) x $RECORDED_ENDPOINTS ],
         'every plan is taken in a transaction that is rolled back'
     );
+}
+
+# Search ranks the newest GPFORUM_SEARCH_CANDIDATE_LIMIT matches, and that
+# inner LIMIT decides between walking the newest-first index and sorting every
+# match. The gate EXPLAINs the cap the application is configured with, not
+# Searcher's default.
+{
+    local $ENV{GPFORUM_SEARCH_CANDIDATE_LIMIT} = $CONFIGURED_CANDIDATES;
+    my $recording = GPForum::Test::QueryPlanEvidenceDbh->new;
+    GPForum::Command::QueryPlanEvidence->new( dbh => $recording )
+      ->evidence_report(
+        {
+            analyze   => 0,
+            dry_run   => 0,
+            endpoints => ['search'],
+        }
+      );
+    my ($search) =
+      grep { $_->{sql} =~ /\A EXPLAIN/msx } @{ $recording->statements };
+    is( scalar( grep { $_ eq $CONFIGURED_CANDIDATES } @{ $search->{bind} } ),
+        1, 'the search endpoint EXPLAINs the configured candidate cap' );
 }
 
 sub _usage_status {

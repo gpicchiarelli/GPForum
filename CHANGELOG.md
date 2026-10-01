@@ -714,6 +714,19 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A process that registered for cache invalidations while the database
+  was unreachable, or inside a transaction, now clears its local cache once
+  its LISTEN takes effect**; before, a hidden post it had cached meanwhile
+  could stay visible until the TTL.
+- **A realtime broadcast whose readability check fails no longer aborts the
+  listener's poll**: the other notifications are still delivered, badges are
+  still re-sent after a reconnect, and the failed event is left to the outbox
+  backstop (`broadcast_failures`). Badges no longer crowd thread hints out of
+  the listener's duplicate filter, which made the backstop send hints twice.
+- **The query-plan gate checks search with the configured
+  `GPFORUM_SEARCH_CANDIDATE_LIMIT`**, not the default 1000: evidence for a
+  forum with another cap described a query it never sends.
+
 - **Realtime and cache invalidation no longer steal each other's
   notifications** (ADR 0111). The cache bus and the realtime listener read
   the same connection's notification queue and took each other's messages: a

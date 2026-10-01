@@ -579,8 +579,14 @@ sub _readability ($schema) {
     return GPForum::Service::Forum::Readability->new( schema => $schema );
 }
 
+# Search ranks under the configured candidate cap, as the application's does.
+# The cap is the inner LIMIT, which decides between walking
+# idx_search_documents_created and sorting every match, so evidence taken at
+# Searcher's default described a statement a forum with another cap never sent.
 sub _searcher ($schema) {
     return GPForum::Service::Search::Searcher->new(
+        candidate_limit =>
+          GPForum::Config->from_environment->search_candidate_limit,
         permission_engine =>
           GPForum::Service::Search::PermissionEngine->new( schema => $schema ),
         schema => $schema,

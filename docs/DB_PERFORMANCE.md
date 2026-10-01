@@ -197,9 +197,12 @@ reads and sorts every match again (32 ms rather than 4 ms at 30,000 documents
 on PostgreSQL 18). Both tables are small and written only by an administrator,
 so autovacuum's default threshold of 50 changed rows can leave them never
 analysed. Migration 048 analyses them and sets
-`autovacuum_analyze_threshold = 0` on both, so creating or editing a category
-or space gets them analysed within a minute. After restoring a dump, run
-`ANALYZE` as usual.
+`autovacuum_analyze_threshold = 0` on both, so autovacuum analyses them once
+more than a tenth of their rows have changed (the default
+`autovacuum_analyze_scale_factor`), without the 50 changed rows it otherwise
+adds: on a new forum the first category created does it, on one with 30
+categories the fourth change does.
+After restoring a dump, run `ANALYZE` as usual.
 
 Every search and autocomplete also runs under its own `statement_timeout`,
 `GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS` (2,000 ms by default), set with

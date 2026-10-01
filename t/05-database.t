@@ -1623,7 +1623,7 @@ for my $table (qw(categories spaces)) {
     like(
         $search_candidate_sql,
         qr/ALTER [ ] TABLE [ ] \Q$table\E [ ] $analyze_on_change/msx,
-        "search candidate migration has $table analysed whenever it changes"
+        "search candidate migration analyses $table on scale factor alone"
     );
 }
 

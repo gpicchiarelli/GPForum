@@ -20,6 +20,7 @@ const my $DEFAULT_BATCH_LIMIT => 100;
 const my $DEFAULT_SEEN_LIMIT  => 1000;
 const my $DONE_STATUS         => 'done';
 const my $MICROSECONDS        => 1_000_000;
+const my $NOTIFICATION_BADGE  => 'notification.badge';
 
 # A done row is read only once it is this old by the database's clock. The
 # dispatcher stamps next_attempt_at before its UPDATE commits, so a cursor
@@ -244,13 +245,22 @@ sub _poll_outbox_message ( $self, $summary, $message ) {
 }
 
 sub _deliver_event ( $self, $summary, $event ) {
-    if ( $self->_seen_or_mark( $event->{event_id} ) ) {
+    if ( $self->_already_delivered($event) ) {
         $summary->{duplicates} += 1;
         $self->stats->{duplicates} += 1;
         return;
     }
 
-    my $broadcast = $self->_broadcast_event($event);
+    # The hub asks the database who may read a thread (ADR 0102), and that
+    # can fail, most likely just after the reconnect that made a gap. The
+    # exception left the poll, dropping the gap the take had returned and
+    # every notification after this one. It is a failed broadcast instead,
+    # and the id is forgotten so that the backstop may deliver it.
+    my $broadcast = eval { return $self->_broadcast_event($event); };
+    if ( !$broadcast ) {
+        delete $self->seen_event_ids->{ $event->{event_id} // q{} };
+        $broadcast = { ok => 0, reason => 'broadcast_failed' };
+    }
     $self->stats->{broadcast} += 1;
 
     $self->_record_broadcast_result( $summary, $broadcast );
@@ -437,6 +447,16 @@ sub _advance_outbox_poll_cursor ( $self, $message ) {
     return;
 }
 
+# The memory is for the hints both paths carry, so that the backstop does
+# not send again what a NOTIFY delivered. A badge only ever comes by NOTIFY,
+# once; remembered, the badges of one reply's fanout pushed every recent
+# hint out of the memory, and the backstop sent each a second time.
+sub _already_delivered ( $self, $event ) {
+    return 0 if ( $event->{type} // q{} ) eq $NOTIFICATION_BADGE;
+
+    return $self->_seen_or_mark( $event->{event_id} );
+}
+
 sub _seen_or_mark ( $self, $event_id ) {
     return 0 if !defined $event_id || !length $event_id;
     return 1 if $self->seen_event_ids->{$event_id};
@@ -572,7 +592,8 @@ on the same handle keeps its own notifications. The backstop reads done
 outbox rows through a cursor, for NOTIFYs that never arrived; it runs only
 while this process has sockets, starts at the head of the outbox, and reads a
 row only once it has settled for five seconds by the database's clock.
-Duplicate event ids from the two paths are suppressed with a bounded memory.
+Duplicate event ids from the two paths are suppressed with a bounded memory,
+which badges, carried by NOTIFY alone, do not take up.
 
 When the queue reports a gap -- the handle's connection was replaced, a
 LISTEN failed, or the queue overflowed -- the listener sends every local
@@ -611,8 +632,8 @@ Counters, status and the notification queue's state, for C</metrics>.
 
 =head1 DIAGNOSTICS
 
-Never throws. Malformed payloads, duplicates, failed broadcasts and gaps are
-counted in C<stats>.
+Never throws. Malformed payloads, duplicates, failed broadcasts (one whose
+readability query died among them) and gaps are counted in C<stats>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

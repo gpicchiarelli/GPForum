@@ -44,16 +44,24 @@ has stats            => sub {
 };
 
 sub listen_to ( $self, $channel ) {
-    $self->channels->{$channel} ||=
+    my $entry = $self->channels->{$channel} ||=
       { connection => undef, failed => 0, gap => 0, queue => [] };
 
     my $dbh = $self->_dbh;
-    if ( !$dbh ) {
-        return 0;
+    if ($dbh) {
+        $self->_sync($dbh);
     }
-    $self->_sync($dbh);
 
-    return $self->listening($channel);
+    # With no handle, or a transaction open, no LISTEN was issued, and the
+    # consumer goes on as if it had been: the cache bus fills L1. What is
+    # raised until a take issues it reaches nobody here, so that take
+    # reports a gap, as for a LISTEN that failed.
+    my $listening = $self->listening($channel);
+    if ( !$listening ) {
+        $entry->{failed} = 1;
+    }
+
+    return $listening;
 }
 
 sub unlisten ( $self, $channel ) {
@@ -311,9 +319,10 @@ replaces the handle after a reconnect, so the backend PID and the handle
 identify the connection: when either changes, every registered channel is
 listened for again and each is marked with a gap. A LISTEN that fails marks
 its channel with a gap too, on that take and on the one that finally
-issues it. A gap tells the consumer that notifications were lost -- raised
-while nobody was listening, or pushed out of a full queue -- so it can fall
-back to something that does not need them.
+issues it; so does one that C<listen_to> could not issue, with no handle or
+inside a transaction, on the take that does. A gap tells the consumer that
+notifications were lost -- raised while nobody was listening, or pushed out
+of a full queue -- so it can fall back to something that does not need them.
 
 It adds no connection: it reads the handle the application already holds.
 
@@ -323,7 +332,8 @@ It adds no connection: it reads the handle the application already holds.
 
 Registers a channel and issues its LISTEN. Returns true when the LISTEN is
 in effect on the current backend. A channel that could not be listened for
-stays registered, and every C<take> tries again.
+stays registered, every C<take> tries again, and the one that succeeds
+reports a gap.
 
 =head2 unlisten
 
