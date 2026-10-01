@@ -134,6 +134,73 @@ An outside review finds nothing serious.
 | A post edit re-checks the post and the thread's lock under its row lock | not yet | a PostgreSQL race test |
 | A written threat model, and a penetration test by someone outside | threat model written (`docs/THREAT_MODEL.md`, 2026-09-30: every mitigation cites its test); no outside test | — |
 
+### Operations
+
+The operator can install, run, back up, restore and upgrade the forum from
+the runbooks alone, and is warned before anything runs out.
+
+| Criterion | Today | Gate |
+| --- | --- | --- |
+| A restore drill that was run, with its timings recorded | `script/pitr-drill` and `docs/ops/backup-and-restore.md` exist; no recorded run on a real host | evidence under `docs/ops/evidence/` |
+| Every readiness warning names its runbook | partition horizon and antivirus warn; not every warning links a runbook | a test over the readiness checks |
+| Each supported platform installed and run from its unit files | Debian units checked statically; FreeBSD rc script never run on FreeBSD | the platform workflows (CI not running) |
+| Upgrades are rehearsed: migrate forward from the previous release on a copy | `script/staging-drill` covers it on throwaway databases | the drill, against a release tag (none yet) |
+| A standby, or a written decision that there is none | no replication | an ADR |
+
+### Admin console
+
+Whatever the shell can do to a running forum, the console can do or says why
+not, and every console write is guarded and audited.
+
+| Criterion | Today | Gate |
+| --- | --- | --- |
+| Every `bin/` command maps to a console route or a written reason | in progress (6.5): dead letters, search rebuild and cache purge done; settings, mail test-send and antivirus check being added | a test over `docs/ops/console-and-cli.md` |
+| Every console write: permission gate, CSRF, command id, audit row | true for the writes listed in 6.5 and 6.6 | the admin access tests (`t/137`, `t/44`) |
+| The effective configuration is visible, secrets redacted | not yet | a test that plants a secret and greps the page and its JSON |
+| Destructive actions ask for confirmation | the four staff actions do (6.6) | `t/44-admin-web.t` |
+
+### Admin CLI
+
+One front door, the same contract on every command.
+
+| Criterion | Today | Gate |
+| --- | --- | --- |
+| One front door listing every command | `bin/gpforum` lists them (6.1) | `t/184` |
+| `--help` succeeds and misuse exits 2 everywhere | done (6.2, 6.4) | `t/184` |
+| A published exit-code contract | done (6.3) | `t/184` |
+| A machine-readable mode where an operator scripts the output | some commands (`--json`); not all that report state | a test over the commands that report state |
+| Every command documented in `docs/ops/` | 14 runbooks for 26 commands | the parity document above |
+
+### Frontend
+
+The pages are fast, accessible and readable on any screen, without depending
+on JavaScript.
+
+| Criterion | Today | Gate |
+| --- | --- | --- |
+| Fingerprinted, long-cached static assets | plain `assets/` files (7.7) | a test that every asset URL carries its digest |
+| Every page usable without JavaScript | server-rendered pages; `site.js` is 12 lines | the accessible SSR tests (`t/35`, `t/65`) |
+| No inline script or style | the CSP allows neither | `t/48-browser-security.t` |
+| The logo's wordmark rendered as a shape, not live text | live text | — |
+
+### i18n and content
+
+| Criterion | Today | Gate |
+| --- | --- | --- |
+| Every key in every locale | English and Italian, checked | `t/64-i18n.t` |
+| Translations in a translators' format (gettext) | a Perl literal (9.2) | a test that the catalog loads from `.po` files |
+| Relative times ("3 minutes ago") with the absolute one available | absolute only | — |
+| The markup language documented, with a preview | neither (9.5) | — |
+
+### Docs and developer experience
+
+| Criterion | Today | Gate |
+| --- | --- | --- |
+| A fresh checkout reaches a green `make check` from the quick start alone | the quick start creates the database (10.2); not verified from nothing | a scripted run in a clean copy |
+| A tagged release with notes | none (10.5) | — |
+| No document contradicts an ADR | `prompt/` contradicts ADR 0087 (10.1, owner decision) | — |
+| Documentation proportional to the code | 30,805 lines of docs for 93,993 of code | see Architecture |
+
 ### What only reality can certify
 
 - **CI must actually run.** The Actions jobs do not start (the account's
