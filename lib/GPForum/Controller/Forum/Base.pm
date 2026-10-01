@@ -401,15 +401,16 @@ sub render_payload ( $, $input ) {
 
 # Cache options for a public page, or none: a page past the first (with a
 # cursor) is not cached, since any string is a cursor and each would mint an
-# entry.
-sub public_cache_options ( $self, $name, $tags ) {
+# entry. The key names the limit the page lists by: a thread list's page size
+# unless the page passes the one it uses.
+sub public_cache_options ( $self, $name, $tags, $limit = undef ) {
     my $undefined;
     return $undefined if length( $self->param('after') // q{} );
 
     my $path = $self->req->url->path;
     return $self->forum_access->public_cache_options(
         {
-            limit  => $self->list_page_limit,
+            limit  => $limit // $self->list_page_limit,
             locale => $self->ui_locale,
             name   => $name,
             path   => $path->to_string,

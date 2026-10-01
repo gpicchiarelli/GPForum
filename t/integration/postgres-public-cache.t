@@ -6,6 +6,7 @@ package main;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Test::Mojo;
 use Test::More;
 
@@ -15,6 +16,9 @@ use lib 't/lib';
 use GPForum::Test::PostgresHarness;
 
 our $VERSION = '0.001';
+
+# A thread list's page size, which the category index's key used to name.
+const my $THREAD_PAGE_SIZE => 25;
 
 if ( !$ENV{GPFORUM_DATABASE_DSN} ) {
     plan skip_all => 'set GPFORUM_DATABASE_DSN to run the public cache test';
@@ -34,6 +38,22 @@ my $prepared = GPForum::Test::PostgresHarness::prepare_database();
 is( $prepared->{migrate}, 0, 'migrations apply' );
 is( $prepared->{seed},    0, 'the seed loads' );
 
+# More public categories than a thread list's page, for the index below.
+GPForum::Test::PostgresHarness::connect_schema()->storage->dbh->do(<<'SQL');
+INSERT INTO categories (category_id, space_id, slug, title, position)
+SELECT gen_random_uuid(), public_space.space_id, 'extra-' || n, 'Extra ' || n,
+       1000 + n
+FROM (
+    SELECT categories.space_id
+    FROM categories
+    JOIN spaces ON spaces.space_id = categories.space_id
+    WHERE categories.visibility = 'public'
+      AND spaces.visibility = 'public'
+      AND categories.deleted_at IS NULL
+    LIMIT 1
+) AS public_space, generate_series(1, 30) AS n
+SQL
+
 my $client = Test::Mojo->new('GPForum');
 
 _get( '/categories', 'it' );
@@ -50,6 +70,23 @@ like( $headers->vary // q{},
 
 _get( '/categories?junk=1&more=junk', 'en' );
 is( _state(), 'hit', 'a junk parameter does not mint an entry' );
+
+# The index lists up to 100 categories unless asked for fewer, but its key
+# named a thread list's page size, 25, when no limit was asked: a visitor who
+# asked for 25 was served the full index, or filled the entry with 25 that
+# every other visitor was then served.
+my $full_index = _listed_categories();
+ok( $full_index > $THREAD_PAGE_SIZE, 'the index lists every category' );
+_get( "/categories?limit=$THREAD_PAGE_SIZE", 'en' );
+is( _state(),             'miss', 'an index of 25 is an entry of its own' );
+is( _listed_categories(), $THREAD_PAGE_SIZE, 'which lists 25' );
+_get( "/categories?limit=$THREAD_PAGE_SIZE", 'en' );
+is( _state(), 'hit', 'which the next visitor asking for 25 is served' );
+_get( '/categories', 'en' );
+is( _listed_categories(), $full_index,
+    'while a visitor asking for no limit still gets the full index' );
+_get( '/categories?limit=abc', 'en' );
+is( _listed_categories(), $full_index, 'as does one whose limit is no number' );
 
 $client->get_ok(
     '/categories' => {
@@ -101,6 +138,10 @@ sub _get {
 
 sub _state {
     return $client->tx->res->headers->header('X-GPForum-Cache');
+}
+
+sub _listed_categories {
+    return $client->tx->res->dom->find('li.ui-card-list__item')->size;
 }
 
 sub _cache_misses {

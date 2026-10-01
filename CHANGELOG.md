@@ -729,6 +729,15 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A moderation purge that landed while a page was being computed could
+  leave the hidden content in GlifiStore until its TTL.** Tag tokens are now
+  read before the computation (a ticket), so a purge in between retires the
+  entry. A public page miss costs a few more token reads, and the first page
+  rendered under a tag with no token stays in the process-local cache only.
+- **`/categories` and `/categories?limit=25` shared one cached page**, so an
+  anonymous visitor could get a truncated category index. Each limit has its
+  own entry.
+
 - **SMTP relays that require a login work.** `Net::SMTP` answers `AUTH`
   only through `Authen::SASL`, which it loads at run time and which nothing
   declared, so every installation with `GPFORUM_SMTP_USERNAME` failed at the

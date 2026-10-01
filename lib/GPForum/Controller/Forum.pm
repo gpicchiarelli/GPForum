@@ -13,14 +13,19 @@ our $VERSION = '0.001';
 
 const my $HTTP_OK => 200;
 
+# The index lists what the reader makes of the request's limit (100 without
+# one), so its cache key names that limit. It named a thread list's page
+# size, 25 when none was asked: /categories?limit=25 and /categories shared
+# an entry, and whichever came first was served to both.
 sub categories ($self) {
-    my $cache =
-      $self->public_cache_options( 'categories', ['forum:categories'] );
+    my $limit = $self->param('limit');
+    my $cache = $self->public_cache_options( 'categories', ['forum:categories'],
+        $limit // q{} );
     return if $self->served_from_public_cache($cache);
 
     my $categories = $self->gp_category_reader->list_categories(
         {
-            limit  => $self->param('limit'),
+            limit  => $limit,
             viewer => $self->gp_forum_viewer,
         }
     );

@@ -38,6 +38,9 @@ sub render ( $self, %input ) {
 # A miss is marked on the options, which the page passes on to render: that
 # render stores without asking L1 and L2 again. Each miss used to look the key
 # up twice, and while GlifiStore hangs every ask costs the request a timeout.
+# The mark carries the cache's ticket for the page's tags, taken here, before
+# the queries: a moderation purge that lands while they run then retires the
+# page the render stores, instead of missing it.
 sub serve_cached ( $self, $controller, $options ) {
     return 0 if !$options || !$options->{key};
     return 0 if !$self->_is_cacheable($controller);
@@ -45,6 +48,9 @@ sub serve_cached ( $self, $controller, $options ) {
     my $entry = $self->cache->get( $options->{key} );
     if ( !$entry ) {
         $options->{known_miss} = 1;
+        if ( $self->cache->can('ticket') ) {
+            $options->{ticket} = $self->cache->ticket( $options->{tags} );
+        }
         return 0;
     }
 
@@ -95,14 +101,14 @@ sub _render_cached ( $self, $input ) {
 
 sub _store_and_render ( $self, $input ) {
     my $entry = $self->_build_entry($input);
-    $self->cache->put(
-        $input->{key},
-        $entry,
-        {
-            tags        => $input->{tags},
-            ttl_seconds => $self->ttl_seconds,
-        }
+    my %put   = (
+        tags        => $input->{tags},
+        ttl_seconds => $self->ttl_seconds,
     );
+    if ( $input->{ticket} ) {
+        $put{ticket} = $input->{ticket};
+    }
+    $self->cache->put( $input->{key}, $entry, \%put );
 
     return $self->_render_entry( $input->{controller}, $entry, 'miss' );
 }

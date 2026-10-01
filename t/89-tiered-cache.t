@@ -302,6 +302,11 @@ is( $absent->get('thread:missing'),       undef, 'which a lookup misses' );
 is( $absent->snapshot->{stats}{failures}, 0,     'none of it is a failure' );
 is( $absent_connects,                     1,     'and the connection is kept' );
 
+# A connection count alone would not show it: a dropped connection also
+# pauses L2, and nothing reconnects during the pause.
+is( $absent->client, $absent_client,   'the client is the one connected' );
+is( $absent->retry_after_epoch, undef, 'and L2 is not paused' );
+
 my $overloaded_client =
   GPForum::Test::SharedCacheClient->new( mode => 'overloaded' );
 my $overloaded = _shared_over( $overloaded_client, 'overloaded' );
@@ -482,7 +487,138 @@ is( $page->res->headers->header('X-GPForum-Cache'),
 ok( $http_cache->serve_cached( $page, { key => 'forum-ssr:categories:en' } ),
     'the page it stored is served next time' );
 
+# A value is computed from the database, then stored. A moderation purge that
+# lands between the two used to be lost: the store read the tag's token after
+# the purge (or minted one where the purge had left none), so the page with
+# the hidden post was current in L2 until its TTL. Tokens are now taken before
+# the value is computed, and a purge in between retires what is stored.
+my $late_client = GPForum::Test::SharedCacheClient->new;
+my $late        = _shared_over( $late_client, 'late' );
+my $purger      = _shared_over( $late_client, 'late' );
+$late->put( 'page:warm', 'warm', { tags => [$PUBLIC_TAG] } );
+$late->get_or_set(
+    'page:raced',
+    sub {
+        $purger->invalidate_tag($PUBLIC_TAG);
+        return 'hidden post';
+    },
+    { tags => [$PUBLIC_TAG] },
+);
+is( $late->get('page:raced'),
+    undef, 'a value computed before a purge and stored after it misses' );
+
+# A fill mints the token its tag lacks before it computes the value.
+$late->get_or_set(
+    'page:minted',
+    sub {
+        $purger->invalidate_tag('forum:thread:8');
+        return 'hidden post';
+    },
+    { tags => ['forum:thread:8'] },
+);
+is( $late->get('page:minted'),
+    undef, 'so a purge of a tag that had no token still retires the fill' );
+
+# A page takes its ticket without minting, since a page that turns out not to
+# exist stores nothing and must leave no key behind. A tag with no token then
+# may have been purged with nothing to erase, so that store only mints it.
+my $page_ticket = $late->ticket( ['forum:thread:7'] );
+ok( !exists $late_client->store->{'late:tag:forum:thread:7'},
+    'a page ticket mints no token' );
+$purger->put( 'page:other', 'other', { tags => ['forum:thread:7'] } );
+$purger->invalidate_tag('forum:thread:7');
+$late->put( 'page:first', 'hidden post',
+    { tags => ['forum:thread:7'], ticket => $page_ticket } );
+is( $late->get('page:first'),
+    undef, 'a page computed before its tag had a token is not stored' );
+ok( defined $late_client->store->{'late:tag:forum:thread:7'},
+    'but the token it lacked is minted' );
+$late->put(
+    'page:first',
+    'shown',
+    {
+        tags   => ['forum:thread:7'],
+        ticket => $late->ticket( ['forum:thread:7'] ),
+    }
+);
+is( $late->get('page:first'), 'shown', 'so the next page is stored' );
+my $paused_ticket =
+  _shared_over( GPForum::Test::SharedCacheClient->new( mode => 'down' ),
+    'late' )->ticket( [$PUBLIC_TAG] );
+$late->put( 'page:paused', 'page',
+    { tags => [$PUBLIC_TAG], ticket => $paused_ticket } );
+is( $late->get('page:paused'),
+    undef, 'nor is one whose tokens L2 could not read' );
+
+# The same through the tiered cache, as the category list fills it: what one
+# process computed across a purge is not what another process reads.
+my $tier_client = GPForum::Test::SharedCacheClient->new;
+my $tier_purger = _shared_over( $tier_client, 'tier' );
+$tier_purger->put( 'warm', 'warm', { tags => ['categories'] } );
+_tiered_over($tier_client)->get_or_set(
+    'categories:list:anonymous:10',
+    sub {
+        $tier_purger->invalidate_tag('categories');
+        return ['private category'];
+    },
+    { tags => ['categories'] },
+);
+is( _tiered_over($tier_client)->get('categories:list:anonymous:10'),
+    undef, 'a tiered fill computed across a purge is not served elsewhere' );
+
+# And through the public page cache, whose lookup runs before the page's
+# queries and whose store runs after them.
+my $raced_client = GPForum::Test::SharedCacheClient->new;
+my $raced_purger = _shared_over( $raced_client, 'tier' );
+$raced_purger->put( 'warm', 'warm',
+    { tags => [ $PUBLIC_TAG, 'forum:thread:5' ] } );
+my $raced_options = {
+    key  => 'forum-ssr:thread:en:/t/5',
+    tags => [ $PUBLIC_TAG, 'forum:thread:5' ],
+};
+my $raced_cache =
+  GPForum::Web::PublicHttpCache->new( cache => _tiered_over($raced_client) );
+ok( !$raced_cache->serve_cached( $page, $raced_options ),
+    'a thread page not cached yet misses' );
+$raced_purger->invalidate_tag('forum:thread:5');
+$raced_cache->render(
+    controller => $page,
+    payload    => {},
+    status     => $HTTP_OK,
+    template   => 'forum/thread',
+    %{$raced_options},
+);
+ok(
+    !GPForum::Web::PublicHttpCache->new( cache => _tiered_over($raced_client) )
+      ->serve_cached( $page, { key => $raced_options->{key} } ),
+    'a page rendered across a moderation purge is not served by another process'
+);
+
+# A lookup of a page that turns out not to exist (any id in a URL) is never
+# followed by a store, and writes nothing to GlifiStore.
+my $missing_options = {
+    key  => 'forum-ssr:thread:en:/t/404',
+    tags => [ $PUBLIC_TAG, 'forum:thread:404' ],
+};
+$raced_cache->serve_cached( $page, $missing_options );
+ok( $missing_options->{ticket}, 'a page miss carries a ticket' );
+ok(
+    !exists $raced_client->store->{'tier:tag:forum:thread:404'},
+    'but a lookup of a page that does not exist mints no token'
+);
+
 done_testing();
+
+sub _tiered_over {
+    my ($shared_client) = @_;
+
+    return GPForum::Service::Operations::TieredCache->new(
+        l1 => GPForum::Service::Operations::LocalCache->new(
+            clock => GPForum::Test::OperationsClock->new
+        ),
+        l2 => _shared_over( $shared_client, 'tier' ),
+    );
+}
 
 sub _shared_over {
     my ( $shared_client, $namespace ) = @_;

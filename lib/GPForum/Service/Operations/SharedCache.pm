@@ -161,9 +161,42 @@ sub get_or_set ( $self, $key, $producer, $options = undef ) {
         return $cached;
     }
 
+    my %put = %{ $options || {} };
+    $put{ticket} = $self->ticket( $put{tags}, { mint => 1 } );
     my $generated = $producer->();
-    $self->put( $key, $generated, $options );
+    $self->put( $key, $generated, \%put );
     return $generated;
+}
+
+# The tokens of the tags a value is about to be computed under, read before
+# the computation reads the database. Passed to put as its ticket option, the
+# value is stored under these tokens rather than those current at the put, so
+# a purge that lands while the value is computed retires it. Read at the put,
+# a page with a post hidden meanwhile was stored under the token minted after
+# the purge, and stayed current in L2 until its TTL.
+#
+# With mint, a tag with no token gets one now, which is safe since nothing has
+# been read yet; for a caller that always stores (get_or_set). Without, the
+# tag is recorded as having none and the put mints it but does not store the
+# value: a purge in between had nothing to erase, so nothing tells whether
+# the value predates it. That is for a caller that may store nothing, such as
+# a page that turns out not to exist: minting for it would let any thread id
+# in a URL write a key that lives a day.
+sub ticket ( $self, $tags, $options = undef ) {
+    my $mint = $options && $options->{mint};
+    my %tokens;
+    for my $tag ( _tag_list($tags) ) {
+        my $token =
+            $mint
+          ? $self->_tag_token($tag)
+          : $self->_current_tag_token($tag);
+        if ( !defined $token ) {
+            return { failed => 1 };
+        }
+        $tokens{$tag} = length $token ? $token : undef;
+    }
+
+    return { tokens => \%tokens };
 }
 
 sub invalidate ( $self, $key ) {
@@ -334,8 +367,11 @@ sub _tokens_current ( $self, $payload ) {
 }
 
 sub _store_value ( $self, $key, $value, $options ) {
-    my @tags   = uniq grep { _has_text($_) } @{ $options->{tags} || [] };
-    my $tokens = $self->_tag_tokens( \@tags );
+    my @tags = _tag_list( $options->{tags} );
+    my $tokens =
+        $options->{ticket}
+      ? $self->_ticketed_tokens( $options->{ticket}, \@tags )
+      : $self->_tag_tokens( \@tags );
     if ( !$tokens ) {
         return 0;
     }
@@ -375,6 +411,31 @@ sub _tag_tokens ( $self, $tags ) {
     return \%tokens;
 }
 
+# The tokens a ticket holds for the tags, or nothing when the ticket could not
+# read them or lacks one. A tag it found without a token gets one now, for the
+# next value, but this value is not stored (see ticket).
+sub _ticketed_tokens ( $self, $ticket, $tags ) {
+    my $undefined;
+
+    my $held = $ticket->{tokens};
+    if ( $ticket->{failed} || ref $held ne 'HASH' ) {
+        return $undefined;
+    }
+
+    my %tokens;
+    my $complete = 1;
+    for my $tag ( @{$tags} ) {
+        if ( !defined $held->{$tag} ) {
+            $self->_tag_token($tag);
+            $complete = 0;
+            next;
+        }
+        $tokens{$tag} = $held->{$tag};
+    }
+
+    return $complete ? \%tokens : $undefined;
+}
+
 # The tag's token, minted when the tag has none. An existing token is never
 # written again, not even to extend it: a put that read it just before an
 # invalidation erased it would put it back, and every entry the invalidation
@@ -385,19 +446,15 @@ sub _tag_tokens ( $self, $tags ) {
 sub _tag_token ( $self, $tag ) {
     my $undefined;
 
-    my $store_key = $self->_tag_store_key($tag);
-    my ( $status, $token ) = $self->_client_get($store_key);
-    if ( $status eq 'failed' ) {
-        return $undefined;
-    }
-    if ( $status eq 'found' && ( $token // q{} ) =~ $TAG_TOKEN_PATTERN ) {
+    my $token = $self->_current_tag_token($tag);
+    if ( !defined $token || length $token ) {
         return $token;
     }
 
     my $minted = unpack 'H*', Crypt::URandom::urandom($TAG_TOKEN_BYTES);
     if (
         !$self->_client_put(
-            $store_key, $minted,
+            $self->_tag_store_key($tag), $minted,
             $self->_expire_at_ns($TAG_TOKEN_TTL_SECONDS),
         )
       )
@@ -406,6 +463,18 @@ sub _tag_token ( $self, $tag ) {
     }
 
     return $minted;
+}
+
+# The tag's token; an empty string when it has none (or holds what is not a
+# token); nothing when L2 could not be read.
+sub _current_tag_token ( $self, $tag ) {
+    my ( $status, $value ) = $self->_client_get( $self->_tag_store_key($tag) );
+    if ( $status eq 'failed' ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    return _is_token( $status, $value ) ? $value : q{};
 }
 
 # ( 'found', $value ), ( 'absent' ), or ( 'failed' ) when L2 is paused or the
@@ -610,6 +679,18 @@ sub _validate_key ( $, $key ) {
 
 sub _has_text ($value) {
     return defined $value && length $value ? 1 : 0;
+}
+
+sub _tag_list ($tags) {
+    return uniq grep { _has_text($_) } @{ $tags || [] };
+}
+
+# A value read from a tag key that is a token, not the member list the key
+# held before tokens, nor nothing.
+sub _is_token ( $status, $value ) {
+    return $status eq 'found' && ( $value // q{} ) =~ $TAG_TOKEN_PATTERN
+      ? 1
+      : 0;
 }
 
 # 'committed', or the category a PUT or ERASE failed with. An indeterminate

@@ -56,9 +56,28 @@ sub get_or_set ( $self, $key, $producer, $options = undef ) {
         return $cached;
     }
 
+    my %put    = %{ $options || {} };
+    my $ticket = $self->ticket( $put{tags}, { mint => 1 } );
+    if ($ticket) {
+        $put{ticket} = $ticket;
+    }
     my $generated = $producer->();
-    $self->put( $key, $generated, $options );
+    $self->put( $key, $generated, \%put );
     return $generated;
+}
+
+# L2's tokens for the tags, taken before a value is computed and passed to put
+# as its ticket (SharedCache::ticket). L1 takes none: another process's purge
+# reaches it on the bus at the next get, which drops the entry if it is
+# already written. Nothing when L2 keeps no tokens.
+sub ticket ( $self, $tags, $options = undef ) {
+    $self->_require_layers;
+    if ( !$self->l2->can('ticket') ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    return $self->l2->ticket( $tags, $options );
 }
 
 sub invalidate ( $self, $key ) {
