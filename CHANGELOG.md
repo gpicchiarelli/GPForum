@@ -729,6 +729,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **SMTP relays that require a login work.** `Net::SMTP` answers `AUTH`
+  only through `Authen::SASL`, which it loads at run time and which nothing
+  declared, so every installation with `GPFORUM_SMTP_USERNAME` failed at the
+  first message: sign-up confirmations, password resets and e-mail changes.
+  `Authen::SASL` 2.2100 is now in the lock; `t/215-smtp-authentication.t`
+  sends through a local relay that asks for `AUTH PLAIN`, and fails without
+  it. Run `make install-deps-postgres` (or `script/bootstrap-deps --postgres`).
+
 - **A process that registered for cache invalidations while the database
   was unreachable, or inside a transaction, now clears its local cache once
   its LISTEN takes effect**; before, a hidden post it had cached meanwhile

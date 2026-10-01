@@ -16,6 +16,10 @@ requires 'Crypt::URandom', '0.55';
 requires 'Email::Sender', '2.603';
 requires 'Email::Address::XS', '1.05';
 requires 'Email::Simple', '2.218';
+# Net::SMTP loads Authen::SASL only when the server asks for AUTH, so
+# nothing names it in a use line -- and without it every SMTP setup with
+# GPFORUM_SMTP_USERNAME failed at the first message.
+requires 'Authen::SASL', '2.2100';
 requires 'Const::Fast', '0.014';
 
 # Security floors for transitive dependencies with published CPANSA advisories.
