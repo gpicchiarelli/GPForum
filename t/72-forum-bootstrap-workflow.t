@@ -970,6 +970,27 @@ is(
     'posting workflow normalizes thread edit store failures'
 );
 
+# The stores check an author's edit, delete or restore again under their row
+# locks, because a moderator can lock the thread or hide the post after the
+# workflow's check, and the author can delete either. Their refusal is the
+# answer the workflow's own check gives, recorded with the command and
+# replayed with it, not a failure that leaves the command id open.
+for my $refusal (
+    [ 'edit_post',    'thread is locked', 'forbidden' ],
+    [ 'edit_post',    'post is hidden',   'forbidden' ],
+    [ 'edit_post',    'thread not found', 'not_found' ],
+    [ 'edit_post',    'post not found',   'not_found' ],
+    [ 'delete_post',  'thread is locked', 'forbidden' ],
+    [ 'delete_post',  'post is hidden',   'forbidden' ],
+    [ 'restore_post', 'thread is locked', 'forbidden' ],
+    [ 'restore_post', 'post is hidden',   'forbidden' ],
+    [ 'edit_thread',  'thread is locked', 'forbidden' ],
+    [ 'edit_thread',  'thread not found', 'not_found' ],
+  )
+{
+    _assert_author_store_refusal( @{$refusal} );
+}
+
 my $missing_thread_delete = _workflow(
     thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
         thread => undef
@@ -1485,6 +1506,93 @@ sub _assert_reply_store_refusal {
     return;
 }
 
+sub _assert_author_store_refusal {
+    my ( $method, $error, $status ) = @_;
+
+    my %case        = _author_write_case( $method, $error );
+    my $idempotency = GPForum::Test::CommandIdempotency->new;
+    my $workflow    = _workflow(
+        %{ $case{override} },
+        command_idempotency => $idempotency,
+        $case{store}        => $case{store_class}->new( refuse => $error ),
+    );
+    is_deeply(
+        $workflow->$method( $case{input} ),
+        {
+            error    => $error,
+            ok       => 0,
+            prepared => undef,
+            status   => $status,
+            stored   => undef,
+        },
+        "$method refused by the store with '$error' is $status, not failed"
+    );
+    is_deeply(
+        $idempotency->response,
+        { error => $error, ok => 0, status => $status },
+        "$method: the '$error' refusal is recorded as the command's answer"
+    );
+    is( $workflow->mention_store->calls,
+        0, "$method refused with '$error' records no mentions" );
+
+    my $replay = _workflow(
+        %{ $case{override} },
+        command_idempotency => GPForum::Test::CommandIdempotency->new(
+            replay_response => $idempotency->response
+        ),
+    );
+    my $replayed = $replay->$method( $case{input} );
+    is_deeply(
+        [ @{$replayed}{qw(error idempotent ok status)} ],
+        [ $error, 1, 0, $status ],
+        "$method: a retry replays the '$error' refusal"
+    );
+    my $store = $case{store};
+    is( $replay->$store->calls,
+        0, "$method: replaying the '$error' refusal does not store again" );
+
+    return;
+}
+
+sub _author_write_case {
+    my ( $method, $error ) = @_;
+
+    my $command_id = "$method-refused-$error-command" =~ tr/ /-/r;
+    my %post_input = (
+        author_user_id => 'user-1',
+        command_id     => $command_id,
+        post_id        => 'post-1',
+    );
+    my %cases = (
+        delete_post => { input => \%post_input },
+        edit_post   => { input => { %post_input, body_source => 'edited' } },
+        edit_thread => {
+            input => {
+                author_user_id => 'user-1',
+                command_id     => $command_id,
+                thread_id      => 'thread-1',
+                title          => 'Edited',
+            },
+            store       => 'thread_store',
+            store_class => 'GPForum::Test::ThreadStore',
+        },
+        restore_post => {
+            input    => \%post_input,
+            override => {
+                post_reader =>
+                  GPForum::Test::PostReader->new( post => _deleted_post() ),
+            },
+        },
+    );
+
+    return (
+        override    => {},
+        store       => 'post_store',
+        store_class => 'GPForum::Test::PostStore',
+        %{ $cases{$method} },
+    );
+}
+
 sub _deleted_post {
     return {
         author_user_id   => 'user-1',
@@ -1603,7 +1711,11 @@ package GPForum::Test::ThreadStore;
 sub new {
     my ( $class, %arguments ) = @_;
 
-    return bless { calls => 0, fail => $arguments{fail} }, $class;
+    return bless {
+        calls  => 0,
+        fail   => $arguments{fail},
+        refuse => $arguments{refuse},
+    }, $class;
 }
 
 sub calls {
@@ -1634,6 +1746,10 @@ sub edit_thread {
     if ( $self->{fail} ) {
         die "thread store failed\n";
     }
+
+    # What ThreadStore answers when the thread lock finds the thread locked,
+    # hidden or gone since the workflow looked.
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
 
     return {
         ok     => 1,
@@ -1822,6 +1938,10 @@ sub edit_post {
     $self->calls( $self->calls + 1 );
     die "post store failed\n" if $self->{fail};
 
+    # What PostStore answers when its locks find the post hidden or gone, or
+    # its thread locked, hidden or gone, since the workflow looked.
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
+
     return {
         ok   => 1,
         post => {
@@ -1839,6 +1959,7 @@ sub delete_post {
     if ( $self->{fail} ) {
         die "post store failed\n";
     }
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
 
     return {
         ok   => 1,
@@ -1857,6 +1978,7 @@ sub restore_post {
     if ( $self->{fail} ) {
         die "post store failed\n";
     }
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
 
     return {
         ok   => 1,

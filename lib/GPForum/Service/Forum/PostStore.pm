@@ -27,8 +27,17 @@ const my $THREAD_LOCK_SQL => join q{ },
   'SELECT author_user_id, deleted_at, locked_at, moderation_state',
   'FROM threads WHERE thread_id = ? FOR NO KEY UPDATE';
 
+# An author's edit, delete or restore of a post changes nothing on the thread
+# row, so it takes the weakest lock that still queues behind the FOR UPDATE of
+# moderation and of the thread's own writes (title, move, delete): it neither
+# waits for replies nor holds them.
+const my $POST_THREAD_LOCK_SQL => join q{ },
+  'SELECT author_user_id, deleted_at, locked_at, moderation_state',
+  'FROM threads WHERE thread_id = ? FOR KEY SHARE';
+
 # ThreadDetailReader shows a thread only in these states, so they are the
-# only ones the workflow lets a reply through. Any other reads as not found.
+# only ones the workflow lets a reply, or an author's edit, delete or restore
+# of a post, through. Any other reads as not found.
 const my %REPLYABLE_STATE => ( locked => 1, visible => 1 );
 
 has clock      => sub { return GPForum::Service::Clock->new; };
@@ -129,12 +138,15 @@ sub _reply_store_block ( $thread, $replier ) {
     return $undefined;
 }
 
-sub _unreadable_thread ( $thread, $replier ) {
+# ThreadDetailReader's answer for the writer as a viewer: hidden or another
+# state it does not show is unreadable, and so is a deleted thread to anyone
+# but its author.
+sub _unreadable_thread ( $thread, $writer ) {
     return 1 if !exists $REPLYABLE_STATE{ $thread->{moderation_state} // q{} };
     return 0 if !defined $thread->{deleted_at};
     return 0
-      if _has_text($replier)
-      && _same_text( $thread->{author_user_id}, $replier );
+      if _has_text($writer)
+      && _same_text( $thread->{author_user_id}, $writer );
 
     return 1;
 }
@@ -432,19 +444,102 @@ sub _unpositioned ($command) {
     return { %{$command}, post => \%post };
 }
 
+# The workflow checked the post and its thread inside the command's
+# transaction but before any row lock, so a moderator may have locked the
+# thread or hidden the post since, or the author deleted either. So the edit
+# takes its rows under lock (see _locked_post) and checks again what the
+# workflow read, as the locks return it.
 sub _update_post ( $self, $input_command ) {
-    my $post_id = $input_command->{post}{post_id};
-    $self->_lock_post($post_id);
+    my ( $existing, $thread ) = $self->_locked_post( $input_command->{post} );
+    my $refused = _live_post_refusal( $existing, $thread,
+        $input_command->{post}{editor_user_id} );
+    return $refused if $refused;
 
-    my $existing = $self->_find_post($post_id);
-    if ( !$existing ) {
-        return { ok => 0, error => 'post not found' };
-    }
     if ( $self->_body_unchanged( $existing, $input_command ) ) {
         return _skipped_post($existing);
     }
 
     return $self->_update_or_retry_revision( $existing, $input_command );
+}
+
+# The thread row, then the post row -- no write takes a post row before its
+# thread's, so no cycle -- and the post and thread as those locks return them.
+# Every write the workflow's checks guard (lock, hide, delete, restore) takes
+# one of these rows FOR UPDATE, so a check made under both sees it committed.
+sub _locked_post ( $self, $post ) {
+    my $thread = $self->_lock_post_thread($post);
+    $self->_lock_post( $post->{post_id} );
+
+    return ( $self->_find_post( $post->{post_id} ), $thread );
+}
+
+# The thread as the lock returns it, or, for the in-memory doubles that have
+# no handle, nothing to lock or check. A post never changes thread, so the
+# thread the workflow read it in is the one to lock.
+sub _lock_post_thread ( $self, $post ) {
+    my $dbh = _schema_dbh( $self->schema );
+    return { unchecked => 1 } if !$dbh;
+
+    my $thread_id = $post->{thread_id}
+      // _column( $self->_find_post( $post->{post_id} ), 'thread_id' );
+
+    return { row =>
+          $dbh->selectrow_hashref( $POST_THREAD_LOCK_SQL, undef, $thread_id ) };
+}
+
+# PostingWorkflow's checks for an edit or a delete (_missing_edit_target,
+# _forbidden_edit), in their order and words: a deleted or missing post is
+# not found, then the thread and the post's moderation are asked. Authorship
+# is not read again: nothing ever changes it.
+sub _live_post_refusal ( $post, $thread, $author ) {
+    if ( !$post || defined _column( $post, 'deleted_at' ) ) {
+        return { ok => 0, error => 'post not found' };
+    }
+
+    return _moderated_post_refusal( $post, $thread, $author );
+}
+
+# A restore's checks (_missing_restore_target, _forbidden_edit): the post
+# must be deleted, then the same questions as an edit.
+sub _deleted_post_refusal ( $post, $thread, $author ) {
+    if ( !$post || !defined _column( $post, 'deleted_at' ) ) {
+        return { ok => 0, error => 'post not found' };
+    }
+
+    return _moderated_post_refusal( $post, $thread, $author );
+}
+
+# A thread the author can no longer read (hidden, gone, or deleted by an
+# author who is not this one) is not found; a hidden post is hidden; a locked
+# thread is locked.
+sub _moderated_post_refusal ( $post, $thread, $author ) {
+    if ( _post_thread_gone( $thread, $author ) ) {
+        return { ok => 0, error => 'thread not found' };
+    }
+    if ( _hidden_post($post) ) {
+        return { ok => 0, error => 'post is hidden' };
+    }
+    if ( !$thread->{unchecked} && defined $thread->{row}{locked_at} ) {
+        return { ok => 0, error => 'thread is locked' };
+    }
+
+    my $undefined;
+    return $undefined;
+}
+
+sub _post_thread_gone ( $thread, $author ) {
+    return 0 if $thread->{unchecked};
+    return 1 if !$thread->{row};
+
+    return _unreadable_thread( $thread->{row}, $author );
+}
+
+sub _hidden_post ($post) {
+    return 1 if defined _column( $post, 'hidden_at' );
+
+    return ( _column( $post, 'moderation_state' ) // q{} ) eq 'hidden'
+      ? 1
+      : 0;
 }
 
 sub _update_or_retry_revision ( $self, $existing, $input_command ) {
@@ -708,12 +803,14 @@ sub _has_text ($value) {
     return length $value ? 1 : 0;
 }
 
+# The workflow lets its author delete or restore a post only where it would
+# let them edit it: a hidden post, or one in a locked thread, is refused
+# (ADR 0061). A moderator may have hidden it or locked the thread after that
+# check, so the store asks again under the same locks as an edit.
 sub _soft_delete_post ( $self, $command ) {
-    my $post_id = $command->{post}{post_id};
-    $self->_lock_post($post_id);
-
-    my $existing = $self->_find_post($post_id);
-    my $blocked  = _delete_store_block($existing);
+    my ( $existing, $thread ) = $self->_locked_post( $command->{post} );
+    my $blocked =
+      _live_post_refusal( $existing, $thread, $command->{post}{deleted_by} );
     if ($blocked) {
         return $blocked;
     }
@@ -730,11 +827,10 @@ sub _soft_delete_post ( $self, $command ) {
 }
 
 sub _undelete_post ( $self, $command ) {
-    my $post_id = $command->{post}{post_id};
-    $self->_lock_post($post_id);
-
-    my $existing = $self->_find_post($post_id);
-    my $blocked  = _restore_store_block($existing);
+    my ( $existing, $thread ) = $self->_locked_post( $command->{post} );
+    my $blocked =
+      _deleted_post_refusal( $existing, $thread,
+        $command->{post}{restored_by} );
     if ($blocked) {
         return $blocked;
     }
@@ -748,30 +844,6 @@ sub _undelete_post ( $self, $command ) {
     $self->_record_restore_audit( $command, $post, $correlation_id );
 
     return { ok => 1, post => $post };
-}
-
-sub _delete_store_block ($existing) {
-    if ( !$existing ) {
-        return { ok => 0, error => 'post not found' };
-    }
-    if ( defined _column( $existing, 'deleted_at' ) ) {
-        return { ok => 0, error => 'post not found' };
-    }
-
-    my $undefined;
-    return $undefined;
-}
-
-sub _restore_store_block ($existing) {
-    if ( !$existing ) {
-        return { ok => 0, error => 'post not found' };
-    }
-    if ( !defined _column( $existing, 'deleted_at' ) ) {
-        return { ok => 0, error => 'post not found' };
-    }
-
-    my $undefined;
-    return $undefined;
 }
 
 sub _apply_delete_markers ( $self, $post, $command ) {

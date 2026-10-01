@@ -22,7 +22,7 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 144;
+const my $EXPECTED_TESTS   => 153;
 const my $RESTORED_VERSION => 3;
 const my $RESTORE_LOCKS    => 3;
 
@@ -638,6 +638,62 @@ is( scalar @{ $edit_schema->created_for('EventLog') },
     $edit_events, 'unchanged thread title does not write another event' );
 is( scalar @{ $edit_schema->created_for('AuditLog') },
     $edit_audits, 'unchanged thread title does not write another audit' );
+like(
+    $edit_locks[0]{sql},
+    qr/deleted_at .* locked_at .* moderation_state .* FOR [ ] UPDATE/msx,
+    'thread title lock reads back what the workflow checked'
+);
+
+# The workflow checks the thread before the row lock; a moderator can lock
+# or hide it in between, and its author can delete it in another tab. The
+# store checks again under the row lock, in the workflow's words, and writes
+# nothing when it refuses.
+_assert_title_refused(
+    {
+        command => $title_prepared->{command},
+        error   => 'thread is locked',
+        label   => 'a thread locked since the workflow looked',
+        row     => {
+            deleted_at       => undef,
+            locked_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'locked',
+        },
+    }
+);
+_assert_title_refused(
+    {
+        command => $title_prepared->{command},
+        error   => 'thread not found',
+        label   => 'a thread hidden since the workflow looked',
+        row     => {
+            deleted_at       => undef,
+            locked_at        => undef,
+            moderation_state => 'hidden',
+        },
+    }
+);
+
+# The workflow does not let even the author retitle a deleted thread.
+_assert_title_refused(
+    {
+        command => $title_prepared->{command},
+        error   => 'thread not found',
+        label   => 'a thread its author deleted since the workflow looked',
+        row     => {
+            deleted_at       => '2026-05-23T12:00:00Z',
+            locked_at        => undef,
+            moderation_state => 'visible',
+        },
+    }
+);
+_assert_title_refused(
+    {
+        command => $title_prepared->{command},
+        error   => 'thread not found',
+        label   => 'a thread that is not there',
+        row     => undef,
+    }
+);
 
 my $delete_clock  = GPForum::Test::FixedClock->new;
 my $delete_dbh    = GPForum::Test::PostStoreLockDbh->new;
@@ -831,5 +887,50 @@ is(
     'thread not found',
     'missing threads cannot be moved'
 );
+
+sub _assert_title_refused {
+    my ($case) = @_;
+
+    my $refusing_schema = GPForum::Test::PostStoreLockSchema->new(
+        lock_dbh =>
+          GPForum::Test::PostStoreLockDbh->new( thread_row => $case->{row} ),
+        threads => [
+            {
+                author_user_id => 'user-1',
+                slug           => 'welcome-to-gp-forum',
+                thread_id      => 'thread-1',
+                title          => 'Welcome to GP Forum',
+                version        => 1,
+            },
+        ],
+    );
+    my $refusing_store = GPForum::Service::Forum::ThreadStore->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $refusing_schema,
+    );
+
+    is_deeply(
+        $refusing_store->edit_thread( $case->{command} ),
+        { error => $case->{error}, ok => 0 },
+        "the store refuses to retitle $case->{label}"
+    );
+    is_deeply(
+        {
+            thread =>
+              [ @{ $refusing_schema->threads->[0] }{qw(slug title version)} ],
+            written => [
+                grep { scalar @{ $refusing_schema->created_for($_) } }
+                  qw(AuditLog EventLog OutboxMessage)
+            ],
+        },
+        {
+            thread  => [ 'welcome-to-gp-forum', 'Welcome to GP Forum', 1 ],
+            written => [],
+        },
+        "refusing to retitle $case->{label} writes nothing"
+    );
+
+    return;
+}
 
 1;

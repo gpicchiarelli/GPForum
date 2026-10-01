@@ -14,7 +14,8 @@ websocket hubs, and workers are execution boundaries, not authority boundaries.
 | event contract | Every domain event has a schema version, contract/version, idempotency key, correlation id, aggregate metadata, and transport metadata. | `t/75-architecture-foundation.t`, `t/86-engineering-correctness.t` |
 | outbox | Workers claim ready pending/failed messages and expired running locks atomically with PostgreSQL `FOR UPDATE SKIP LOCKED`; no two workers process the same `outbox_id`. A crash after claim and before dispatch leaves the row `running`; another worker does not take a fresh lock, and a stale lock is reclaimed and delivered once. Identity mail is an outbox job whose EventLog payload omits the raw token; a crash after send and before outbox ack resends from the outbox mail payload. | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `t/86-engineering-correctness.t`, `t/121-outbox-boundaries.t`, `t/150-outbox-handler-idempotency.t`, `t/154-identity-mail.t` |
 | retry/dead-letter | Retryable outbox failures advance attempt count and backoff; a classified `permanent` failure cancels immediately; max-attempt exhaustion moves to `cancelled` and records dead-letter evidence. Cancelled rows are not claimed again. A unique race on leftover `dead_letter_id` with this source reuses the review row. A unique race on `(source_table, source_id)` reuses the review row. A unique race on `dead_letter_id` remints the id once and does not return another review row. | `t/13-outbox-dispatcher.t`, `t/84-outbox-concurrent-dispatcher.t`, `t/121-outbox-boundaries.t` |
-| reply position | A reply takes its thread position under the thread row lock (`FOR NO KEY UPDATE`), so positions in a thread are unique and in commit order. Under the same lock the reply re-checks the thread: one locked or hidden since the workflow's check is refused, not written. | `t/12-forum-post.t`, `t/72-forum-bootstrap-workflow.t`, `t/integration/postgres-concurrency.t` |
+| reply position | A reply takes its thread position under the thread row lock (`FOR NO KEY UPDATE`), so positions in a thread are unique and in commit order. Under the same lock the reply re-checks the thread: one locked or hidden since the workflow's check, or deleted by its author while someone else's reply waited, is refused, not written. | `t/12-forum-post.t`, `t/72-forum-bootstrap-workflow.t`, `t/integration/postgres-concurrency.t` |
+| author edits | An author's post edit, delete or restore takes the thread row (`FOR KEY SHARE`) and then the post row (`FOR UPDATE`), and a thread title edit takes the thread row (`FOR UPDATE`); under those locks the store re-checks what the workflow checked. A post hidden or deleted since, or a thread locked, hidden or deleted since, is refused with the workflow's own status, nothing is written, and the refusal is the command's recorded answer. | `t/11-forum-thread.t`, `t/12-forum-post.t`, `t/72-forum-bootstrap-workflow.t`, `t/integration/postgres-concurrency.t` |
 | read-state | Per-user thread read state is monotonic and stored with a delta row; lower positions cannot regress the marker. | `t/41-thread-read-state.t`, `t/86-engineering-correctness.t` |
 | moderation | Moderation state transitions are transactional, audited, evented, and outboxed; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/25-moderation-review.t`, `t/43-moderation-web.t`, `t/86-engineering-correctness.t` |
 | privacy | Deletion requests, legal holds, erasure jobs, and completion retries are transactional; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/29-privacy-rights.t`, `t/62-privacy-web.t`, `t/86-engineering-correctness.t` |
@@ -336,22 +337,24 @@ paths. Expired `running` locks are claimable for stale-lock recovery.
 
 Reply position allocation is performed inside `PostStore` in the same
 transaction as the canonical post/event/audit/outbox writes. The store locks the
-target thread row with PostgreSQL `FOR NO KEY UPDATE`, reading back `locked_at`
-and `moderation_state`, then allocates the next position before inserting the
-post. The lock hands out positions in commit order, which the `PostReader`
-keyset and the `ReadState` high-water mark rely on: a reply that commits later
-never takes the lower number. `FOR NO KEY UPDATE` still queues a reply behind
-other replies and behind the `FOR UPDATE` that moderation and thread edits
-take, but not the `FOR KEY SHARE` of a foreign-key check, so a reader's first
-mark-read insert does not wait for the replies in flight.
+target thread row with PostgreSQL `FOR NO KEY UPDATE`, reading back `locked_at`,
+`moderation_state`, `deleted_at` and the author, then allocates the next
+position before inserting the post. The lock hands out positions in commit
+order, which the `PostReader` keyset and the `ReadState` high-water mark rely
+on: a reply that commits later never takes the lower number.
+`FOR NO KEY UPDATE` still queues a reply behind other replies and behind the
+`FOR UPDATE` that moderation and thread edits take, but not the `FOR KEY SHARE`
+of a foreign-key check, so a reader's first mark-read insert does not wait for
+the replies in flight.
 
-The workflow checks the thread before the command's transaction starts, so a
-moderator can lock or hide it in between. The store repeats that check under
-the lock: a locked thread refuses the reply with `thread is locked` (403), a
-hidden or missing one with `thread not found` (404). Nothing is written, and
-the refusal is recorded against the command id like the workflow's own check.
-`deleted_at` is not re-checked, because the workflow lets an author reply to
-their own deleted thread.
+The workflow checks the thread before the store takes the lock, so a moderator
+can lock or hide it in between, and its author can delete it. The store
+repeats that check under the lock: a locked thread refuses the reply with
+`thread is locked` (403); a hidden or missing one, or a deleted one replied to
+by anyone but its author, with `thread not found` (404). The author may still
+reply to their own deleted thread, as the workflow allows. Nothing is written,
+and the refusal is recorded against the command id like the workflow's own
+check.
 
 The `(thread_id, position)` uniqueness constraint remains the final database
 invariant. A unique race on that key retries allocation once instead of
@@ -360,10 +363,50 @@ does not insert a second event; a unique race on `post_id` occupied by another
 post remints the id once and does not return that post.
 
 `t/integration/postgres-concurrency.t` checks this against PostgreSQL:
-`_reply_position_race` (concurrent replies to one thread each get the next
-position), `_reply_lock_allows_fk_inserts` (a mark-read insert does not wait
-on a reply in flight) and `_reply_rechecks_lock` (a reply waiting on a
-moderator's lock is refused once the lock commits).
+`_reply_position_race` (four replies queue on a held thread row, then each
+gets the next position; without the lock they would not queue, and the unique
+retry alone would hide it), `_reply_lock_allows_fk_inserts` (a reply in flight
+holds the thread from the next reply, and a mark-read insert does not wait on
+it), `_reply_rechecks_lock` (a reply waiting on a moderator's lock is refused
+once the lock commits) and `_reply_rechecks_delete` (a reply waiting on the
+author's delete is refused once the delete commits).
+
+An author's edit has the same race (ADR 0061: a locked thread rejects writes).
+The workflow checks a post edit inside the command's transaction but before
+any row lock -- the post live and not hidden, its thread readable and not
+locked -- and a moderator can lock the thread or hide the post in between, or
+the author can delete the post from another tab. `PostStore` therefore takes
+the thread row with `FOR KEY SHARE`, then the post row with `FOR UPDATE` -- no
+write takes a post row before its thread's, so no lock cycle -- and asks
+again, in the workflow's order and words: a missing or deleted post is
+`post not found` (404); a thread the author can no longer read (hidden,
+missing, or deleted by another author) is `thread not found` (404); a hidden
+post is `post is hidden` (403); a locked thread is `thread is locked` (403).
+`FOR KEY SHARE` queues behind the `FOR UPDATE` that every guarded thread write
+takes (a moderator's lock or hide, the author's thread delete, a title edit),
+and the post's `FOR UPDATE` behind a moderator's hide of the post. Neither
+conflicts with a reply's `FOR NO KEY UPDATE`, so an edit neither waits for
+replies nor holds them up.
+
+The workflow lets an author delete or restore a post only where it would let
+them edit it, so both take the same locks and make the same checks; a restore
+needs the post deleted instead of live. A thread title edit takes its thread
+`FOR UPDATE` and re-checks it: deleted (even by its author, who must restore
+it first), hidden or missing is `thread not found`, locked is
+`thread is locked`. In every case nothing is written, and `PostingWorkflow`
+answers with the status of its own check, recorded against the command id and
+replayed on a retry, not `failed`.
+
+`t/integration/postgres-concurrency.t` races each of these against PostgreSQL:
+the moderator's lock, hide or the author's delete is left uncommitted, the
+author's write is forked and seen queueing on the held row, and once the
+holder commits the write is refused and the post or thread is unchanged
+(`_edit_rechecks_thread_lock`, `_edit_rechecks_post_hide`,
+`_edit_rechecks_post_delete`, `_title_edit_rechecks_lock`,
+`_delete_rechecks_thread_lock`, `_restore_rechecks_post_hide`). An author's
+thread delete, restore and move still check the thread's lock and hiding only
+in the workflow; under their row lock the store re-checks only that the thread
+exists and is (or, for a restore, is not) deleted.
 
 ## Failure Injection
 

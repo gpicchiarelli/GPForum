@@ -6,6 +6,7 @@ package GPForum::Service::Forum::PostingWorkflow;
 use strict;
 use warnings;
 
+use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use English     qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
@@ -16,6 +17,15 @@ use GPForum::Infrastructure::Row;
 use GPForum::Service::Forum::Visibility;
 
 our $VERSION = '0.001';
+
+# What a store's refusal under its row locks means: the status the workflow's
+# own check gives for the same words. See _store_answer.
+const my %STORE_REFUSAL_STATUS => (
+    'post is hidden'   => 'forbidden',
+    'post not found'   => 'not_found',
+    'thread is locked' => 'forbidden',
+    'thread not found' => 'not_found',
+);
 
 has category_reader      => undef;
 has command_idempotency  => undef;
@@ -737,23 +747,34 @@ sub _store_post ( $self, $command ) {
         return _result( status => 'failed', error => 'post store failed' );
     }
 
-    return _reply_stored_result($stored);
+    return _post_store_answer($stored);
 }
 
-# The store checks the thread again under its row lock, because a moderator
-# may have locked or hidden it after _create_reply_once looked. Its refusal
-# is an answer, not a failure: the status the first check gives, recorded
-# with the command and replayed with it.
-sub _reply_stored_result ($stored) {
+sub _post_store_answer ($stored) {
+    return _store_answer( $stored, 'post store failed' );
+}
+
+sub _thread_store_answer ($stored) {
+    return _store_answer( $stored, 'thread store failed' );
+}
+
+# A store checks again, under its row locks, what the workflow checked before
+# the transaction, because a moderator may have locked or hidden the thread or
+# the post since, or the author deleted one. Its refusal is an answer, not a
+# failure: the status the first check gives, recorded with the command and
+# replayed with it.
+sub _store_answer ( $stored, $fallback_error ) {
     my $refusal = _stored_refusal($stored);
-    if ( $refusal eq 'thread not found' ) {
-        return _result( status => 'not_found', error => $refusal );
-    }
-    if ( $refusal eq 'thread is locked' ) {
-        return _result( status => 'forbidden', error => $refusal );
+
+    # exists first: reading an absent key of a constant hash dies.
+    if ( exists $STORE_REFUSAL_STATUS{$refusal} ) {
+        return _result(
+            status => $STORE_REFUSAL_STATUS{$refusal},
+            error  => $refusal
+        );
     }
 
-    return _stored_result( $stored, 'post store failed' );
+    return _stored_result( $stored, $fallback_error );
 }
 
 sub _stored_refusal ($stored) {
@@ -770,7 +791,7 @@ sub _store_edit_post ( $self, $command ) {
         return _result( status => 'failed', error => 'post store failed' );
     }
 
-    return _edit_stored_result($stored);
+    return _post_store_answer($stored);
 }
 
 sub _store_delete_post ( $self, $command ) {
@@ -780,7 +801,7 @@ sub _store_delete_post ( $self, $command ) {
         return _result( status => 'failed', error => 'post store failed' );
     }
 
-    return _edit_stored_result($stored);
+    return _post_store_answer($stored);
 }
 
 sub _store_restore_post ( $self, $command ) {
@@ -790,7 +811,7 @@ sub _store_restore_post ( $self, $command ) {
         return _result( status => 'failed', error => 'post store failed' );
     }
 
-    return _edit_stored_result($stored);
+    return _post_store_answer($stored);
 }
 
 sub _store_edit_thread ( $self, $command ) {
@@ -800,7 +821,7 @@ sub _store_edit_thread ( $self, $command ) {
         return _result( status => 'failed', error => 'thread store failed' );
     }
 
-    return _edit_thread_stored_result($stored);
+    return _thread_store_answer($stored);
 }
 
 sub _store_delete_thread ( $self, $command ) {
@@ -810,7 +831,7 @@ sub _store_delete_thread ( $self, $command ) {
         return _result( status => 'failed', error => 'thread store failed' );
     }
 
-    return _edit_thread_stored_result($stored);
+    return _thread_store_answer($stored);
 }
 
 sub _store_restore_thread ( $self, $command ) {
@@ -820,7 +841,7 @@ sub _store_restore_thread ( $self, $command ) {
         return _result( status => 'failed', error => 'thread store failed' );
     }
 
-    return _edit_thread_stored_result($stored);
+    return _thread_store_answer($stored);
 }
 
 sub _store_move_thread ( $self, $command ) {
@@ -830,39 +851,7 @@ sub _store_move_thread ( $self, $command ) {
         return _result( status => 'failed', error => 'thread store failed' );
     }
 
-    return _edit_thread_stored_result($stored);
-}
-
-sub _edit_thread_stored_result ($stored) {
-    if ( _missing_stored_thread($stored) ) {
-        return _result( status => 'not_found', error => 'thread not found' );
-    }
-
-    return _stored_result( $stored, 'thread store failed' );
-}
-
-sub _missing_stored_thread ($stored) {
-    return 0 if ref $stored ne 'HASH';
-    return 0 if $stored->{ok};
-    return 1 if ( $stored->{error} || q{} ) eq 'thread not found';
-
-    return 0;
-}
-
-sub _edit_stored_result ($stored) {
-    if ( _missing_stored_post($stored) ) {
-        return _result( status => 'not_found', error => 'post not found' );
-    }
-
-    return _stored_result( $stored, 'post store failed' );
-}
-
-sub _missing_stored_post ($stored) {
-    return 0 if ref $stored ne 'HASH';
-    return 0 if $stored->{ok};
-    return 1 if ( $stored->{error} || q{} ) eq 'post not found';
-
-    return 0;
+    return _thread_store_answer($stored);
 }
 
 sub _record_post_mentions ( $self, $stored, $command ) {

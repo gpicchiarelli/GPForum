@@ -18,15 +18,19 @@ use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
 use GPForum::Test::PostStoreLockDbh;
 use GPForum::Test::PostStoreLockSchema;
-use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS           => 171;
+const my $EXPECTED_TESTS           => 201;
 const my $ALLOCATED_REPLY_POSITION => 3;
 const my $NEXT_REVISION            => 2;
 const my $RESTORED_VERSION         => 3;
 const my $RESTORE_LOCKS            => 3;
+const my %AUTHOR_WRITE => (
+    delete  => 'delete_post',
+    edit    => 'edit_post',
+    restore => 'restore_post',
+);
 
 plan tests => $EXPECTED_TESTS;
 
@@ -138,7 +142,7 @@ is(
     'but may be narrower'
 );
 
-my $schema = _reply_schema();
+my $schema = _lock_schema();
 my $store  = GPForum::Service::Forum::PostStore->new(
     schema     => $schema,
     id_service => GPForum::Test::Id->new,
@@ -190,7 +194,7 @@ is( scalar @{ $schema->created_for('Post') },
 is( scalar @{ $schema->created_for('EventLog') },
     1, 'unique post id race does not write a second event' );
 
-my $post_pk_schema = _reply_schema();
+my $post_pk_schema = _lock_schema();
 $post_pk_schema->resultset('Post')->create(
     {
         author_user_id => 'user-other',
@@ -226,7 +230,7 @@ is( $post_pk->{post}{post_id},
 is( $post_pk->{post}{thread_id},
     'thread-pk', 'unique post id collision keeps this thread' );
 
-my $post_leftover_schema = _reply_schema();
+my $post_leftover_schema = _lock_schema();
 my $post_leftover_ids    = GPForum::Test::Id->new;
 my $post_leftover_prepared =
   GPForum::Service::Forum::PostComposer->new( id_service => $post_leftover_ids )
@@ -268,7 +272,7 @@ is( scalar @{ $post_leftover_schema->created_for('Post') },
 is( scalar @{ $post_leftover_schema->created_for('PostBody') },
     1, 'leftover post id race inserts the missing body' );
 
-my $copy_body_schema = _reply_schema();
+my $copy_body_schema = _lock_schema();
 $copy_body_schema->resultset('PostBody')->create(
     {
         body_id => 'generated-2',
@@ -302,7 +306,7 @@ is( $copy_body->{post}{current_body_id},
 is( $copy_body->{post}{post_id},
     'generated-1', 'unique reply body id collision keeps this post' );
 
-my $copy_body_leftover_schema = _reply_schema();
+my $copy_body_leftover_schema = _lock_schema();
 $copy_body_leftover_schema->resultset('PostBody')->create(
     {
         body_id => 'generated-2',
@@ -343,7 +347,7 @@ is( scalar @{ $copy_body_leftover_schema->created_for('PostBody') },
 is( scalar @{ $copy_body_leftover_schema->created_for('PostRevision') },
     1, 'leftover reply body id race inserts the missing revision' );
 
-my $copy_rev_schema = _reply_schema();
+my $copy_rev_schema = _lock_schema();
 $copy_rev_schema->resultset('PostRevision')->create(
     {
         post_id     => 'other-post',
@@ -377,7 +381,7 @@ is( $copy_rev->{post}{current_revision_id},
 is( $copy_rev->{post}{post_id},
     'generated-1', 'unique reply revision id collision keeps this post' );
 
-my $copy_rev_leftover_schema = _reply_schema();
+my $copy_rev_leftover_schema = _lock_schema();
 $copy_rev_leftover_schema->resultset('PostRevision')->create(
     {
         post_id     => 'generated-1',
@@ -701,6 +705,128 @@ is( scalar @{ $edit_schema->created_for('EventLog') },
 is( scalar @{ $edit_schema->created_for('AuditLog') },
     $edit_audits, 'unchanged post edit does not write another audit' );
 
+# An edit takes the thread row before the post row, as a reply and moderation
+# do, and the thread's lock is the weakest that still waits for a moderator.
+my @edit_lock_sql = map { $_->{sql} } @{ $edit_dbh->calls }[ 0, 1 ];
+like(
+    $edit_lock_sql[0],
+    qr/FROM [ ] threads [ ] .* FOR [ ] KEY [ ] SHARE/msx,
+    'post edit takes its thread first, with a lock that lets replies through'
+);
+like(
+    $edit_lock_sql[1],
+    qr/FROM [ ] posts [ ] .* FOR [ ] UPDATE/msx,
+    'post edit takes the post after its thread'
+);
+
+# The workflow checks the post and its thread before the row locks; a
+# moderator can lock the thread or hide the post in between, and the author
+# can delete either. The store checks again under its locks, in the
+# workflow's order and words, and writes nothing when it refuses.
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'thread is locked',
+        label   => 'a post whose thread was locked since the workflow looked',
+        thread  => {
+            locked_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'locked',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'thread not found',
+        label   => 'a post whose thread was hidden since the workflow looked',
+        thread  => { locked_at => undef, moderation_state => 'hidden' },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'thread not found',
+        label   => 'a post whose thread is not there',
+        thread  => undef,
+    }
+);
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'thread not found',
+        label   => 'a post whose thread another author deleted',
+        thread  => {
+            author_user_id   => 'user-2',
+            deleted_at       => '2026-05-23T12:00:00Z',
+            locked_at        => undef,
+            moderation_state => 'visible',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'post is hidden',
+        label   => 'a post hidden since the workflow looked',
+        post    => {
+            hidden_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'hidden',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'post not found',
+        label   => 'a post its author deleted since the workflow looked',
+        post    => { deleted_at => '2026-05-23T12:00:00Z' },
+    }
+);
+
+# The workflow asks about the post before the thread's lock: a hidden post in
+# a locked thread is hidden.
+_assert_author_write_refused(
+    {
+        command => $revision_prepared->{command},
+        write   => 'edit',
+        error   => 'post is hidden',
+        label   => 'a hidden post in a locked thread',
+        post    => {
+            hidden_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'hidden',
+        },
+        thread => {
+            locked_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'locked',
+        },
+    }
+);
+
+# The workflow lets an author edit their post in their own deleted thread,
+# and the store must not decide that differently.
+ok(
+    GPForum::Service::Forum::PostStore->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => _edit_schema(
+            {
+                thread => {
+                    author_user_id   => 'user-1',
+                    deleted_at       => '2026-05-23T12:00:00Z',
+                    locked_at        => undef,
+                    moderation_state => 'visible',
+                },
+            }
+        ),
+    )->edit_post( $revision_prepared->{command} )->{ok},
+    'the store lets an author edit a post in their own deleted thread'
+);
+
 my $race_edit_dbh    = GPForum::Test::PostStoreLockDbh->new;
 my $race_edit_schema = GPForum::Test::PostStoreLockSchema->new(
     lock_dbh => $race_edit_dbh,
@@ -775,7 +901,7 @@ is( scalar @{ $id_edit_schema->created_for('PostBody') },
 is( scalar @{ $id_edit_schema->created_for('EventLog') },
     1, 'unique revision id race inserts the missing event' );
 
-my $body_pk_schema = GPForum::Test::Schema->new;
+my $body_pk_schema = _lock_schema();
 $body_pk_schema->resultset('Post')->create(
     {
         author_user_id      => 'user-1',
@@ -819,7 +945,7 @@ is( $body_pk_schema->posts->[0]{current_body_id},
 is( $body_pk_schema->created_for('PostBody')->[-1]{post_id},
     'post-pk', 'unique body id collision keeps this post' );
 
-my $body_leftover_schema = GPForum::Test::Schema->new;
+my $body_leftover_schema = _lock_schema();
 $body_leftover_schema->resultset('Post')->create(
     {
         author_user_id      => 'user-1',
@@ -869,7 +995,7 @@ is( scalar @{ $body_leftover_schema->created_for('PostBody') },
 is( scalar @{ $body_leftover_schema->created_for('PostRevision') },
     1, 'leftover edit body id race inserts the missing revision' );
 
-my $rev_pk_schema = GPForum::Test::Schema->new;
+my $rev_pk_schema = _lock_schema();
 $rev_pk_schema->resultset('Post')->create(
     {
         author_user_id      => 'user-1',
@@ -913,7 +1039,7 @@ is( $rev_pk_schema->posts->[0]{current_revision_id},
 is( $rev_pk_schema->created_for('PostRevision')->[-1]{post_id},
     'post-pk', 'unique revision id collision keeps this post' );
 
-my $rev_leftover_schema = GPForum::Test::Schema->new;
+my $rev_leftover_schema = _lock_schema();
 $rev_leftover_schema->resultset('Post')->create(
     {
         author_user_id      => 'user-1',
@@ -1022,6 +1148,11 @@ my @delete_locks =
 is( scalar @delete_locks, 1, 'post delete locks the post row' );
 is( $delete_locks[0]{bind}[0],
     'post-1', 'post row lock targets the deleted post' );
+like(
+    $delete_dbh->calls->[0]{sql},
+    qr/FROM [ ] threads [ ] .* FOR [ ] KEY [ ] SHARE/msx,
+    'post delete takes its thread first, as an edit does'
+);
 is(
     $delete_store->delete_post(
         {
@@ -1078,12 +1209,179 @@ is(
     'post restore rejects a live post'
 );
 
-# A reply reads its thread back under the row lock through the storage
-# handle. The plain handle double has no selectrow_hashref; the lock double
-# answers with an open thread.
-sub _reply_schema {
+# The workflow refuses its author's delete or restore of a hidden post, or of
+# one in a locked thread, as it refuses an edit; a moderator acting after that
+# check is caught under the same locks, in the same words.
+my %delete_command = (
+    idempotency_key => 'delete-refused-command',
+    post            => {
+        deleted_by => 'user-1',
+        post_id    => 'post-1',
+        thread_id  => 'thread-1',
+    },
+);
+my %restore_command = (
+    idempotency_key => 'restore-refused-command',
+    post            => {
+        restored_by => 'user-1',
+        post_id     => 'post-1',
+        thread_id   => 'thread-1',
+    },
+);
+my %deleted_post = (
+    deleted_at => '2026-05-23T12:00:00Z',
+    deleted_by => 'user-1',
+);
+_assert_author_write_refused(
+    {
+        command => \%delete_command,
+        write   => 'delete',
+        error   => 'thread is locked',
+        label   => 'a post whose thread was locked since the workflow looked',
+        thread  => {
+            locked_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'locked',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => \%delete_command,
+        write   => 'delete',
+        error   => 'post is hidden',
+        label   => 'a post hidden since the workflow looked',
+        post    => {
+            hidden_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'hidden',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => \%delete_command,
+        write   => 'delete',
+        error   => 'thread not found',
+        label   => 'a post whose thread another author deleted',
+        thread  => {
+            author_user_id   => 'user-2',
+            deleted_at       => '2026-05-23T12:00:00Z',
+            locked_at        => undef,
+            moderation_state => 'visible',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => \%restore_command,
+        write   => 'restore',
+        error   => 'thread is locked',
+        label   => 'a post whose thread was locked since the workflow looked',
+        post    => \%deleted_post,
+        thread  => {
+            locked_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'locked',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => \%restore_command,
+        write   => 'restore',
+        error   => 'post is hidden',
+        label   => 'a post hidden since the workflow looked',
+        post    => {
+            %deleted_post,
+            hidden_at        => '2026-05-23T12:00:00Z',
+            moderation_state => 'hidden',
+        },
+    }
+);
+_assert_author_write_refused(
+    {
+        command => \%restore_command,
+        write   => 'restore',
+        error   => 'thread not found',
+        label   => 'a post whose thread was hidden since the workflow looked',
+        post    => \%deleted_post,
+        thread  => { locked_at => undef, moderation_state => 'hidden' },
+    }
+);
+
+# A reply, and an author's edit, delete or restore of a post, read the thread
+# back under its row lock through the storage handle. The plain handle double
+# has no selectrow_hashref; the lock double answers with an open thread.
+sub _lock_schema {
     return GPForum::Test::PostStoreLockSchema->new(
         lock_dbh => GPForum::Test::PostStoreLockDbh->new );
+}
+
+# One post by user-1 in thread-1, behind a lock double that answers with the
+# given thread row (an open thread unless the case says otherwise).
+sub _edit_schema {
+    my ($case) = @_;
+
+    my %thread_row =
+      exists $case->{thread} ? ( thread_row => $case->{thread} ) : ();
+
+    return GPForum::Test::PostStoreLockSchema->new(
+        lock_dbh => GPForum::Test::PostStoreLockDbh->new(%thread_row),
+        posts    => [
+            {
+                author_user_id      => 'user-1',
+                current_body_id     => 'body-1',
+                current_revision_id => 'rev-1',
+                post_id             => 'post-1',
+                thread_id           => 'thread-1',
+                version             => 1,
+                %{ $case->{post} || {} },
+            },
+        ],
+        post_revisions => [ { post_id => 'post-1', revision_number => 1 } ],
+    );
+}
+
+# An author's write the store refuses under its locks leaves the post as it
+# was and records nothing: no body, revision, counter, event or audit.
+sub _assert_author_write_refused {
+    my ($case) = @_;
+
+    my $write_schema = _edit_schema($case);
+    my $write_store  = GPForum::Service::Forum::PostStore->new(
+        id_service => GPForum::Test::Id->new,
+        schema     => $write_schema,
+    );
+    my $before = _post_snapshot($write_schema);
+    my $method = $AUTHOR_WRITE{ $case->{write} };
+
+    is_deeply(
+        $write_store->$method( $case->{command} ),
+        { error => $case->{error}, ok => 0 },
+        "the store refuses to $case->{write} $case->{label}"
+    );
+    is_deeply(
+        {
+            post    => _post_snapshot($write_schema),
+            written => [
+                grep { scalar @{ $write_schema->created_for($_) } }
+                  qw(AuditLog EventLog OutboxMessage PostBody PostRevision
+                  ThreadCounterShard)
+            ],
+        },
+        { post => $before, written => [] },
+        "refusing to $case->{write} $case->{label} writes nothing"
+    );
+
+    return;
+}
+
+sub _post_snapshot {
+    my ($post_schema) = @_;
+
+    my %post = %{ $post_schema->posts->[0] };
+
+    return { map { $_ => $post{$_} }
+          qw(current_body_id current_revision_id deleted_at deleted_by version)
+    };
 }
 
 sub _assert_reply_refused {

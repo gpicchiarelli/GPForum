@@ -24,6 +24,13 @@ const my $POST_ID_CONSTRAINT     => 'posts_pkey';
 const my $BODY_ID_CONSTRAINT     => 'post_bodies_pkey';
 const my $REVISION_ID_CONSTRAINT => 'post_revisions_pkey';
 const my $COUNTER_ID_CONSTRAINT  => 'thread_counters_pkey';
+const my $TITLE_LOCK_SQL => join q{ },
+  'SELECT deleted_at, locked_at, moderation_state',
+  'FROM threads WHERE thread_id = ? FOR UPDATE';
+
+# ThreadDetailReader shows a thread only in these states, so the workflow
+# lets an edit through only in these. Any other reads as not found.
+const my %EDITABLE_STATE => ( locked => 1, visible => 1 );
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has schema     => undef;
@@ -582,9 +589,14 @@ sub _find_post ( $self, $post_id ) {
     return $self->schema->resultset('Post')->find( { post_id => $post_id } );
 }
 
+# The workflow checked the thread before this row lock; a moderator may
+# have locked or hidden it since, or its author deleted it in another tab.
+# The row lock orders the edit against those writes, which take FOR UPDATE
+# too, and returns the thread as they committed it, to be checked again.
 sub _update_thread ( $self, $command ) {
     my $thread_id = $command->{thread}{thread_id};
-    $self->_lock_thread($thread_id);
+    my $refused   = $self->_title_refusal($thread_id);
+    return $refused if $refused;
 
     my $existing = $self->_find_thread($thread_id);
     if ( !$existing ) {
@@ -600,6 +612,37 @@ sub _update_thread ( $self, $command ) {
     $self->_record_update_audit( $command, $thread, $correlation_id );
 
     return { ok => 1, thread => $thread };
+}
+
+# The in-memory doubles have no handle, so nothing to lock or re-check.
+sub _title_refusal ( $self, $thread_id ) {
+    my $dbh = _schema_dbh( $self->schema );
+    if ( !$dbh ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    return _title_store_block(
+        $dbh->selectrow_hashref( $TITLE_LOCK_SQL, undef, $thread_id ) );
+}
+
+# What the workflow's check said, in its words. A hidden or missing thread is
+# not found, and so is a deleted one, even to its author, who must restore it
+# before editing it; a locked thread is locked. Authorship is not read again:
+# nothing ever changes it.
+sub _title_store_block ($thread) {
+    if (   !$thread
+        || defined $thread->{deleted_at}
+        || !exists $EDITABLE_STATE{ $thread->{moderation_state} // q{} } )
+    {
+        return { ok => 0, error => 'thread not found' };
+    }
+    if ( defined $thread->{locked_at} ) {
+        return { ok => 0, error => 'thread is locked' };
+    }
+
+    my $undefined;
+    return $undefined;
 }
 
 sub _move_thread ( $self, $command ) {

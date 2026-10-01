@@ -62,19 +62,58 @@ Files involved:
 
 Current behavior: `PostStore::_command_with_allocated_position` runs inside
 `schema->txn_do`, locks the `threads` record with `FOR NO KEY UPDATE`, re-reads
-its `locked_at` and moderation state, computes the next position, and inserts
-into `posts`. `FOR NO KEY UPDATE` still orders replies against each other and
-against moderation, which takes `FOR UPDATE`, and no longer blocks the
-foreign-key checks of a reader's first read-marker insert (ADR 0111). The migration keeps
+its `locked_at`, moderation state, `deleted_at` and author, computes the next
+position, and inserts into `posts`. `FOR NO KEY UPDATE` still orders replies
+against each other and against moderation, which takes `FOR UPDATE`, and no
+longer blocks the foreign-key checks of a reader's first read-marker insert
+(ADR 0111). The migration keeps
 `posts_thread_position_key UNIQUE (thread_id, position)`.
 
 Residual risk: low. On a non-PostgreSQL backend the lock depends on the driver,
 but the target for production is PostgreSQL.
 
-Evidence: `t/integration/postgres-concurrency.t` races concurrent replies to
-one thread (contiguous positions, one event each), shows the read-marker insert
-no longer waits, and refuses a reply to a thread locked while it waited. The
-race runs the harness's two workers, not the 25-100 once proposed.
+Evidence: `t/integration/postgres-concurrency.t` queues four replies on a
+held thread row and releases them (contiguous positions, one event each; a
+free race could not tell the lock from the unique-index retry), shows the
+read-marker insert no longer waits while the next reply does, and refuses a
+reply to a thread locked, or deleted by its author, while it waited.
+
+### TX-002: author edits checked outside the row locks
+
+Severity: closed for post edit, delete and restore and for thread title edit,
+historical risk `high`; open, `medium`, for thread delete, restore and move.
+
+Files involved:
+
+- `lib/GPForum/Service/Forum/PostingWorkflow.pm`
+- `lib/GPForum/Service/Forum/PostStore.pm`
+- `lib/GPForum/Service/Forum/ThreadStore.pm`
+
+Current behavior: `PostingWorkflow` checks an author's write (post live or,
+for a restore, deleted; post not hidden; thread readable and not locked)
+inside the command's transaction but before any row lock. `PostStore` then
+takes the thread row with `FOR KEY SHARE` and the post row with `FOR UPDATE`
+-- no write takes a post row before its thread's -- and repeats those checks
+on the rows as the locks return them; `ThreadStore` does the same for a title
+edit under the thread's `FOR UPDATE`. A lock, hide or delete committed while
+the write waited refuses it with the workflow's status (`thread is locked` and
+`post is hidden` 403, `post not found` and `thread not found` 404), writes
+nothing, and the refusal is recorded and replayed against the command id.
+Before, the edit landed in a thread a moderator had just locked, or on a post
+just hidden or deleted.
+
+Residual risk: an author's thread delete, restore and move re-check under
+their `FOR UPDATE` only that the thread exists and its deletion state; a
+moderator's lock or hide committed after the workflow's check does not stop
+them.
+
+Evidence: `t/integration/postgres-concurrency.t` (`_edit_rechecks_thread_lock`,
+`_edit_rechecks_post_hide`, `_edit_rechecks_post_delete`,
+`_title_edit_rechecks_lock`, `_delete_rechecks_thread_lock`,
+`_restore_rechecks_post_hide`) holds the moderator's or author's write
+uncommitted, sees the author's write queue on the row, commits, and checks the
+refusal and the unchanged row; `t/11-forum-thread.t`, `t/12-forum-post.t` and
+`t/72-forum-bootstrap-workflow.t` cover the re-check and the recorded answer.
 
 ### ID-001: concurrent race on `command_log`
 

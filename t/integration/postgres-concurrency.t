@@ -21,6 +21,8 @@ use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Forum::PostComposer;
 use GPForum::Service::Forum::PostStore;
+use GPForum::Service::Forum::ThreadComposer;
+use GPForum::Service::Forum::ThreadStore;
 use GPForum::Service::Operations::CacheInvalidationBus;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::TieredCache;
@@ -38,6 +40,7 @@ our $VERSION = '0.001';
 
 const my $TOKEN_TTL       => 3_600;
 const my $LOCK_TIMEOUT_MS => 10_000;
+const my $IDLE_TIMEOUT_MS => 30_000;
 const my $SEED_USER_SQL   => 'SELECT id FROM users ORDER BY username LIMIT 2';
 const my $SEED_POST_SQL => join q{ },
   'SELECT post_id FROM posts',
@@ -48,6 +51,19 @@ const my $SEED_THREAD_SQL => join q{ },
   'WHERE deleted_at IS NULL AND locked_at IS NULL',
   q{AND moderation_state = 'visible'},
   'ORDER BY thread_id LIMIT 1';
+const my $OTHER_AUTHOR_THREAD_SQL => join q{ },
+  'SELECT thread_id, author_user_id, category_id, visibility FROM threads',
+  'WHERE deleted_at IS NULL AND locked_at IS NULL',
+  q{AND moderation_state = 'visible'},
+  'AND thread_id <> ? AND author_user_id <> ?',
+  'ORDER BY thread_id LIMIT 1';
+const my $HOLD_THREAD_SQL =>
+  'SELECT 1 FROM threads WHERE thread_id = ? FOR NO KEY UPDATE';
+const my $HOLD_THREAD_NOWAIT_SQL => "$HOLD_THREAD_SQL NOWAIT";
+const my $LOCK_WAITERS_SQL => join q{ },
+  'SELECT count(*) FROM pg_stat_activity',
+  q{WHERE datname = current_database() AND wait_event_type = 'Lock'};
+const my $REPLY_RACERS => 4;
 const my $CLEAR_READ_SQL =>
   'DELETE FROM thread_read_state WHERE user_id = ? AND thread_id = ?';
 const my $LAST_POSITION_SQL =>
@@ -61,13 +77,53 @@ const my $MARK_READ_SQL => join q{ },
 const my $BLOCKED_ON_SQL => join q{ },
   'SELECT count(*) FROM pg_stat_activity',
   'WHERE ? = ANY (pg_blocking_pids(pid))';
-const my $BLOCK_POLLS        => 200;
-const my $BLOCK_POLL_SECONDS => 0.05;
-const my $RACE_TARGET_ID     => '018f9999-0001-7000-8000-00000000c001';
-const my $REPORT_TARGET_ID   => '018f9999-0001-7000-8000-00000000c002';
-const my $COMMAND_KEY        => '018f9999-0001-7000-8000-00000000c010';
-const my $HIDE_COMMAND       => '018f9999-0001-7000-8000-00000000c011';
-const my $LOCK_COMMAND       => '018f9999-0001-7000-8000-00000000c012';
+const my $ROW_WAIT_SQL => join q{ },
+  'SELECT count(*) FROM pg_stat_activity',
+  'WHERE ? = ANY (pg_blocking_pids(pid))',
+  q{AND wait_event IN ('transactionid', 'tuple')};
+const my $EDITABLE_POST_SQL => join q{ },
+  'SELECT p.post_id, p.thread_id, p.author_user_id FROM posts p',
+  'JOIN threads t ON t.thread_id = p.thread_id',
+  'WHERE p.deleted_at IS NULL AND p.hidden_at IS NULL',
+  q{AND p.moderation_state = 'visible'},
+  'AND t.deleted_at IS NULL AND t.locked_at IS NULL',
+  q{AND t.moderation_state = 'visible'},
+  'ORDER BY p.post_id LIMIT 1';
+const my $EDITABLE_THREAD_SQL => join q{ },
+  'SELECT thread_id, author_user_id FROM threads',
+  'WHERE deleted_at IS NULL AND locked_at IS NULL',
+  q{AND moderation_state = 'visible'},
+  'ORDER BY thread_id LIMIT 1';
+
+# What an edit writes, and only that: the holder's own write may bump the
+# row's version.
+const my $POST_POINTERS_SQL => join q{ },
+  'SELECT current_body_id, current_revision_id FROM posts',
+  'WHERE post_id = ?';
+const my $THREAD_TITLE_SQL =>
+  'SELECT title, slug FROM threads WHERE thread_id = ?';
+const my $POST_DELETION_SQL =>
+  'SELECT deleted_at, deleted_by FROM posts WHERE post_id = ?';
+const my $REPLY_COUNT_SQL => join q{ },
+  'SELECT COALESCE(sum(reply_count_delta), 0) FROM thread_counter_shards',
+  'WHERE thread_id = ?';
+const my $BLOCK_POLLS          => 200;
+const my $BLOCK_POLL_SECONDS   => 0.05;
+const my $RACE_TARGET_ID       => '018f9999-0001-7000-8000-00000000c001';
+const my $REPORT_TARGET_ID     => '018f9999-0001-7000-8000-00000000c002';
+const my $COMMAND_KEY          => '018f9999-0001-7000-8000-00000000c010';
+const my $HIDE_COMMAND         => '018f9999-0001-7000-8000-00000000c011';
+const my $LOCK_COMMAND         => '018f9999-0001-7000-8000-00000000c012';
+const my $DELETE_COMMAND       => '018f9999-0001-7000-8000-00000000c013';
+const my $EDIT_LOCK_COMMAND    => '018f9999-0001-7000-8000-00000000c014';
+const my $EDIT_HIDE_COMMAND    => '018f9999-0001-7000-8000-00000000c015';
+const my $EDIT_DELETE_KEY      => '018f9999-0001-7000-8000-00000000c016';
+const my $TITLE_LOCK_COMMAND   => '018f9999-0001-7000-8000-00000000c017';
+const my $DELETE_LOCK_COMMAND  => '018f9999-0001-7000-8000-00000000c018';
+const my $RESTORE_HIDE_COMMAND => '018f9999-0001-7000-8000-00000000c019';
+const my $RESTORE_DELETE_KEY   => '018f9999-0001-7000-8000-00000000c01a';
+const my $DELETE_RACE_KEY      => '018f9999-0001-7000-8000-00000000c01b';
+const my $RESTORE_RACE_KEY     => '018f9999-0001-7000-8000-00000000c01c';
 const my $EVENT_IDEM_KEY =>
   'worker.notify:018f9999-0001-7000-8000-00000000c020';
 const my $EVENT_IDEM_EVENT     => '018f9999-0001-7000-8000-00000000c020';
@@ -104,9 +160,14 @@ if ( !$ENV{GPFORUM_DATABASE_DSN} ) {
       'set GPFORUM_DATABASE_DSN to run the PostgreSQL concurrency test';
 }
 
-local $ENV{GPFORUM_DATABASE_LOCK_TIMEOUT_MS}  = $LOCK_TIMEOUT_MS;
-local $ENV{GPFORUM_MINION_ENABLED}            = 0;
-local $ENV{GPFORUM_REALTIME_LISTENER_ENABLED} = 0;
+local $ENV{GPFORUM_DATABASE_LOCK_TIMEOUT_MS} = $LOCK_TIMEOUT_MS;
+
+# A holder sits idle in its transaction while the test polls for its waiter,
+# up to BLOCK_POLLS * BLOCK_POLL_SECONDS. The default timeout would end it
+# first, and a waiter that never queued would fail as a lost connection.
+local $ENV{GPFORUM_DATABASE_IDLE_IN_TRANSACTION_TIMEOUT_MS} = $IDLE_TIMEOUT_MS;
+local $ENV{GPFORUM_MINION_ENABLED}                          = 0;
+local $ENV{GPFORUM_REALTIME_LISTENER_ENABLED}               = 0;
 
 my $database =
   GPForum::Test::PostgresHarness::create_database( $ENV{GPFORUM_DATABASE_DSN} );
@@ -127,6 +188,13 @@ _moderation_hide_race($case);
 _reply_position_race($case);
 _reply_lock_allows_fk_inserts($case);
 _reply_rechecks_lock($case);
+_reply_rechecks_delete($case);
+_edit_rechecks_thread_lock($case);
+_edit_rechecks_post_hide($case);
+_edit_rechecks_post_delete($case);
+_title_edit_rechecks_lock($case);
+_delete_rechecks_thread_lock($case);
+_restore_rechecks_post_hide($case);
 _privacy_approval_race($case);
 _identity_token_consume_race($case);
 _event_idempotency_race($case);
@@ -649,29 +717,39 @@ sub _hide_once {
 # Replies to one thread take their positions under the thread row lock, so
 # they come out in commit order: the PostReader keyset and the ReadState
 # high-water mark both assume a reply that commits later never has the lower
-# number. Concurrent replies must all land, on the next positions, one each.
+# number. Racing replies freely cannot show the lock: without it the retry on
+# the (thread_id, position) unique index still hands out contiguous positions.
+# So the test holds the thread row as a reply in flight would, sees every
+# racing reply queue behind it, then lets them through.
 sub _reply_position_race {
     my ($ctx) = @_;
 
     my ($before) =
       $ctx->{dbh}
       ->selectrow_array( $LAST_POSITION_SQL, undef, $ctx->{reply_thread_id} );
-    my @outcomes = GPForum::Test::PostgresHarness::race(
-        sub {
-            my ($slot) = @_;
-            return _reply_once( $ctx, "concurrent reply $slot" );
-        }
+    my $holder =
+      GPForum::Test::PostgresHarness::connect_dbi( $ENV{GPFORUM_DATABASE_DSN} );
+    $holder->begin_work;
+    $holder->selectrow_array( $HOLD_THREAD_SQL, undef,
+        $ctx->{reply_thread_id} );
+
+    my @replies =
+      map { _spawn_reply( $ctx, "concurrent reply $_" ) } 1 .. $REPLY_RACERS;
+    ok(
+        _await_lock_waiters( $ctx->{dbh}, $REPLY_RACERS ),
+        'every racing reply queues on the thread row lock'
     );
+    $holder->rollback;
+    $holder->disconnect;
+
+    my @outcomes = map { _collect_worker($_) } @replies;
     _assert_workers_ok( \@outcomes, 'reply position race' );
 
     my @positions =
       sort { $a <=> $b } map { $_->{result}{position} // 0 } @outcomes;
     is_deeply(
         \@positions,
-        [
-            map { $before + $_ }
-              1 .. GPForum::Test::PostgresHarness::worker_count()
-        ],
+        [ map { $before + $_ } 1 .. $REPLY_RACERS ],
         'reply position race hands each reply the next position'
     );
     is_deeply(
@@ -722,6 +800,15 @@ sub _reply_lock_allows_fk_inserts {
     my $in_flight = GPForum::Service::Forum::PostStore->new( schema => $holder )
       ->create_post( _reply_command( $ctx, 'reply in flight' ) );
     ok( $in_flight->{ok}, 'a reply is in flight, holding the thread lock' );
+
+    # Passing the foreign-key check proves nothing if the reply took no lock.
+    my $next_reply = eval {
+        $reader->selectrow_array( $HOLD_THREAD_NOWAIT_SQL, undef,
+            $ctx->{reply_thread_id} );
+        1;
+    };
+    ok( !$next_reply,
+        'the reply in flight holds the thread from the next one' );
 
     # The seed has already marked the thread read for its users. Clear the
     # marker inside the rolled-back transaction, so the insert is a first
@@ -779,7 +866,7 @@ sub _reply_rechecks_lock {
     $moderator->txn_commit;
     $moderator->storage->disconnect;
 
-    my $outcome = _collect_reply($reply);
+    my $outcome = _collect_worker($reply);
     ok( $outcome->{ok}, 'the waiting reply finishes without exception' )
       or diag( $outcome->{error} // 'missing error' );
     is_deeply(
@@ -799,6 +886,462 @@ sub _reply_rechecks_lock {
     );
 
     return;
+}
+
+# A deleted thread is not found to anyone but its author, so a reply that
+# waited while the author deleted the thread must read the deletion and be
+# refused, not land in a thread its own writer can no longer open.
+sub _reply_rechecks_delete {
+    my ($ctx) = @_;
+
+    my $thread = $ctx->{dbh}->selectrow_hashref(
+        $OTHER_AUTHOR_THREAD_SQL, undef,
+        $ctx->{reply_thread_id},
+        $ctx->{member_user_id}
+    );
+    ok( $thread, 'seed provides an open thread by someone else' );
+    my $target = {
+        %{$ctx},
+        reply_thread_id  => $thread->{thread_id},
+        reply_visibility => $thread->{visibility},
+    };
+    my $posts_before =
+      GPForum::Test::PostgresHarness::count_rows( $ctx->{dbh}, 'posts',
+        { thread_id => $thread->{thread_id} } );
+
+    my $author = GPForum::Test::PostgresHarness::connect_schema();
+    $author->txn_begin;
+    my $deleted =
+      GPForum::Service::Forum::ThreadStore->new( schema => $author )
+      ->delete_thread(
+        {
+            idempotency_key => $DELETE_COMMAND,
+            thread          => {
+                category_id => $thread->{category_id},
+                deleted_by  => $thread->{author_user_id},
+                thread_id   => $thread->{thread_id},
+            },
+        }
+      );
+    ok( $deleted->{ok}, 'the author deletes the thread, not yet committed' );
+    my ($author_pid) =
+      $author->storage->dbh->selectrow_array('SELECT pg_backend_pid()');
+
+    my $reply = _spawn_reply( $target, 'reply racing a delete' );
+    ok(
+        _await_blocked_on( $ctx->{dbh}, $author_pid ),
+        'the reply waits on the author\'s thread lock'
+    );
+    $author->txn_commit;
+    $author->storage->disconnect;
+
+    my $outcome = _collect_worker($reply);
+    ok( $outcome->{ok}, 'the reply racing a delete finishes without exception' )
+      or diag( $outcome->{error} // 'missing error' );
+    is_deeply(
+        {
+            error => $outcome->{result}{error},
+            ok    => $outcome->{result}{ok}
+        },
+        { error => 'thread not found', ok => 0 },
+        'the reply sees the deletion committed while it waited and is refused'
+    );
+    is(
+        GPForum::Test::PostgresHarness::count_rows(
+            $ctx->{dbh}, 'posts', { thread_id => $thread->{thread_id} }
+        ),
+        $posts_before,
+        'the refused reply leaves no post in the deleted thread'
+    );
+
+    return;
+}
+
+# The workflow checks an edit before the store takes any row lock: the post is
+# live and not hidden, its thread readable and not locked. A moderator who
+# locks the thread in between used to see the edit land in the locked thread
+# (ADR 0061). The edit now takes the thread row before the post, waits on the
+# moderator's lock, reads the thread as committed and is refused.
+sub _edit_rechecks_thread_lock {
+    my ($ctx) = @_;
+
+    my $post = _editable_post($ctx);
+    _assert_refused_after_wait(
+        $ctx,
+        {
+            write =>
+              sub { return _edit_post_once( $post, 'edit racing a lock' ) },
+            error => 'thread is locked',
+            hold  => sub {
+                my ($holder) = @_;
+                return GPForum::Service::Moderation::ActionStore->new(
+                    schema => $holder )->lock_thread(
+                    {
+                        actor_user_id => $ctx->{actor_user_id},
+                        command_id    => $EDIT_LOCK_COMMAND,
+                        reason        => 'concurrency edit lock',
+                        thread_id     => $post->{thread_id},
+                    }
+                    );
+            },
+            label => 'a post edit racing a thread lock',
+            state => sub { return _post_edit_state( $ctx, $post ) },
+        }
+    );
+
+    return;
+}
+
+# A moderator hides the post while its author's edit waits on the post row.
+sub _edit_rechecks_post_hide {
+    my ($ctx) = @_;
+
+    my $post = _editable_post($ctx);
+    _assert_refused_after_wait(
+        $ctx,
+        {
+            write =>
+              sub { return _edit_post_once( $post, 'edit racing a hide' ) },
+            error => 'post is hidden',
+            hold  => sub {
+                my ($holder) = @_;
+                return GPForum::Service::Moderation::ActionStore->new(
+                    schema => $holder )->hide_post(
+                    {
+                        actor_user_id => $ctx->{actor_user_id},
+                        command_id    => $EDIT_HIDE_COMMAND,
+                        post_id       => $post->{post_id},
+                        reason        => 'concurrency edit hide',
+                    }
+                    );
+            },
+            label => 'a post edit racing a hide',
+            state => sub { return _post_edit_state( $ctx, $post ) },
+        }
+    );
+
+    return;
+}
+
+# The author deletes the post in one tab while an edit from another waits.
+sub _edit_rechecks_post_delete {
+    my ($ctx) = @_;
+
+    my $post = _editable_post($ctx);
+    _assert_refused_after_wait(
+        $ctx,
+        {
+            write =>
+              sub { return _edit_post_once( $post, 'edit racing a delete' ) },
+            error => 'post not found',
+            hold  => sub {
+                my ($holder) = @_;
+                return GPForum::Service::Forum::PostStore->new(
+                    schema => $holder )->delete_post(
+                    {
+                        idempotency_key => $EDIT_DELETE_KEY,
+                        post            => {
+                            deleted_by => $post->{author_user_id},
+                            post_id    => $post->{post_id},
+                            thread_id  => $post->{thread_id},
+                        },
+                    }
+                    );
+            },
+            label => 'a post edit racing a delete',
+            state => sub { return _post_edit_state( $ctx, $post ) },
+        }
+    );
+
+    return;
+}
+
+# A thread's title is an edit of the thread, and ADR 0061's lock covers it.
+sub _title_edit_rechecks_lock {
+    my ($ctx) = @_;
+
+    my $thread = $ctx->{dbh}->selectrow_hashref( $EDITABLE_THREAD_SQL, undef );
+    ok( $thread, 'seed provides another open thread to retitle' );
+    my $command = GPForum::Service::Forum::ThreadComposer->new->prepare_title(
+        {
+            editor_user_id  => $thread->{author_user_id},
+            idempotency_key => $TITLE_LOCK_COMMAND,
+            thread_id       => $thread->{thread_id},
+            title           => 'Title edit racing a lock',
+        }
+    )->{command};
+    _assert_refused_after_wait(
+        $ctx,
+        {
+            write => sub {
+                return _store_answer(
+                    GPForum::Service::Forum::ThreadStore->new(
+                        schema =>
+                          GPForum::Test::PostgresHarness::connect_schema()
+                    )->edit_thread($command)
+                );
+            },
+            error => 'thread is locked',
+            hold  => sub {
+                my ($holder) = @_;
+                return GPForum::Service::Moderation::ActionStore->new(
+                    schema => $holder )->lock_thread(
+                    {
+                        actor_user_id => $ctx->{actor_user_id},
+                        command_id    => $TITLE_LOCK_COMMAND,
+                        reason        => 'concurrency title lock',
+                        thread_id     => $thread->{thread_id},
+                    }
+                    );
+            },
+            label => 'a title edit racing a thread lock',
+            state => sub {
+                return {
+                    events => GPForum::Test::PostgresHarness::count_rows(
+                        $ctx->{dbh},
+                        'event_log',
+                        {
+                            aggregate_id => $thread->{thread_id},
+                            event_type   => 'thread.updated',
+                        }
+                    ),
+                    row => $ctx->{dbh}->selectrow_hashref(
+                        $THREAD_TITLE_SQL, undef, $thread->{thread_id}
+                    ),
+                };
+            },
+        }
+    );
+
+    return;
+}
+
+# The workflow refuses its author's delete of a post in a locked thread, as
+# it refuses an edit (ADR 0061). A moderator who locks the thread after that
+# check used to see the post disappear from the locked thread anyway.
+sub _delete_rechecks_thread_lock {
+    my ($ctx) = @_;
+
+    my $post = _editable_post($ctx);
+    _assert_refused_after_wait(
+        $ctx,
+        {
+            write => sub {
+                return _store_answer(
+                    GPForum::Service::Forum::PostStore->new(
+                        schema =>
+                          GPForum::Test::PostgresHarness::connect_schema()
+                    )->delete_post(
+                        _post_delete_command( $post, $DELETE_RACE_KEY )
+                    )
+                );
+            },
+            error => 'thread is locked',
+            hold  => sub {
+                my ($holder) = @_;
+                return GPForum::Service::Moderation::ActionStore->new(
+                    schema => $holder )->lock_thread(
+                    {
+                        actor_user_id => $ctx->{actor_user_id},
+                        command_id    => $DELETE_LOCK_COMMAND,
+                        reason        => 'concurrency delete lock',
+                        thread_id     => $post->{thread_id},
+                    }
+                    );
+            },
+            label => 'a post delete racing a thread lock',
+            state => sub { return _post_deletion_state( $ctx, $post ) },
+        }
+    );
+
+    return;
+}
+
+# The author restores their deleted post while a moderator hides it: the
+# workflow refuses to restore a hidden post, and so must the store once the
+# hide has committed.
+sub _restore_rechecks_post_hide {
+    my ($ctx) = @_;
+
+    my $post = _editable_post($ctx);
+    my $deleted =
+      GPForum::Service::Forum::PostStore->new(
+        schema => GPForum::Test::PostgresHarness::connect_schema() )
+      ->delete_post( _post_delete_command( $post, $RESTORE_DELETE_KEY ) );
+    ok( $deleted->{ok}, 'the author has deleted the post to restore' );
+
+    _assert_refused_after_wait(
+        $ctx,
+        {
+            write => sub {
+                return _store_answer(
+                    GPForum::Service::Forum::PostStore->new(
+                        schema =>
+                          GPForum::Test::PostgresHarness::connect_schema()
+                    )->restore_post(
+                        {
+                            idempotency_key => $RESTORE_RACE_KEY,
+                            post            => {
+                                author_user_id => $post->{author_user_id},
+                                post_id        => $post->{post_id},
+                                restored_by    => $post->{author_user_id},
+                                thread_id      => $post->{thread_id},
+                            },
+                        }
+                    )
+                );
+            },
+            error => 'post is hidden',
+            hold  => sub {
+                my ($holder) = @_;
+                return GPForum::Service::Moderation::ActionStore->new(
+                    schema => $holder )->hide_post(
+                    {
+                        actor_user_id => $ctx->{actor_user_id},
+                        command_id    => $RESTORE_HIDE_COMMAND,
+                        post_id       => $post->{post_id},
+                        reason        => 'concurrency restore hide',
+                    }
+                    );
+            },
+            label => 'a post restore racing a hide',
+            state => sub { return _post_deletion_state( $ctx, $post ) },
+        }
+    );
+
+    return;
+}
+
+sub _post_delete_command {
+    my ( $post, $idempotency_key ) = @_;
+
+    return {
+        idempotency_key => $idempotency_key,
+        post            => {
+            deleted_by => $post->{author_user_id},
+            post_id    => $post->{post_id},
+            thread_id  => $post->{thread_id},
+        },
+    };
+}
+
+# What a delete or restore writes: the post's deletion markers, the thread's
+# reply count and the event.
+sub _post_deletion_state {
+    my ( $ctx, $post ) = @_;
+
+    my ($replies) =
+      $ctx->{dbh}
+      ->selectrow_array( $REPLY_COUNT_SQL, undef, $post->{thread_id} );
+
+    return {
+        events => {
+            map {
+                $_ => GPForum::Test::PostgresHarness::count_rows( $ctx->{dbh},
+                    'event_log',
+                    { aggregate_id => $post->{post_id}, event_type => $_ } )
+            } qw(post.deleted post.undeleted)
+        },
+        replies => $replies,
+        row     => $ctx->{dbh}
+          ->selectrow_hashref( $POST_DELETION_SQL, undef, $post->{post_id} ),
+    };
+}
+
+sub _store_answer {
+    my ($stored) = @_;
+
+    return { error => $stored->{error}, ok => $stored->{ok} ? 1 : 0 };
+}
+
+# The holder acts in a transaction left open; the author's write, forked,
+# must queue on one of the holder's rows, and once the holder commits, read
+# what it wrote, be refused in the workflow's words, and leave the target as
+# it was.
+sub _assert_refused_after_wait {
+    my ( $ctx, $race ) = @_;
+
+    my $before = $race->{state}->();
+    my $holder = GPForum::Test::PostgresHarness::connect_schema();
+    $holder->txn_begin;
+    ok( $race->{hold}->($holder)->{ok},
+        "$race->{label}: the holder writes, not yet committed" );
+    my ($holder_pid) =
+      $holder->storage->dbh->selectrow_array('SELECT pg_backend_pid()');
+
+    my $write = _spawn_worker( $race->{write} );
+    ok( _await_row_wait( $ctx->{dbh}, $holder_pid ),
+        "$race->{label}: the write waits on the holder's row lock" );
+    $holder->txn_commit;
+    $holder->storage->disconnect;
+
+    my $outcome = _collect_worker($write);
+    ok( $outcome->{ok}, "$race->{label}: the write finishes without exception" )
+      or diag( $outcome->{error} // 'missing error' );
+    is_deeply(
+        {
+            error => $outcome->{result}{error},
+            ok    => $outcome->{result}{ok}
+        },
+        { error => $race->{error}, ok => 0 },
+        "$race->{label}: the write reads the commit it waited on and is refused"
+    );
+    is_deeply( $race->{state}->(),
+        $before, "$race->{label}: the refused write changes nothing" );
+
+    return;
+}
+
+sub _editable_post {
+    my ($ctx) = @_;
+
+    my $post = $ctx->{dbh}->selectrow_hashref( $EDITABLE_POST_SQL, undef );
+    ok( $post, 'seed provides a live post in an open thread to edit' );
+
+    return $post;
+}
+
+sub _post_edit_state {
+    my ( $ctx, $post ) = @_;
+
+    return {
+        events => GPForum::Test::PostgresHarness::count_rows(
+            $ctx->{dbh},
+            'event_log',
+            {
+                aggregate_id => $post->{post_id},
+                event_type   => 'post.updated',
+            }
+        ),
+        revisions => GPForum::Test::PostgresHarness::count_rows(
+            $ctx->{dbh}, 'post_revisions', { post_id => $post->{post_id} }
+        ),
+        row => $ctx->{dbh}
+          ->selectrow_hashref( $POST_POINTERS_SQL, undef, $post->{post_id} ),
+    };
+}
+
+sub _edit_post_once {
+    my ( $post, $body ) = @_;
+
+    my $composed = GPForum::Service::Forum::PostComposer->new->prepare_revision(
+        {
+            body_hash       => "hash of $body",
+            body_source     => $body,
+            editor_user_id  => $post->{author_user_id},
+            idempotency_key => "edit of $post->{post_id}",
+            post_id         => $post->{post_id},
+            thread_id       => $post->{thread_id},
+        }
+    );
+    if ( !$composed->{ok} ) {
+        croak "edit command did not prepare: $body";
+    }
+    return _store_answer(
+        GPForum::Service::Forum::PostStore->new(
+            schema => GPForum::Test::PostgresHarness::connect_schema()
+        )->edit_post( $composed->{command} )
+    );
 }
 
 sub _reply_once {
@@ -841,43 +1384,65 @@ sub _reply_command {
     return $composed->{command};
 }
 
-# PostgresHarness::race releases its workers together and waits for all of
-# them, which leaves the parent no step while one is blocked. This forks one
-# reply and returns at once, so the parent can see it wait and then commit.
 sub _spawn_reply {
     my ( $ctx, $body ) = @_;
 
-    pipe my $out_reader, my $out_writer or croak 'reply pipe failed';
+    return _spawn_worker( sub { return _reply_once( $ctx, $body ) } );
+}
+
+# PostgresHarness::race releases its workers together and waits for all of
+# them, which leaves the parent no step while one is blocked. This forks one
+# write and returns at once, so the parent can see it wait and then commit.
+sub _spawn_worker {
+    my ($work) = @_;
+
+    pipe my $out_reader, my $out_writer or croak 'worker pipe failed';
     my $pid = fork;
     if ( !defined $pid ) {
         croak "fork failed: $OS_ERROR";
     }
     if ( $pid == 0 ) {
-        close $out_reader or croak 'child reply reader close failed';
-        my $result = eval { return _reply_once( $ctx, $body ) };
+        close $out_reader or croak 'child worker reader close failed';
+        my $result = eval { return $work->() };
         my $payload =
           $result ? { ok => 1, result => $result } : { error => "$EVAL_ERROR" };
         print {$out_writer} encode_json($payload)
-          or croak 'reply result write failed';
-        close $out_writer or croak 'child reply writer close failed';
+          or croak 'worker result write failed';
+        close $out_writer or croak 'child worker writer close failed';
 
         # _exit skips the destructors that would close the parent's handles.
         _exit(0);
     }
 
-    close $out_writer or croak 'parent reply writer close failed';
+    close $out_writer or croak 'parent worker writer close failed';
     return { out => $out_reader, pid => $pid };
 }
 
-sub _collect_reply {
+sub _collect_worker {
     my ($child) = @_;
 
     local $INPUT_RECORD_SEPARATOR = undef;
     my $json = readline $child->{out};
-    close $child->{out} or croak 'parent reply reader close failed';
+    close $child->{out} or croak 'parent worker reader close failed';
     waitpid $child->{pid}, 0;
 
     return decode_json($json);
+}
+
+# Backends of this database waiting on a heavyweight lock. Only the first
+# reply in a row-lock queue is blocked by the holder itself; the others wait on
+# the tuple lock the first one holds, so pg_blocking_pids of the holder would
+# not count them.
+sub _await_lock_waiters {
+    my ( $dbh, $count ) = @_;
+
+    for ( 1 .. $BLOCK_POLLS ) {
+        my ($waiting) = $dbh->selectrow_array($LOCK_WAITERS_SQL);
+        return 1 if $waiting >= $count;
+        $dbh->do( 'SELECT pg_sleep(?)', undef, $BLOCK_POLL_SECONDS );
+    }
+
+    return 0;
 }
 
 sub _await_blocked_on {
@@ -886,6 +1451,23 @@ sub _await_blocked_on {
     for ( 1 .. $BLOCK_POLLS ) {
         my ($waiting) =
           $dbh->selectrow_array( $BLOCKED_ON_SQL, undef, $holder_pid );
+        return 1 if $waiting;
+        $dbh->do( 'SELECT pg_sleep(?)', undef, $BLOCK_POLL_SECONDS );
+    }
+
+    return 0;
+}
+
+# Blocked by the holder on a row: a transaction id or a tuple lock. Every
+# write here also queues on the audit chain's advisory lock, so a backend
+# merely blocked by the holder could be waiting there, behind a check it
+# never made.
+sub _await_row_wait {
+    my ( $dbh, $holder_pid ) = @_;
+
+    for ( 1 .. $BLOCK_POLLS ) {
+        my ($waiting) =
+          $dbh->selectrow_array( $ROW_WAIT_SQL, undef, $holder_pid );
         return 1 if $waiting;
         $dbh->do( 'SELECT pg_sleep(?)', undef, $BLOCK_POLL_SECONDS );
     }
