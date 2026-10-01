@@ -25,7 +25,7 @@ use GPForum::Test::SharedCacheClient;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS              => 39;
+const my $EXPECTED_TESTS              => 43;
 const my $CHECK_COUNT                 => 13;
 const my $ENDPOINT_BUDGET_CHECK_INDEX => 7;
 const my $QUERY_BUDGET_DRIFT_INDEX    => 8;
@@ -94,6 +94,25 @@ my $failed = GPForum::Service::Operations::Readiness->new(
 
 is( $failed->{status},            'fail', 'readiness fails when db fails' );
 is( $failed->{checks}[0]{status}, 'fail', 'failed check is reported' );
+is(
+    $failed->{checks}[0]{runbook},
+    'docs/DEPLOYMENT.md#postgresql-baseline',
+    'and names the runbook the operator follows'
+);
+ok( !exists $ready->{checks}[0]{runbook}, 'a passing check names none' );
+
+# Every check readiness returns has a runbook, and the runbook exists.
+my $runbooks = GPForum::Service::Operations::Readiness->runbooks;
+is_deeply( [ grep { !exists $runbooks->{ $_->{name} } } @{ $ready->{checks} } ],
+    [], 'every readiness check has a runbook' );
+is_deeply(
+    [
+        grep { my ($file) = split /[#]/msx, $runbooks->{$_}; !-f $file }
+        sort keys %{$runbooks}
+    ],
+    [],
+    'and every runbook is a file in the repository'
+);
 
 my $degraded = GPForum::Service::Operations::Readiness->new(
     environment => 'test',

@@ -34,6 +34,32 @@ has runtime        => undef;
 has runtime_policy => undef;
 has schema         => undef;
 
+# Where the operator goes when a check is not ok: every check readiness can
+# return has a runbook, and a check that is degraded or failed carries its
+# path, so a warning on /health/ready says what to do about it. The missing
+# tables point at the migrations, which create them.
+const my $MIGRATIONS_RUNBOOK => 'docs/DEPLOYMENT.md#postgresql-baseline';
+const my %RUNBOOK => (
+    antivirus            => 'docs/ops/antivirus.md',
+    database             => 'docs/DEPLOYMENT.md#postgresql-baseline',
+    endpointquerybudget  => $MIGRATIONS_RUNBOOK,
+    eventlog             => $MIGRATIONS_RUNBOOK,
+    operational_profile  => 'docs/architecture/operational-profiles.md',
+    os_preflight         => 'docs/OS_RUNTIME_ENFORCEMENT.md',
+    outboxmessage        => $MIGRATIONS_RUNBOOK,
+    partition_horizon    => 'docs/ops/partition-maintenance.md',
+    projectiongeneration => $MIGRATIONS_RUNBOOK,
+    query_budget_drift   => 'docs/QUERY_BUDGET_POLICY.md',
+    runtime              => 'docs/OS_RUNTIME_ENFORCEMENT.md',
+    runtime_enforcement  => 'docs/OS_RUNTIME_ENFORCEMENT.md',
+    shared_cache         => 'docs/DEPLOYMENT.md#glifistore-required-l2',
+);
+
+# Every check name readiness can return, with its runbook.
+sub runbooks ($class) {
+    return {%RUNBOOK};
+}
+
 sub check ($self) {
     my $started = time;
     my @checks  = (
@@ -51,6 +77,12 @@ sub check ($self) {
         $self->_partition_horizon_check,
         $self->_profile_check,
     );
+
+    for my $check (@checks) {
+        next if ( $check->{status}               // q{} ) eq 'ok';
+        next if !exists $RUNBOOK{ $check->{name} // q{} };
+        $check->{runbook} = $RUNBOOK{ $check->{name} };
+    }
 
     return {
         status      => _overall_status( \@checks ),
@@ -354,3 +386,79 @@ sub _compact_error ($error) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::Readiness - The checks behind /health/ready.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $report = GPForum::Service::Operations::Readiness->new(
+        config  => $config,
+        runtime => $runtime,
+        schema  => $schema,
+    )->check;
+
+=head1 DESCRIPTION
+
+Whether this node should take traffic: the database answers, the runtime and
+OS posture hold, the tables the forum needs exist, the query budgets match,
+the shared cache, the antivirus and the partition horizon are healthy, and the
+configuration fits its operational profile. A check that cannot pass without
+the node being useless fails; one the forum can live without for a while is
+degraded. Every check that is not ok names its runbook.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 check
+
+Runs every check and returns the overall status, the checks, the environment,
+the runtime, a timestamp and the latency.
+
+=head2 runbooks
+
+Every check name readiness can return, mapped to the runbook a degraded or
+failed check carries in its C<runbook> field.
+
+=head2 probe_resultset
+
+The one-row query a table check runs.
+
+=head1 DIAGNOSTICS
+
+Never dies: a check that throws is reported failed with its error.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Reads L<GPForum::Config>.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Operations::PartitionLifecycle>,
+L<GPForum::Service::Operations::QueryBudget>,
+L<GPForum::Service::Operations::Profile>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

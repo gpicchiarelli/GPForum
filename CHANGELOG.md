@@ -254,6 +254,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **`/health/ready` names the runbook for every check that is not ok**
+  (`runbook`, a path in the repository), so a degraded or failed check says
+  what to do about it.
+
 - **`docs/THREAT_MODEL.md`**: what GPForum protects, from whom, the trust
   boundaries, and at each one the mitigation and the test that pins it, with
   the residual risks said plainly.

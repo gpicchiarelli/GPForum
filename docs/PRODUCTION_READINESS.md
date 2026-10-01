@@ -294,6 +294,9 @@ Endpoints:
 
 - `GET /health/live`: process liveness.
 - `GET /health/ready`: readiness, including database/resultset availability.
+  Each check reports `ok`, `degraded` or `fail`; a check that is not `ok`
+  carries a `runbook` field with the document to follow (for example
+  `docs/ops/partition-maintenance.md` for `partition_horizon`).
 - `GET /health`: summary for operators; keep internal.
 - `GET /metrics`: process-local operational snapshot; keep internal. When
   `GPFORUM_METRICS_TOKEN` is configured, scrape with `Authorization: Bearer
