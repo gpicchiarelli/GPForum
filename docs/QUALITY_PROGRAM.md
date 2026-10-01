@@ -141,7 +141,7 @@ the runbooks alone, and is warned before anything runs out.
 
 | Criterion | Today | Gate |
 | --- | --- | --- |
-| A restore drill that was run, with its timings recorded | `script/pitr-drill` and `docs/ops/backup-and-restore.md` exist; no recorded run on a real host | evidence under `docs/ops/evidence/` |
+| A restore drill that was run, with its timings recorded | point-in-time recovery run and recorded on the development host (`docs/ops/evidence/2026-10-01-pitr-drill/`, 108 s, PostgreSQL 18.6); not yet on a production-sized database | evidence under `docs/ops/evidence/` |
 | Every readiness warning names its runbook | partition horizon and antivirus warn; not every warning links a runbook | a test over the readiness checks |
 | Each supported platform installed and run from its unit files | Debian units checked statically; FreeBSD rc script never run on FreeBSD | the platform workflows (CI not running) |
 | Upgrades are rehearsed: migrate forward from the previous release on a copy | `script/staging-drill` covers it on throwaway databases | the drill, against a release tag (none yet) |

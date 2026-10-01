@@ -86,7 +86,10 @@ script/pitr-drill
 The drill builds its own throwaway cluster, so it touches nothing you run. It
 applies the configuration above, takes a base backup, writes rows on either
 side of a recovery target, restores to that target, and checks that the rows
-written before it came back and the rows written after it did not.
+written before it came back and the rows written after it did not. The last
+recorded run is in
+[`evidence/2026-10-01-pitr-drill/`](evidence/2026-10-01-pitr-drill/README.md)
+(PostgreSQL 18.6, 108 s end to end).
 
 Row counts alone would not catch the failure worth catching, which is a restore
 that silently lands on the wrong instant. Verified on PostgreSQL 18: three rows
