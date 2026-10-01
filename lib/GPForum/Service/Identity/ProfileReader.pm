@@ -306,3 +306,95 @@ sub _count_search ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Identity::ProfileReader - A member's public profile: identity, trust, counts and recent public activity.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader =
+      GPForum::Service::Identity::ProfileReader->new( schema => $schema );
+
+    my $result = $reader->public_profile( 'Alice', { limit => 10 } );
+    if ( $result->{ok} ) {
+        my $profile = $result->{profile};
+        # user, trust, counts, threads, replies
+    }
+
+=head1 DESCRIPTION
+
+Builds the data of the public profile page. A profile is the same for every
+reader (ADR 0102): it counts and lists only public threads, not deleted and
+visible or locked, in public, live categories of public spaces, and the
+replies in them that are public, visible and not deleted, leaving out each
+thread's opening post. Deleted and suspended members have no public
+profile. The thread and reply lists are keyset paged through
+L<GPForum::Service::Forum::PageWindow>, most recent first.
+
+The trust block reads the member's C<trust_score_snapshots> row and falls
+back to the trust level on the user row; the badge is
+C<New contributor> below level 1, C<Participant> at level 1 and
+C<Trusted contributor> from level 2.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 public_profile
+
+Takes a username, matched trimmed and lower-cased, and an optional hash
+reference with C<limit> and C<after>. Returns
+C<< { ok => 0, error => 'not_found' } >> when there is no such member or
+the member is deleted or suspended. Otherwise returns
+C<< { ok => 1, profile => { user, trust, counts, threads, replies } } >>:
+C<user> has the id, username, display name, status, trust level, timestamps
+and an C<@username> C<profile_label>; C<trust> has C<score>,
+C<trust_level>, C<calculated_at>, C<version> and C<badge>; C<counts> has
+C<public_threads>, C<public_replies> and C<total_public>; C<threads> and
+C<replies> are C<< { items, next_cursor } >> of plain hashes. The same limit
+and cursor apply to both lists.
+
+=head2 public_threads_resultset
+
+Takes a user id and a page plan (C<after> and C<fetch_rows>, as
+L<GPForum::Service::Forum::PageWindow/plan> returns). Returns the
+unexecuted resultset the profile's thread list runs, public so the plan
+tests can EXPLAIN it. Without C<fetch_rows> it reads 10 rows.
+
+=head1 DIAGNOSTICS
+
+A missing profile is returned as C<not_found>, not thrown. Database errors
+propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Keyset>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Service::Forum::PageWindow>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

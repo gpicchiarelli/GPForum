@@ -224,3 +224,100 @@ sub _status_for_lag ($lag_seconds) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Projection::OffsetTracker - Where a projection has got to in the event stream, and how far behind it is.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $tracker =
+      GPForum::Service::Projection::OffsetTracker->new( schema => $schema );
+
+    $tracker->record_progress(
+        'search',
+        {
+            event_created_at    => $event->{created_at},
+            event_created_epoch => $created_epoch,
+            event_id            => $event->{event_id},
+        }
+    );
+
+    my $lag = $tracker->observe_lag('search');
+    # { projection_name, lag_seconds, status, updated_at }
+
+    $tracker->mark_failed('search');
+
+=head1 DESCRIPTION
+
+Keeps one C<projection_offsets> row per projection: the last event it
+applied, when that event was created, the lag in seconds between then and
+now, and a status, C<current> with no lag, C<catching_up> with some, and
+C<failed> after C<mark_failed>. Recording the event already recorded, or
+failing a projection already failed, writes nothing and returns the stored
+row marked as skipped. When two writers insert a projection's first row at
+once, the loser keeps the winner's row if it says the same and updates it
+otherwise. No method opens a transaction of its own.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 record_progress
+
+Takes a projection name and a hash reference with C<event_id>,
+C<event_created_at> and C<event_created_epoch> (now when absent, which
+gives no lag). Returns the row written: C<projection_name>,
+C<last_event_id>, C<last_event_created_at>, C<lag_seconds> (never
+negative), C<status> and C<updated_at>; or the stored row with
+C<< skipped => 1 >> when its last event is this one.
+
+=head2 mark_failed
+
+Takes a projection name. Sets its status to C<failed> with a lag of 0 and
+returns the row written, or the stored row with C<< skipped => 1 >> when it
+had already failed.
+
+=head2 observe_lag
+
+Takes a projection name. Returns
+C<< { projection_name, lag_seconds, status, updated_at } >>, or undef when
+the projection has no row.
+
+=head1 DIAGNOSTICS
+
+An insert error other than a unique violation, or a unique violation whose
+winning row cannot be found, is rethrown with C<croak>; other database
+errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

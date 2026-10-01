@@ -183,3 +183,101 @@ sub _unique_users ($users) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Community::FeedProjector - Write and remove items in members' personal feeds.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $projector =
+      GPForum::Service::Community::FeedProjector->new( schema => $schema );
+
+    $projector->project_item(
+        {
+            created_at => $created_at,
+            item_id    => $post_id,
+            item_type  => 'post',
+            user_ids   => \@subscriber_ids,
+        }
+    );
+    $projector->remove_item( { item_id => $post_id, item_type => 'post' } );
+    $projector->remove_thread($thread_id);
+
+=head1 DESCRIPTION
+
+Maintains C<user_feed_items>, the per-member feed that
+L<GPForum::Worker::Handler::FeedProjection> fills from domain events.
+
+Projecting an item writes it for every recipient in one PostgreSQL
+statement: the ids travel as one array, whatever their number, and each row
+is inserted or refreshed in place, rows that already hold the item
+unchanged being left alone. It used to read and write each recipient in
+turn, two statements per subscriber of a popular thread in one ever longer
+transaction.
+
+Removing a thread takes the thread item and the items of all its posts out
+of every feed together, the posts in one statement by the
+C<(item_type, item_id)> index, so a partial sweep cannot leave deleted posts
+in somebody's feed.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 project_item
+
+Takes a hash reference with C<item_type>, C<item_id>, C<created_at>,
+C<user_ids> (an array reference; duplicates and undef are dropped), and
+optional C<rank_score> (default 0), C<visibility_version> and
+C<permission_version> (default 1). In a transaction, returns
+C<< { ok => 1, projected, written } >>: the number of distinct recipients,
+and of rows actually inserted or changed; both 0 without recipients.
+
+=head2 remove_item
+
+Takes a hash reference with C<item_type> and C<item_id>. In a transaction,
+deletes that item from every feed. Returns C<< { ok => 1, removed } >> with
+the rows deleted, 0 when either key is missing.
+
+=head2 remove_thread
+
+Takes a thread id. In a transaction, deletes the thread's item and its
+posts' items from every feed. Returns
+C<< { ok => 1, removed, posts_removed } >>, C<removed> counting both.
+
+=head1 DIAGNOSTICS
+
+None of its own; database errors propagate and roll the transaction back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+None beyond L<Mojo::Base> and L<Const::Fast>. The upsert is PostgreSQL SQL
+(C<unnest>, C<ON CONFLICT>, C<IS DISTINCT FROM>).
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

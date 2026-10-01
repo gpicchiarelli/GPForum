@@ -132,3 +132,104 @@ sub _normalized ( $input, $media_type ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Attachment::Validator - Check an upload's metadata and tell its media type from its bytes.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $validator = GPForum::Service::Attachment::Validator->new;
+
+    my $result = $validator->validate_upload(
+        {
+            byte_size         => length $content,
+            checksum          => $sha256_hex,
+            content           => $content,
+            original_filename => 'diagram.png',
+            owner_user_id     => $user_id,
+        }
+    );
+    return $result->{errors} if !$result->{ok};
+    my $values = $result->{values};
+
+    my $limit = GPForum::Service::Attachment::Validator->max_bytes;
+
+=head1 DESCRIPTION
+
+The first check an upload passes. The media type is decided on the server:
+a C<sniffed_media_type> given by the caller wins, then the type sniffed from
+C<content>, and only without either the client's C<media_type>. That type
+must be C<image/gif>, C<image/jpeg>, C<image/png>, C<image/webp>,
+C<application/pdf> or C<text/plain>; the size must be positive and at most
+25 MiB; and a filename ending in C<.cgi>, C<.exe>, C<.pl>, C<.pm>, C<.php>
+or C<.sh> is refused whatever its type.
+
+Sniffing reads the magic numbers of PNG, JPEG, GIF, PDF and WebP. Other
+content is C<text/plain> when its first 512 bytes hold no control character
+other than tab, line feed and carriage return, and
+C<application/octet-stream> otherwise.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 max_bytes
+
+Class method. Returns the largest upload accepted, in bytes (25 MiB), so a
+scanner's own limit can be checked against it.
+
+=head2 validate_upload
+
+Takes a hash reference with C<owner_user_id>, C<original_filename>,
+C<checksum>, C<byte_size>, and C<media_type>, C<content> or
+C<sniffed_media_type>. Returns C<< { ok => 0, errors => \%errors } >> with
+every problem found, keyed by field, or
+C<< { ok => 1, values => \%values } >> where the values are
+C<owner_user_id>, C<original_filename>, C<media_type> and C<checksum>
+(both lower-cased) and C<byte_size> (an integer).
+
+=head2 sniff_media_type
+
+Takes the uploaded bytes. Returns the media type they show,
+C<application/octet-stream> when none is recognized, or undef for undef
+content.
+
+=head1 DIAGNOSTICS
+
+Nothing is thrown. The errors C<validate_upload> returns are
+C<FIELD is required> for C<owner_user_id>, C<original_filename>,
+C<media_type> and C<checksum>; C<byte_size is required> or
+C<byte_size exceeds limit>; C<media_type is not allowed>; and
+C<executable uploads are not allowed> for C<original_filename>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+None beyond L<Mojo::Base> and L<Const::Fast>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

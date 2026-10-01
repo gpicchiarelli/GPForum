@@ -417,3 +417,122 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Community::MentionStore - Record the mentions in a post and notify the people mentioned.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $mentions = GPForum::Service::Community::MentionStore->new(
+        notification_dispatcher => $notification_dispatcher,
+        readability => GPForum::Service::Forum::Readability->new(
+            schema => $schema,
+        ),
+        schema => $schema,
+    );
+    my $result = $mentions->record_for_source(
+        {
+            actor_id     => $author_id,
+            body_source  => $body_source,
+            max_mentions => 10,
+            source_id    => $post_id,
+            source_type  => 'post',
+            thread_id    => $thread_id,
+        }
+    );
+    # { ok => 1, created => [...], notifications => [...], skipped => [...] }
+
+=head1 DESCRIPTION
+
+Turns the C<@username> mentions found by
+L<GPForum::Service::Community::MentionExtractor> into C<mentions> rows and
+C<mention> notifications. A mention is not recorded when the username
+matches no user (deleted users are not looked up), when it names the
+author, or when the
+mentioned user cannot read the source (ADR 0102): a mention of someone who
+cannot read the post would otherwise notify them and list the thread on
+their mentions page.
+
+The number of mentions one body can fan out to is capped (10 by default);
+the ones past the cap are skipped and the cut is audited as
+C<mention.fanout_limited>, so a post cannot be used to notify a crowd.
+
+Recording is idempotent per source and mentioned user, which a unique
+index enforces. A mention already recorded is not inserted again, but its
+notification is requested again, and a result the dispatcher marks as a
+duplicate is left out. Inserts run under savepoints
+through L<GPForum::Infrastructure::UniqueConflict>, so a conflict with a
+concurrent writer does not abort the transaction.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required. C<notification_dispatcher>
+(an object with C<create_notification>, such as
+L<GPForum::Service::Notification::Dispatcher>) and C<readability> (an
+object with C<readable_by>, such as L<GPForum::Service::Forum::Readability>)
+are optional: without the first no notification is sent, without the
+second every resolved user is taken to be able to read the source.
+C<clock>, C<extractor>, C<id_service> and C<recorder> have defaults.
+
+=head2 record_for_source
+
+Takes a hash reference with C<body_source> (the text to scan),
+C<source_type>, C<source_id>, C<actor_id> (the author), C<thread_id> (put
+into the notification payload) and an optional C<max_mentions> (10 when
+absent or zero). Runs the inserts and notifications in one transaction when
+the schema has C<txn_do>.
+
+Returns a hash reference with C<< ok => 1 >>, C<created> (the hashes of the
+mention rows inserted), C<notifications> (the dispatcher's results for the
+notifications it accepted and did not report as duplicates) and C<skipped>
+(C<< { username, reason } >> entries with reason C<unknown_user>,
+C<self_mention>, C<source_not_readable> or C<fanout_limited>). A body
+without mentions returns empty lists and touches nothing.
+
+=head1 DIAGNOSTICS
+
+Database errors other than the two handled unique conflicts (on the
+mention id and on source and mentioned user) are rethrown, as is a
+conflict on the source whose existing row cannot be found, and the
+transaction rolls back. A failure to write the fan-out audit is ignored.
+L<GPForum::Service::Forum::PostingWorkflow> calls this inside an C<eval> so
+that a failed mention does not fail the post.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Community::MentionExtractor>,
+L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

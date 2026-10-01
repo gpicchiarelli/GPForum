@@ -1005,3 +1005,193 @@ sub _schema_dbh ($self) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Privacy::DeletionWorkflow - Deletion requests, their approval, legal holds and the erasure job that anonymizes a member.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $deletion = GPForum::Service::Privacy::DeletionWorkflow->new(
+        clock      => $clock,
+        id_service => $id_service,
+        schema     => $schema,
+    );
+    my $request = $deletion->request_deletion(
+        {
+            reason            => 'leaving the forum',
+            request_type      => 'anonymize',
+            requester_user_id => $user_id,
+            resource_id       => $user_id,
+            resource_type     => 'user',
+        }
+    );
+    my $approved = $deletion->approve_request(
+        $request->{deletion_request_id}, $admin_id, 'verified' );
+    if ( $approved && $approved->{ok} ) {
+        $deletion->complete_job( $approved->{job}{erasure_job_id}, $admin_id );
+    }
+
+=head1 DESCRIPTION
+
+Owns the writes behind a member's deletion: it writes C<deletion_requests>,
+C<erasure_jobs> and C<deletion_actions>, anonymizes the member when the job
+runs, and records a privacy event and audit entry for each step, built by
+L<GPForum::Service::Privacy::Event> and written by
+L<GPForum::Infrastructure::EventRecorder>. L<GPForum::Service::Privacy::Workflow>
+validates the commands and calls it. Each public method runs in one
+transaction, and every step can be repeated: a step already taken is
+answered from what is stored rather than done twice, and one found
+half-recorded -- a request without its event, a job without its approval
+action -- is finished.
+
+A request is C<pending> until approved. A resource has at most one open
+(C<pending>, C<approved> or C<held>) request of a type: asking again returns
+that request, and concurrent requests are serialized by locking the open
+rows and by the unique index C<idx_deletion_requests_open_resource_unique>.
+Approving locks the request, then schedules one C<pending> erasure job for
+it -- unless the resource is under an active retention hold (one with no
+C<ends_at>), in which case the request is put on hold instead. Running the
+job checks the hold again: under a hold it marks the request C<held> and the
+job's C<last_error>, and erases nothing; otherwise it anonymizes the member
+(when the resource is a C<user> that exists), revokes their credentials and
+sessions, and marks the job C<done> and the request C<completed>.
+
+Inserts run inside savepoints. A lost race on a unique index reuses the row
+the other writer inserted; a collision on a generated id is retried once
+with a fresh id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 request_deletion
+
+Takes a hash reference with C<requester_user_id>, C<request_type>,
+C<resource_type>, C<resource_id> and an optional C<reason> (empty when
+omitted). Creates a C<pending> request and records
+C<privacy.deletion_requested>, or returns the open request already there.
+Returns the request as a hash reference: C<deletion_request_id>,
+C<request_type>, C<requester_user_id>, C<resource_type>, C<resource_id>,
+C<reason>, C<status>, C<created_at> and C<completed_at>.
+
+=head2 approve_request
+
+Takes a request id, the approving actor's id and a reason. Returns undef
+when there is no such request. Otherwise:
+
+=over 4
+
+=item *
+
+with no erasure job yet and no active hold, sets the request C<approved>,
+schedules the job, records a C<released> deletion action and
+C<privacy.deletion_approved>, and returns
+C<< { ok => 1, request_id, action, job } >>, C<job> being the job as a hash
+reference;
+
+=item *
+
+with an active hold, holds the request as C<hold_request> does (the reason
+defaulting to C<active legal hold>) and returns
+C<< { ok => 0, error => 'retention_hold_active', request_id, action } >>,
+C<action> being undef when the request was already held;
+
+=item *
+
+when the request already has a job and a C<released> action, returns
+C<< { ok => 1, idempotent => 1, request_id, job } >>; with a job but no
+action yet, it finishes the approval as in the first case.
+
+=back
+
+=head2 complete_job
+
+Takes an erasure job id and the acting user's id. Returns undef when there
+is no such job, or when a job not yet done has no request. Otherwise:
+
+=over 4
+
+=item *
+
+when the job is already C<done>, marks its request C<completed> if it is
+not yet and returns C<< { ok => 1, idempotent => 1, erasure_job_id } >>;
+
+=item *
+
+under an active retention hold, sets the request C<held> and the job's
+C<last_error> to C<retention hold active>, and returns
+C<< { ok => 0, error => 'retention_hold_active', erasure_job_id, action } >>.
+The C<held> deletion action and C<privacy.erasure_blocked> are recorded only
+when the request was not yet held and the job not yet blocked; otherwise
+C<action> is undef. When both were already so, it writes nothing and
+returns
+C<< { ok => 0, error => 'retention_hold_active', idempotent => 1, erasure_job_id } >>;
+
+=item *
+
+otherwise, when the resource is a C<user> that exists, anonymizes the member
+and revokes their credentials and sessions; in every case it marks the job
+C<done> and the request C<completed>, records an
+C<anonymized> deletion action and C<privacy.erasure_completed>, and returns
+C<< { ok => 1, erasure_job_id, action, anonymized } >>. C<anonymized> is
+C<< { user_id, idempotent } >> (C<idempotent> 1 when the member was already
+anonymized), or C<< { skipped => 'resource_not_user' } >> or
+C<< { skipped => 'user_not_found' } >>.
+
+=back
+
+=head2 hold_request
+
+Takes a request id, the acting user's id, a reason (default C<legal hold>)
+and the retention hold row it is held under. Returns undef when there is no
+such request. Otherwise sets the request C<held>, records a C<held>
+deletion action naming the hold and C<privacy.deletion_held>, and returns
+C<< { ok => 1, error => undef, request_id, action } >>; C<action> is undef
+when the request was already held and nothing was written.
+
+=head1 DIAGNOSTICS
+
+Croaks with the database error when an insert fails for any reason other
+than a unique conflict it knows, when a conflict leaves no row to reuse,
+and when the retry after an id collision fails too. Every public method
+runs in C<txn_do>, so any failure, including one recording the event or
+the audit entry, rolls the whole step back and propagates. A retention hold
+is not a failure: it is reported as C<< ok => 0 >> with
+C<< error => 'retention_hold_active' >>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<clock>, C<id_service>, C<recorder>, C<record>, C<completion>,
+C<erasure> and C<events> have defaults; the application passes its clock
+and id service.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::EventRecorder>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Clock>,
+L<GPForum::Service::Privacy::Completion>, L<GPForum::Service::Privacy::Erasure>,
+L<GPForum::Service::Privacy::Event>, L<GPForum::Service::Privacy::Record>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

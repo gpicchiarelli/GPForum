@@ -150,3 +150,114 @@ sub _visible_state ($state) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::ThreadDetailReader - Load a thread the viewer may read, with a page of its posts.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader = GPForum::Service::Forum::ThreadDetailReader->new(
+        schema => $schema,
+    );
+    my $page = $reader->thread_page(
+        {
+            thread_id => $thread_id,
+            viewer    => $viewer,
+            limit     => 25,
+            after     => $cursor,
+        }
+    );
+    # { ok => 1, thread => $row, posts => { items, has_next, next_cursor } }
+    # or { ok => 0, error => 'not_found' }
+
+    my $thread = $reader->find_thread( $thread_id, $viewer );
+
+=head1 DESCRIPTION
+
+Reads the thread page. The thread row comes in one statement with its
+author's names, its category's title and visibility and its space's
+visibility, joined on primary keys, because the category and the space
+decide who may read the thread (ADR 0102). A thread is readable when its
+moderation state is C<visible> or C<locked> and
+L<GPForum::Service::Forum::Visibility> lets the viewer read it; a deleted
+thread is readable only by its author.
+
+The posts come from L<GPForum::Service::Forum::PostReader>, scoped to the
+viewer's grants for the thread's category and space. The author of a
+private thread, when the viewer is a member, reads every reply in it.
+
+A thread the viewer may not read and a thread that does not exist give the
+same answer, so a page does not reveal that a hidden thread is there.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is the DBIx::Class schema;
+C<post_reader> defaults to a L<GPForum::Service::Forum::PostReader> on it.
+
+=head2 find_thread
+
+Takes a thread id and an optional viewer (a
+L<GPForum::Service::Forum::Viewer>, a user id, or nothing for an anonymous
+reader). Returns the thread row from L</find_thread_row> when the viewer may
+read it, otherwise C<undef>.
+
+=head2 find_thread_row
+
+Takes a thread id. Returns the C<Thread> row with its own columns
+(C<thread_id>, C<category_id>, C<author_user_id>, C<title>, C<slug>,
+C<pinned>, C<visibility>, C<moderation_state>, C<locked_at>,
+C<last_activity_at>, C<deleted_at>) plus C<author_username>,
+C<author_display_name>, C<category_title>, C<category_visibility>,
+C<space_id> and C<space_visibility>, without any visibility check. Returns
+C<undef> for an undefined or empty id or a missing thread.
+
+=head2 thread_page
+
+Takes a hash reference with C<thread_id>, an optional C<viewer> (anonymous
+when absent), an optional C<limit> (25 when absent or zero) and an optional
+C<after> cursor. Returns C<< { ok => 0, error => 'not_found' } >> when the
+viewer may not read the thread, otherwise
+C<< { ok => 1, thread => $row, posts => $page } >>, where C<$page> is the
+post reader's page (C<items>, C<has_next>, C<next_cursor>).
+
+=head1 DIAGNOSTICS
+
+A thread that is missing or not readable is returned as C<not_found>, not
+thrown. Database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Forum::PostReader>, L<GPForum::Service::Forum::Viewer>,
+L<GPForum::Service::Forum::Visibility>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -184,3 +184,99 @@ sub _column ( $row, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Portability::LegacyIdMapper - Records which native row an imported legacy identifier became.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $mapper = GPForum::Service::Portability::LegacyIdMapper->new(
+        schema => $schema,
+    );
+    my $mapping = $mapper->map_identifier(
+        {
+            import_job_id => $job_id,
+            legacy_type   => 'thread',
+            legacy_id     => 'old-42',
+            native_type   => 'thread',
+            native_id     => $thread_id,
+            canonical_url => '/t/welcome',
+            visibility    => 'public',
+        }
+    );
+    my $row = $mapper->find_native( 'thread', 'old-42' );
+
+=head1 DESCRIPTION
+
+An import keeps the identifiers of the forum it came from in
+C<legacy_id_map>, one row per legacy type and id, so a legacy identifier
+resolves to its native type, id and canonical URL, and an import that runs
+again does not map the same legacy item twice.
+
+Mapping is first-wins. When the legacy item is already mapped, the existing
+mapping is returned, marked C<skipped>, and nothing is written. Otherwise a
+row is inserted inside a savepoint. If that insert loses a race on the
+source key (C<legacy_id_map_source_key>), the mapping the other writer
+inserted is returned as skipped. If it collides on the map id
+(C<legacy_id_map_pkey>), the mapping is looked up again and, when there is
+still none, the insert is retried once with a fresh id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 map_identifier
+
+Takes a hash reference with C<import_job_id>, C<legacy_type>, C<legacy_id>,
+C<native_type>, C<native_id>, C<canonical_url> and C<visibility>. Returns a
+hash reference of the mapping: those fields plus C<legacy_id_map_id> (a new
+uuid) and C<created_at> (the clock's ISO 8601 time) when it inserted the
+row; the stored mapping's fields and C<< skipped => 1 >> when the legacy
+item was already mapped, in which case the native fields passed in are
+ignored.
+
+=head2 find_native
+
+Takes a legacy type and a legacy id. Returns the C<LegacyIdMap> row for
+them, or undef when the item was never mapped.
+
+=head1 DIAGNOSTICS
+
+C<map_identifier> croaks with the database error when the insert fails for
+any reason other than a unique conflict, when a source-key conflict leaves
+no mapping to reuse, and when the retry after a map-id collision fails too.
+C<find_native> lets database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<clock> and C<id_service> default to L<GPForum::Service::Clock> and
+L<GPForum::Infrastructure::Id>; tests pass fixed ones.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

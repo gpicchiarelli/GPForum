@@ -572,3 +572,123 @@ sub _hash_part ( $parts, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Portability::ExportBundleBuilder - A member's data export: the request, the bundle and its completion.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $exports = GPForum::Service::Portability::ExportBundleBuilder->new(
+        schema => $schema,
+    );
+
+    my $request = $exports->request_user_export($user_id);
+
+    # Later, in the worker:
+    my $done =
+      $exports->complete_user_export( $request->{export_request_id} );
+    # $done->{status} is 'completed'; $done->{manifest}{counts}{posts}
+
+=head1 DESCRIPTION
+
+Serves a member's right to a copy of their data. A request is an
+C<export_requests> row in the C<pending> state, recorded with a
+C<privacy.export_requested> event and audit entry. Asking again while one
+is pending returns the pending one, and records its event first if an
+earlier attempt left it out.
+
+Completing gathers the bundle: the profile (username, display name,
+normalized email, status and preferences), every post the member wrote with
+its body source, their attachments' metadata, notifications, subscriptions
+and notification preferences. The bundle is stored as the request's
+manifest together with its counts, the request is marked C<completed>, and
+a C<privacy.export_completed> event and audit entry are recorded, whose
+payload carries the safe manifest: the counts, not the data. A table the
+schema lacks is exported as an empty list.
+
+Post bodies are read C<body_batch_size> post ids per statement: libpq
+refuses more than 65,535 parameters, and binding one per post of a
+long-time member of a large forum made the whole export fail.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 create_request
+
+Takes a hash reference with C<requester_user_id>, C<subject_user_id>,
+C<export_type> and C<format> (default C<json>). In a transaction, returns
+the request as a hash (C<export_request_id>, requester, subject, type,
+format, C<status>, C<created_at>, C<finished_at>, C<manifest>): the pending
+one for the same requester, subject, type and format if there is one, a new
+one otherwise. A collision on the minted id is retried once; losing the race
+to another pending request returns that one.
+
+=head2 request_user_export
+
+Takes a user id. Calls C<create_request> for the user about themselves,
+type C<user_data>, format C<json>.
+
+=head2 complete_user_export
+
+Takes an export request id and optional bundle parts. In a transaction,
+builds the bundle from the parts given or from the database, stores it and
+marks the request completed. Returns the request hash with C<status>
+C<completed>, C<finished_at> and the stored manifest (the safe manifest plus
+the bundle's profile, posts, attachments, notifications, subscriptions and
+preferences). An already completed request is returned as stored, and an
+unknown id gives undef.
+
+=head2 build_user_bundle
+
+Takes a subject user id and a hash reference of parts. Returns the bundle:
+C<subject_user_id>, C<generated_at> (now), C<format> C<json>, C<profile> (a
+hash) and C<posts>, C<attachments>, C<notifications>, C<subscriptions> and
+C<preferences> (array references, empty when not in the parts). Reads
+nothing.
+
+=head2 safe_manifest
+
+Takes a bundle. Returns the summary that may travel in events:
+C<subject_user_id>, C<generated_at>, C<format> and C<counts> of each list.
+
+=head1 DIAGNOSTICS
+
+An unknown request in C<complete_user_export> gives undef. An insert error
+other than the two collisions above, or a collision whose winning request
+cannot be found, is rethrown with C<croak>; other database errors propagate.
+Either rolls the transaction back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+C<body_batch_size>, the post ids bound per body query (default 10,000).
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

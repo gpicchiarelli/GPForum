@@ -331,3 +331,163 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Community::BookmarkStore - Saves, removes and lists a member's bookmarks.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Community::BookmarkStore->new(
+        readability => GPForum::Service::Forum::Readability->new(
+            schema => $schema,
+        ),
+        schema => $schema,
+    );
+    my $saved = $store->save_bookmark(
+        {
+            user_id     => $user_id,
+            target_type => 'thread',
+            target_id   => $thread_id,
+            note        => 'read later',
+        }
+    );
+    my $status = $store->status_for_user_target( $user_id, 'thread', $thread_id );
+    my $page   = $store->list_page_for_user(
+        $user_id,
+        { target_type => 'thread', limit => 25, after => $cursor, viewer => $viewer },
+    );
+    $store->remove_for_user_target(
+        { user_id => $user_id, target_type => 'thread', target_id => $thread_id } );
+
+=head1 DESCRIPTION
+
+A member has at most one C<bookmarks> row per target. Removing a bookmark
+soft-deletes it by setting C<deleted_at>; saving it again restores the same
+row, with the new note, rather than inserting another. Saving a bookmark
+that is already active with the same note writes nothing and is reported as
+C<skipped>.
+
+A new bookmark is inserted inside a savepoint. If the insert loses a race
+on the member's target (C<bookmarks_user_target_key>), the row the other
+request inserted is restored instead. If it collides on the bookmark id
+(C<bookmarks_pkey>), the target is looked up again and, when there is still
+no row, the insert is retried once with a fresh id.
+
+Lists show active bookmarks only, newest first. When C<readability> is set,
+they keep only bookmarks whose post or thread the reader can still read,
+judged in the query before C<LIMIT> (ADR 0102), so a page stays full. A
+bookmark used to keep pointing at a thread after its category turned
+private, showing its title to someone who had lost access.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 save_bookmark
+
+Takes a hash reference with C<user_id>, C<target_type>, C<target_id> and an
+optional C<note> (empty when omitted). Creates the bookmark, or restores
+the member's existing one for that target. Returns a hash reference with
+C<bookmark_id>, C<user_id>, C<target_type>, C<target_id>, C<note>,
+C<created_at> and C<deleted_at> (undef), plus C<< skipped => 1 >> when the
+bookmark was already active with that note.
+
+=head2 create_bookmark
+
+Takes the same hash reference and inserts a new row with a fresh uuid and
+the clock's time, with no check for an existing one. Returns the inserted
+fields as a hash reference. Used by C<save_bookmark>; a unique conflict
+propagates from here.
+
+=head2 find_for_user_target
+
+Takes a user id, a target type and a target id. Returns that member's
+C<Bookmark> row for the target, active or soft-deleted, or undef.
+
+=head2 status_for_user_target
+
+Takes a user id, a target type and a target id. Returns
+C<< { bookmarked => 0 } >> when there is no user id or no row; otherwise
+C<bookmarked> (1 when active, 0 when soft-deleted), C<bookmark_id> and
+C<note>.
+
+=head2 remove_bookmark
+
+Takes a bookmark id and soft-deletes that bookmark. Returns
+C<< { bookmark_id, deleted_at } >>, with C<< skipped => 1 >> and the
+earlier C<deleted_at> when it was already removed.
+
+=head2 remove_for_user_target
+
+Takes a hash reference with C<user_id>, C<target_type> and C<target_id>.
+Returns C<< { ok => 0, error => 'not_found' } >> when the member has no
+bookmark for the target; otherwise the result of the soft delete, as for
+C<remove_bookmark>, with C<< ok => 1 >>.
+
+=head2 list_for_user
+
+Takes a user id and an optional hash reference of the options
+C<bookmarks_resultset> takes. Returns an array reference of the rows, at
+most C<limit> (default 50) of them.
+
+=head2 list_page_for_user
+
+Takes a user id and a hash reference with C<limit>, C<after> (the cursor
+string from the URL), C<target_type> and C<viewer>. Returns the page hash
+reference from L<GPForum::Service::Forum::PageWindow/page>: C<items>,
+C<has_next> and C<next_cursor>, the cursor over C<created_at> and
+C<bookmark_id>.
+
+=head2 bookmarks_resultset
+
+Takes a user id and a hash reference with optional C<target_type>,
+C<after> (an already decoded C<< { sort_value, id } >>), C<limit> (default
+50) and C<viewer> (the reader to judge readability for; defaults to the
+user id). Returns the unexecuted C<Bookmark> resultset of the member's
+active bookmarks, ordered by C<created_at> and then C<bookmark_id>,
+descending. Public so tests and the query-plan evidence see the SQL that
+runs.
+
+=head1 DIAGNOSTICS
+
+C<save_bookmark> croaks with the database error when the insert fails for
+any reason other than a unique conflict, when a target conflict leaves no
+row to restore, and when the retry after an id collision fails too.
+C<remove_bookmark> dies when no bookmark has the given id, calling
+C<update> on undef. Other database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<clock> and C<id_service> default to L<GPForum::Service::Clock> and
+L<GPForum::Infrastructure::Id>; tests pass fixed ones.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Keyset>,
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>, L<GPForum::Service::Forum::PageWindow>,
+L<GPForum::Service::Forum::Readability> (passed in as C<readability>).
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

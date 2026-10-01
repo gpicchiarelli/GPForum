@@ -172,3 +172,158 @@ sub identity_profile_not_found {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Web::ErrorPayload - The error payloads controllers return, and what an HTML error page says for them.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $payload =
+      GPForum::Web::ErrorPayload->not_found( error => 'thread not found' );
+    # { error => 'thread not found', status => 'not_found',
+    #   title => 'Not found' }
+
+    my $page = GPForum::Web::ErrorPayload->page($payload);
+    # { kind => 'not_found', detail => 'thread not found',
+    #   title_key   => 'forum.error_not_found_title',
+    #   message_key => 'forum.error_not_found_message' }
+
+=head1 DESCRIPTION
+
+One place for the shape of an error: a hash reference with C<error> (an
+English message), C<status> (a stable code such as C<invalid>,
+C<forbidden> or C<not_found>) and usually C<title>. JSON responses send
+these strings as they are, for API clients.
+
+An HTML error page does not show them. A payload's title and error are
+English, and the common ones are internal codes such as
+C<authentication required> or C<Bad CSRF token>, so C<page> maps the
+payload to catalog keys for the page's title and message, and keeps the
+error as detail only when it is specific to the request rather than one of
+the payloads' own default messages. A CSRF failure is told apart from other
+C<forbidden> payloads by its error text.
+
+Every method can be called on the class.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 page
+
+Takes a payload. Returns C<< { kind, detail, title_key, message_key } >>.
+C<kind> is C<csrf> when the error is the CSRF text, and the payload's
+status otherwise (empty when there is none). For the kinds C<conflict>,
+C<csrf>, C<error>, C<forbidden>, C<invalid>, C<not_found>,
+C<rate_limited>, C<unauthorized> and C<unavailable> the keys are the kind's
+catalog text (C<forum.error_internal> for C<error>, C<forum.error_KIND> for
+the others) followed by C<_title> and C<_message>; any other kind gets
+C<forum.error_title> and C<forum.error_default>. C<detail> is the error when
+it is not empty and not a generic default message, undef otherwise.
+
+=head2 page_text_keys
+
+Returns an array reference of every title and message key C<page> can
+name, for the test that both locales have them.
+
+=head2 bad_request
+
+Takes optional named C<error> (default C<invalid request>), C<title>
+(default C<Invalid request>) and C<errors>. Returns a payload with status
+C<invalid>; C<errors>, the per-field messages, is included only when given.
+
+=head2 csrf_failure
+
+Returns error C<Bad CSRF token>, status C<forbidden>, title C<Forbidden>.
+
+=head2 csrf_text
+
+Returns C<Bad CSRF token>, the plain-text body of a CSRF failure.
+
+=head2 unauthorized
+
+Returns error C<authentication required>, status C<unauthorized>, title
+C<Authentication required>.
+
+=head2 forbidden
+
+Takes an optional named C<error> (default C<permission denied>). Returns
+status C<forbidden>, title C<Forbidden>.
+
+=head2 not_found
+
+Takes an optional named C<error> (default C<not found>). Returns status
+C<not_found>, title C<Not found>.
+
+=head2 rate_limited
+
+Takes optional named C<error> (default C<too many requests>) and C<title>
+(default C<Too many requests>). Returns status C<rate_limited>.
+
+=head2 rate_limited_text
+
+Returns C<Too many requests>, the plain-text body of a rate-limited
+response.
+
+=head2 system_failure
+
+Returns error C<internal error>, status C<error>, title C<Internal error>.
+
+=head2 unavailable
+
+Returns error C<service unavailable>, status C<unavailable>, title
+C<Service unavailable>.
+
+=head2 conflict
+
+Takes optional named C<error> (default C<conflict>), C<status> (default
+C<conflict>) and C<title> (default C<Conflict>). Returns the payload.
+
+=head2 identity_rate_limited
+
+Returns error C<too many requests>, status C<rate_limited>, no title.
+
+=head2 identity_invalid_login
+
+Returns error C<login request could not be accepted>, status
+C<unauthorized>, no title.
+
+=head2 identity_profile_not_found
+
+Returns error C<profile not found>, status C<not_found>, no title.
+
+=head1 DIAGNOSTICS
+
+None. Every method returns a new hash reference (or string).
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+None beyond L<Mojo::Base> and L<Const::Fast>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

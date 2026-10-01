@@ -430,3 +430,106 @@ sub _has_value ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::ReadState - How far a member has read a thread, and the unread posts on a page.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $read_state =
+      GPForum::Service::Forum::ReadState->new( schema => $schema );
+
+    my $summary = $read_state->summary_for_page( $user_id, $thread_id, $posts );
+    # first_unread_anchor => 'post-<post_id>', unread_in_page => 3, ...
+
+    my $marked = $read_state->mark_thread_read(
+        {
+            last_read_position => $summary->{last_visible_position},
+            thread_id          => $thread_id,
+            user_id            => $user_id,
+        }
+    );
+
+=head1 DESCRIPTION
+
+A member's read marker is the highest post position they have seen in a
+thread, kept in C<thread_read_state> with a copy in
+C<user_read_marker_deltas>. It only moves forward: marking an earlier
+position than the stored one keeps the stored one, and a mark that would not
+advance an existing marker writes nothing. A first mark inserts both rows;
+when a concurrent first mark wins that insert, its row is read back and this
+mark either advances it or is skipped.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 state_for_thread
+
+Takes a user id and a thread id. Returns
+C<< { user_id, thread_id, last_read_position, last_read_at } >> from the
+stored marker, or with position 0 and C<last_read_at> undef when there is
+none or either id is empty.
+
+=head2 summary_for_page
+
+Takes a user id, a thread id and the page's posts (an array reference of
+hashes or rows with C<post_id> and C<position>). Returns the read state
+plus C<authenticated>, C<last_visible_position> (the highest position on the
+page), C<first_unread_post_id>, C<first_unread_position> and
+C<first_unread_anchor> (C<post-POST_ID>) of the first post past the marker,
+and C<unread_in_page>, the number of posts past it. For an anonymous viewer
+(an empty user id) C<authenticated> is 0, the first-unread fields are undef
+and C<unread_in_page> is 0.
+
+=head2 mark_thread_read
+
+Takes a hash reference with C<user_id>, C<thread_id> and
+C<last_read_position> (a non-negative integer). Returns
+C<< { ok => 0, status => 'invalid', errors } >> for bad input. Otherwise,
+in a transaction when the schema has C<txn_do>, returns
+C<< { ok => 1, advanced, read_state } >> with the marker written, or the
+stored marker with C<< skipped => 1 >> when nothing needed writing.
+C<advanced> is 1 when the position moved past the stored one.
+
+=head1 DIAGNOSTICS
+
+C<mark_thread_read> returns the errors C<user_id is required>,
+C<thread_id is required> and
+C<last_read_position must be a non-negative integer>. An insert error other
+than the expected primary-key collision, or a collision whose winning row
+cannot be read back, is rethrown with C<croak>; other database errors
+propagate. Croaks C<read state row does not expose columns> for a post or
+row that is neither a hash nor has C<get_column>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -408,3 +408,105 @@ sub trust_level_for_score ($score) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Community::ReputationLedger - Reputation deltas, the running trust score and the trust level it gives.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $ledger =
+      GPForum::Service::Community::ReputationLedger->new( schema => $schema );
+
+    my $result = $ledger->record_event(
+        {
+            actor_id    => $actor_id,
+            delta       => 1,
+            reason      => 'post_created',
+            source_id   => $post_id,
+            source_type => 'post',
+            user_id     => $author_id,
+        }
+    );
+    # { ok => 1, event => {...}, snapshot => { score, trust_level, ... } }
+
+    my $level =
+      GPForum::Service::Community::ReputationLedger::trust_level_for_score(60);
+    # 2
+
+=head1 DESCRIPTION
+
+Each reputation change is a C<reputation_events> row identified by its
+source (C<source_type>, C<source_id> and C<user_id>), so a replayed domain
+event credits nothing twice. The member's C<trust_score_snapshots> row
+holds the running score; it is read with C<FOR UPDATE> and incremented, so
+a concurrent delta is not lost, and the trust level it gives is copied to
+the user row. The event, the snapshot and the user's trust level are
+written in one transaction: written apart, a failed snapshot write left the
+ledger crediting a delta the score never received.
+
+The trust levels are 0 below 10 points, 1 from 10, 2 from 50, 3 from 150
+and 4 from 500. A member's first snapshot starts from C<current_score> when
+the input gives one, 0 otherwise. An event already recorded whose member has
+no snapshot, left by an interrupted write, has its snapshot written now.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 record_event
+
+Takes a hash reference with C<user_id>, C<delta>, C<source_type>,
+C<source_id>, C<actor_id>, C<reason> and an optional C<current_score>. In a
+transaction, returns C<< { ok => 1, event, snapshot } >> for a new event;
+C<< { ok => 1, skipped => 1, event, snapshot } >> when the source was
+already recorded, with the current snapshot or the one just written for a
+leftover event; and C<< { ok => 1, skipped => 1, reason => 'missing_source',
+snapshot } >>, recording nothing, when C<source_type> or C<source_id> is
+empty. The snapshot is C<< { user_id, score, trust_level, calculated_at,
+version } >>; for a member without one it has score and level 0 and no
+C<calculated_at>.
+
+=head2 trust_level_for_score
+
+A function, not a method. Takes a score and returns the trust level it
+gives, from 0 to 4.
+
+=head1 DIAGNOSTICS
+
+An insert error other than a collision on the event id or on the event's
+source, or a collision whose winning row cannot be found, is rethrown with
+C<croak>; other database errors propagate. Either rolls the transaction
+back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

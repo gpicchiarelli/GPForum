@@ -174,3 +174,85 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Moderation::ReviewReader - Keyset-paged moderation action history and suspension list.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader =
+      GPForum::Service::Moderation::ReviewReader->new( schema => $schema );
+
+    my $actions = $reader->list_actions(
+        { limit => 25, target_id => $post_id, target_type => 'post' } );
+    my $older = $reader->list_actions( { after => $actions->{next_cursor} } );
+
+    my $suspensions =
+      $reader->list_suspensions( { status => 'all', user_id => $user_id } );
+
+=head1 DESCRIPTION
+
+The read side of the moderation review screens. Both lists are newest first
+and keyset paged through L<GPForum::Service::Forum::PageWindow>, so a deep
+page costs the same as the first: actions on C<created_at> and
+C<moderation_action_id>, suspensions on C<valid_from> and C<suspension_id>.
+By default the suspension list holds only active suspensions: not revoked,
+with no C<valid_to> or one not yet past.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 list_actions
+
+Takes an optional hash reference with C<limit>, C<after> (a cursor from a
+previous page), and C<target_type> and C<target_id> filters, ignored when
+empty. Returns C<< { items, has_next, next_cursor } >>, the items being
+C<moderation_actions> rows with the action's id, actor, type, target,
+reason, metadata, creation time and reversal columns.
+
+=head2 list_suspensions
+
+Takes an optional hash reference with C<limit>, C<after>, C<user_id>,
+C<status> and C<active>. Lists active suspensions only, unless C<status> is
+C<all> and C<active> is absent or 0, or C<active> is 0 and C<status> is
+absent. Returns the page hash as C<list_actions> does, the items being
+C<suspensions> rows.
+
+=head1 DIAGNOSTICS
+
+None of its own; database errors propagate. A cursor that cannot be decoded
+gives the first page.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Keyset>, L<GPForum::Service::Forum::PageWindow>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

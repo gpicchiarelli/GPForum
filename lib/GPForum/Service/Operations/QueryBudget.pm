@@ -421,3 +421,125 @@ sub _column ( $row, $column ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::QueryBudget - Per-endpoint query and transaction budgets, checked per request and kept in the database.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $budgets =
+      GPForum::Service::Operations::QueryBudget->new( schema => $schema );
+
+    my $result = $budgets->observe( 'thread_view',
+        { duplicate_queries => 0, queries => 7, transactions => 1 } );
+    # $result->{status} is 'ok', 'fail' or 'unknown'
+
+    $budgets->enforce( 'thread_view', $observation );    # dies on 'fail'
+
+    $budgets->sync_schema;
+    my $drift = $budgets->drift_report;
+
+=head1 DESCRIPTION
+
+The catalog of how much database work each named endpoint may do: a
+C<max_queries> per endpoint, from 2 for search to 8 for the thread view and
+the admin status page, at most one transaction and no duplicate query, all
+at the C<release-gate> enforcement level. The request hook in
+L<GPForum::Bootstrap::Operations> observes every request that carries an
+endpoint name against it, and the benchmark reads its budgets.
+
+The C<endpoint_query_budgets> table holds a copy of the catalog:
+C<sync_schema> writes it (C<bin/gpforum-query-budget --sync>) and
+C<drift_report> compares it, for the platform check, readiness, the metrics
+snapshot and the admin console.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 catalog
+
+Returns a shallow copy of the budgets hash, keyed by endpoint name.
+
+=head2 budget_for
+
+Takes an endpoint name. Returns a copy of its budget (C<endpoint_name>,
+C<max_queries>, C<max_transactions>, C<max_duplicate_queries>, C<notes>,
+C<enforcement_level>), or undef for an unknown or undef name.
+
+=head2 observe
+
+Takes an endpoint name and a hash reference of the observed C<queries>,
+C<transactions> and C<duplicate_queries>; a missing one counts as 0 and the
+others are truncated to integers. Returns
+C<< { endpoint_name, status, budget, observed, violations } >>: status
+C<fail>, with each exceeded measure named in C<violations>, or C<ok>. For an
+unknown endpoint the status is C<unknown>, the budget undef and the
+violations C<['endpoint']>.
+
+=head2 enforce
+
+Takes the same arguments as C<observe> and returns its result, but dies
+when the status is C<fail>. An unknown endpoint does not die.
+
+=head2 snapshot
+
+Returns C<< { endpoints => { NAME => \%budget, ... } } >> with a copy of
+every budget.
+
+=head2 sync_schema
+
+Takes an optional schema; the object's is used without one. Writes the
+catalog to C<endpoint_query_budgets>: rows whose C<max_queries>,
+C<max_transactions> and C<notes> already match are left alone, the others
+updated or inserted. An insert that loses a race to another writer re-reads
+the row and updates it if it still differs. Returns
+C<< { endpoints, synced, written, skipped } >>: the endpoint names, their
+number, the rows written and the rows left as they were.
+
+=head2 drift_report
+
+Takes an optional schema. Compares the stored rows (up to 1,000) with the
+catalog. Returns C<< { status, missing, extra, mismatched } >>: the
+endpoints in the catalog but not stored, stored but not in the catalog, and
+stored with a different C<max_queries> or C<max_transactions>; the status
+is C<fail> when any list is not empty and C<ok> otherwise.
+
+=head1 DIAGNOSTICS
+
+C<enforce> dies with C<query budget exceeded:ENDPOINT:VIOLATIONS>, the
+violations joined by commas. C<sync_schema> rethrows with C<croak> an insert
+error that is not a unique violation, and a unique violation whose row
+cannot then be found. Other database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+The C<budgets> attribute replaces the built-in catalog.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::UniqueConflict>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

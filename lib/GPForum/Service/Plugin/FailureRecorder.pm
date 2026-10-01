@@ -74,3 +74,79 @@ sub _retry_failure_id ( $self, $input ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Plugin::FailureRecorder - Store a failed plugin hook call in plugin_failures.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $recorder =
+      GPForum::Service::Plugin::FailureRecorder->new( schema => $schema );
+
+    my $failure = $recorder->record_failure(
+        {
+            context       => { payload_id => $post_id },
+            error_class   => 'timeout',
+            error_message => 'callback exceeded timeout',
+            hook_name     => 'post.created',
+            plugin_id     => $plugin_id,
+        }
+    );
+
+=head1 DESCRIPTION
+
+Inserts one C<plugin_failures> row for each failed hook call, for
+L<GPForum::Service::Plugin::HookDispatcher>: a fresh uuid, the plugin id,
+the hook name, the error's class and message, a context hash and the time.
+Every call is a new failure; nothing is merged. If the minted id collides
+with an existing row's primary key, the insert is retried once with a new
+id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 record_failure
+
+Takes a hash reference with C<plugin_id>, C<hook_name>, C<error_class>,
+C<error_message> and an optional C<context> hash (empty when absent).
+Returns the row as inserted: C<plugin_failure_id>, those five values and
+C<created_at>.
+
+=head1 DIAGNOSTICS
+
+An error from the insert other than a collision on the failure id, or a
+second collision, is rethrown with C<croak>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -132,3 +132,103 @@ sub _column ( $row, $column ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Attachment::MediaProcessor - Record the thumbnail variant of an uploaded image.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $processor = GPForum::Service::Attachment::MediaProcessor->new(
+        storage => $attachment_storage,
+        store   => $attachment_store,
+    );
+    my $result = $processor->process($attachment_id);
+    # { ok => 1, variant => {...} }, { ok => 1, skipped => ... }
+    # or { ok => 0, error => 'not_found' }
+
+=head1 DESCRIPTION
+
+Run by the media processing worker
+(L<GPForum::Worker::Handler::MediaProcessing>) for an attachment event. For
+an available attachment whose media type starts with C<image/>, it writes a
+C<thumbnail> object under the key C<< <object_key>-thumbnail >> and records
+it as an attachment variant through L<GPForum::Service::Attachment::Store>.
+
+The work is idempotent: an attachment that already has a thumbnail variant
+is reported as skipped, and an object already present under the variant key
+is not written again, so a redelivered event does no harm. The variant's
+bytes are the original object's bytes, read from storage and written under
+the new key; no image is decoded or resized here.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<storage> (an object with C<read_object>,
+C<exists_object> and C<write_object>, such as
+L<GPForum::Service::Attachment::FilesystemStorage>) is required for
+images; C<store> defaults to a new L<GPForum::Service::Attachment::Store>.
+
+=head2 process
+
+Takes an attachment id. Returns a hash reference:
+
+=over 4
+
+=item * C<< { ok => 0, error => 'not_found' } >> when there is no such
+attachment;
+
+=item * C<< { ok => 1, skipped => 'not_available' } >> when its state is
+not C<available>;
+
+=item * C<< { ok => 1, skipped => 'not_image' } >> when its media type does
+not start with C<image/>;
+
+=item * C<< { ok => 1, skipped => 1, variant => {...} } >> when a thumbnail
+variant already exists; the variant's columns come with
+C<< idempotent => 1 >>;
+
+=item * C<< { ok => 1, variant => {...} } >> after writing the object and
+adding the variant (same media type, C<byte_size> the length of the
+original's bytes, also when the object was already there and not written).
+
+=back
+
+=head1 DIAGNOSTICS
+
+Refusals are returned, not thrown. Errors from the storage backend or the
+store propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Attachment::Store>, L<GPForum::Infrastructure::Row>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

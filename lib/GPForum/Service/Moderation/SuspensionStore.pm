@@ -372,3 +372,119 @@ sub _column ( $row, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Moderation::SuspensionStore - Suspend and reinstate members, and say whether one may take part.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store =
+      GPForum::Service::Moderation::SuspensionStore->new( schema => $schema );
+
+    my $result = $store->create_suspension(
+        {
+            actor_user_id  => $moderator_id,
+            correlation_id => $correlation_id,
+            reason         => 'spam',
+            user_id        => $user_id,
+            valid_to       => '2026-11-01T00:00:00Z',
+        }
+    );
+
+    my $gate = $store->can_participate($user_id);
+    # { ok => 1 }, or { ok => 0, reason => 'suspended', ... }
+
+    $store->revoke_suspension( $suspension_id, $moderator_id, 'appeal upheld' );
+
+=head1 DESCRIPTION
+
+Owns the C<suspensions> table and the user status that mirrors it. A
+suspension sets the user's status to C<suspended> and records a
+C<user.suspended> event and audit entry; a revocation stamps C<revoked_at>,
+sets the user back to C<active> and records C<user.suspension_revoked>.
+Each runs in one transaction with its event and audit rows, written through
+L<GPForum::Infrastructure::EventRecorder> from the envelopes of
+L<GPForum::Service::Moderation::Event>.
+
+Suspending is idempotent: a user who already has an active suspension gets
+that one back instead of a second row. A suspension is active while it is
+not revoked and its C<valid_to> is empty or not yet past. An insert that
+loses a race on the suspension id checks again for an active suspension and
+otherwise retries once with a new id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 create_suspension
+
+Takes a hash reference with C<user_id>, C<actor_user_id>, C<reason>, and
+optional C<valid_to> (ISO 8601; none means open-ended), C<source> (kept in
+the row's metadata, default C<moderation>) and C<correlation_id> (a new
+uuid when absent). In a transaction, returns
+C<< { ok => 1, suspension => \%suspension } >> with the new row, whose
+metadata also keeps the user's previous status, or the user's active one.
+Returns undef when the user does not exist.
+
+=head2 revoke_suspension
+
+Takes a suspension id, the acting user's id and a reason. In a transaction,
+returns C<< { suspension_id, revoked_at } >>, or undef when there is no such
+suspension. Revoking one that is already revoked records nothing new and
+returns its original C<revoked_at>, but still sets the user back to
+C<active> if they are not.
+
+=head2 active_for_user
+
+Takes a user id. Returns the newest active suspension row, looked for among
+the user's ten most recent unrevoked suspensions by C<valid_from>; undef
+when there is none or the id is empty.
+
+=head2 can_participate
+
+Takes a user id. Returns C<< { ok => 1 } >> when the user may take part.
+Otherwise returns C<< { ok => 0, reason } >> with reason C<user_not_found>,
+C<user_deleted> (status C<deleted>) or C<suspended> (status C<suspended>),
+or C<suspended> together with C<suspension_id> when an active suspension
+exists while the status says otherwise.
+
+=head1 DIAGNOSTICS
+
+A missing user or suspension is returned as undef, not thrown. An error
+from the insert other than a collision on the suspension id, or a second
+collision, is rethrown with C<croak>; other database errors propagate.
+Either rolls the transaction back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Clock>, L<GPForum::Service::Moderation::Event>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

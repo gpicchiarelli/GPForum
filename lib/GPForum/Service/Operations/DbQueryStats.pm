@@ -223,3 +223,165 @@ sub _budget_mismatches ($rows) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::DbQueryStats - Count the queries, transactions and repeated statements of each request.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $stats = GPForum::Service::Operations::DbQueryStats->new(
+        recent_limit => 25,
+    );
+    $stats->attach_to_schema($schema);
+
+    my $token = $stats->start_request(
+        { correlation_id => $request_id, route => '/t/42/slug' } );
+    # ... the request runs its queries ...
+    my $request = $stats->finish_request( $token,
+        { route => 'thread_show', endpoint_name => 'thread_show', status => 200 }
+    );
+    $stats->record_budget_observation( $request->{request_id}, $observation );
+
+    my $snapshot = $stats->snapshot;
+
+=head1 DESCRIPTION
+
+A L<DBIx::Class::Storage::Statistics> subclass installed as the schema
+storage's C<debugobj>. DBIx::Class calls it for every statement and every
+transaction; it counts them per request, process-wide, and flags a
+statement that runs more than once in the same request (the same SQL text
+with whitespace collapsed, whatever its bind values), which is how an N+1
+query shows up. The application keeps one instance; its C<before_dispatch>
+and C<after_dispatch> hooks open and close the request, and the query
+budget check compares the counts with the endpoint's budget.
+
+It only counts. Every callback that the parent class would turn into log
+output, savepoints included, is overridden to do nothing, so turning
+C<debug> on for the whole process writes nothing to the log.
+
+Finished requests are kept in a bounded list of recent requests (25 by
+default), oldest dropped first.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Class method. Takes C<recent_limit> as a key/value pair or in a hash
+reference; a missing or zero limit means 25. Returns a detached collector
+with no requests.
+
+=head2 attach_to_schema
+
+Takes a schema. Installs the collector as its storage's C<debugobj> and
+turns C<debug> on. Returns 1, or 0 (changing nothing) when the schema has
+no storage or the storage has no C<debugobj>.
+
+=head2 start_request
+
+Takes a hash reference with C<correlation_id>, C<route> (C<unknown> when
+absent) and C<endpoint_name>. Makes a new request current, numbered by a
+sequence local to the collector, and returns a token that remembers the
+request that was current before it.
+
+=head2 finish_request
+
+Takes the token from L</start_request> and a hash reference whose
+C<route>, C<endpoint_name> and C<status>, when defined, overwrite the
+request's. Sets C<duration_ms>, adds the request to the recent list,
+restores the request the token remembers as current (none without a
+token) and returns a copy of the finished request: C<request_id>,
+C<correlation_id>, C<route>, C<endpoint_name>, C<status>, C<duration_ms>,
+C<queries>, C<transactions>, C<duplicate_queries>,
+C<duplicate_fingerprints> and C<attached>. Returns C<undef> when no request
+is current.
+
+=head2 record_budget_observation
+
+Takes a request id and a query budget observation (C<status>, C<budget>,
+C<observed>, C<violations>). Stores them on that recent request as
+C<query_budget_status>, C<query_budget>, C<query_budget_observed> and
+C<query_budget_violations> and returns a copy of the request. Returns
+C<undef> when the id is undefined, the observation is false or the request
+is no longer in the recent list.
+
+=head2 last_request
+
+Returns a copy of the most recently finished request, or C<undef> when
+there is none.
+
+=head2 snapshot
+
+Returns a hash reference with C<attached>, C<requests_observed> (the size
+of the recent list), C<total_queries> and C<total_transactions> since the
+collector was made, C<duplicate_query_warnings> (the repeated statements
+summed over the recent list), C<query_budget_mismatches> (recent requests
+whose budget status is C<fail>), C<last_request> and C<recent_requests>
+(copies, oldest first).
+
+=head2 query_start
+
+DBIx::Class callback, called with the SQL and its bind values. Counts the
+statement in the process total and, when a request is current, in the
+request. The second time a statement is seen in a request its text is added
+to C<duplicate_fingerprints>; every repeat adds one to
+C<duplicate_queries>. Returns nothing.
+
+=head2 query_end
+
+DBIx::Class callback; does nothing.
+
+=head2 txn_begin
+
+DBIx::Class callback. Counts a transaction in the process total and in the
+current request, if any. Returns nothing.
+
+=head2 txn_commit
+
+DBIx::Class callback; does nothing.
+
+=head2 txn_rollback
+
+DBIx::Class callback; does nothing.
+
+=head2 print
+
+Overrides the parent's output method, which would otherwise write
+savepoint statements to STDERR; does nothing.
+
+=head1 DIAGNOSTICS
+
+None. Missing requests and tokens are answered with C<undef> or ignored.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<DBIx::Class::Storage::Statistics>, L<Time::HiRes>, L<Const::Fast>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

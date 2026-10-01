@@ -364,3 +364,136 @@ sub _text ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Portability::ImportJobStore - Create import jobs and record their failures and progress.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $imports = GPForum::Service::Portability::ImportJobStore->new(
+        schema => $schema,
+    );
+    my $created = $imports->create_job(
+        {
+            actor_user_id => $admin_id,
+            manifest      => {
+                adapter_name   => 'legacy_forum_v1',
+                dry_run        => 1,
+                records        => {
+                    categories => 4,
+                    posts      => 900,
+                    threads    => 120,
+                    users      => 80,
+                },
+                source_system  => 'legacy-forum',
+                source_version => '1.4',
+            },
+        }
+    );
+    my $job_id = $created->{job}{import_job_id};
+
+    $imports->record_failure(
+        {
+            error_code         => 'missing_author',
+            error_message      => 'author 17 was not imported',
+            import_job_id      => $job_id,
+            payload            => { post_id => 4211 },
+            source_record_id   => '4211',
+            source_record_type => 'post',
+        }
+    );
+    $imports->update_progress( $job_id, { posts => 450 } );
+
+=head1 DESCRIPTION
+
+The bookkeeping of an import from another forum. A job is created only from
+a manifest that L<GPForum::Service::Portability::ImportManifestValidator>
+accepts, and starts as C<pending>. While the import runs, each source record
+that cannot be imported is recorded once as an import failure, and the job's
+progress is replaced as it advances.
+
+Every write can be repeated. A failure is identified by its job, source
+record type and source record id, which a unique index backs, so a retried
+batch does not record it twice; the lookup and the insert share one
+transaction. Writing the progress the job already holds changes nothing.
+Inserts run under savepoints through
+L<GPForum::Infrastructure::UniqueConflict>, and a conflict on a generated id
+is retried once with a fresh id.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required; C<clock>, C<id_service> and
+C<validator> default to L<GPForum::Service::Clock>,
+L<GPForum::Infrastructure::Id> and
+L<GPForum::Service::Portability::ImportManifestValidator>.
+
+=head2 create_job
+
+Takes a hash reference with C<manifest> and C<actor_user_id>. When the
+manifest is invalid, returns C<< { ok => 0, errors => \%errors } >> with the
+validator's errors and writes nothing. Otherwise inserts the job in a
+transaction and returns C<< { ok => 1, job => \%job } >>, where the job has
+C<import_job_id>, C<adapter_name>, C<source_system>, C<dry_run> (0 or 1),
+C<manifest>, C<< status => 'pending' >>, an empty C<progress>,
+C<created_by>, C<created_at>, and undefined C<started_at> and
+C<finished_at>.
+
+=head2 record_failure
+
+Takes a hash reference with C<import_job_id>, C<source_record_type>,
+C<source_record_id>, C<error_code>, C<error_message> and an optional
+C<payload> (an empty hash when absent). In a transaction, inserts the
+failure and returns its hash (with C<import_failure_id> and C<created_at>
+added), or, when that source record already has a failure in the job,
+returns the existing failure's hash with C<< skipped => 1 >>.
+
+=head2 update_progress
+
+Takes a job id and a progress hash reference. In a transaction, replaces
+the job's progress and returns C<< { import_job_id, progress } >>. When the
+stored progress has the same keys and the same values (compared as strings,
+one level deep), writes nothing and adds C<< skipped => 1 >>.
+
+=head1 DIAGNOSTICS
+
+An invalid manifest is returned as errors, not thrown. Database errors other
+than the handled unique conflicts are rethrown and the transaction rolls
+back. C<update_progress> dies when the job id matches no job.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Portability::ImportManifestValidator>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

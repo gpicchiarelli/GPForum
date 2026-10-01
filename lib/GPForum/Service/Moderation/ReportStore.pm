@@ -405,3 +405,142 @@ sub _column ( $row, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Moderation::ReportStore - Member reports and their way through the moderation queue.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Moderation::ReportStore->new(
+        schema => $schema,
+    );
+    my $report = $store->create_report(
+        {
+            reporter_user_id => $user_id,
+            target_type      => 'post',
+            target_id        => $post_id,
+            reason           => 'spam',
+            details          => 'link farm',
+        }
+    );
+    my $queue = $store->list_queue( { status => 'open', limit => 50 } );
+    $store->assign_report( $report_id, $moderator_id );
+    $store->resolve_report( $report_id, 'removed', $moderator_id );
+
+=head1 DESCRIPTION
+
+Writes the C<reports> table and records, in the same transaction, a domain
+event and an audit entry for each change, built by
+L<GPForum::Service::Moderation::Event> and written by
+L<GPForum::Infrastructure::EventRecorder>.
+
+A member has at most one open or triaged report per target. Reporting the
+same target again returns that report instead of a new one and audits the
+attempt as C<report.duplicate_blocked>. If the existing report has no
+C<report.created> event yet -- a report left over from a write that did
+not finish -- its event and audit are recorded instead. A new report is
+inserted inside a savepoint; when the insert loses a race on the open-report
+index (C<idx_reports_reporter_target_open_unique>), the other writer's
+report is reused the same way, and when it collides on the report id
+(C<reports_pkey>), the report is looked up again and, when there is still
+none, the insert is retried once with a fresh id.
+
+Assigning, releasing and resolving lock the report row with
+C<SELECT ... FOR UPDATE> first, when the schema has a database handle. A
+transition that would change nothing writes nothing and records no event.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 create_report
+
+Takes a hash reference with C<reporter_user_id>, C<target_type>,
+C<target_id>, C<reason> and an optional C<details> (empty when omitted).
+Returns a hash reference of the new C<open> report's columns, or, when the
+member already has an open or triaged report on that target, that report's
+row.
+
+=head2 assign_report
+
+Takes a report id and a moderator's user id. Assigns the report to that
+moderator and records C<report.assigned>, with the moderator as actor.
+Returns C<< { report_id, assigned_moderator_user_id } >>; when it is
+already assigned to that moderator, a hash reference of the report's
+C<report_id>, C<status>, C<assigned_moderator_user_id>, C<resolution> and
+C<resolved_at> instead. Returns an empty list (undef in scalar context)
+when there is no such report.
+
+=head2 release_report
+
+Takes a report id and the acting user's id. Clears the assignment and
+records C<report.released>. Returns
+C<< { report_id, assigned_moderator_user_id => undef } >>; when the report
+is not assigned, the report's state hash as for C<assign_report>. Returns
+an empty list (undef in scalar context) when there is no such report.
+
+=head2 resolve_report
+
+Takes a report id, a resolution and, optionally, the acting user's id.
+Sets the status to C<resolved> with C<resolved_at> and the resolution, and
+records C<report.resolved>. Returns
+C<< { report_id, status, resolved_at, resolution } >>; when the report is
+already resolved, the report's state hash as for C<assign_report>. Returns
+an empty list (undef in scalar context) when there is no such report.
+
+=head2 list_queue
+
+Takes a hash reference of the options C<queue_resultset> takes. Returns an
+array reference of the report rows.
+
+=head2 queue_resultset
+
+Takes a hash reference with optional C<status> (default C<open>) and
+C<limit> (default 50). Returns the unexecuted C<Report> resultset of the
+reports in that status, oldest first, ordered by C<created_at> and then
+C<report_id>. Public so the query-plan evidence EXPLAINs what actually
+runs.
+
+=head1 DIAGNOSTICS
+
+C<create_report> croaks with the database error when the insert fails for
+any reason other than a unique conflict, when an open-report conflict
+leaves no report to reuse, and when the retry after an id collision fails
+too. Every write runs in C<txn_do>, so a failure, including a failure to
+record the event or the audit entry, rolls the whole change back and
+propagates.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<clock>, C<id_service>, C<recorder> and C<events> have defaults;
+tests pass their own.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::EventRecorder>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>, L<GPForum::Service::Moderation::Event>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -121,7 +121,9 @@ values themselves are not interpreted here.
 Takes the manifest as a hash reference. Returns C<< { ok => 1, errors => {} } >>
 when it passes, or C<< ok => 0 >> with C<errors> keyed by field: C<FIELD is
 required> for a missing or undefined field, C<FIELD must be an array> for a
-non-array C<capabilities>, C<required_permissions> or C<hooks>, and
+non-array C<capabilities>, C<required_permissions> or C<hooks> (an
+undefined C<capabilities> or C<required_permissions> gets this message
+rather than C<is required>), and
 C<hooks.N.FIELD is required> for a hook at position N missing C<hook_name> or
 C<callback_name>.
 

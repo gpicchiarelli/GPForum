@@ -440,3 +440,164 @@ sub _nullable_trim ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::CommandIdempotency - Run a write command once per command id and replay its answer.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $idempotency = GPForum::Service::Operations::CommandIdempotency->new(
+        schema => $schema,
+    );
+
+    # The shape every workflow returns
+    my $result = $idempotency->result_of(
+        {
+            actor_id     => $user_id,
+            command_id   => $command_id,
+            command_type => 'notification.preferences',
+            request      => $preferences,
+            run          => sub { return $store->save_preferences($preferences) },
+        }
+    );
+
+    # The lower-level call
+    my $guarded = $idempotency->run(
+        {
+            actor_id     => $user_id,
+            command_id   => $command_id,
+            command_type => 'identity.password_change',
+            request      => $request_fields,
+        },
+        sub { return $store->change_password($input) },
+        sub {
+            my ($result) = @_;
+            return { ok => $result->{ok} };
+        },
+    );
+    # $guarded->{recorded}, ->{replayed}, ->{conflict}, ->{in_progress}
+    # or ->{invalid}
+
+=head1 DESCRIPTION
+
+Makes a write safe to retry. The caller's command id (or idempotency key)
+is the key of a C<command_log> row that holds a SHA-256 hash of the
+request, taken over its canonical JSON, and, once the command has run, the
+response to give back. The first call with a key inserts the row, runs the
+command and stores its response, all in one transaction. A later call with
+the same key and the same request gets the stored response without running
+anything; with a different request it is refused as a conflict, and while
+the first call has not finished it is refused as in progress. The insert
+runs under a savepoint through L<GPForum::Infrastructure::UniqueConflict>,
+so two concurrent first calls end with one run and one replay.
+
+A command whose result has C<status> C<failed> is not an answer. The
+transaction is abandoned, so neither what the command wrote before it
+failed nor the C<command_log> row is kept, and retrying the same command id
+can still succeed. The failure is handed back to the caller uncommitted.
+
+L</result_of> wraps L</run> in the result shape the workflows share; seven
+of them used to carry their own copy of it (ADR 0110).
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required (it must support
+C<txn_do>); C<clock> and C<id_service> default to
+L<GPForum::Service::Clock> and L<GPForum::Infrastructure::Id>.
+
+=head2 result_of
+
+Takes a hash reference with C<actor_id>, C<command_id> (trimmed),
+C<command_type>, C<request> (an empty hash when absent) and C<run> (a code
+reference called with no arguments). Calls L</run> with the result itself
+as the response, and returns:
+
+=over 4
+
+=item * the stored response, on a replay;
+
+=item * the command's result, when it ran (also when it failed and was
+rolled back);
+
+=item * C<< { ok => 0, status => 'invalid', errors => { command_id => 'command_id is required' }, error => undef, stored => undef } >>
+for an empty command id;
+
+=item * C<< { ok => 0, status => 'conflict', error => $message, errors => undef, stored => undef } >>
+when the id was used for another request or is still in progress.
+
+=back
+
+=head2 run
+
+Takes an input hash reference (C<command_id>, or C<idempotency_key> when
+the command id is empty; C<request>; C<actor_id>; C<command_type>), the
+code reference to run (called with no arguments) and a response builder,
+called with the result to make the response to store (the result itself is
+stored when the builder is undefined). Returns a hash reference:
+
+=over 4
+
+=item * C<< { invalid => 1, error => 'command_id is required' } >> when
+both keys are empty;
+
+=item * C<< { recorded => 1, result => $result } >> after running the
+command; the row's status becomes C<handled> when the result has a true
+C<ok> and C<rejected> otherwise;
+
+=item * C<< { recorded => 1, result => $result, rolled_back => 1 } >> when
+the result's status was C<failed> and the transaction was abandoned;
+
+=item * C<< { replayed => 1, response => $response } >> for a key already
+answered with the same request;
+
+=item * C<< { conflict => 1, error => 'idempotency key was already used for another request' } >>;
+
+=item * C<< { in_progress => 1, error => 'idempotency key is already in progress' } >>.
+
+=back
+
+=head1 DIAGNOSTICS
+
+Croaks with the original error when the command dies or the database fails
+for any reason other than the handled unique conflicts (on the command id,
+which is retried once with a fresh id, and on the idempotency key, which
+replays the row that won); the transaction rolls back. The workflows call
+L</result_of> inside an C<eval> and turn such an error into their own
+C<failed> result.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Clock>, L<JSON::MaybeXS>, L<Digest::SHA>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

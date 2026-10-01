@@ -325,3 +325,123 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::ThreadReader - Keyset pages of a category's threads and of the latest public threads.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader = GPForum::Service::Forum::ThreadReader->new( schema => $schema );
+
+    my $threads = $reader->list_category_threads(
+        {
+            category_id    => $category_id,
+            limit          => 25,
+            after          => $cursor,
+            viewer_user_id => $user_id,
+            viewer_scope   => $viewer->within( $category_id, $space_id ),
+        }
+    );
+
+    my $latest = $reader->list_public_threads(
+        { limit => 20, after => $cursor, viewer => $viewer } );
+
+=head1 DESCRIPTION
+
+Two thread listings, each a keyset page of one row more than the limit,
+planned by L<GPForum::Service::Forum::PageWindow>.
+
+A category's threads are ordered by C<pinned>, then C<last_activity_at>,
+then C<thread_id>, all descending, so its cursor leads with C<pinned>: a
+cursor that carried only the last two columns let pinned threads repeat or
+vanish across pages. Cursors minted before that, with two parts, resume
+from the top of the pinned block instead of being rejected. The category
+itself is authorized by the caller; its threads are judged on their own
+level with the viewer's grants for that category (C<viewer_scope>, from
+C<< Viewer->within >>), or as public only when there is none. Threads that
+are deleted or not C<visible> or C<locked> are left out, except that a
+signed-in reader also sees their own deleted threads. That is read as the
+union of two page-sized key queries, one per partial index, because a
+single C<deleted_at IS NULL OR author_user_id = ?> predicate could use no
+index and read the whole table for every signed-in category page.
+
+The latest list holds public threads only, not deleted and C<visible> or
+C<locked>, from categories and spaces the viewer can read (ADR 0102),
+ordered by C<last_activity_at> and then C<thread_id>, descending. It feeds
+the home page's latest threads and, with an anonymous viewer, the sitemap
+and the Atom feed.
+
+Rows carry the author's C<username> and C<display_name> as
+C<author_username> and C<author_display_name>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 list_category_threads
+
+Takes a hash reference with C<category_id>, C<limit>, C<after> (the cursor
+string from the URL), C<viewer_user_id> (undef or empty for an anonymous
+reader) and C<viewer_scope>. Returns C<< { items, has_next, next_cursor } >>:
+the thread rows, whether there is a next page, and that page's cursor
+(base64url of C<pinned|last_activity_at|thread_id>) or undef.
+
+=head2 category_threads_resultset
+
+Takes the same request and, optionally, a plan from
+L<GPForum::Service::Forum::PageWindow/plan> (made from the request when
+omitted). Returns the unexecuted C<Thread> resultset that
+C<list_category_threads> runs. Public so the plan tests EXPLAIN what
+actually runs rather than a transcription.
+
+=head2 list_public_threads
+
+Takes a hash reference with C<limit>, C<after> (the cursor string) and
+C<viewer> (anonymous when omitted). Returns the page hash reference from
+L<GPForum::Service::Forum::PageWindow/page>, with a cursor over
+C<last_activity_at> and C<thread_id>.
+
+=head2 latest_threads_resultset
+
+Takes the same request and an optional plan. Returns the unexecuted
+C<Thread> resultset that C<list_public_threads> runs. Public so the
+query-plan evidence EXPLAINs what actually runs.
+
+=head1 DIAGNOSTICS
+
+Nothing of its own: a cursor that does not decode, has the wrong number of
+parts or carries an unacceptable value shows the first page. Database
+errors propagate from the schema.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Keyset>, L<GPForum::Service::Forum::PageWindow>,
+L<GPForum::Service::Forum::Viewer>, L<GPForum::Service::Forum::Visibility>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

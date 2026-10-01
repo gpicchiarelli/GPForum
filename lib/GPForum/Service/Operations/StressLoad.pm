@@ -357,3 +357,130 @@ sub _rounded ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::StressLoad - Concurrent HTTP load against a running instance, reported as evidence.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $stress   = GPForum::Service::Operations::StressLoad->new;
+    my $evidence = $stress->run(
+        {
+            base_url => 'http://127.0.0.1:8080',
+            check    => 1,
+            profile  => 'smoke',
+        }
+    );
+    print $stress->format_evidence( $evidence, 'json' );
+    exit $stress->exit_status($evidence);
+
+=head1 DESCRIPTION
+
+The engine behind C<bin/gpforum-stress-load>
+(L<GPForum::Command::StressLoad>). It sends GET requests to a set of routes
+on an instance that is already running, and never starts one. Up to
+C<concurrency> requests are in flight at once on one L<Mojo::IOLoop>,
+round-robin over the routes, and redirects are not followed. Each request's
+latency and status code are recorded; a 2xx or 3xx response is a success,
+anything else, a transport failure included, an error.
+
+The profiles are C<smoke> (4 slots of 5 requests each, not a capacity
+claim) and C<100>, C<500> and C<1000> (that many slots of 10 requests
+each). The default routes are the home page, the category list, one
+category, one thread, a search and the two health checks, with the seed
+data's ids.
+
+With C<check>, the run fails when the error rate is above
+C<max_error_rate> (a percentage, default 1) or the 95th percentile latency
+above C<p95_limit_ms> (default 2000); without it the status is C<ok>
+whatever the numbers. The evidence goes through
+L<GPForum::Service::Operations::EvidenceMeta>'s C<evidence_finalize>, which
+adds the default private-beta readiness gap when no listed gap mentions it,
+de-duplicates the residual gaps, sets C<private_beta_claimed> to 0 and
+marks C<secrets_redacted>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 profiles
+
+Returns a copy of the profile table: name to
+C<< { concurrency, requests_per_client, description } >>.
+
+=head2 run
+
+Takes a hash reference with C<profile> (default C<smoke>),
+C<concurrency>, C<requests_per_client>, C<routes> (an array reference of
+paths), C<base_url>, C<request_timeout> (seconds, default 30, applied to
+connecting, inactivity and the whole request), C<max_error_rate>,
+C<p95_limit_ms>, C<check> and C<dry_run>. With C<dry_run>, returns
+C<dry-run> evidence holding the plan, and sends nothing. Otherwise returns
+evidence with C<status> (C<ok>, C<pass> or C<fail>), C<mode>, C<plan>,
+C<prerequisites>, C<wall_seconds>, C<completed>, C<errors>,
+C<error_rate_pct>, C<peak_inflight>, C<req_per_sec>, C<p50_ms>, C<p95_ms>,
+C<p99_ms>, C<max_ms>, C<status_codes> (counts by code, C<error> for
+transport failures) and C<residual_gaps>, plus the keys
+C<evidence_finalize> adds. If the run itself dies, returns C<fail> evidence
+with the error instead.
+
+=head2 plan
+
+Takes the same options. Returns the run plan: C<profile>,
+C<profile_description>, C<concurrency>, C<requests_per_client>,
+C<total_requests> (their product), C<routes>, C<base_url>,
+C<request_timeout_s>, C<max_error_rate_pct> and C<p95_limit_ms>, each
+option given overriding the profile's value or the default.
+
+=head2 format_evidence
+
+Takes evidence and a format. Returns the evidence as one line of JSON for
+C<json>, and as a short C<key=value> text summary otherwise.
+
+=head2 exit_status
+
+Takes evidence. Returns 0 for status C<pass>, C<ok> or C<dry-run>, and 1
+otherwise.
+
+=head1 DIAGNOSTICS
+
+C<plan>, and so C<run>, croaks C<Unsupported stress profile: NAME>. C<run>
+croaks C<GPForum stress-load requires --base-url (running Hypnotoad/app)>
+when it is not a dry run and has no base URL. Failures during the load are
+returned as C<fail> evidence, not thrown.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+C<GPFORUM_DATABASE_DSN> is reported in the prerequisites as set or unset;
+it is not otherwise used.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Operations::EvidenceMeta>, L<Mojo::UserAgent>,
+L<Mojo::IOLoop>, L<JSON::MaybeXS>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+It proves request concurrency against a running instance. As the residual
+gap in its evidence says, it does not by itself prove private-beta readiness
+or staging multicore capacity.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

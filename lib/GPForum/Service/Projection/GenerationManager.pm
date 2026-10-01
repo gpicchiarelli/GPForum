@@ -349,3 +349,122 @@ sub _active_generations ( $self, $projection_name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Projection::GenerationManager - Start, finish and switch the generations of a rebuilt projection.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $generations = GPForum::Service::Projection::GenerationManager->new(
+        schema => $schema,
+    );
+    my $generation = $generations->start_generation(
+        'search',
+        { event_id => $event_id, event_created_at => $event_created_at },
+    );
+    # ... build the new read model ...
+    $generations->mark_ready( $generation->{generation_id} );
+    $generations->activate_generation( $generation->{generation_id} );
+
+    # or, when the build fails
+    $generations->mark_failed( $generation->{generation_id} );
+
+=head1 DESCRIPTION
+
+A projection can be rebuilt beside the copy that is serving reads. Each
+build is a row in C<projection_generations>, which moves from C<building>
+to C<ready> or C<failed>; activating one marks it C<active> and retires the
+generation that was active before, so the switch is explicit and a
+projection has at most one active generation (a partial unique index
+enforces it).
+
+Every step can be repeated safely. A build is identified by the projection
+name and the event it was built from: starting it again returns the
+existing generation instead of a second row, and a race between two
+starters ends on the same row (a unique index backs that rule; inserts run
+under savepoints through L<GPForum::Infrastructure::UniqueConflict>).
+Marking a generation with the status it already has, or activating the
+generation that is already active, writes nothing and says so with
+C<skipped>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required; C<clock> and C<id_service>
+default to L<GPForum::Service::Clock> and L<GPForum::Infrastructure::Id>.
+
+=head2 start_generation
+
+Takes a projection name and an event hash reference with C<event_id> and
+C<event_created_at>. Inserts a C<building>, inactive generation and returns
+its hash (C<generation_id>, C<projection_name>, C<built_from_event_id>,
+C<built_from_event_created_at>, C<status>, C<is_active>, C<created_at>,
+C<activated_at>). When a generation of that projection was already built
+from that event, returns that generation's hash with C<< skipped => 1 >>
+instead. A conflict on the generated id is retried once with a fresh id.
+
+=head2 mark_ready
+
+Takes a generation id and sets its status to C<ready>. Returns
+C<< { generation_id, status => 'ready' } >>, with C<< skipped => 1 >> when
+the status was already C<ready>.
+
+=head2 mark_failed
+
+Takes a generation id and sets its status to C<failed>. Returns
+C<< { generation_id, status => 'failed' } >>, with C<< skipped => 1 >> when
+the status was already C<failed>.
+
+=head2 activate_generation
+
+Takes a generation id. Retires every active generation of the same
+projection (C<< is_active => 0 >>, status C<retired>) and makes this one
+active with the current time as C<activated_at>. Returns
+C<< { generation_id, projection_name, retired_generations => $count, status => 'active' } >>.
+When the generation is already active, returns the same keys with
+C<< retired_generations => 0 >> and C<< skipped => 1 >>. When a concurrent
+activation trips the one-active index, the generation is reloaded: if it
+is now active the call reports it as skipped, otherwise the switch is
+tried once more.
+
+=head1 DIAGNOSTICS
+
+Database errors other than the handled unique conflicts are rethrown.
+C<mark_ready>, C<mark_failed> and C<activate_generation> die when the
+generation id matches no row.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

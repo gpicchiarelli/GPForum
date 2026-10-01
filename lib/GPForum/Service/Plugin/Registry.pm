@@ -455,3 +455,131 @@ sub _hook_row ( $self, $plugin_id, $hook ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Plugin::Registry - Install a plugin from its manifest and switch it on or off.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $registry = GPForum::Service::Plugin::Registry->new( schema => $schema );
+    my $installed = $registry->install(
+        {
+            name                     => 'gpforum-analytics',
+            version                  => '1.0.0',
+            author                   => 'Giacomo Picchiarelli',
+            compatible_gpforum_range => '>=0.1.0 <1.0.0',
+            capabilities             => ['analytics_sink'],
+            required_permissions     => ['analytics.write'],
+            config_schema            => { sample_rate => 'number' },
+            hooks                    => [
+                {
+                    hook_name     => 'post.created',
+                    callback_name => 'analytics.record_post',
+                },
+            ],
+        }
+    );
+    my $plugin_id = $installed->{plugin}{plugin_id};
+    $registry->enable($plugin_id);
+    $registry->disable($plugin_id);
+
+=head1 DESCRIPTION
+
+Records a plugin and the hooks it declares. A manifest is installed only
+when L<GPForum::Service::Plugin::ManifestValidator> accepts it, and the
+plugin row and its hook rows are written in one transaction, so a failed
+install leaves neither hooks bound to a plugin that was never recorded nor
+the reverse. A new plugin starts as C<installed>.
+
+Installing is idempotent. A plugin is identified by its name and version
+and a hook by its plugin and hook name, each backed by a unique index.
+Installing a name and version that is already recorded reuses the plugin
+row as it is and adds only the hooks it does not have yet; hooks already
+recorded are not changed. Inserts run under savepoints through
+L<GPForum::Infrastructure::UniqueConflict>, so a concurrent install of the
+same manifest ends on the same rows, and a conflict on a generated id is
+retried once with a fresh id.
+
+Each hook takes its C<execution_order> (100), C<timeout_ms> (500),
+C<side_effect_policy> (C<read_only>) and C<enabled> (1) from the manifest,
+or the default in brackets when the manifest gives none.
+L</enable> and L</disable> change the plugin row only; the hook rows keep
+their own C<enabled> flag.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required; C<clock>, C<id_service> and
+C<validator> default to L<GPForum::Service::Clock>,
+L<GPForum::Infrastructure::Id> and
+L<GPForum::Service::Plugin::ManifestValidator>.
+
+=head2 install
+
+Takes a manifest hash reference (C<name>, C<version>, C<author>,
+C<compatible_gpforum_range>, C<capabilities>, C<required_permissions>,
+C<hooks>, and an optional C<config_schema>, an empty hash when absent).
+When the manifest is invalid, returns C<< { ok => 0, errors => \%errors } >>
+with the validator's errors and writes nothing. Otherwise returns
+C<< { ok => 1, plugin => \%plugin } >> with the plugin's C<plugin_id>,
+C<name>, C<version>, C<author>, C<compatible_gpforum_range>,
+C<capabilities>, C<required_permissions>, C<config_schema>, C<status>,
+C<installed_at>, C<enabled_at> and C<disabled_at>; C<< skipped => 1 >> is
+added when the plugin was already installed.
+
+=head2 enable
+
+Takes a plugin id. In a transaction, sets the status to C<enabled>, stamps
+C<enabled_at> and clears C<disabled_at>. Returns
+C<< { plugin_id, status => 'enabled' } >>, with C<< skipped => 1 >> and no
+write when the plugin was already enabled.
+
+=head2 disable
+
+Takes a plugin id. In a transaction, sets the status to C<disabled> and
+stamps C<disabled_at>. Returns C<< { plugin_id, status => 'disabled' } >>,
+with C<< skipped => 1 >> and no write when the plugin was already disabled.
+
+=head1 DIAGNOSTICS
+
+An invalid manifest is returned as errors, not thrown. Database errors
+other than the handled unique conflicts are rethrown and the transaction
+rolls back. C<enable> and C<disable> die when the plugin id matches no
+plugin.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Plugin::ManifestValidator>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

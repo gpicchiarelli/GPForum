@@ -575,3 +575,162 @@ sub _column ( $row, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Moderation::ActionStore - Hide, restore, lock and unlock content and record each moderation action once.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $actions = GPForum::Service::Moderation::ActionStore->new(
+        schema => $schema,
+    );
+    my $result = $actions->hide_post(
+        {
+            actor_user_id  => $moderator_id,
+            command_id     => $command_id,
+            correlation_id => $correlation_id,
+            post_id        => $post_id,
+            reason         => 'spam',
+        }
+    );
+    # { ok => 1, action => {...} }, with replayed or skipped on a repeat,
+    # or undef when the post does not exist
+
+    $actions->lock_thread(
+        {
+            actor_user_id => $moderator_id,
+            command_id    => $other_command_id,
+            reason        => 'off topic',
+            thread_id     => $thread_id,
+        }
+    );
+    $actions->reverse_action( $action_id, $moderator_id, 'appeal upheld' );
+
+=head1 DESCRIPTION
+
+The write side of moderation for L<GPForum::Service::Moderation::Workflow>.
+Each action changes the target's C<moderation_state> (and C<hidden_at> or
+C<locked_at>), inserts a C<moderation_actions> row and records the matching
+event and audit entry through L<GPForum::Infrastructure::EventRecorder>, with
+shapes from L<GPForum::Service::Moderation::Event>; all of it in one
+transaction, after the target row has been locked with
+C<SELECT ... FOR UPDATE> so two moderators acting on the same post or thread
+take turns.
+
+Every action is safe to repeat:
+
+=over 4
+
+=item * A command id that already has an action row is a replay: nothing
+changes, the stored action comes back with C<< replayed => 1 >>, and the
+action's event and audit are written first if an earlier attempt left the
+row without them.
+
+=item * A target already in the requested state is not updated. When an
+unreversed action of the same type exists for it, that action comes back
+with C<< skipped => 1 >> and C<< idempotent => 1 >>; otherwise a new action
+is recorded with C<< idempotent => 1 >> in its metadata.
+
+=item * A unique conflict on the command id (a concurrent request with the
+same command) replays the row that won; a conflict on the generated action
+id is retried once with a fresh id. Inserts run under savepoints through
+L<GPForum::Infrastructure::UniqueConflict>.
+
+=back
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required; C<clock>, C<id_service>,
+C<recorder> and C<events> have defaults.
+
+=head2 hide_post
+
+Takes a hash reference with C<post_id>, C<actor_user_id>, C<reason> and the
+optional C<command_id> and C<correlation_id> (a fresh one for the event
+when absent). Sets the post's state to C<hidden> and stamps C<hidden_at>,
+and records a C<post.hidden> action. Returns C<< { ok => 1, action => \%action } >>,
+the replay or skip results described above, or C<undef> when the post does
+not exist. The action hash holds C<moderation_action_id>, C<action_type>,
+C<target_type>, C<target_id>, C<actor_user_id>, C<command_id>, C<reason>,
+C<created_at> and C<metadata> (C<command_id>, C<idempotent>,
+C<previous_state>).
+
+=head2 restore_post
+
+As L</hide_post>, setting the post's state to C<visible>, clearing
+C<hidden_at> and recording C<post.restored>.
+
+=head2 hide_thread
+
+As L</hide_post> for a thread, keyed by C<thread_id>: state C<hidden>,
+C<hidden_at> stamped, action C<thread.hidden>.
+
+=head2 restore_thread
+
+As L</hide_thread>, setting the state to C<visible>, clearing C<hidden_at>
+and recording C<thread.restored>.
+
+=head2 lock_thread
+
+As L</hide_thread>, setting the state to C<locked>, stamping C<locked_at>
+and recording C<thread.locked>.
+
+=head2 unlock_thread
+
+As L</hide_thread>, setting the state to C<visible>, clearing C<locked_at>
+and recording C<thread.unlocked>.
+
+=head2 reverse_action
+
+Takes an action id, the id of the user reversing it and a reason. In a
+transaction, stamps the action's C<reversed_at> and C<reversed_by_user_id>
+and records a C<moderation_action.reversed> event and its audit entry.
+Returns C<< { moderation_action_id, reversed_at, reversed_by_user_id } >>.
+An action already reversed returns its existing reversal and writes
+nothing; an unknown action id returns nothing. The target's state is not
+changed here.
+
+=head1 DIAGNOSTICS
+
+A missing target returns C<undef> and a missing action an empty return;
+neither is thrown. Database errors other than the handled unique conflicts
+are rethrown and the transaction rolls back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>,
+L<GPForum::Service::Moderation::Event>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

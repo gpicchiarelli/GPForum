@@ -1046,3 +1046,278 @@ sub _record_audit ( $self, $action, $intent, $correlation_id ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Attachment::Store - Attachment rows, links, variants, scan verdicts and deletions.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Attachment::Store->new(
+        readability => GPForum::Service::Forum::Readability->new(
+            schema => $schema,
+        ),
+        schema => $schema,
+    );
+
+    $store->create_intent($intent);    # from IntentBuilder
+    $store->mark_uploaded( $intent->{attachment_id} );
+    $store->record_scan(
+        {
+            actor_id      => 'antivirus',
+            attachment_id => $intent->{attachment_id},
+            scan_engine   => 'clamd',
+            scan_status   => 'clean',
+        }
+    );
+    $store->link_attachment(
+        {
+            attachment_id => $intent->{attachment_id},
+            target_id     => $post_id,
+            target_type   => 'post',
+        }
+    );
+
+    my $download = $store->download_for(
+        {
+            attachment_id  => $attachment_id,
+            viewer         => $viewer,
+            viewer_user_id => $user_id,
+        }
+    );
+    my $by_post = $store->attachments_for_posts( \@post_ids,
+        { viewer => $viewer, viewer_user_id => $user_id } );
+
+=head1 DESCRIPTION
+
+The persistence of attachments. An upload goes through the states
+C<intent>, C<uploaded>, then C<available> or C<quarantined> on its scan
+verdict, and C<deleted> when it is removed; only an C<available>, C<clean>,
+undeleted attachment is ever served. Links tie an attachment to a post, a
+thread or a profile, and variants (such as a thumbnail) are further objects
+derived from it. The storage of the bytes is elsewhere
+(L<GPForum::Service::Attachment::FilesystemStorage>); this class writes rows
+and the events and audit entries that go with them, through
+L<GPForum::Infrastructure::EventRecorder>.
+
+Every write can be repeated. Intents, links and variants are found before
+they are inserted and inserted under savepoints through
+L<GPForum::Infrastructure::UniqueConflict>, so a retry or a concurrent
+writer ends on the row that is already there, reported with
+C<< idempotent => 1 >> or C<< skipped => 1 >>; a conflict on a generated id
+is retried once with a fresh id.
+
+A scan verdict and its event are written in one transaction, and only over
+a row the verdict may replace: never a deleted one, and never C<clean> over
+C<infected> or C<failed>, while a verdict other than C<clean> may replace
+C<clean>, so a later scan can quarantine a file that was being served. The
+condition is in the C<UPDATE> itself, so when two scans race (the outbox
+retry and the hourly rescan) the database decides and the loser is a
+replay. Verdicts are recorded with no actor, because the scanners are not
+users; the event payload names the scanner.
+
+The rescan and the backfill of files served on a format check alone, once
+an antivirus is configured, take their work from L</pending_scan_ids> and
+L</unscanned_clean_ids> (ADR 0108).
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required. C<readability> (an object
+with C<readable_by>, such as L<GPForum::Service::Forum::Readability>) is
+optional; without it, downloads through a post or thread are decided on the
+target's own visibility column. C<clock>, C<id_service>, C<recorder>,
+C<record>, C<download_access>, C<lifecycle> and C<events> have defaults.
+
+=head2 create_intent
+
+Takes an intent hash reference as built by
+L<GPForum::Service::Attachment::IntentBuilder> (C<attachment_id>,
+C<owner_user_id>, C<object_key>, C<original_filename>, C<media_type>,
+C<byte_size>, C<checksum>, C<< state => 'intent' >>,
+C<< scan_status => 'pending' >> and the timestamps). In a transaction,
+inserts the attachment and records its C<attachment.uploaded> event and
+audit entry. Returns C<< { ok => 1, attachment => $row } >>.
+
+When the id is already taken by a row with the same object key, the
+existing row is returned with C<< skipped => 1 >>, and its event and audit
+are written first if they are missing. When the id is taken by a row with a
+different object key, the intent is reissued with a fresh id and the object
+key C<< attachments/<owner_user_id>/<new id> >>.
+
+=head2 mark_uploaded
+
+Takes an attachment id. Moves an C<intent> attachment to C<uploaded> and
+stamps C<uploaded_at>; returns C<< { attachment_id, state, uploaded_at } >>.
+An attachment past the C<intent> state is left alone and returned as
+C<< { attachment_id, idempotent => 1, state, uploaded_at } >>. Returns
+C<undef> for an unknown id.
+
+=head2 record_scan
+
+Takes a hash reference with C<attachment_id>, C<scan_status> (C<clean> or
+another verdict), C<scan_engine> and the optional C<scan_signature>,
+C<reason> and C<actor_id> (the scanner's name, put in the event payload as
+C<scanned_by>). In a transaction, a C<clean> verdict makes the attachment
+C<available>; any other makes it C<quarantined> and stamps
+C<quarantined_at>. It records C<attachment.scanned> or
+C<attachment.quarantined> and returns
+C<< { attachment_id, scan_status, scan_engine, scan_signature, scan_error => undef, scanned_at, state } >>
+(plus C<quarantined_at>). When the row may not take the verdict, nothing is
+written and it returns C<< { attachment_id, idempotent => 1, scan_status, state } >>
+with the stored values. Returns C<undef> for an unknown id.
+
+=head2 terminal_scan
+
+Takes an attachment row. Returns
+C<< { attachment_id, idempotent => 1, scan_status, state } >> when its scan
+is final (C<clean> and C<available>, or C<infected> and C<quarantined>),
+otherwise C<undef>.
+
+=head2 pending_scan_ids
+
+Takes a limit. Returns an array reference of the ids of undeleted
+C<uploaded> attachments whose scan is still C<pending>, fewest scan
+attempts first, then oldest upload, then id.
+
+=head2 unscanned_clean_ids
+
+Takes a limit. Returns an array reference of the ids of undeleted
+C<available> attachments marked C<clean> on a format check alone (no scan
+engine, or C<format-check>), fewest scan attempts first, then oldest, then
+id.
+
+=head2 confirm_clean
+
+Takes a hash reference with C<attachment_id> and C<scan_engine>. Records the
+engine that confirmed a format-checked file clean, clears C<scan_error> and
+stamps C<scanned_at>; nothing else changes, since the file was already
+served. Only a row still waiting for that confirmation is touched, so a
+quarantine that won a race stands. Returns
+C<< { attachment_id, confirmed => 1 or 0, scan_engine } >>.
+
+=head2 record_scan_failure
+
+Takes an attachment id and an error message. Adds one to C<scan_attempts>
+and keeps the first 500 characters of the error in C<scan_error>. Returns 1,
+or 0 for an unknown id.
+
+=head2 link_attachment
+
+Takes a hash reference with C<attachment_id>, C<target_type> and
+C<target_id>. Inserts the link and returns its hash
+(C<attachment_link_id>, C<attachment_id>, C<target_type>, C<target_id>,
+C<created_at>), or the existing link's columns with C<< idempotent => 1 >>
+when the attachment is already linked to that target.
+
+=head2 find_variant
+
+Takes a hash reference with C<attachment_id>, C<variant_type> and an
+optional C<object_key>. Returns the attachment's variant of that type, else
+the variant stored under that object key, else C<undef>.
+
+=head2 add_variant
+
+Takes a hash reference with C<attachment_id>, C<variant_type>,
+C<object_key>, C<media_type> and C<byte_size>. Inserts the variant and
+returns its hash (with C<attachment_variant_id> and C<created_at>), or the
+existing variant's columns with C<< idempotent => 1 >> when
+L</find_variant> finds one.
+
+=head2 find_attachment
+
+Takes an attachment id. Returns the C<Attachment> row, or C<undef>.
+
+=head2 download_for
+
+Takes a hash reference with C<attachment_id>, C<viewer> and
+C<viewer_user_id>. Returns C<< { ok => 0, error => 'not_found' } >> when the
+attachment is missing, deleted, not C<available> or not C<clean>. Otherwise
+L<GPForum::Service::Attachment::DownloadAccess> decides from the
+attachment's links: an unlinked attachment, or one linked to a profile, is
+served to its owner only; one linked to a post or thread is served only
+when the target is present and visible, and then to a viewer who can read
+it or to the owner.
+Returns C<< { ok => 0, error => 'forbidden' } >> when no link allows it, or
+C<< { ok => 1, attachment, attachment_id, byte_size, media_type, object_key, original_filename } >>.
+
+=head2 attachments_for_posts
+
+Takes an array reference of post ids and a hash reference with C<viewer>
+and C<viewer_user_id>. Returns a hash reference from post id to an array
+reference of C<< { attachment_id, byte_size, media_type, original_filename } >>,
+one per linked attachment that L</download_for> lets the viewer have. The
+link query is capped at ten rows per requested post. Posts without such
+attachments have no key.
+
+=head2 cleanup_orphans
+
+Takes a hash reference with optional C<limit> (100), C<actor_id> (each
+attachment's owner when absent) and C<reason> (C<orphan cleanup>).
+Soft-deletes attachments still in the C<intent> state and without links,
+oldest first, up to the limit, and returns
+C<< { ok => 1, deleted => \@attachments } >>. The stored objects are not
+removed here; L<GPForum::Service::Attachment::UploadPipeline> does that.
+
+=head2 delete_linked
+
+Takes a hash reference with C<attachment_id>, C<target_type>,
+C<target_id>, C<actor_id> and an optional C<reason> (C<author delete>).
+Soft-deletes the attachment when it is linked to that target; otherwise
+returns C<< { ok => 0, error => 'not_found' } >>. Whether the actor may
+delete it is the caller's decision.
+
+=head2 soft_delete
+
+Takes an attachment id, an actor id and a reason. In a transaction, sets
+C<state> to C<deleted>, stamps C<deleted_at> and records an
+C<attachment.deleted> event and audit entry; returns
+C<< { ok => 1, attachment => \%attachment } >>. An attachment already
+deleted is returned with C<< idempotent => 1 >> and nothing written; an
+unknown id returns C<< { ok => 0, error => 'not_found' } >>.
+
+=head1 DIAGNOSTICS
+
+Missing attachments, refused downloads and replays are returned, not
+thrown. Database errors other than the handled unique conflicts are
+rethrown, and a write inside a transaction rolls back.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Attachment::DownloadAccess>,
+L<GPForum::Service::Attachment::Event>,
+L<GPForum::Service::Attachment::Lifecycle>,
+L<GPForum::Service::Attachment::Record>,
+L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

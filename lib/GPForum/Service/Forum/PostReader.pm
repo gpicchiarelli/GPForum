@@ -180,3 +180,107 @@ sub _rows ($search) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::PostReader - The posts of a thread a viewer may read, page by page, and single-post lookups.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader = GPForum::Service::Forum::PostReader->new( schema => $schema );
+
+    my $page = $reader->list_thread_posts(
+        {
+            limit          => 25,
+            thread_id      => $thread_id,
+            viewer_scope   => $viewer->within( $category_id, $space_id ),
+            viewer_user_id => $viewer->user_id,
+        }
+    );
+    # { items => [...], has_next => 1, next_cursor => '...' }
+
+    my $post = $reader->find_visible_post( $post_id, $viewer );
+
+=head1 DESCRIPTION
+
+Reads posts for the thread page and for actions on a single post. The
+caller has already authorized the thread; each post is judged on its own
+visibility, with the viewer's grants decided for the thread's category
+(C<viewer_scope>, from L<GPForum::Service::Forum::Viewer/within>), and as
+public-only without one (ADR 0102). Only visible posts are listed, and
+deleted ones are left out except that a signed-in viewer still sees their
+own. Posts come in position order, keyset paged on C<position> and
+C<post_id> through L<GPForum::Service::Forum::PageWindow>; the cursor is
+added beside the visibility condition, never in place of it, which once
+listed every private post from the second page on.
+
+Each listed row carries the post's columns plus C<body> (the rendered safe
+HTML), C<body_source>, C<author_username> and C<author_display_name>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 list_thread_posts
+
+Takes a hash reference with C<thread_id>, C<viewer_scope>,
+C<viewer_user_id>, C<limit> and C<after>. Returns
+C<< { items, has_next, next_cursor } >> with the post rows.
+
+=head2 thread_posts_resultset
+
+Takes the same request and an optional page plan, made from the request
+when absent. Returns the unexecuted resultset C<list_thread_posts> runs,
+public so the query-plan evidence EXPLAINs what actually runs.
+
+=head2 find_visible_post
+
+Takes a post id and an optional viewer (a
+L<GPForum::Service::Forum::Viewer>, a bare user id, or nothing for an
+anonymous one). Returns the post row when the post is visible and not
+deleted, its thread is visible or locked and not deleted, and the viewer may
+read its space, category, thread and the post itself; undef otherwise, and
+for an empty id.
+
+=head2 find_post
+
+Takes a post id. Returns the post row whatever its state, or undef for an
+empty id or no row.
+
+=head1 DIAGNOSTICS
+
+None of its own; what is missing or unreadable is returned as undef.
+Database errors propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Keyset>, L<GPForum::Service::Forum::Viewer>,
+L<GPForum::Service::Forum::Visibility>,
+L<GPForum::Service::Forum::PageWindow>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

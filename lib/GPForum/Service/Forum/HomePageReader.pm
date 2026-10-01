@@ -120,3 +120,103 @@ sub _bounded_limit ( $requested, $default, $max ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::HomePageReader - The categories and latest public threads the home page shows.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader = GPForum::Service::Forum::HomePageReader->new(
+        category_reader => $category_reader,
+        thread_reader   => $thread_reader,
+    );
+    my $home = $reader->home_page(
+        {
+            after          => $cursor,
+            category_limit => 12,
+            thread_limit   => 20,
+            viewer         => $viewer,
+        }
+    );
+    # { categories => [...], latest_threads => { items => [...], next_cursor => ... } }
+
+=head1 DESCRIPTION
+
+Puts the home page's data together from two readers: the categories the
+viewer can read, from L<GPForum::Service::Forum::CategoryReader>, and a
+keyset page of the latest public threads, from
+L<GPForum::Service::Forum::ThreadReader/list_public_threads>. Each row is
+turned into a plain hash of the columns the page uses, so the controller
+and the template see the same shape whether the readers return resultset
+rows or hashes.
+
+When C<category_reader> or C<thread_reader> is not set, a reader is built
+on C<schema> for each call.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 home_page
+
+Takes an optional hash reference with C<category_limit> (default 12, at
+most 50), C<thread_limit> (default 20, at most 50), C<after> (the latest
+threads' cursor string) and C<viewer>. Returns a hash reference with:
+
+=over 4
+
+=item C<categories>
+
+An array reference of hashes with C<category_id>, C<description>,
+C<position>, C<slug>, C<title> and C<visibility>.
+
+=item C<latest_threads>
+
+A hash reference with C<items>, an array reference of hashes with
+C<author_user_id>, C<category_id>, C<created_at>, C<deleted_at>,
+C<last_activity_at>, C<moderation_state>, C<pinned>, C<safe_excerpt>,
+C<slug>, C<thread_id>, C<title> and C<visibility>, and C<next_cursor>, the
+cursor of the next page or undef. C<safe_excerpt> is undef when the row's
+source has no such column.
+
+=back
+
+The readers bound the limits again on their side.
+
+=head1 DIAGNOSTICS
+
+Nothing of its own; errors from the readers and the database propagate.
+The home page controller catches them and renders the page as unavailable.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Row>, L<GPForum::Service::Forum::CategoryReader>,
+L<GPForum::Service::Forum::ThreadReader>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

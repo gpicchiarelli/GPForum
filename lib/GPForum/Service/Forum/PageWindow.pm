@@ -101,3 +101,93 @@ sub _decode_cursor ($cursor) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::PageWindow - Page size, keyset cursor and next-page cursor for a listing.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $window = GPForum::Service::Forum::PageWindow->new;
+    my $plan   = $window->plan( { limit => $limit, after => $after } );
+
+    # Fetch $plan->{fetch_rows} rows past $plan->{after}, then:
+    my $page = $window->page( \@rows, $plan->{limit},
+        [qw(created_at item_id)] );
+    # { items => [...], has_next => 1, next_cursor => '...' }
+
+=head1 DESCRIPTION
+
+The shared arithmetic of a keyset-paged list. C<plan> bounds the requested
+page size and decodes the C<after> cursor from the URL; the reader then
+fetches one row more than the page, and C<page> uses that extra row to tell
+whether there is a next page and, if so, mints its cursor from the last row
+kept.
+
+A cursor is base64url of C<sort_value|id>. Because it comes from the URL,
+only a position or a timestamp and a uuid may reach SQL; anything else is
+treated as no cursor, so the first page is shown. A malformed C<?after=>
+used to reach PostgreSQL and fail the request on an invalid timestamp.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 plan
+
+Takes a hash reference with optional C<limit> and C<after>. Returns
+C<< { limit, fetch_rows, after } >>: C<limit> is 25 when missing or not a
+whole number, at least 1 and at most 100; C<fetch_rows> is C<limit + 1>;
+C<after> is C<< { sort_value, id } >> decoded from the cursor, or undef
+when there is none or it is not acceptable.
+
+=head2 page
+
+Takes the fetched rows (an array reference), the page limit and the cursor
+columns (an array reference of column names). Returns
+C<< { items, has_next, next_cursor } >>: when there are more rows than the
+limit, the extra row is dropped, C<has_next> is 1 and C<next_cursor> encodes
+the cursor columns of the last item kept, read with C<get_column>;
+otherwise C<has_next> is 0 and C<next_cursor> undef.
+
+=head2 acceptable_cursor
+
+Class method. Takes a sort value and an id. Returns 1 when the id is a uuid
+and the sort value is a position (up to 18 digits) or a timestamp as
+PostgreSQL or ISO 8601 writes it; 0 otherwise.
+
+=head1 DIAGNOSTICS
+
+None. An undecodable or unacceptable cursor is ignored rather than
+reported; C<page> dies only if a row cannot C<get_column>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Id>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

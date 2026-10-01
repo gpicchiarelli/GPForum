@@ -42,3 +42,71 @@ sub _is_not_removed ($resource) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Discovery::VisibilityPolicy - Whether a resource may appear in the sitemap and the public feed.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $policy = GPForum::Service::Discovery::VisibilityPolicy->new;
+    my @public = grep { $policy->is_public($_) } @{$resources};
+
+=head1 DESCRIPTION
+
+The test the discovery builders apply before showing anything to crawlers
+and feed readers. A resource is public when its effective visibility is
+public, its moderation state is C<visible> (or absent), and it is neither
+deleted nor hidden.
+
+The effective visibility is the most restrictive of the resource's own
+C<visibility> and, when the hash carries them, its C<category_visibility>
+and C<space_visibility> (ADR 0102): a thread page's thread brings its
+category and space, while a sitemap row does not, since its list already
+kept only public categories and spaces.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 is_public
+
+Takes a resource hash reference (C<visibility>, and optionally
+C<category_visibility>, C<space_visibility>, C<moderation_state>,
+C<deleted_at> and C<hidden_at>). Returns true when it may be published and
+false otherwise; an unknown visibility counts as private.
+
+=head1 DIAGNOSTICS
+
+None.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Forum::Visibility>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

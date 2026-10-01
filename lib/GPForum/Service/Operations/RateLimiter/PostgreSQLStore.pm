@@ -115,3 +115,97 @@ sub _iso8601_from_epoch ($epoch) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::RateLimiter::PostgreSQLStore - Rate limit counters shared by every worker, in PostgreSQL.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Operations::RateLimiter::PostgreSQLStore
+      ->new( schema => $schema );
+    my $decision = $store->check(
+        {
+            action         => 'thread.create',
+            actor_id       => $user_id,
+            limit          => 30,
+            scope          => 'forum_http',
+            window_seconds => 60,
+        }
+    );
+    my $snapshot = $store->snapshot;
+
+=head1 DESCRIPTION
+
+The primary store behind L<GPForum::Service::Operations::RateLimiter>. Each
+check is one C<INSERT ... ON CONFLICT DO UPDATE> on C<rate_limit_buckets>,
+keyed by scope, actor hash, action and the start of the fixed window, so
+every Hypnotoad worker and every node counts in the same bucket and the
+increment is atomic. The row also counts how many requests went over the
+limit (C<blocked_count>) and records when the bucket expires.
+
+The actor is never stored in clear: the bucket holds the SHA-256 of the
+scope and the actor id. Windows are aligned on multiples of the window
+length in epoch seconds.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required and must be connected to
+PostgreSQL, since the upsert is written in its dialect; C<clock> defaults to
+L<GPForum::Service::Clock>.
+
+=head2 check
+
+Takes a hash reference with C<scope>, C<action>, C<actor_id> (an empty
+string when absent), and optional C<limit> and C<window_seconds> (both 60
+when absent or zero). Counts one request and returns a hash reference with
+C<ok> (1 while the count is within the limit, 0 above it), C<key>
+(scope, actor hash, action and window start joined by colons), C<limit>,
+C<remaining> (never below 0), C<reset_at_epoch>, C<< store => 'postgresql' >>,
+C<window_seconds>, C<observed_count>, C<< mitigation_hint => 'slow_down' >>
+and C<actor_hash>. A refused request is still counted.
+
+=head2 snapshot
+
+Returns C<< { buckets => $count, store => 'postgresql', status => 'ok' } >>,
+where C<$count> is the number of buckets that have not expired yet.
+
+=head1 DIAGNOSTICS
+
+Database errors propagate; L<GPForum::Service::Operations::RateLimiter>
+catches them from C<check> and applies its degradation policy.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. Limits and windows come from the caller.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Clock>, L<Digest::SHA>, L<POSIX>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

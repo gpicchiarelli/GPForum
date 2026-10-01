@@ -275,3 +275,119 @@ sub _trim ($value) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::PostComposer - Validate a new reply or an edit and build the rows the post store writes.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $composer = GPForum::Service::Forum::PostComposer->new;
+
+    my $prepared = $composer->prepare(
+        {
+            allocate_position => 1,
+            author_user_id    => $user_id,
+            body_hash         => $body_hash,
+            body_source       => $markdown,
+            idempotency_key   => $command_id,
+            thread_id         => $thread_id,
+            visibility_floor  => 'members',
+        }
+    );
+    return $prepared->{errors} if !$prepared->{ok};
+    my $command = $prepared->{command};
+
+    my $edit = $composer->prepare_revision(
+        {
+            body_hash       => $new_hash,
+            body_source     => $new_markdown,
+            edit_reason     => 'typo',
+            editor_user_id  => $user_id,
+            idempotency_key => $command_id,
+            post_id         => $post_id,
+            thread_id       => $thread_id,
+        }
+    );
+
+=head1 DESCRIPTION
+
+The pure part of writing a reply or an edit: the input is trimmed and
+checked, the body is rendered to safe HTML through
+L<GPForum::Service::Forum::BodyRenderer>, and the result is a command of
+plain hashes that L<GPForum::Service::Forum::PostStore> writes in one
+transaction. Nothing is read or written here.
+
+A reply left without a visibility takes its thread's effective visibility
+(C<visibility_floor>, public when not given), and may not ask for a broader
+one (ADR 0102): content written in a members-only place stays members-only
+if that place is later opened.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 prepare
+
+Takes a hash reference with C<thread_id>, C<author_user_id>,
+C<body_source>, C<body_hash>, C<idempotency_key>, optional C<visibility>
+and C<visibility_floor>, and either a positive C<position> or a true
+C<allocate_position>. Returns C<< { ok => 0, errors, values } >> with the
+normalized values, or C<< { ok => 1, command } >>, the command holding:
+C<idempotency_key>; C<post>, with new post, body and revision ids, the
+thread, author, position (0 when none was given, which the post store
+replaces with the thread's next position) and visibility, moderation state
+C<visible>, versions at 1 and empty hidden, locked and deleted columns;
+C<body>, the Markdown source, its rendered HTML and the source hash;
+C<revision>, number 1 by the author; and C<counter_shard>, shard 0 with a
+C<reply_count_delta> of 1.
+
+=head2 prepare_revision
+
+Takes a hash reference with C<post_id>, C<thread_id>, C<editor_user_id>,
+C<body_source>, C<body_hash>, C<idempotency_key> and an optional
+C<edit_reason>. Returns C<< { ok => 0, errors, values } >>, or
+C<< { ok => 1, command } >> with C<idempotency_key>, C<post> (the post id,
+thread id and editor), a new C<body> and a C<revision> by the editor with
+number 0, which the post store replaces with the post's next revision
+number.
+
+=head1 DIAGNOSTICS
+
+Nothing is thrown. The errors returned are C<FIELD is required> for
+C<thread_id>, C<author_user_id>, C<post_id>, C<editor_user_id> and
+C<body_hash>; C<position is invalid>; C<body is required>;
+C<visibility is invalid> for anything but C<public>, C<members> and
+C<private>; and C<visibility is broader than its thread>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Forum::BodyRenderer>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Forum::Visibility>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -299,3 +299,144 @@ sub _validate_limit ($self) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::LocalCache - An in-process LRU cache with expiry and tags.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $cache = GPForum::Service::Operations::LocalCache->new(
+        max_entries => 512,
+        namespace   => 'gpforum',
+        ttl_seconds => 60,
+    );
+    $cache->put( 'category:42', $category, { tags => ['category:42'] } );
+    my $value = $cache->get('category:42');
+    my $page  = $cache->get_or_set( 'home', sub { build_home() },
+        { ttl_seconds => 30, tags => ['home'] } );
+    $cache->invalidate_tag('category:42');
+
+=head1 DESCRIPTION
+
+The first cache layer of every process (L1 in
+L<GPForum::Service::Operations::TieredCache>, or the only layer when no
+shared cache is configured; see
+L<GPForum::Service::Operations::CacheFactory>). Each process has its own
+copy and nothing is shared between workers. It is disposable: PostgreSQL
+stays the source of truth, and an entry may vanish at any time.
+
+Entries expire after their time to live (60 seconds by default) and are
+dropped when read after that. When the cache is full (512 entries by
+default), writing a new key evicts the least recently used entry. Recency is
+a doubly linked list threaded through the entries, so a read or a write
+moves an entry to the recent end, and eviction drops the other end, in a
+fixed number of hash operations: the scan for the oldest key it replaced
+cost O(n) once the cache was full. Each entry can carry tags, indexed so
+that one call drops every entry with a given tag.
+
+The cache counts hits, misses, writes, evictions, expirations and
+invalidations for L</snapshot>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. Optional C<max_entries> (512), C<ttl_seconds> (60),
+C<namespace> (C<default>, only reported by L</snapshot>) and C<clock>
+(L<GPForum::Service::Clock>, read through C<now_epoch>).
+
+=head2 get
+
+Takes a key. Returns the cached value, or C<undef> when the key is missing
+or has expired (an expired entry is removed). A hit refreshes the entry's
+recency and last access time.
+
+=head2 lookup
+
+Takes a key. Returns C<< { value => ..., tags => [...] } >> for a live
+entry, or C<undef> when it is missing or expired; the same read contract
+L<GPForum::Service::Operations::SharedCache> offers, so either can sit
+under L<GPForum::Service::Operations::TieredCache>. A miss is counted as in
+L</get>; a hit is returned without refreshing the entry's recency or
+counting a hit.
+
+=head2 put
+
+Takes a key, a value and an optional hash reference with C<ttl_seconds>
+(the cache's default when absent or zero) and C<tags> (an array reference).
+Replaces any entry under the key, evicting the least recently used entry
+first when the key is new and the cache is full. Returns the value.
+
+=head2 get_or_set
+
+Takes a key, a code reference and the options of L</put>. Returns the
+cached value on a hit; on a miss calls the code reference with no
+arguments, stores its result with the options and returns it.
+
+=head2 invalidate
+
+Takes a key. Removes its entry and returns 1, or 0 when there was none.
+
+=head2 invalidate_tag
+
+Takes a tag. Removes every entry carrying it and returns how many were
+removed (0 for an undefined or unknown tag).
+
+=head2 purge_expired
+
+Removes every expired entry and returns how many were removed.
+
+=head2 clear
+
+Empties the cache and returns how many entries it held; they count as
+invalidations.
+
+=head2 snapshot
+
+Returns a hash reference with C<namespace>, C<entries>, C<tags> (the number
+of distinct tags indexed), C<ttl_seconds>, C<max_entries> and a copy of
+C<stats> (C<hits>, C<misses>, C<writes>, C<evictions>, C<expired>,
+C<invalidations>).
+
+=head1 DIAGNOSTICS
+
+C<get>, C<lookup>, C<put> and C<get_or_set> croak with
+C<cache key is required> for an undefined or empty key. C<put> croaks with
+C<cache max_entries must be positive> when C<max_entries> is below 1.
+Errors from the code reference given to C<get_or_set> propagate, and
+nothing is stored.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None directly; L<GPForum::Service::Operations::CacheFactory> sets
+C<max_entries> from the configuration's C<local_cache_max_entries>.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut
