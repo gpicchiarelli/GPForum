@@ -254,6 +254,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **Migrations can build indexes without stopping writes.** A migration
+  whose first line is `-- gpforum:no-transaction` runs one statement at a
+  time, so `CREATE INDEX CONCURRENTLY` works; the runner sent every file
+  whole, inside a transaction, so every index so far locked its table's
+  writes while it built. From migration 049 on, an index on an existing
+  table must be built this way (`t/209-migration-indexes.t`).
+
 - **A streaming standby and failover** (ADR 0112,
   `docs/ops/standby-and-failover.md`): the standby follows through a
   replication slot, `GPFORUM_DATABASE_DSN` names both servers with

@@ -26,6 +26,16 @@ const my $MILLISECONDS => 1_000;
 # COMMIT and leave the rest of the run unprotected.
 const my $MIGRATION_LOCK_KEY => 4_021_970_001;
 
+# A migration whose first line is this marker runs outside a transaction, one
+# statement at a time. CREATE INDEX CONCURRENTLY needs that: PostgreSQL refuses
+# it inside a transaction block, and a file sent whole is one, so every index
+# so far was built under a lock that stopped writes to its table. Such a file
+# holds plain statements, each ending with a semicolon at the end of a line,
+# and each safe to run again: a failure part-way leaves the earlier ones
+# applied and the migration unrecorded, so the next run repeats them.
+const my $NO_TRANSACTION => qr{\A -- [ ] gpforum:no-transaction \b}msx;
+const my $DOLLAR_QUOTE   => qr{[\$][\$]}msx;
+
 has plan       => sub { return GPForum::Migration::Plan->new; };
 has schema     => undef;
 has applied_by => sub { return $ENV{USER} || 'gpforum'; };
@@ -155,7 +165,12 @@ sub apply_migration ( $self, $migration ) {
     my $checksum = sha256_hex($sql);
     my $started  = time;
 
-    $self->_execute($sql);
+    if ( $sql =~ $NO_TRANSACTION ) {
+        $self->_execute_each( $migration, $sql );
+    }
+    else {
+        $self->_execute($sql);
+    }
 
     my $elapsed_ms = int( ( time - $started ) * $MILLISECONDS );
 
@@ -168,6 +183,37 @@ sub apply_migration ( $self, $migration ) {
         checksum          => $checksum,
         execution_time_ms => $elapsed_ms,
     };
+}
+
+sub _execute_each ( $self, $migration, $sql ) {
+    my $dbh = $self->_dbh;
+    croak "$migration->{version} runs outside a transaction, and one is open"
+      if defined $dbh->{AutoCommit} && !$dbh->{AutoCommit};
+
+    for my $statement ( $self->statements($sql) ) {
+        $self->_execute($statement);
+    }
+
+    return;
+}
+
+# The statements of a no-transaction migration: comment lines dropped, split
+# at each semicolon that ends a line. A dollar-quoted body could hold such a
+# semicolon, so it is refused rather than split wrongly.
+sub statements ( $class, $sql ) {
+    croak 'a no-transaction migration holds plain statements: no $$ bodies'
+      if $sql =~ $DOLLAR_QUOTE;
+
+    my $code = join "\n", grep { !/\A \s* --/msx } split /\n/msx, $sql;
+    my @statements;
+    for my $statement ( split /;[ \t]*$/msx, $code ) {
+        $statement =~ s/\A \s+ | \s+ \z//gmsx;
+        if ( length $statement ) {
+            push @statements, $statement;
+        }
+    }
+
+    return @statements;
 }
 
 sub _record_schema_version ( $self, $migration, $checksum ) {
@@ -253,6 +299,20 @@ Applies every pending migration in order.
 =head2 apply_migration
 
 Applies a single migration hash returned by L<GPForum::Migration::Plan>.
+
+=head2 statements
+
+The statements of a no-transaction migration, split at each semicolon that
+ends a line, comment lines dropped. Croaks on a dollar-quoted body.
+
+=head1 NO-TRANSACTION MIGRATIONS
+
+A migration whose first line is C<-- gpforum:no-transaction> runs one
+statement at a time, each in its own transaction, so it can build an index
+with C<CREATE INDEX CONCURRENTLY> without stopping writes to the table. Each
+statement must be safe to repeat: drop a half-built index first
+(C<DROP INDEX CONCURRENTLY IF EXISTS>), because a failed concurrent build
+leaves an invalid one behind.
 
 =head1 DIAGNOSTICS
 

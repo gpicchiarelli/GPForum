@@ -45,6 +45,20 @@ script/profile -Ilib -It/lib t/17-notifications.t
 - Raw SSR HTML must pass through `GPForum::Web::RenderPolicy`.
 - Browser security headers belong in `GPForum::Security::*`, not controllers.
 
+## Migrations
+
+- An applied migration never changes: the runner compares checksums and
+  refuses to run when a file differs from what the database recorded.
+- An index on a table that already exists is built with
+  `CREATE INDEX CONCURRENTLY`, so writes to the table go on while it builds.
+  PostgreSQL refuses that inside a transaction block, and the runner sends a
+  file whole, so start the file with `-- gpforum:no-transaction`: its
+  statements then run one at a time. Each must be safe to repeat; begin with
+  `DROP INDEX CONCURRENTLY IF EXISTS` for the index, because a failed
+  concurrent build leaves an invalid one behind. A partitioned parent cannot
+  be built concurrently: say so in a `-- gpforum:blocking-index <reason>`
+  line. `t/209-migration-indexes.t` enforces this from migration 049 on.
+
 ## Pull requests
 
 Every pull request should include:

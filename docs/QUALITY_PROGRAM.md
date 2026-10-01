@@ -119,7 +119,7 @@ worse.
 | A query budget per request | done: 15 pages, anonymous and signed in, each within a measured budget (1–8 statements) and none growing with its rows | `t/integration/postgres-query-budget.t` |
 | EXPLAIN on deep pages and on signed-in pages | first pages only | the plan gate |
 | No query regresses 20% | — | a `pg_stat_statements` comparison in CI |
-| Indexes built `CONCURRENTLY`; `LISTEN` on a dedicated connection so PgBouncer works | not yet | the migration check |
+| Indexes built `CONCURRENTLY`; `LISTEN` on a dedicated connection so PgBouncer works | done for indexes: no-transaction migrations (`-- gpforum:no-transaction`) build them concurrently, required from migration 049 on; `LISTEN` still shares the process handle (ADR 0111) | `t/209-migration-indexes.t`, `t/integration/postgres-migration-concurrently.t` |
 | Keyset pages start the index scan at the cursor | done: `Infrastructure::Keyset` bounds the sort column on every paged list; page 800 of a 50,000-post thread went from 39,008 rows read to 5 | the plan gate on deep pages (to add) |
 
 ### Security and correctness
