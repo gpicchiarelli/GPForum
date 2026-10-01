@@ -92,10 +92,12 @@ sub drain ($self) {
         $self->stats->{unavailable} += 1;
     }
 
-    # A gap means invalidations were lost: raised while this backend was
-    # reconnecting, or pushed out of a full queue. Which entries they named
-    # is unknown, so all of L1 goes. A refill costs a query; a missed
-    # invalidation serves a hidden post until its entry expires.
+    # A gap means invalidations were lost: raised while this process was
+    # reconnecting or could not LISTEN, or pushed out of a full queue. Which
+    # entries they named is unknown, so all of L1 goes. A refill costs a
+    # query; a missed invalidation serves a hidden post until its entry
+    # expires. While the LISTEN keeps failing, every drain reports a gap and
+    # L1 serves nothing it could not be told about.
     if ( $taken->{gap} ) {
         $self->stats->{received} += scalar @{ $taken->{notifications} };
         $self->stats->{gaps}     += 1;
@@ -234,9 +236,9 @@ channel's share of the process's notification queue
 reads too; the sending backend's PID identifies our own notifications so they
 are not replayed.
 
-When the queue reports a gap -- the backend was replaced and its LISTEN
-re-issued, or the queue overflowed -- the invalidations in between are gone,
-so C<drain> returns one clear request instead.
+When the queue reports a gap -- the connection was replaced and its LISTEN
+re-issued, a LISTEN failed, or the queue overflowed -- the invalidations in
+between are gone, so C<drain> returns one clear request instead.
 
 The bus carries invalidation intent only. It holds no cache and applies
 nothing; the caller decides what a request means.

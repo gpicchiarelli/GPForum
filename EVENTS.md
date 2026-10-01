@@ -167,12 +167,15 @@ the next outbox message, and only the search handler consumes them.
     `after` while steps remain
 - `search.thread_posts_requested`
   - producer: `GPForum::Worker::Handler::SearchIndexing`, when a renamed,
-    moved or restored thread has more posts than one batch
+    moved, restored or undeleted thread, or one whose moderation was
+    reversed, has more posts than one batch
   - aggregate_type: `thread`; aggregate_id: `thread_id`; causation_id: the
-    message that asked for it
+    event whose message asked for it (the one that started the chain, then
+    each batch's own)
   - idempotency_key: `search.thread_posts:{cause_event_id}:{after}`
   - payload: `after` (the position the batch starts after),
-    `cause_event_id` (the thread event that started the chain), `thread_id`
+    `cause_event_id` (the event that started the chain: the thread event or
+    the `moderation_action.reversed`), `thread_id`
 
 ## Realtime Propagation
 
@@ -192,7 +195,10 @@ Current mappings:
 - `thread.moved` -> `thread.update`;
 - `thread.hidden` -> `thread.update`;
 - `thread.restored` -> `thread.update`;
-- `moderation.*` -> `moderation.queue.invalidate`.
+- `moderation.*` and `report.*` -> `moderation.queue.invalidate`.
 
-Notification badge updates still use the notification dispatcher and local hub
-path, with the same versioned realtime envelope shape.
+No domain event maps to a badge. The notification dispatcher NOTIFYs a
+`notification.badge` on the same channel whenever an unread count changes,
+from a web request or from the worker's fanout, so every process sees it
+once; the hub sends the same frame as a snapshot when a client subscribes to
+`notifications:<user_id>`. See `docs/realtime.md`.

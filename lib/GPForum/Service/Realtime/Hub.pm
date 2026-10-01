@@ -111,19 +111,6 @@ sub broadcast ( $self, $channel, $payload ) {
     };
 }
 
-sub broadcast_thread_update ( $self, $thread_id, $payload ) {
-    my $event = $self->event_contract->build(
-        type           => $THREAD_UPDATE,
-        aggregate_type => 'thread',
-        aggregate_id   => $thread_id,
-        payload        => $payload || {},
-        metadata       => { channel_type => 'thread' },
-    );
-    $event->{thread_id} = $thread_id;
-
-    return $self->broadcast( _channel( 'thread', $thread_id ), $event, );
-}
-
 # The connection's user's unread count, sent to that connection alone. A
 # badge carries an absolute count, so one snapshot heals whatever a socket
 # missed: a subscriber that has just (re)connected, possibly to another node,
@@ -132,10 +119,44 @@ sub send_badge_snapshot ( $self, $connection_id ) {
     my $row     = $self->registry->connection($connection_id);
     my $user_id = $row ? _user_id( $row->{actor} ) : undef;
     return { ok => 0, reason => 'connection_not_found' } if !defined $user_id;
-    return { ok => 0, reason => 'badge_unavailable' } if !$self->badge_counter;
 
-    my $count =
+    return $self->_send_badge( $row, $user_id, $self->_unread_count($user_id) );
+}
+
+# Returns how many snapshots were sent. Each user's count is read once,
+# however many of their sockets this process holds: a gap follows a
+# reconnect, when every process of every node resends at the same moment to
+# a database that has just come back.
+sub resend_badge_snapshots ($self) {
+    my %count_of;
+    my $sent = 0;
+    for my $row ( $self->registry->subscribers_of_family($NOTIFICATIONS) ) {
+        my $user_id = _user_id( $row->{actor} );
+        next if !defined $user_id;
+
+        if ( !exists $count_of{$user_id} ) {
+            $count_of{$user_id} = $self->_unread_count($user_id);
+        }
+        my $snapshot =
+          $self->_send_badge( $row, $user_id, $count_of{$user_id} );
+        if ( $snapshot->{ok} ) {
+            $sent++;
+        }
+    }
+
+    return $sent;
+}
+
+# Undef when there is no counter or it failed.
+sub _unread_count ( $self, $user_id ) {
+    my $undefined;
+    return $undefined if !$self->badge_counter;
+
+    return
       eval { return $self->badge_counter->unread_count_for_user($user_id); };
+}
+
+sub _send_badge ( $self, $row, $user_id, $count ) {
     return { ok => 0, reason => 'badge_unavailable' } if !defined $count;
 
     my $sent = _send_json( $row->{connection},
@@ -143,19 +164,6 @@ sub send_badge_snapshot ( $self, $connection_id ) {
     $self->stats->{badge_snapshots} += 1;
 
     return { ok => $sent ? 1 : 0, unread_count => $count };
-}
-
-# Returns how many snapshots were sent.
-sub resend_badge_snapshots ($self) {
-    my $sent = 0;
-    for my $row ( $self->registry->subscribers_of_family($NOTIFICATIONS) ) {
-        my $snapshot = $self->send_badge_snapshot( $row->{connection_id} );
-        if ( $snapshot->{ok} ) {
-            $sent++;
-        }
-    }
-
-    return $sent;
 }
 
 sub connection_count ($self) {

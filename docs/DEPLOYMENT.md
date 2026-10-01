@@ -335,10 +335,17 @@ nodes need no sticky sessions and share no presence state. See
   (30 per minute per user).
 - After a PostgreSQL restart or failover, each web process clears its L1
   cache once, on its next cache read, and re-sends notification badge counts
-  to its sockets: expect a short rise in queries.
+  to its sockets, one count query per connected user: expect a short rise in
+  queries.
+- A web process that cannot LISTEN (pointed at a standby, say) clears its L1
+  on every cache read until it can, and `listen_failures` rises in
+  `/metrics`.
 - After a deploy or a worker recycle, the outbox backstop starts at the head
   of the outbox; nothing is replayed. It runs only in processes that have
   websocket connections.
+- Keep every host's clock on NTP. The backstop waits five seconds for an
+  outbox row to settle, and that window also absorbs the offset between a
+  worker's clock, which stamps the row, and the database's.
 
 ## GlifiStore (required L2)
 

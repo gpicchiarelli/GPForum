@@ -101,9 +101,11 @@ notify failures, invalid payloads, duplicate event suppression, reconnect count,
 fanout count, supervisor running state, scheduled polls, poll failures and
 heartbeats. `realtime_listener.listener.notifications` is the process's one
 notification queue, shared by the listener and the L1 invalidation bus: its
-`gaps` and `relistens` count reconnects to a new backend (each clears L1 once
-and re-sends badge snapshots), `dropped` counts notifications on channels
-nobody registered, and each channel reports whether it is `listening`. See
+`gaps` and `relistens` count reconnects to a new connection (each clears L1
+once and re-sends badge snapshots) and LISTENs that failed and were issued
+again, `listen_failures` counts failed LISTEN attempts (while it rises, L1 is
+cleared on every read), `dropped` counts notifications on channels nobody
+registered, and each channel reports whether it is `listening`. See
 `docs/realtime.md`.
 
 Outbox metrics include pending rows, failed rows, ready retry backlog, and dead

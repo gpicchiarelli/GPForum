@@ -46,14 +46,23 @@ buffer: it reads it whole and files each notification under its channel, so
 neither consumer takes the other's. A notification on a channel nobody
 registered is counted as `dropped`.
 
-A LISTEN lives on one PostgreSQL backend. When the handle's backend changes
-(a reconnect after a PostgreSQL restart, a failover, a killed idle
+A LISTEN lives on one PostgreSQL backend. The queue knows the connection by
+its backend PID and by the handle itself, because a PID can come back (a
+PostgreSQL restarted in a fresh container hands out the same PIDs again) but
+DBIx::Class replaces the handle on every reconnect. When the connection
+changes (a reconnect after a PostgreSQL restart, a failover, a killed idle
 connection), the queue LISTENs on every channel again and reports a gap:
 
 - the cache bus clears the process's L1 once, because the invalidations sent
   meanwhile are gone;
 - the listener re-sends badge snapshots to its local notifications
-  subscribers.
+  subscribers, reading each user's count once.
+
+A LISTEN that fails (a standby refuses it) reports a gap on every take until
+one succeeds, and on the take that issues it. The cache bus therefore clears
+L1 on every read while it cannot hear invalidations, and serves from L2 and
+the database instead; the listener waits until its LISTEN is in effect and
+re-sends the badges once.
 
 Each channel's queue holds at most 1000 notifications; an overflow drops the
 oldest and reports a gap the same way.
@@ -69,9 +78,12 @@ that never arrived:
   row, so a deploy or a recycled worker replays nothing;
 - it reads a row only once its `next_attempt_at` is five seconds old by the
   database's clock, so a row committed a moment after a later one is not
-  skipped;
+  skipped. The dispatcher stamps that column with its own host's clock, so
+  the five seconds also cover that clock's offset from the database's: keep
+  every host on NTP;
 - a reconnect keeps the cursor, so what was missed during a database outage
-  is read once.
+  is read once; a query that fails leaves the cursor where it was, and the
+  next poll asks again.
 
 Event ids from both paths are de-duplicated with a bounded memory.
 
@@ -212,11 +224,13 @@ events, `gaps` and the `badge_snapshots` re-sent after them. The hub counts
 every badge snapshot it sends in `badge_snapshots`.
 
 `realtime_listener.listener.notifications` is the process's notification
-queue: `received`, `dropped` (unregistered channel), `overflowed`, `gaps`,
-`relistens`, `listen_failures`, `unavailable`, the current `backend_pid`,
-and per channel whether it is `listening` and how many are `queued`. The
-cache bus snapshot (`local_caches[].bus`) counts its own `gaps`: each is one
-L1 clear.
+queue: `received`, `dropped` (unregistered channel), `overflowed`, `gaps`
+(per channel and take), `relistens`, `listen_failures` (per attempt),
+`unavailable`, the current `backend_pid`, and per channel whether it is
+`listening` and how many are `queued`. The cache bus snapshot
+(`local_caches[].bus`) counts its own `gaps`: each is one L1 clear. A
+`listen_failures` that keeps rising means the process cannot LISTEN, and
+its L1 is being cleared on every read.
 
 `ListenerSupervisor` exposes enabled/running state, scheduled polls, poll
 failures, reconnects and heartbeats.
@@ -254,7 +268,8 @@ message bodies or private resource contents.
 | --- | --- |
 | NOTIFY unavailable | notifier returns `degraded`, outbox dispatch can continue, polling remains source of truth |
 | LISTEN unavailable | listener status becomes `polling`; the outbox backstop is the only path while the process has sockets; every poll tries the LISTEN again |
-| database reconnect | the notification queue LISTENs again on the new backend and reports a gap: L1 is cleared once, badge snapshots are re-sent, the backstop cursor is kept |
+| database reconnect | the notification queue LISTENs again on the new connection and reports a gap: L1 is cleared once, badge snapshots are re-sent, the backstop cursor is kept |
+| LISTEN refused (standby) | each take reports a gap: L1 is cleared on every read until a LISTEN succeeds; badge snapshots are re-sent once it does |
 | supervisor start failure | reconnect is scheduled after bounded backoff; SSR and polling continue |
 | malformed NOTIFY payload | listener rejects payload and increments invalid counters |
 | duplicate NOTIFY payload | listener suppresses recent duplicate event ids with bounded best-effort memory |

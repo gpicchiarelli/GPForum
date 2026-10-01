@@ -24,7 +24,9 @@ const my $MICROSECONDS        => 1_000_000;
 # A done row is read only once it is this old by the database's clock. The
 # dispatcher stamps next_attempt_at before its UPDATE commits, so a cursor
 # that ran up to the newest stamp could pass a row that committed a moment
-# later with an older one, and never read it. The SQL says the same five
+# later with an older one, and never read it. The stamp comes from the
+# dispatcher host's clock, so the window also covers that host's offset from
+# the database's, which NTP keeps far below it. The SQL says the same five
 # seconds, so the poll needs no separate query for the clock.
 const my $SETTLE_SECONDS => 5;
 const my $SETTLED_SQL    => q{statement_timestamp() - interval '5 seconds'};
@@ -34,8 +36,11 @@ const my $SETTLED_SQL    => q{statement_timestamp() - interval '5 seconds'};
 const my $HEAD_CREATED_AT => 'infinity';
 const my $HEAD_OUTBOX_ID  => 'ffffffff-ffff-ffff-ffff-ffffffffffff';
 
-has batch_limit => $DEFAULT_BATCH_LIMIT;
-has channel     => 'gpforum_domain_events';
+# Set by a gap and cleared once badge snapshots went out, which waits for
+# the LISTEN to be in effect again (see _poll_listen_notify).
+has badges_stale => 0;
+has batch_limit  => $DEFAULT_BATCH_LIMIT;
+has channel      => 'gpforum_domain_events';
 
 # The database's clock, as a code ref returning epoch seconds. Left undef,
 # PostgreSQL's own statement_timestamp() is used; tests set it because the
@@ -126,10 +131,19 @@ sub _poll_listen_notify ($self) {
     }
 
     # Badges are absolute counts, so the ones lost in a gap are rebuilt by
-    # sending each local subscriber its count again. Thread and moderation
-    # hints lost in it are read back by the outbox backstop.
+    # sending each local subscriber its count again, once the LISTEN is in
+    # effect: while it fails the queue reports a gap on every take, and a
+    # snapshot sent then would be stale at the next change it cannot hear.
+    # Thread and moderation hints lost in a gap are read back by the outbox
+    # backstop.
     if ( $taken->{gap} ) {
         $self->stats->{gaps} += 1;
+        $self->badges_stale(1);
+    }
+    if (   $self->badges_stale
+        && $self->notifications->listening( $self->channel ) )
+    {
+        $self->badges_stale(0);
         $self->_resend_badges;
     }
 
@@ -198,8 +212,11 @@ sub _poll_outbox ($self) {
         return _available_summary();
     }
 
+    my $messages = $self->_outbox_messages;
+    return _unavailable_summary() if !$messages;
+
     my %summary = %{ _available_summary() };
-    for my $message ( $self->_outbox_messages ) {
+    for my $message ( @{$messages} ) {
         $self->_poll_outbox_message( \%summary, $message );
         $self->_advance_outbox_poll_cursor($message);
     }
@@ -329,14 +346,18 @@ sub _outbox_available ($self) {
     return $resultset ? 1 : 0;
 }
 
+# The next batch, or undef when the database could not be asked. The query
+# runs here, not when the resultset is built, so it is inside the eval too:
+# a lost connection made the poll throw. The cursor stays where it was and
+# the next poll asks again.
 sub _outbox_messages ($self) {
+    my @messages;
+    my $read = eval {
+        @messages = _search_rows( $self->outbox_poll_resultset );
+        return 1;
+    };
 
-    # Callers iterate the result, so every early exit must yield an empty
-    # list. A single undef would become one undefined message row.
-    my $search = eval { return $self->outbox_poll_resultset };
-    return () if !$search;
-
-    return _search_rows($search);
+    return $read ? \@messages : undef;
 }
 
 # The next batch the backstop reads after its cursor. Public so the tests
@@ -386,8 +407,8 @@ sub _outbox_poll_query ($self) {
     };
 }
 
-# The database's clock, not this host's: dispatchers on other hosts stamp
-# the rows, and only the database orders them.
+# The database's clock, not this host's: each dispatcher stamps rows with
+# its own host's clock, and the database's is the one they all share.
 sub _settled_bound ($self) {
     return _iso8601( $self->db_now->() - $SETTLE_SECONDS ) if $self->db_now;
 
@@ -553,9 +574,10 @@ while this process has sockets, starts at the head of the outbox, and reads a
 row only once it has settled for five seconds by the database's clock.
 Duplicate event ids from the two paths are suppressed with a bounded memory.
 
-When the queue reports a gap -- the handle's backend was replaced, or the
-queue overflowed -- the listener sends every local notifications subscriber
-its unread count again.
+When the queue reports a gap -- the handle's connection was replaced, a
+LISTEN failed, or the queue overflowed -- the listener sends every local
+notifications subscriber its unread count again, once its LISTEN is in
+effect.
 
 =head1 SUBROUTINES/METHODS
 
@@ -570,7 +592,8 @@ Issues the UNLISTEN.
 
 =head2 poll_once
 
-Delivers what arrived on both paths. Fails only when neither is available.
+Delivers what arrived on both paths. Fails only when neither is available;
+a backstop whose query failed counts as unavailable, and keeps its cursor.
 
 =head2 reconnect
 

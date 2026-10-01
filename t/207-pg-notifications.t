@@ -36,6 +36,9 @@ const my $SMALL_QUEUE     => 2;
 const my $CACHE_CHANNEL   => 'gpforum_cache_invalidation';
 const my $DOMAIN_CHANNEL  => 'gpforum_domain_events';
 
+# The first drain registers the channel and takes, trying twice.
+const my $FAILED_LISTENS => 3;
+
 # One web process: the cache bus and the realtime listener on one handle,
 # sharing one queue, as Bootstrap wires them. A peer backend of the same
 # PostgreSQL publishes.
@@ -206,6 +209,106 @@ subtest 'a new backend is listened to again and reported as a gap' => sub {
         'post-3', 'and delivery resumes' );
     is( $process->{queue}->snapshot->{relistens},
         2, 'the queue counts the channels it listened to again' );
+};
+
+# A PostgreSQL restarted in a fresh container hands out the same small PIDs
+# again, so a reconnect can land on a backend with the PID of the one it
+# lost. The PID alone said "same connection", and nothing was listened to.
+subtest 'a new handle is a new connection, whatever its PID' => sub {
+    my $process = _process();
+    _start($process);
+
+    my $same_pid = GPForum::Test::RealtimeBusDbh->new( pg_pid => $WORKER_PID )
+      ->join_network( $process->{peer} );
+    $process->{schema}->dbh($same_pid);
+
+    is_deeply(
+        $process->{bus}->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'a replaced handle on the same PID is a gap'
+    );
+    is_deeply(
+        [ sort keys %{ $same_pid->listening } ],
+        [ $CACHE_CHANNEL, $DOMAIN_CHANNEL ],
+        'and both channels are listened to on it'
+    );
+
+    # The handle DBIx::Class dropped is freed, and the next one may take
+    # its address: held weakly, the old one is simply gone.
+    my $schema = GPForum::Test::RealtimeBusSchema->new(
+        dbh => GPForum::Test::RealtimeBusDbh->new( network => [] ) );
+    my $queue =
+      GPForum::Infrastructure::PgNotifications->new( schema => $schema );
+    $queue->listen_to($CACHE_CHANNEL);
+    $schema->dbh(undef);
+    $schema->dbh( GPForum::Test::RealtimeBusDbh->new( network => [] ) );
+
+    ok( $queue->take($CACHE_CHANNEL)->{gap},
+        'a freed handle replaced on the same PID is a gap too' );
+    ok(
+        $schema->dbh->listening->{$CACHE_CHANNEL},
+        'and the channel is listened to on the new one'
+    );
+};
+
+# A standby refuses LISTEN. The queue counted the failure and reported
+# nothing, so the bus kept serving L1 entries that nobody could invalidate.
+subtest 'a channel not listened to reports a gap until it is' => sub {
+    my $backend = GPForum::Test::RealtimeBusDbh->new( refuse_listen => 1 );
+    my $schema  = GPForum::Test::RealtimeBusSchema->new( dbh => $backend );
+    my $queue =
+      GPForum::Infrastructure::PgNotifications->new( schema => $schema );
+    my $bus = GPForum::Service::Operations::CacheInvalidationBus->new(
+        notifications => $queue,
+        schema        => $schema,
+    );
+
+    for my $drain ( 1 .. 2 ) {
+        is_deeply(
+            $bus->drain,
+            [ { clear => 1, keys => [], tags => [] } ],
+            "drain $drain while the LISTEN fails clears L1"
+        );
+    }
+
+    $backend->refuse_listen(0);
+    is_deeply(
+        $bus->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'so does the one that issues it: what was raised meanwhile is gone'
+    );
+    is_deeply( $bus->drain, [], 'and then nothing is missed' );
+    is( $queue->snapshot->{listen_failures},
+        $FAILED_LISTENS, 'each failed attempt is counted' );
+};
+
+# While the LISTEN failed, the listener re-sent every subscriber's count on
+# every poll, a query per user per second, each stale at the next change it
+# could not hear.
+subtest 'badges are re-sent once the LISTEN is in effect' => sub {
+    my $process = _process();
+    _start($process);
+    my $sent = scalar @{ $process->{badge}->sent };
+
+    my $standby = GPForum::Test::RealtimeBusDbh->new(
+        pg_pid        => $RECONNECTED_PID,
+        refuse_listen => 1,
+    )->join_network( $process->{peer} );
+    $process->{schema}->dbh($standby);
+
+    for ( 1 .. 2 ) {
+        $process->{listener}->poll_once;
+    }
+    is( scalar @{ $process->{badge}->sent },
+        $sent, 'nothing is re-sent while nothing can be heard' );
+    is( $process->{listener}->status, 'polling', 'the listener says so' );
+
+    $standby->refuse_listen(0);
+    $process->{listener}->poll_once;
+    is( scalar @{ $process->{badge}->sent },
+        $sent + 1, 'the count goes out once the LISTEN is back' );
+    $process->{listener}->poll_once;
+    is( scalar @{ $process->{badge}->sent }, $sent + 1, 'and only once' );
 };
 
 subtest 'a full queue drops its oldest and reports a gap' => sub {

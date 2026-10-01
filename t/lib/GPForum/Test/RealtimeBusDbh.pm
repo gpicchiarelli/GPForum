@@ -18,6 +18,10 @@ const my $DEFAULT_PID      => 4_242;
 has notifies   => sub { return []; };
 has statements => sub { return []; };
 
+# A backend that refuses LISTEN, as a hot standby does ("cannot execute
+# LISTEN during recovery").
+has refuse_listen => 0;
+
 # The channels this backend has LISTENed to. PostgreSQL delivers a NOTIFY
 # only to the backends listening on its channel, the sender included.
 has listening => sub { return {}; };
@@ -62,6 +66,9 @@ sub quote_identifier {
 sub _dbi_do {
     my ( $self, @arguments ) = @_;
 
+    if ( $self->refuse_listen && $arguments[0] =~ /\A LISTEN \s/msx ) {
+        die "cannot execute LISTEN during recovery\n";
+    }
     push @{ $self->statements }, \@arguments;
     $self->_capture_listen(@arguments);
     $self->_capture_notify(@arguments);

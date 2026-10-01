@@ -8,6 +8,7 @@ use warnings;
 
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use Scalar::Util qw(refaddr weaken);
 
 our $VERSION = '0.001';
 
@@ -18,11 +19,19 @@ const my $DEFAULT_MAX_QUEUED => 1_000;
 has max_queued => $DEFAULT_MAX_QUEUED;
 has schema     => undef;
 
-# The backend the last take saw. A LISTEN lives on one backend: when this
-# changes, every channel has to be listened for again.
-has backend_pid => undef;
-has channels    => sub { return {}; };
-has stats       => sub {
+# The connection the last take saw. A LISTEN lives on one backend: when the
+# connection changes, every channel has to be listened for again. It is
+# known by its backend PID and by the handle itself, held weakly. A PID can
+# come back -- a PostgreSQL restarted in a fresh container hands out the
+# same small PIDs again -- but DBIx::Class replaces the handle whenever it
+# reconnects, and a handle that was freed or replaced is a new connection
+# whatever its PID.
+has backend_pid      => undef;
+has channels         => sub { return {}; };
+has connection       => undef;
+has connections_seen => 0;
+has handle           => undef;
+has stats            => sub {
     return {
         dropped         => 0,
         gaps            => 0,
@@ -35,7 +44,8 @@ has stats       => sub {
 };
 
 sub listen_to ( $self, $channel ) {
-    $self->channels->{$channel} ||= { gap => 0, pid => undef, queue => [] };
+    $self->channels->{$channel} ||=
+      { connection => undef, failed => 0, gap => 0, queue => [] };
 
     my $dbh = $self->_dbh;
     if ( !$dbh ) {
@@ -48,7 +58,7 @@ sub listen_to ( $self, $channel ) {
 
 sub unlisten ( $self, $channel ) {
     my $entry = delete $self->channels->{$channel};
-    if ( !$entry || !defined $entry->{pid} ) {
+    if ( !$entry || !defined $entry->{connection} ) {
         return 1;
     }
 
@@ -57,7 +67,7 @@ sub unlisten ( $self, $channel ) {
     my $dbh = $self->_dbh;
     if (   !$dbh
         || !$dbh->{AutoCommit}
-        || _pid_of($dbh) ne $entry->{pid} )
+        || $self->_identify($dbh) ne $entry->{connection} )
     {
         return 1;
     }
@@ -74,11 +84,11 @@ sub registered ( $self, $channel ) {
 
 sub listening ( $self, $channel ) {
     my $entry = $self->channels->{$channel};
-    if ( !$entry || !defined $entry->{pid} ) {
+    if ( !$entry || !defined $entry->{connection} ) {
         return 0;
     }
 
-    return $entry->{pid} eq ( $self->backend_pid // q{} ) ? 1 : 0;
+    return $entry->{connection} eq ( $self->connection // q{} ) ? 1 : 0;
 }
 
 # What arrived for one channel since its last take. Every take reads the
@@ -133,11 +143,12 @@ sub _sync ( $self, $dbh ) {
         return;
     }
 
-    my $pid = _pid_of($dbh);
-    $self->backend_pid($pid);
+    my $connection = $self->_identify($dbh);
     for my $channel ( sort keys %{ $self->channels } ) {
         my $entry = $self->channels->{$channel};
-        next if defined $entry->{pid} && $entry->{pid} eq $pid;
+        next
+          if defined $entry->{connection}
+          && $entry->{connection} eq $connection;
 
         $self->_listen_on( $dbh, $channel );
     }
@@ -145,30 +156,55 @@ sub _sync ( $self, $dbh ) {
     return;
 }
 
+# The token of the connection $dbh is, made anew when its PID or the handle
+# changed.
+sub _identify ( $self, $dbh ) {
+    my $pid   = _pid_of($dbh);
+    my $known = $self->handle;
+    if (   defined $self->connection
+        && defined $known
+        && refaddr($known) == refaddr($dbh)
+        && $pid eq $self->backend_pid )
+    {
+        return $self->connection;
+    }
+
+    $self->connections_seen( $self->connections_seen + 1 );
+    $self->backend_pid($pid);
+    $self->connection( join q{/}, $pid, $self->connections_seen );
+    $self->handle($dbh);
+    weaken( $self->{handle} );
+
+    return $self->connection;
+}
+
 sub _listen_on ( $self, $dbh, $channel ) {
     my $entry = $self->channels->{$channel};
 
-    # The channel was listened for on another backend. That LISTEN went with
-    # the old connection, and so did everything NOTIFYed until this one:
-    # the consumer is told it missed an unknown number of messages.
-    if ( defined $entry->{pid} ) {
-        $entry->{gap} = 1;
-        $self->stats->{gaps} += 1;
-    }
-
+    # Until the LISTEN is in effect, a NOTIFY on the channel reaches nobody
+    # here. One listened for on a connection that is gone, or one whose
+    # LISTEN failed, has missed an unknown number of messages, and so has
+    # one whose LISTEN fails now: the consumer is told.
+    my $resumed  = defined $entry->{connection} || $entry->{failed};
     my $listened = eval {
         $dbh->do( 'LISTEN ' . $dbh->quote_identifier($channel) );
         return 1;
     };
+    if ( $resumed || !$listened ) {
+        $entry->{gap} = 1;
+        $self->stats->{gaps} += 1;
+    }
     if ( !$listened ) {
+        $entry->{failed} = 1;
         $self->stats->{listen_failures} += 1;
         return;
     }
 
-    if ( defined $entry->{pid} ) {
+    if ($resumed) {
         $self->stats->{relistens} += 1;
     }
-    $entry->{pid} = $self->backend_pid;
+    $entry->{connection} = $self->connection;
+    $entry->{failed}     = 0;
 
     return;
 }
@@ -271,11 +307,13 @@ C<listen_to> and read only their own channel with C<take>; a notification on a
 channel nobody registered is counted and dropped.
 
 It also owns the LISTENs. A LISTEN lives on one backend, and DBIx::Class
-replaces the handle after a reconnect, so the backend PID identifies the
-connection: when it changes, every registered channel is listened for again
-and each is marked with a gap. A gap tells the consumer that notifications
-were lost -- raised while nobody was listening, or pushed out of a full
-queue -- so it can fall back to something that does not need them.
+replaces the handle after a reconnect, so the backend PID and the handle
+identify the connection: when either changes, every registered channel is
+listened for again and each is marked with a gap. A LISTEN that fails marks
+its channel with a gap too, on that take and on the one that finally
+issues it. A gap tells the consumer that notifications were lost -- raised
+while nobody was listening, or pushed out of a full queue -- so it can fall
+back to something that does not need them.
 
 It adds no connection: it reads the handle the application already holds.
 
@@ -290,7 +328,7 @@ stays registered, and every C<take> tries again.
 =head2 unlisten
 
 Forgets a channel, dropping its queue, and issues UNLISTEN when its LISTEN
-is still on the current backend.
+is still on the current connection.
 
 =head2 registered
 
@@ -298,8 +336,8 @@ True when the channel has been registered with C<listen_to>.
 
 =head2 listening
 
-True when the channel's LISTEN is in effect on the backend the last call
-saw.
+True when the channel's LISTEN is in effect on the connection the last
+call saw.
 
 =head2 take
 
@@ -326,7 +364,7 @@ queue (1000).
 
 =head1 DEPENDENCIES
 
-L<Mojo::Base>, L<Const::Fast>.
+L<Mojo::Base>, L<Const::Fast>, L<Scalar::Util>.
 
 =head1 INCOMPATIBILITIES
 

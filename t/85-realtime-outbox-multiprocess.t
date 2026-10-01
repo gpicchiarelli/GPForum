@@ -20,6 +20,7 @@ use GPForum::Service::Realtime::ConnectionRegistry;
 use GPForum::Service::Realtime::Hub;
 use GPForum::Service::Realtime::PgListener;
 use GPForum::Service::Realtime::PgNotifier;
+use GPForum::Test::FailingOutboxResultSet;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
 use GPForum::Test::NotificationResultSet;
@@ -52,6 +53,7 @@ _assert_backstop_idles_without_sockets();
 _assert_backstop_cursor_advances();
 _assert_backstop_reads_a_late_commit();
 _assert_cursor_survives_reconnect();
+_assert_backstop_survives_a_failed_query();
 
 done_testing();
 
@@ -310,6 +312,30 @@ sub _assert_cursor_survives_reconnect {
         [ 'post-before', 'post-during' ],
         'so what was missed during the outage is read once, nothing replayed'
     );
+
+    return;
+}
+
+# The backstop built its query inside an eval and ran it outside one, so a
+# lost connection made the poll throw. A failed query is an unavailable
+# backstop now: the cursor stays, and the next poll asks again.
+sub _assert_backstop_survives_a_failed_query {
+    my $outbox   = GPForum::Test::FailingOutboxResultSet->new;
+    my $now      = $NOW;
+    my $listener = _backstop_listener( $outbox, \$now, 'thread:thread-lost',
+        GPForum::Test::RealtimeConnection->new );
+
+    $listener->start;
+    $listener->poll_once;
+    my $cursor = $listener->outbox_poll_cursor;
+    $now += $PAST_THE_SETTLE;
+    my $poll = eval { return $listener->poll_once; };
+
+    ok( $poll, 'a failed backstop query does not throw' );
+    ok( $poll && $poll->{degraded},
+        'with no LISTEN either, the poll reports itself degraded' );
+    is_deeply( $listener->outbox_poll_cursor,
+        $cursor, 'and the cursor stays where it was' );
 
     return;
 }

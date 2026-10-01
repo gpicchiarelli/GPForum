@@ -201,7 +201,7 @@ Covered event families:
 | Realtime event | Source |
 | --- | --- |
 | `thread.update` | `thread.created`, `post.created` |
-| `notification.badge` | notification fanout results produced during outbox dispatch; outbox polling rebuilds missed badges from `notifications`/`notification_inbox` |
+| `notification.badge` | NOTIFYed by the notification dispatcher whenever an unread count changes, from a web request or the worker's fanout; a missed one is healed by a snapshot on subscribe and after a gap, not by the outbox backstop |
 | `moderation.queue.invalidate` | moderation/report domain events |
 
 `t/85-realtime-outbox-multiprocess.t` simulates separate worker/listener hubs
