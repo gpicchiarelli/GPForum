@@ -141,6 +141,81 @@ sub default_catalogs {
               '{indexed} indexed, {unchanged} unchanged, {pruned} removed',
             'admin.search_status_unavailable' =>
               'The search status is unavailable.',
+            'admin.settings'       => 'Settings and diagnostics',
+            'admin.settings_nav'   => 'Settings sections',
+            'admin.configuration'  => 'Configuration',
+            'admin.settings_intro' =>
+'The configuration this process is running with. It comes from the service environment, not from the database, so it is read-only here.',
+            'admin.settings_change' =>
+'To change a setting, edit {file} (on FreeBSD, {freebsd_file}) and restart the service with {restart}. This page then shows the new value.',
+            'admin.settings_secret_note' =>
+'Secrets are never shown, not even in part: only whether they are set.',
+            'admin.settings_section_antivirus'        => 'Antivirus',
+            'admin.settings_section_application'      => 'Application',
+            'admin.settings_section_cache'            => 'Cache',
+            'admin.settings_section_database'         => 'Database',
+            'admin.settings_section_jobs'             => 'Background jobs',
+            'admin.settings_section_mail'             => 'Mail',
+            'admin.settings_section_operating_system' => 'Operating system',
+            'admin.settings_section_processes' => 'Processes and runtime',
+            'admin.settings_section_realtime'  => 'Realtime',
+            'admin.settings_section_search'    => 'Search',
+            'admin.settings_section_security'  => 'Sessions and tokens',
+            'admin.setting'                    => 'Variable',
+            'admin.setting_value'              => 'Value',
+            'admin.setting_source'             => 'Source',
+            'admin.setting_source_environment' => 'Environment',
+            'admin.setting_source_default'     => 'Default',
+            'admin.setting_secret_set'         => 'Set (hidden)',
+            'admin.setting_secret_unset'       => 'Not set',
+            'admin.setting_secret_count'       => {
+                one   => '{count} set (hidden)',
+                other => '{count} set (hidden)',
+            },
+            'admin.setting_empty'           => '(empty)',
+            'admin.diagnostics_unavailable' =>
+              'The mail and antivirus status is unavailable.',
+            'admin.mail'           => 'Mail',
+            'admin.mail_test_hint' =>
+'Send one test message to your own address, {address}, through the {transport} transport. It is never sent to any other address.',
+            'admin.mail_test_no_address' =>
+'Your account has no email address, so there is nowhere to send a test message.',
+            'admin.mail_test_transport_note' =>
+'The test transport keeps messages in memory: a test reports success, but nothing leaves this server.',
+            'admin.send_test_mail'  => 'Send test message',
+            'admin.mail_test_last'  => 'Last test message',
+            'admin.mail_test_never' =>
+              'No test message has been sent from the console.',
+            'admin.mail_transport'   => 'Transport',
+            'admin.mail_test_sent'   => 'Test message sent to your address.',
+            'admin.mail_test_failed' =>
+'The test message could not be sent. The error is shown under Mail.',
+            'admin.antivirus'            => 'Antivirus',
+            'admin.antivirus_check_hint' =>
+'Check the {engine} scanner: the EICAR test file must be detected, and an ordinary file and one as large as the upload limit must pass.',
+            'admin.run_antivirus_check'        => 'Run antivirus check',
+            'admin.antivirus_check_shell_only' =>
+'This server scans with a command (GPFORUM_ANTIVIRUS=command), which loads its signatures for every file and takes longer than a web request may. Run bin/gpforum-antivirus-check on the server instead.',
+            'admin.antivirus_check_last'  => 'Last check',
+            'admin.antivirus_check_never' =>
+              'The antivirus has not been checked from the console.',
+            'admin.antivirus_engine'       => 'Engine',
+            'admin.antivirus_health'       => 'Health',
+            'admin.antivirus_eicar'        => 'EICAR test file',
+            'admin.antivirus_ordinary'     => 'Ordinary file',
+            'admin.antivirus_largest'      => 'File at the upload limit',
+            'admin.antivirus_detected'     => 'Detected',
+            'admin.antivirus_not_detected' => 'Not detected',
+            'admin.antivirus_clean'        => 'Passed',
+            'admin.antivirus_not_clean'    => 'Did not pass',
+            'admin.antivirus_problems'     => 'Problems',
+            'admin.antivirus_disabled'     =>
+'Upload scanning is off (GPFORUM_ANTIVIRUS=none): uploads are checked for format only.',
+            'admin.antivirus_check_passed'  => 'Antivirus check passed.',
+            'admin.antivirus_check_problem' =>
+'The antivirus check did not pass. The report is shown under Antivirus.',
+            'admin.antivirus_check_disabled' =>
+              'Upload scanning is off: there was nothing to check.',
             'admin.dead_letter_replay_status' => 'Replay',
             'admin.replay_dead_letter'        => 'Replay',
             'admin.description'               => 'Description',
@@ -660,7 +735,11 @@ sub default_catalogs {
             'state.cancelled'                   => 'Cancelled',
             'state.completed'                   => 'Completed',
             'state.current'                     => 'Current',
+            'state.degraded'                    => 'Degraded',
+            'state.disabled'                    => 'Disabled',
             'state.done'                        => 'Done',
+            'state.not_run'                     => 'Not run',
+            'state.sent'                        => 'Sent',
             'state.failed'                      => 'Failed',
             'state.indefinite'                  => 'Indefinite',
             'state.manual'                      => 'Manual',
@@ -830,6 +909,82 @@ sub default_catalogs {
               '{indexed} indicizzati, {unchanged} invariati, {pruned} rimossi',
             'admin.search_status_unavailable' =>
               'Lo stato della ricerca non è disponibile.',
+            'admin.settings'       => 'Impostazioni e diagnostica',
+            'admin.settings_nav'   => 'Sezioni delle impostazioni',
+            'admin.configuration'  => 'Configurazione',
+            'admin.settings_intro' =>
+'La configurazione con cui gira questo processo. Viene dall’ambiente del servizio, non dal database, perciò qui è in sola lettura.',
+            'admin.settings_change' =>
+'Per cambiare un’impostazione modifica {file} (su FreeBSD, {freebsd_file}) e riavvia il servizio con {restart}. La pagina mostrerà poi il nuovo valore.',
+            'admin.settings_secret_note' =>
+'I segreti non sono mai mostrati, nemmeno in parte: solo se sono impostati.',
+            'admin.settings_section_antivirus'        => 'Antivirus',
+            'admin.settings_section_application'      => 'Applicazione',
+            'admin.settings_section_cache'            => 'Cache',
+            'admin.settings_section_database'         => 'Database',
+            'admin.settings_section_jobs'             => 'Job in background',
+            'admin.settings_section_mail'             => 'Posta',
+            'admin.settings_section_operating_system' => 'Sistema operativo',
+            'admin.settings_section_processes'        => 'Processi e runtime',
+            'admin.settings_section_realtime'         => 'Tempo reale',
+            'admin.settings_section_search'           => 'Ricerca',
+            'admin.settings_section_security'         => 'Sessioni e token',
+            'admin.setting'                           => 'Variabile',
+            'admin.setting_value'                     => 'Valore',
+            'admin.setting_source'                    => 'Origine',
+            'admin.setting_source_environment'        => 'Ambiente',
+            'admin.setting_source_default'            => 'Predefinito',
+            'admin.setting_secret_set'                => 'Impostato (nascosto)',
+            'admin.setting_secret_unset'              => 'Non impostato',
+            'admin.setting_secret_count'              => {
+                one   => '{count} impostato (nascosto)',
+                other => '{count} impostati (nascosti)',
+            },
+            'admin.setting_empty'           => '(vuoto)',
+            'admin.diagnostics_unavailable' =>
+              'Lo stato di posta e antivirus non è disponibile.',
+            'admin.mail'           => 'Posta',
+            'admin.mail_test_hint' =>
+'Invia un messaggio di prova al tuo indirizzo, {address}, con il trasporto {transport}. Non viene mai inviato ad altri indirizzi.',
+            'admin.mail_test_no_address' =>
+'Il tuo account non ha un indirizzo email, quindi non c’è dove inviare un messaggio di prova.',
+            'admin.mail_test_transport_note' =>
+'Il trasporto di test tiene i messaggi in memoria: la prova riesce, ma nulla esce da questo server.',
+            'admin.send_test_mail'  => 'Invia messaggio di prova',
+            'admin.mail_test_last'  => 'Ultimo messaggio di prova',
+            'admin.mail_test_never' =>
+'Dalla console non è ancora stato inviato alcun messaggio di prova.',
+            'admin.mail_transport' => 'Trasporto',
+            'admin.mail_test_sent' =>
+              'Messaggio di prova inviato al tuo indirizzo.',
+            'admin.mail_test_failed' =>
+'Non è stato possibile inviare il messaggio di prova. L’errore è indicato sotto Posta.',
+            'admin.antivirus'            => 'Antivirus',
+            'admin.antivirus_check_hint' =>
+'Verifica lo scanner {engine}: il file di test EICAR deve essere rilevato, mentre un file normale e uno grande quanto il limite di caricamento devono passare.',
+            'admin.run_antivirus_check' => 'Esegui la verifica antivirus',
+            'admin.antivirus_check_shell_only' =>
+'Questo server analizza i file con un comando (GPFORUM_ANTIVIRUS=command), che carica le firme per ogni file e impiega più di quanto una richiesta web possa attendere. Esegui bin/gpforum-antivirus-check sul server.',
+            'admin.antivirus_check_last'  => 'Ultima verifica',
+            'admin.antivirus_check_never' =>
+              'L’antivirus non è ancora stato verificato dalla console.',
+            'admin.antivirus_engine'       => 'Motore',
+            'admin.antivirus_health'       => 'Stato',
+            'admin.antivirus_eicar'        => 'File di test EICAR',
+            'admin.antivirus_ordinary'     => 'File normale',
+            'admin.antivirus_largest'      => 'File al limite di caricamento',
+            'admin.antivirus_detected'     => 'Rilevato',
+            'admin.antivirus_not_detected' => 'Non rilevato',
+            'admin.antivirus_clean'        => 'Passato',
+            'admin.antivirus_not_clean'    => 'Non passato',
+            'admin.antivirus_problems'     => 'Problemi',
+            'admin.antivirus_disabled'     =>
+'L’analisi dei caricamenti è disattivata (GPFORUM_ANTIVIRUS=none): dei file si controlla solo il formato.',
+            'admin.antivirus_check_passed'  => 'Verifica antivirus superata.',
+            'admin.antivirus_check_problem' =>
+'La verifica antivirus non è stata superata. Il resoconto è sotto Antivirus.',
+            'admin.antivirus_check_disabled' =>
+'L’analisi dei caricamenti è disattivata: non c’era nulla da verificare.',
             'admin.dead_letter_replay_status' => 'Replay',
             'admin.replay_dead_letter'        => 'Rimetti in coda',
             'admin.description'               => 'Descrizione',
@@ -1366,7 +1521,11 @@ sub default_catalogs {
             'state.cancelled'                 => 'Annullato',
             'state.completed'                 => 'Completato',
             'state.current'                   => 'Aggiornato',
+            'state.degraded'                  => 'Degradato',
+            'state.disabled'                  => 'Disattivato',
             'state.done'                      => 'Completato',
+            'state.not_run'                   => 'Non eseguito',
+            'state.sent'                      => 'Inviato',
             'state.failed'                    => 'Fallito',
             'state.indefinite'                => 'Indefinita',
             'state.manual'                    => 'Manuale',

@@ -24,8 +24,8 @@ const my $POST_ID_CONSTRAINT     => 'posts_pkey';
 const my $BODY_ID_CONSTRAINT     => 'post_bodies_pkey';
 const my $REVISION_ID_CONSTRAINT => 'post_revisions_pkey';
 const my $THREAD_LOCK_SQL => join q{ },
-  'SELECT locked_at, moderation_state FROM threads',
-  'WHERE thread_id = ? FOR NO KEY UPDATE';
+  'SELECT author_user_id, deleted_at, locked_at, moderation_state',
+  'FROM threads WHERE thread_id = ? FOR NO KEY UPDATE';
 
 # ThreadDetailReader shows a thread only in these states, so they are the
 # only ones the workflow lets a reply through. Any other reads as not found.
@@ -94,32 +94,31 @@ sub _insert_post ( $self, $input_command ) {
     # The thread row lock does two jobs. It hands out positions in commit
     # order, which the PostReader keyset and the ReadState high-water mark
     # depend on: a reply that commits later never takes a lower number. And
-    # it orders a reply against a moderator locking or hiding the thread, so
-    # the thread is checked again here, as the lock returns it.
-    my $refused = $self->_thread_refusal( $input_command->{post}{thread_id} );
+    # it orders a reply against a moderator locking or hiding the thread, and
+    # against its author deleting it, so the thread is checked again here, as
+    # the lock returns it.
+    my $refused = $self->_thread_refusal( $input_command->{post} );
     return $refused if $refused;
 
     return $self->_insert_or_retry_position($input_command);
 }
 
 # The in-memory doubles have no handle, so nothing to lock or re-check.
-sub _thread_refusal ( $self, $thread_id ) {
+sub _thread_refusal ( $self, $post ) {
     my $dbh = _schema_dbh( $self->schema );
     return if !$dbh;
 
-    return _reply_store_block( _lock_thread( $dbh, $thread_id ) );
+    return _reply_store_block( _lock_thread( $dbh, $post->{thread_id} ),
+        $post->{author_user_id} );
 }
 
-# The workflow read the thread before this transaction began, and a
-# moderator may have locked or hidden it since. Repeat what that check read,
-# in its words: a missing or hidden thread is not found, a locked one is
-# locked. deleted_at is left out on purpose: an author still sees, and may
-# reply to, their own deleted thread, and this must not decide otherwise.
-sub _reply_store_block ($thread) {
-    if ( !$thread ) {
-        return { ok => 0, error => 'thread not found' };
-    }
-    if ( !exists $REPLYABLE_STATE{ $thread->{moderation_state} // q{} } ) {
+# The workflow read the thread before this lock was granted, and a moderator
+# may have locked or hidden it since, or its author deleted it. Repeat what
+# that check read, in its words: a missing or hidden thread is not found, and
+# so is a deleted one to anyone but its author, who still sees it and may
+# reply to it; a locked one is locked.
+sub _reply_store_block ( $thread, $replier ) {
+    if ( !$thread || _unreadable_thread( $thread, $replier ) ) {
         return { ok => 0, error => 'thread not found' };
     }
     if ( defined $thread->{locked_at} ) {
@@ -128,6 +127,16 @@ sub _reply_store_block ($thread) {
 
     my $undefined;
     return $undefined;
+}
+
+sub _unreadable_thread ( $thread, $replier ) {
+    return 1 if !exists $REPLYABLE_STATE{ $thread->{moderation_state} // q{} };
+    return 0 if !defined $thread->{deleted_at};
+    return 0
+      if _has_text($replier)
+      && _same_text( $thread->{author_user_id}, $replier );
+
+    return 1;
 }
 
 sub _insert_or_retry_position ( $self, $input_command ) {

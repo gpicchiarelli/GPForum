@@ -45,6 +45,7 @@ starting work on any of the areas below.
 | [ops/reload-and-restart.md](ops/reload-and-restart.md) | Why reload is unsupported, and how to restart or resize workers |
 | [ops/backup-and-restore.md](ops/backup-and-restore.md) | WAL archiving, point-in-time recovery, and the drill that rehearses it |
 | [ops/mail-check.md](ops/mail-check.md) | Identity mail transport dry-run / SMTP probe |
+| [ops/console-and-cli.md](ops/console-and-cli.md) | Every `bin/` command against the admin console route that covers it, or why none does |
 | [ops/staging-drills.md](ops/staging-drills.md) | Throwaway migrate / dump / attachments / deploy checklist |
 | [ops/staging-host.md](ops/staging-host.md) | Live staging Hypnotoad+TLS bring-up and verify |
 | [ops/stress-load.md](ops/stress-load.md) | Concurrent HTTP stress profiles against a base URL |

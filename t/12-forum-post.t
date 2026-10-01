@@ -22,7 +22,7 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS           => 169;
+const my $EXPECTED_TESTS           => 171;
 const my $ALLOCATED_REPLY_POSITION => 3;
 const my $NEXT_REVISION            => 2;
 const my $RESTORED_VERSION         => 3;
@@ -556,11 +556,29 @@ _assert_reply_refused(
     }
 );
 
-# deleted_at is not re-checked: the workflow lets an author reply to their
-# own deleted thread, and the store must not decide that differently.
+# A deleted thread is the workflow's not found for everyone but its author.
+# Its author deleting it while someone else's reply waits on the lock is the
+# same race as a moderator hiding it.
+_assert_reply_refused(
+    {
+        command => $allocated_prepared->{command},
+        error   => 'thread not found',
+        label   => 'a thread its author deleted since the workflow looked',
+        row     => {
+            author_user_id   => 'user-2',
+            deleted_at       => '2026-05-23T12:00:00Z',
+            locked_at        => undef,
+            moderation_state => 'visible',
+        },
+    }
+);
+
+# The workflow lets an author reply to their own deleted thread, and the store
+# must not decide that differently.
 my $deleted_thread_schema = GPForum::Test::PostStoreLockSchema->new(
     lock_dbh => GPForum::Test::PostStoreLockDbh->new(
         thread_row => {
+            author_user_id   => 'user-1',
             deleted_at       => '2026-05-23T12:00:00Z',
             locked_at        => undef,
             moderation_state => 'visible',
@@ -572,7 +590,7 @@ ok(
         id_service => GPForum::Test::Id->new,
         schema     => $deleted_thread_schema,
     )->create_post( $allocated_prepared->{command} )->{ok},
-    'the thread lock leaves the deleted-thread decision to the workflow'
+    'the thread lock lets an author reply to their own deleted thread'
 );
 
 my $revision_prepared = $composer->prepare_revision(

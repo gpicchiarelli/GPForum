@@ -36,6 +36,19 @@ sub list_users {
     return _users();
 }
 
+# Admin::ConsoleReader's: the address a console action may mail for a user,
+# undef for one with none.
+sub email_of {
+    my ( undef, $user_id ) = @_;
+
+    my %address = (
+        'admin-1' => 'admin-1@example.test',
+        'user-1'  => 'admin@example.test',
+    );
+
+    return $address{ $user_id // q{} };
+}
+
 sub async_jobs {
     return {
         dead_letters    => _dead_letters(),

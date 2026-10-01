@@ -267,6 +267,27 @@ sub maintenance_response ( $self, $status, $stored ) {
     return $self->_html_success( $status, $self->admin_access->jobs_redirect );
 }
 
+# A test message's or an antivirus check's answer: JSON with the outcome, or
+# back to the settings page, which shows the audited result in full, with a
+# flash that is a warning when the check did not pass.
+sub diagnostics_response ( $self, $status, $stored ) {
+    if ( $self->_wants_json ) {
+        return $self->render(
+            json   => { result => $stored, status => $status },
+            status => $HTTP_OK,
+        );
+    }
+
+    my $access    = $self->admin_access;
+    my $flash_key = $access->write_flash_key($status);
+    if ($flash_key) {
+        $self->flash(
+            $access->write_flash_type($status) => $self->t($flash_key) );
+    }
+
+    return $self->redirect_to( $access->settings_redirect );
+}
+
 sub render_payload ( $self, $input ) {
     return GPForum::Web::Responder->new->payload(
         {
@@ -502,6 +523,11 @@ flash.
 
 Answers a replayed dead letter: JSON, or a redirect to the jobs page with a
 flash.
+
+=head2 diagnostics_response
+
+Answers a test message or an antivirus check: JSON with the result, or a
+redirect to the settings page with a flash whose type follows the outcome.
 
 =head1 DIAGNOSTICS
 

@@ -104,6 +104,17 @@ pass too — a `StreamMaxLength` below 26M fails here. Readiness only asks wheth
 this proves it scans. Exit status: `0` ok, degraded or disabled, `1` failed (including a
 misconfiguration), `2` misuse. `--json` gives the same evidence as JSON.
 
+### From the console
+
+`/admin/settings` has a **Run antivirus check** button that runs the same
+check inside the running service, so it sees the service's own environment
+and scanner. It shows the report -- engine, health, whether EICAR was
+detected, whether the ordinary file and the one at the upload limit passed,
+and any problem -- and records it in the audit log
+(`admin.antivirus_checked`). With `GPFORUM_ANTIVIRUS=command` the console
+offers no button: clamscan loads its signatures for every file, and three
+scans outlast a web request. Run the check above instead.
+
 ## Configuration
 
 | Variable | Default | Meaning |

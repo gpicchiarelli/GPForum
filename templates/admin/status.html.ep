@@ -2,7 +2,7 @@
 % title t('admin.health_runtime') . ' - ' . t('app.name');
 
 <section aria-labelledby="admin-status-heading">
-  <%= include 'components/page_header', heading_id => 'admin-status-heading', component_title => t('admin.health_runtime'), actions_label => t('admin.status'), actions => ui_actions({ href => url_for('admin_dashboard'), label => t('admin.admin') }, { href => url_for('admin_jobs'), label => t('admin.async_jobs') }) %>
+  <%= include 'components/page_header', heading_id => 'admin-status-heading', component_title => t('admin.health_runtime'), actions_label => t('admin.status'), actions => ui_actions({ href => url_for('admin_dashboard'), label => t('admin.admin') }, { href => url_for('admin_jobs'), label => t('admin.async_jobs') }, { href => url_for('admin_settings'), label => t('admin.settings') }) %>
 
   <section aria-labelledby="admin-readiness-heading">
     <%= include 'components/section_header', heading_id => 'admin-readiness-heading', component_title => t('admin.readiness') %>

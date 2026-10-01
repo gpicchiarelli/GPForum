@@ -67,6 +67,15 @@ sub register ( $, %input ) {
       ->to('Admin::Maintenance#cache_purge')
       ->name('admin_cache_purge');
     $routes->get('/admin/status')->to('Admin#status')->name('admin_status');
+    $routes->get('/admin/settings')
+      ->to('Admin#settings')
+      ->name('admin_settings');
+    $routes->post('/admin/mail/test')
+      ->to('Admin::Diagnostics#mail_test')
+      ->name('admin_mail_test');
+    $routes->post('/admin/antivirus/check')
+      ->to('Admin::Diagnostics#antivirus_check')
+      ->name('admin_antivirus_check');
     $routes->get('/admin/privacy')
       ->to('Privacy::Review#review')
       ->name('privacy_review');

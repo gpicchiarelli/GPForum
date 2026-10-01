@@ -16,6 +16,7 @@
       { href => url_for('moderation_suspensions'), label => t('moderation.suspensions') },
       { href => url_for('admin_jobs'), label => t('admin.async_jobs') },
       { href => url_for('admin_status'), label => t('admin.health_runtime') },
+      { href => url_for('admin_settings'), label => t('admin.settings') },
       { href => url_for('privacy_review'), label => t('admin.privacy_review') },
     ) %>
 

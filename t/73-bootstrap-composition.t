@@ -77,18 +77,21 @@ done_testing();
 
 sub _route_names {
     return qw(
+      admin_antivirus_check
       admin_audit
       admin_categories
       admin_category_create
       admin_category_update
       admin_dashboard
       admin_jobs
+      admin_mail_test
       admin_permission_create
       admin_role_bind
       admin_role_binding_revoke
       admin_role_create
       admin_role_permission_attach
       admin_roles
+      admin_settings
       admin_status
       admin_user_roles
       admin_users
@@ -177,7 +180,9 @@ sub _helper_names {
     return qw(
       gp_admin_audit_review
       gp_admin_console_reader
+      gp_admin_diagnostics
       gp_admin_maintenance
+      gp_admin_settings
       gp_admin_view_model
       gp_admin_workflow
       gp_antivirus

@@ -103,6 +103,36 @@ sub status_page ( $self, %input ) {
     };
 }
 
+# The settings page: the configuration as Admin::Settings redacted it, and
+# the test message and antivirus check with their last audited results.
+sub settings_page ( $self, %input ) {
+    my $diagnostics = $input{diagnostics}       || {};
+    my $mail        = $diagnostics->{mail}      || {};
+    my $antivirus   = $diagnostics->{antivirus} || {};
+    my $settings    = $input{settings}          || {};
+
+    return {
+        antivirus => {
+            command_id => $self->string( $input{antivirus_command_id} ),
+            engine     => $antivirus->{engine},
+            in_request => $antivirus->{in_request} ? 1 : 0,
+            latest     => $self->_antivirus_latest( $antivirus->{latest} ),
+        },
+        change                  => $settings->{change} || {},
+        diagnostics_unavailable => $diagnostics->{unavailable} ? 1 : 0,
+        mail                    => {
+            command_id => $self->string( $input{mail_command_id} ),
+            latest     => $self->_mail_latest( $mail->{latest} ),
+            recipient  => $mail->{recipient},
+            transport  => $mail->{transport},
+        },
+        sections => [
+            map { $self->_settings_section($_) }
+              @{ $settings->{sections} || [] }
+        ],
+    };
+}
+
 sub audit_page ( $self, %input ) {
     my $filters = $input{filters} || {};
     my $errors  = $input{errors}  || {};
@@ -157,6 +187,80 @@ sub category_response ( $self, $status, $category ) {
     return {
         category => $self->category($category),
         status   => $status,
+    };
+}
+
+sub _settings_section ( $self, $section ) {
+    my $name = $self->string( $section->{name} );
+
+    return {
+        name     => $name,
+        settings => $section->{settings} || [],
+        ui       => {
+            heading_id =>
+              $self->stable_id( 'admin-settings', $name, 'heading' ),
+        },
+    };
+}
+
+sub _mail_latest ( $self, $latest ) {
+    my $none;
+    return $none if ref $latest ne 'HASH';
+
+    my $result = $latest->{result} || {};
+    return {
+        at        => $latest->{at},
+        error     => $result->{error},
+        outcome   => $result->{outcome} || 'unknown',
+        transport => $result->{transport},
+    };
+}
+
+# The check's report as the page lists it: each file with what it had to be
+# and what it was, so a reader sees at a glance which one let it down.
+sub _antivirus_latest ( $self, $latest ) {
+    my $none;
+    return $none if ref $latest ne 'HASH';
+
+    my $report = $latest->{result} || {};
+    my $health = ref $report->{health} eq 'HASH' ? $report->{health} : {};
+    my @files;
+    for my $file (
+        [ eicar    => 'test_file',     'infected' ],
+        [ ordinary => 'ordinary_file', 'clean' ],
+        [ largest  => 'largest_file',  'clean' ],
+      )
+    {
+        my ( $key, $field, $expected ) = @{$file};
+        my $verdict = $report->{$field};
+        next if ref $verdict ne 'HASH';
+
+        my $status = $self->string( $verdict->{status} );
+        push @files,
+          {
+            error     => $verdict->{error},
+            key       => $key,
+            passed    => $status eq $expected ? 1 : 0,
+            signature => $verdict->{signature},
+            status    => $status,
+          };
+    }
+
+    return {
+        at       => $latest->{at},
+        detail   => $report->{detail},
+        engine   => $report->{engine},
+        files    => \@files,
+        health   => $health,
+        problems => [
+            @{ ref $report->{problems} eq 'ARRAY' ? $report->{problems} : [] }
+        ],
+        reason => $report->{reason},
+
+        # The check says fail; the state labels and tones say failed.
+        status => ( $report->{status} // q{} ) eq 'fail'
+        ? 'failed'
+        : $report->{status} || 'unknown',
     };
 }
 

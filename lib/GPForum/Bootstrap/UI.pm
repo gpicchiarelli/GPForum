@@ -236,6 +236,7 @@ sub _register_presentation_helpers {
                 cancelled => 'neutral',
                 completed => 'success',
                 current   => 'success',
+                degraded  => 'warning',
                 done      => 'success',
                 failed    => 'danger',
                 ok        => 'success',
@@ -243,6 +244,7 @@ sub _register_presentation_helpers {
                 pending   => 'warning',
                 rejected  => 'danger',
                 resolved  => 'success',
+                sent      => 'success',
                 suspended => 'danger',
                 triaged   => 'warning',
             );
@@ -464,6 +466,7 @@ sub _ui_breadcrumbs ($controller) {
         admin_dashboard        => 'nav.admin',
         admin_jobs             => 'nav.admin',
         admin_roles            => 'nav.admin',
+        admin_settings         => 'nav.admin',
         admin_status           => 'nav.admin',
         admin_user_roles       => 'nav.admin',
         admin_users            => 'nav.admin',

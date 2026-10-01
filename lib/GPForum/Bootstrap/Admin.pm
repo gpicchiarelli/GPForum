@@ -10,11 +10,13 @@ use feature 'signatures';
 use GPForum::Service::Admin::AuditReview;
 use GPForum::Service::Admin::CategoryStore;
 use GPForum::Service::Admin::ConsoleReader;
+use GPForum::Service::Admin::Diagnostics;
 use GPForum::Service::Admin::Maintenance;
 use GPForum::Service::Admin::PermissionGate;
 use GPForum::Service::Admin::PermissionReview;
 use GPForum::Service::Admin::RoleBindingStore;
 use GPForum::Service::Admin::RoleCatalog;
+use GPForum::Service::Admin::Settings;
 use GPForum::Service::Admin::Workflow;
 use GPForum::Service::Outbox::DeadLetterReplay;
 
@@ -103,6 +105,29 @@ sub register {
         }
     );
     $application->helper(
+        gp_admin_settings => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::Settings->new(
+                config => $controller->gp_config );
+        }
+    );
+    $application->helper(
+        gp_admin_diagnostics => sub {
+            my ($controller) = @_;
+
+            return GPForum::Service::Admin::Diagnostics->new(
+                accounts     => $controller->gp_admin_console_reader,
+                antivirus    => $controller->gp_antivirus,
+                audit_review => $controller->gp_admin_audit_review,
+                config       => $controller->gp_config,
+                id_service   => $controller->gp_id,
+                schema       => $controller->gp_schema,
+                settings     => $controller->gp_admin_settings,
+            );
+        }
+    );
+    $application->helper(
         gp_admin_workflow => sub {
             my ($controller) = @_;
 
@@ -111,6 +136,7 @@ sub register {
                 category_store      => $controller->gp_category_store,
                 command_idempotency => $controller->gp_command_idempotency,
                 dead_letter_replay  => $controller->gp_dead_letter_replay,
+                diagnostics         => $controller->gp_admin_diagnostics,
                 logger              => $controller->app->log,
                 maintenance         => $controller->gp_admin_maintenance,
                 role_catalog        => $controller->gp_role_catalog,

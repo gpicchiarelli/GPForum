@@ -207,7 +207,9 @@ _install_test_session_route($admin);
 $admin->get_ok('/__test/session/admin-1')->status_is($HTTP_OK);
 
 for my $route (
-    qw(/admin /admin/users /admin/roles /admin/audit /admin/jobs /admin/status))
+    qw(/admin /admin/users /admin/roles /admin/audit /admin/jobs /admin/status
+    /admin/settings)
+  )
 {
     $admin->get_ok($route)->status_is($HTTP_OK);
     _single_main_ok( $admin, "$route has one document main landmark" );

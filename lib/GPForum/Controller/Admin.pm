@@ -242,6 +242,34 @@ sub status ($self) {
     );
 }
 
+# 6.5: the effective configuration, read-only, with its secrets redacted, and
+# the test message and antivirus check beside it.
+sub settings ($self) {
+    my $user_id = $self->authorized_user_id( $self->admin_access->view_action );
+    if ( !$user_id ) {
+        return;
+    }
+
+    my $settings = eval { return $self->gp_admin_settings->view; };
+    if ( !$settings ) {
+        $self->app->log->error("admin settings failed: $EVAL_ERROR");
+        return $self->system_failure;
+    }
+
+    return $self->render_payload(
+        {
+            payload => $self->gp_admin_view_model->settings_page(
+                antivirus_command_id => $self->_new_command_id,
+                diagnostics          => $self->_diagnostics_overview($user_id),
+                mail_command_id      => $self->_new_command_id,
+                settings             => $settings,
+            ),
+            status   => $HTTP_OK,
+            template => 'admin/settings',
+        }
+    );
+}
+
 sub _dashboard_payload ($self) {
     my $limit = $self->admin_access->dashboard_limit;
     my $console_summary =
@@ -335,6 +363,20 @@ sub _search_status ($self) {
     return $search;
 }
 
+# The recipient, the transports and the last results, for the settings page.
+# A failure to read them leaves those sections saying so; the configuration,
+# which needs no database, still shows.
+sub _diagnostics_overview ( $self, $user_id ) {
+    my $overview =
+      eval { return $self->gp_admin_diagnostics->overview($user_id) };
+    if ( !$overview ) {
+        $self->app->log->warn("admin diagnostics overview failed: $EVAL_ERROR");
+        return { unavailable => 1 };
+    }
+
+    return $overview;
+}
+
 sub _new_command_id ($self) {
     return $self->gp_id->uuid;
 }
@@ -357,8 +399,8 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Renders authorized dashboard, role, category, user, audit, job, and status
-review pages.
+Renders authorized dashboard, role, category, user, audit, job, status and
+settings review pages.
 The catalog C<view> action lives on L<GPForum::Web::AdminAccess>. Dashboard
 failures stay logged here.
 
@@ -395,6 +437,11 @@ Renders outbox and dead-letter job lists.
 =head2 status
 
 Renders operations status.
+
+=head2 settings
+
+Renders the effective configuration, secrets redacted, with the test message
+and antivirus check forms and their last results.
 
 =head1 DIAGNOSTICS
 

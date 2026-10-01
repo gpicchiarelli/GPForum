@@ -258,6 +258,21 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **`/admin/settings`**: every configuration variable with its effective
+  value and whether it comes from the environment or the default. Secrets
+  show only as set or not set, and a password inside a DSN or URL is
+  redacted; the page says to edit `/etc/gpforum/gpforum.env` and restart.
+- **Send test message** (`/admin/settings`): one message through the
+  configured transport to the signed-in admin's own address only, audited
+  as `admin.mail_test_sent`, with the transport's error shown without
+  credentials, stack traces or the recipient.
+- **Run antivirus check** (`/admin/settings`): the check
+  `bin/gpforum-antivirus-check` runs, from the console, audited as
+  `admin.antivirus_checked`.
+- **`docs/ops/console-and-cli.md`** maps every `bin/` command to its console
+  page or says why there is none; a test fails when a command is missing or
+  a named route is not registered.
+
 - **Migrations can build indexes without stopping writes.** A migration
   whose first line is `-- gpforum:no-transaction` runs one statement at a
   time, so `CREATE INDEX CONCURRENTLY` works; the runner sent every file

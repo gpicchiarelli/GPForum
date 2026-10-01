@@ -37,7 +37,7 @@ seeded, and the running application was driven through a browser.
 | Perl craft | 5.0 → 7.0 | 4.1, 4.4 and 4.5 done: 4,681 signatures, 9,311 lines net removed, one row reader in place of 41, `permits` in place of `can`. 4.3 attribute contracts and 4.6's POD remain |
 | Perl tooling | 5.0 → 8.0 | 4.2, 4.5, 4.8, 5.3, 8.5 and 10.7 done: no gate can pass without running its tool, coverage is gated at a measured floor, and the query-plan gate EXPLAINs the application's own statements against the schema that exists. 4.7's ratchet is still a flat baseline |
 | Correctness | 4.0 → 8.0 | **Phase 1 complete**, plus 4.4's three latent defects: the empty-list column reader, the `can` override, and unique-conflict misclassification |
-| Admin console | 4.0 → 8.5 | 6.6 done: the counters, the shared command id and the borrowed audit text are fixed, the four destructive staff actions ask for confirmation, and the audit viewer filters and pages as ADR 0079 requires. 6.5: dead letters replay from the console and the shell (ADR 0056), and the jobs page shows search lag, rebuilds the index through the outbox and purges the page cache; settings and SMTP test-send remain |
+| Admin console | 4.0 → 8.5 | 6.6 done: the counters, the shared command id and the borrowed audit text are fixed, the four destructive staff actions ask for confirmation, and the audit viewer filters and pages as ADR 0079 requires. 6.5: dead letters replay from the console and the shell (ADR 0056); the jobs page shows search lag, rebuilds the index and purges the page cache; settings, mail test-send and the antivirus check are in the console, and every CLI command maps to a console route or a reason |
 | i18n & content | 4.0 → 8.0 | 9.1, 9.3 (time zones), 9.4 and 9.5's renderer defect done: members read times in their own zone, named on the page. Translations are still a Perl literal rather than gettext (9.2), relative time waits on a client-side enhancement, and the markup language has no documentation or preview |
 | Testing | 4.0 → 6.5 | 5.0 and 5.1 done; the doubles now also model DBI's "0E0", rollback of row columns, a signed clock offset, and DBIx::Class's list-context `search` — four infidelities that each hid a real defect. CI runs the whole integration tier on PostgreSQL 16–18; its coverage of the correctness invariants (5.2) is still thin |
 | Operations | 3.5 → 9.0 | 3.1–3.8 done except the last of 3.5: readiness warns before the partition horizon runs out, and the FreeBSD rc script loads its environment and supervises a foreground Hypnotoad (not yet run on FreeBSD). No replication |
@@ -154,9 +154,9 @@ not, and every console write is guarded and audited.
 
 | Criterion | Today | Gate |
 | --- | --- | --- |
-| Every `bin/` command maps to a console route or a written reason | in progress (6.5): dead letters, search rebuild and cache purge done; settings, mail test-send and antivirus check being added | a test over `docs/ops/console-and-cli.md` |
+| Every `bin/` command maps to a console route or a written reason | done (27 commands) | `t/214-console-cli-parity.t` |
 | Every console write: permission gate, CSRF, command id, audit row | true for the writes listed in 6.5 and 6.6 | the admin access tests (`t/137`, `t/44`) |
-| The effective configuration is visible, secrets redacted | not yet | a test that plants a secret and greps the page and its JSON |
+| The effective configuration is visible, secrets redacted | done (`/admin/settings`) | `t/212-admin-settings.t` |
 | Destructive actions ask for confirmation | the four staff actions do (6.6) | `t/44-admin-web.t` |
 
 ### Admin CLI
@@ -1463,8 +1463,20 @@ be dropped: candidates are now checked again, each under its lock. It also
 found that `bin/gpforum` exited 0 on misuse for every command (Mojolicious
 ignores a command's return value), fixed for all 25 adapters.
 
-**Still open in 6.5:** no settings surface, no SMTP test-send, no rate-limit
-tuning, no bans, no plugin management, no import/export UI.
+**Settings, mail test-send and antivirus check — DONE 2026-10-01.**
+`/admin/settings` shows the effective configuration with every secret
+redacted (a test plants known secrets and greps the page, its JSON and the
+Italian page); the console sends a test message to the admin's own address
+and runs the antivirus check, both audited. `docs/ops/console-and-cli.md`
+maps every `bin/` command to a console route or a reason, checked against
+the application's router by `t/214-console-cli-parity.t`. The review found
+five defects before commit: `sslpassword=` and a password with a raw `@`
+shown in clear, a stack trace stored as the mail error, the recipient's
+address quoted back by the SMTP server into the audit row, and a send that
+could outlive the request's idle limit.
+
+**Still open in 6.5:** no rate-limit tuning, no bans beyond suspensions, no
+plugin management, no import/export UI.
 
 **6.6 Fix the admin console defects that mislead the operator. — DONE.**
 

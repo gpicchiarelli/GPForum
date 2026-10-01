@@ -48,6 +48,17 @@ Evidence JSON always sets `secrets_redacted=true` and
 passwords plus the internal probe token from nested strings/errors. Never
 archive evidence that still contains secrets.
 
+## From the console
+
+`/admin/settings` has a **Send test message** button: one message, through
+the configured transport, to the signed-in administrator's own address. It
+never takes an address from the request, so the console cannot send mail
+anywhere else; `--send --to` other addresses stays on the shell. The outcome,
+or the transport's error with every configured secret replaced by
+`[redacted]`, is shown on the page and recorded in the audit log
+(`admin.mail_test_sent`, with the actor and the outcome, not the address).
+Each SMTP step is given five seconds: the send runs inside a web request.
+
 ## Identity mail lifecycle drill
 
 Exercise all three identity mail kinds through `Identity::Mailer` under the

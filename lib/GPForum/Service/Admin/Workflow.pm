@@ -22,6 +22,7 @@ has binding_store       => undef;
 has category_store      => undef;
 has command_idempotency => undef;
 has dead_letter_replay  => undef;
+has diagnostics         => undef;
 has logger              => undef;
 has maintenance         => undef;
 has role_catalog        => undef;
@@ -131,6 +132,19 @@ sub request_search_rebuild ( $self, $input ) {
 sub purge_public_cache ( $self, $input ) {
     return $self->_maintenance_command( $input, 'admin.cache_purge',
         sub { return $self->maintenance->purge_public_cache($input); } );
+}
+
+# 6.5: a test message to the administrator's own address, and the antivirus
+# check, each under a command id -- a resubmitted form sends no second
+# message -- and audited with its outcome (Admin::Diagnostics).
+sub send_test_mail ( $self, $input ) {
+    return $self->_maintenance_command( $input, 'admin.mail_test',
+        sub { return $self->diagnostics->send_test_mail($input); } );
+}
+
+sub check_antivirus ( $self, $input ) {
+    return $self->_maintenance_command( $input, 'admin.antivirus_check',
+        sub { return $self->diagnostics->check_antivirus($input); } );
 }
 
 sub _maintenance_command ( $self, $input, $command_type, $work ) {
@@ -616,6 +630,26 @@ Creates a category when a title is present.
 =head2 update_category
 
 Updates a category when a category id is present.
+
+=head2 request_search_rebuild
+
+Starts a search rebuild through L<GPForum::Service::Admin::Maintenance>,
+under the command id.
+
+=head2 purge_public_cache
+
+Purges the public page cache, under the command id.
+
+=head2 send_test_mail
+
+Sends a test message to the actor's own address through
+L<GPForum::Service::Admin::Diagnostics>, under the command id; C<ok> whether
+the transport accepted it or not, with the outcome in C<stored>.
+
+=head2 check_antivirus
+
+Runs the antivirus check, under the command id, with its report in
+C<stored>.
 
 =head2 replay_dead_letter
 

@@ -28,7 +28,12 @@ has public_base_url => sub {
 
     return $self->_config_value( 'public_base_url', $DEFAULT_BASE );
 };
-has transport => sub {
+
+# Seconds Email::Sender's SMTP transport waits on each step; undef keeps its
+# default of 120. A caller inside a web request needs far less
+# (Admin::Diagnostics).
+has smtp_timeout => undef;
+has transport    => sub {
     my ($self) = @_;
 
     return $self->_build_transport;
@@ -66,6 +71,22 @@ sub send_email_verification ( $self, $input ) {
             body    => $self->_email_verification_body($input),
             kind    => 'email_verification',
             subject => 'Verify your GPForum account',
+            to      => $input->{to},
+        }
+    );
+}
+
+# The console's test message (Admin::Diagnostics). It only has to arrive, so
+# it carries no link and no token.
+sub send_test_message ( $self, $input ) {
+    return $self->_send_identity_mail(
+        {
+            body => join( "\n\n",
+                'This message was sent from the GPForum admin console to'
+                  . ' check that mail is delivered.',
+                'No action is needed.' ),
+            kind    => 'test_message',
+            subject => 'GPForum test message',
             to      => $input->{to},
         }
     );
@@ -170,6 +191,9 @@ sub _smtp_args ($self) {
     };
     $self->_apply_smtp_ssl($args);
     $self->_apply_smtp_auth($args);
+    if ( defined $self->smtp_timeout ) {
+        $args->{timeout} = $self->smtp_timeout;
+    }
 
     return $args;
 }
@@ -278,6 +302,10 @@ Sends an email-change confirmation link.
 
 Sends a registration verification link.
 
+=head2 send_test_message
+
+Sends the admin console's test message, which carries no link.
+
 =head1 DIAGNOSTICS
 
 Transport send exceptions propagate to the caller. Delivery success is
@@ -286,7 +314,8 @@ logged as C<identity mail delivered: $kind> without the token.
 =head1 CONFIGURATION AND ENVIRONMENT
 
 Reads C<mail_transport>, C<mail_from>, C<public_base_url>, and optional
-SMTP fields from the injected config object.
+SMTP fields from the injected config object. C<smtp_timeout> bounds each
+SMTP step for callers that cannot wait Email::Sender's 120 seconds.
 
 =head1 DEPENDENCIES
 

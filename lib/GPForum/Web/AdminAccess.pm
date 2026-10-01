@@ -36,18 +36,37 @@ const my $STATUS_DEAD_LETTER_REPLAYED => 'dead_letter_replayed';
 const my $STATUS_SEARCH_REBUILD       => 'search_rebuild_requested';
 const my $STATUS_CACHE_PURGED         => 'cache_purged';
 const my $JOBS_REDIRECT               => 'admin_jobs';
+const my $STATUS_MAIL_TEST_SENT       => 'mail_test_sent';
+const my $STATUS_MAIL_TEST_FAILED     => 'mail_test_failed';
+const my $STATUS_ANTIVIRUS_PASSED     => 'antivirus_check_passed';
+const my $STATUS_ANTIVIRUS_PROBLEM    => 'antivirus_check_problem';
+const my $STATUS_ANTIVIRUS_DISABLED   => 'antivirus_check_disabled';
+const my $SETTINGS_REDIRECT           => 'admin_settings';
 
 const my %WRITE_FLASH => (
+    $STATUS_ANTIVIRUS_DISABLED   => 'admin.antivirus_check_disabled',
+    $STATUS_ANTIVIRUS_PASSED     => 'admin.antivirus_check_passed',
+    $STATUS_ANTIVIRUS_PROBLEM    => 'admin.antivirus_check_problem',
     $STATUS_CACHE_PURGED         => 'admin.cache_purged',
     $STATUS_CATEGORY_CREATED     => 'admin.category_created',
     $STATUS_CATEGORY_UPDATED     => 'admin.category_updated',
     $STATUS_DEAD_LETTER_REPLAYED => 'admin.dead_letter_replayed',
+    $STATUS_MAIL_TEST_FAILED     => 'admin.mail_test_failed',
+    $STATUS_MAIL_TEST_SENT       => 'admin.mail_test_sent',
     $STATUS_PERMISSION_CREATED   => 'admin.permission_created',
     $STATUS_ROLE_BOUND           => 'admin.role_bound',
     $STATUS_ROLE_BINDING_REVOKED => 'admin.role_binding_revoked',
     $STATUS_ROLE_CREATED         => 'admin.role_created',
     $STATUS_ROLE_PERM_ATTACHED   => 'admin.role_permission_attached',
     $STATUS_SEARCH_REBUILD       => 'admin.search_rebuild_requested',
+);
+
+# A diagnostic that ran but did not pass is not a success: its flash says so
+# as a warning, and scanning that is off as a notice.
+const my %WRITE_FLASH_TYPE => (
+    $STATUS_ANTIVIRUS_DISABLED => 'notice',
+    $STATUS_ANTIVIRUS_PROBLEM  => 'warning',
+    $STATUS_MAIL_TEST_FAILED   => 'warning',
 );
 
 sub page_limit ( $, $requested ) {
@@ -124,6 +143,28 @@ sub jobs_redirect {
     return $JOBS_REDIRECT;
 }
 
+sub settings_redirect {
+    return $SETTINGS_REDIRECT;
+}
+
+# The answer to a test message: sent, or failed with the transport's error.
+sub mail_test_status ( $, $outcome ) {
+    return ( ( $outcome // q{} ) eq 'sent' )
+      ? $STATUS_MAIL_TEST_SENT
+      : $STATUS_MAIL_TEST_FAILED;
+}
+
+# The answer to an antivirus check: passed only when it is ok, off when
+# scanning is disabled, and a problem otherwise -- degraded signatures, a
+# failed scan, or a scanner the console cannot run.
+sub antivirus_check_status ( $, $report_status ) {
+    my $status = $report_status // q{};
+    return $STATUS_ANTIVIRUS_PASSED   if $status eq 'ok';
+    return $STATUS_ANTIVIRUS_DISABLED if $status eq 'disabled';
+
+    return $STATUS_ANTIVIRUS_PROBLEM;
+}
+
 sub categories_redirect {
     return $CATEGORIES_REDIRECT;
 }
@@ -150,6 +191,12 @@ sub write_flash_key ( $, $status ) {
     }
 
     return $undefined;
+}
+
+sub write_flash_type ( $, $status ) {
+    my $key = $status // q{};
+
+    return exists $WRITE_FLASH_TYPE{$key} ? $WRITE_FLASH_TYPE{$key} : 'success';
 }
 
 sub is_failed ( $self, $result ) {
@@ -281,6 +328,19 @@ Returns C<dead_letter_replayed>.
 
 The async jobs page, where a replay returns to.
 
+=head2 settings_redirect
+
+The settings page, where a test message and an antivirus check return to.
+
+=head2 mail_test_status
+
+C<mail_test_sent> for a sent test message, C<mail_test_failed> otherwise.
+
+=head2 antivirus_check_status
+
+C<antivirus_check_passed>, C<antivirus_check_disabled> or
+C<antivirus_check_problem> for an antivirus report's status.
+
 =head2 categories_redirect
 
 Returns the categories catalog route name.
@@ -297,6 +357,11 @@ Returns the roles catalog route name.
 
 Returns the i18n catalog key for a successful HTML write, or undef when the
 status has no flash copy.
+
+=head2 write_flash_type
+
+The flash type for a write status: C<success>, or C<warning> and C<notice>
+for a diagnostic that did not pass or had nothing to check.
 
 =head2 is_failed
 

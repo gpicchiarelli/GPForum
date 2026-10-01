@@ -86,6 +86,20 @@ sub list_users ( $self, $options ) {
     return [ map { _row_hash( $_, @USER_COLUMNS ) } _rows($search) ];
 }
 
+# The only address a console action may mail on an administrator's behalf:
+# their own (Admin::Diagnostics' test message). Undef for no such account.
+sub email_of ( $self, $user_id ) {
+    my $search = $self->schema->resultset('User')->search_rs(
+        {
+            deleted_at => undef,
+            id         => $user_id,
+        },
+        { columns => ['email_normalized'] }
+    );
+
+    return _column( $search->single, 'email_normalized' );
+}
+
 sub list_reports ( $self, $options ) {
     $options ||= {};
 
