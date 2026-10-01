@@ -82,7 +82,7 @@ A Perl expert reads any module and finds nothing to rewrite.
 | One utility module | 37 `_trim`, 40 `_column`, 25 `_rows` | no private copy of a shared utility |
 | `return undef` under a stated policy, instead of `my $undefined` | 420 | perlcritic, with the policy's reason in `.perlcriticrc` |
 | Critic baseline at zero; each remaining exemption a `## no critic` with its reason on the line | 857 baseline lines | the critic gate with no baseline file |
-| POD on every public API | 262 modules lack a full POD | `Pod::Coverage` over `Service/` and `Web/` |
+| POD on every public API | done for `Service/` and `Web/` (2026-10-01): 99 modules documented, every public sub with its entry, read against the code (about 20 descriptions corrected; two real defects found on the way, the cached-page encoding and SMTP login); the other layers remain | `t/216-pod-coverage.t` |
 
 ### Architecture and maintainability
 

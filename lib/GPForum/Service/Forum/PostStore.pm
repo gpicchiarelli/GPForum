@@ -1275,3 +1275,228 @@ sub _column ( $row, $name ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::PostStore - Write replies, edits, deletes and restores of posts under row locks.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Forum::PostStore->new(
+        clock      => $clock,
+        id_service => $id_service,
+        schema     => $schema,
+    );
+
+    # A reply or an edit, as PostComposer prepared it.
+    my $created = $store->create_post( $prepared->{command} );
+    return $created->{error} if !$created->{ok};
+    my $post = $created->{post};
+
+    my $edited = $store->edit_post( $prepared_edit->{command} );
+
+    $store->delete_post(
+        {
+            idempotency_key => $command_id,
+            post            => {
+                deleted_by => $user_id,
+                post_id    => $post_id,
+                thread_id  => $thread_id,
+            },
+        }
+    );
+    $store->restore_post(
+        {
+            idempotency_key => $command_id,
+            post            => {
+                author_user_id => $author_id,
+                post_id        => $post_id,
+                restored_by    => $user_id,
+                thread_id      => $thread_id,
+            },
+        }
+    );
+
+=head1 DESCRIPTION
+
+The write side of posts. L<GPForum::Service::Forum::PostingWorkflow> calls
+it with the commands that L<GPForum::Service::Forum::PostComposer> builds
+for a reply or an edit, and with the ones it builds itself for a delete or a
+restore. Each method runs in its own C<txn_do> and, with one correlation
+id, records through L<GPForum::Infrastructure::EventRecorder> the domain
+event (C<post.created>, C<post.updated>, C<post.deleted>,
+C<post.undeleted>, aggregate type C<post>) and the audit row of the same
+name. The event's idempotency key is
+C<command:IDEMPOTENCY_KEY:EVENT_TYPE> when the command carries an
+C<idempotency_key>, C<EVENT_TYPE:POST_ID> otherwise.
+
+A reply takes its thread row C<FOR NO KEY UPDATE>. The lock hands out
+positions in commit order, which the post reader's keyset and the read-state
+high-water mark depend on: a reply that commits later never takes a lower
+number. It also orders the reply against a moderator locking or hiding the
+thread and against its author deleting it. C<FOR NO KEY UPDATE> does not
+block the C<FOR KEY SHARE> of a foreign-key check, so a reader's first
+mark-read insert does not wait for the replies in flight. An edit, delete or
+restore changes nothing on the thread row, so it takes the thread row
+C<FOR KEY SHARE> and then the post row C<FOR UPDATE>: the thread before the
+post, as every write does, so no lock cycle.
+
+The workflow checked the thread and the post before those locks were
+granted, so the store checks again, in the workflow's words, what the locks
+return: a missing thread, one in a state the thread page does not show
+(only C<visible> and C<locked> are), or a deleted one written to by anyone
+but its author is C<thread not found>; a locked thread is
+C<thread is locked>. For an edit, delete or restore a missing post is
+C<post not found>, and so is a deleted one for an edit or a delete and one
+that is not deleted for a restore; a hidden post is C<post is hidden>.
+Authorship is not read again: nothing changes it. A refusal is returned as
+C<< { ok => 0, error => MESSAGE } >> with nothing written, and the workflow
+answers it with the status its own check gives.
+
+Unique conflicts are caught in a savepoint through
+L<GPForum::Infrastructure::UniqueConflict>. A post id already taken by a
+post of the same thread, or a body or revision id already taken by a row of
+the same post, is read as an earlier run of the same command and that row
+is reused; an id taken by any other row is replaced with a new UUID and the
+write is tried once more. Any other unique conflict, such as a position or
+a revision number taken meanwhile, gets the position or number allocated
+again, once.
+
+The reply count lives in C<thread_counter_shards> (shard 0 of the thread):
+a reply or a restore adds 1, a delete subtracts 1. An existing shard row is
+updated in SQL (C<reply_count_delta + ?>, C<last_updated_at = now()>); a
+missing one is inserted, and an insert that loses a race updates the row
+that won.
+
+A schema with no DBI handle (the in-memory doubles) has nothing to lock:
+the thread is not checked again, though an edit or a delete still refuses a
+missing, deleted or hidden post, and a restore a missing, not deleted or
+hidden one. Rows may then be plain hashes, which are updated in place.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is the L<DBIx::Class> schema and has no
+default. C<clock> defaults to L<GPForum::Service::Clock> and stamps
+C<deleted_at>; C<id_service> defaults to L<GPForum::Infrastructure::Id> and
+mints the correlation ids and any replacement ids; C<recorder> defaults to
+an L<GPForum::Infrastructure::EventRecorder> on that id service and
+schema.
+
+=head2 create_post
+
+Takes the command from C<prepare> in L<GPForum::Service::Forum::PostComposer>:
+C<post>, C<body>, C<revision>, C<counter_shard> and C<idempotency_key>.
+Under the thread lock it re-checks the thread for C<post>'s
+C<author_user_id>, then inserts the post (at the thread's next position,
+from 1, when C<position> is not a positive number), its body and its
+revision, adds C<counter_shard>'s C<reply_count_delta>, points the post at
+the body and the revision, and records C<post.created>.
+
+Returns C<< { ok => 0, error => 'thread not found' | 'thread is locked' } >>
+when refused, else C<< { ok => 1, post => $post, skipped => $skipped } >>.
+C<post> is the new post row. When C<post_id> is already a post of the same
+thread whose body is stored too, that post is returned with C<skipped> 1 and
+nothing is written or recorded; when its body is missing, the body,
+revision, count and pointers are completed and recorded. Otherwise
+C<skipped> is undefined.
+
+=head2 edit_post
+
+Takes the command from C<prepare_revision> in
+L<GPForum::Service::Forum::PostComposer>: C<post> (C<post_id>,
+C<thread_id>, C<editor_user_id>), C<body>, C<revision> and
+C<idempotency_key>. Under the thread and post locks it re-checks the post
+and its thread for the editor. When the C<source_hash> of the new body is
+that of the post's current body, it writes nothing. Otherwise it stores the
+body (reusing a stored body of the same id and post), inserts the revision
+(numbered after the post's highest when C<revision_number> is not a
+positive number), points the post at both, raises its C<version> and
+records C<post.updated>. A stored revision of the same id and post that the
+post does not point at yet is pointed at and recorded instead.
+
+Returns a refusal (C<post not found>, C<thread not found>,
+C<post is hidden>, C<thread is locked>), C<< { ok => 1, post => $post } >>
+after a write, or C<< { ok => 1, post => $post, skipped => 1 } >> when the
+body was unchanged or the post already points at the command's revision
+(an earlier run of the same command).
+
+=head2 delete_post
+
+Takes C<< { idempotency_key, post => { post_id, thread_id, deleted_by } } >>.
+Under the thread and post locks it re-checks the post and its thread for
+C<deleted_by>, then sets C<deleted_at> (the clock's ISO 8601 time) and
+C<deleted_by>, raises the post's C<version>, subtracts 1 from the
+thread's reply count (the post's thread, else C<thread_id>; skipped when
+neither is set) and records C<post.deleted>.
+
+Returns a refusal (C<post not found>, C<thread not found>,
+C<post is hidden>, C<thread is locked>) or C<< { ok => 1, post => $post } >>.
+A post already deleted is C<post not found>: replaying a command is the
+workflow's command idempotency, not the store's.
+
+=head2 restore_post
+
+Takes C<< { idempotency_key, post => { post_id, thread_id, restored_by,
+author_user_id } } >>. Under the thread and post locks it requires the post
+to be deleted and re-checks it and its thread for C<restored_by>, then
+clears C<deleted_at> and C<deleted_by>, raises the post's C<version>, adds
+1 to the thread's reply count (skipped when no thread id is known) and
+records C<post.undeleted>, whose payload carries the post's author (the
+row's, else C<author_user_id>).
+
+Returns a refusal (C<post not found> when the post is missing or not
+deleted, C<thread not found>, C<post is hidden>, C<thread is locked>) or
+C<< { ok => 1, post => $post } >>.
+
+=head1 DIAGNOSTICS
+
+A refusal is returned, not thrown: C<< { ok => 0, error => MESSAGE } >>
+with C<thread not found>, C<thread is locked>, C<post not found> or
+C<post is hidden>. Database errors die, and so does a unique conflict that
+is not one of those described above or that the one retry does not
+resolve (re-thrown with C<croak>); the transaction rolls back.
+L<GPForum::Service::Forum::PostingWorkflow> catches the death, logs it and
+answers C<post store failed>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<Mojo::Base>, L<Const::Fast>, L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Clock>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Each retry happens once: a second conflict on a new post id, or on a
+position or revision number allocated again, dies and rolls the transaction
+back. A second conflict on a new body or revision id is passed up and taken
+as a position conflict (a reply) or a revision number conflict (an edit),
+so the write is tried once more from there. The next revision
+number is found by reading every revision of the post. Without a DBI handle
+nothing is locked and the thread is not checked again.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

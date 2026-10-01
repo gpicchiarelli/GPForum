@@ -224,7 +224,7 @@ Version 0.001.
 
 A process-local cache layer is invisible to its siblings. Under Hypnotoad every
 worker holds its own L1, so an invalidation raised in one worker leaves the
-others serving the old entry until it expires — long enough for a hidden post
+others serving the old entry until it expires -- long enough for a hidden post
 to stay readable after a moderator removed it.
 
 This bus closes that gap with PostgreSQL's own pub/sub rather than a new piece

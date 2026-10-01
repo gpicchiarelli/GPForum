@@ -1215,3 +1215,303 @@ sub _viewer ($input) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::PostingWorkflow - Create, edit, move, delete and restore threads and posts, once per command id.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $workflow = GPForum::Service::Forum::PostingWorkflow->new(
+        category_reader      => $category_reader,
+        command_idempotency  => $command_idempotency,
+        logger               => $app->log,
+        mention_store        => $mention_store,
+        post_composer        => $post_composer,
+        post_reader          => $post_reader,
+        post_store           => $post_store,
+        thread_composer      => $thread_composer,
+        thread_detail_reader => $thread_detail_reader,
+        thread_store         => $thread_store,
+    );
+
+    my $result = $workflow->create_thread(
+        {
+            author_user_id => $user_id,
+            body_source    => $markdown,
+            category_id    => $category_id,
+            command_id     => $command_id,
+            title          => $title,
+            viewer         => $viewer,
+        }
+    );
+    if ( $result->{ok} ) {
+        my $thread = $result->{stored}{thread};  # a Thread row
+    }
+    elsif ( $result->{status} eq 'invalid' ) {
+        # $result->{prepared}{errors}, $result->{prepared}{values}
+    }
+
+    $workflow->create_reply(
+        {
+            author_user_id => $user_id,
+            body_source    => $markdown,
+            command_id     => $reply_command_id,
+            thread_id      => $thread_id,
+            viewer         => $viewer,
+        }
+    );
+
+=head1 DESCRIPTION
+
+The write side of the forum for its controllers: a new thread, a reply, and
+an author's title edit, move, delete and restore of a thread, and edit,
+delete and restore of a post. Each method checks the request, has a composer
+validate it and build the command where there is something to validate,
+hands the command to the store, and answers with one result shape.
+
+The author acts as a reader (ADR 0102): the category and the thread are
+read through the category reader and the thread detail reader as the
+request's C<viewer>, or as an anonymous reader when there is none, so a
+write never reaches what its author cannot read, and what they cannot read
+is answered as not found. Only the author of a thread or a post may change
+it, and not while it is hidden or its thread is locked. A new thread or reply
+may not ask for a visibility broader than the effective visibility of the
+category or thread it goes in, which the composer gets as its floor.
+
+The store checks again, under its row locks, what the workflow checked
+before the transaction, because a moderator may have locked or hidden the
+thread or the post since, or the author deleted one in another tab. Its
+refusal is an answer, not a failure: C<thread not found> and
+C<post not found> become C<not_found>, and C<thread is locked> and
+C<post is hidden> become C<forbidden>, the status the workflow's own check
+gives for the same words.
+
+Every method needs a command id. With a C<command_idempotency>
+(L<GPForum::Service::Operations::CommandIdempotency>), a command runs once
+per id: the request (the author and the trimmed fields each entry names,
+the body as a SHA-256 hash of the trimmed source, but not the C<viewer> or
+an C<edit_reason>) and the response are kept in the command log, a repeat of
+the same request gets the response back without running anything, and a
+different request under the same id is refused as a conflict. A C<failed>
+result is not kept, so the same id can be tried again. Without a
+C<command_idempotency>, every call runs.
+
+After a new thread, a reply or a post edit is stored, the mentions in its
+body are recorded through the mention store, at most ten; a failure there is
+logged as a warning and does not fail the write.
+
+=head1 SUBROUTINES/METHODS
+
+Every method below takes one hash reference with C<command_id> (or
+C<idempotency_key> when C<command_id> is empty; both are trimmed),
+C<author_user_id>, the acting user, and an optional C<viewer>, a
+L<GPForum::Service::Forum::Viewer> (anonymous when absent), plus the fields
+named in its entry. It returns a hash reference:
+
+    {
+        ok       => 1 or 0,     # 1 only when status is 'ok'
+        status   => $status,    # ok, invalid, not_found, forbidden,
+                                # conflict or failed
+        error    => $message,   # why, for every status but ok and invalid
+        prepared => $prepared,  # the composer's answer, if one ran, on ok
+                                # and invalid
+        stored   => $stored,    # the store's answer, on ok
+    }
+
+A store's refusal or death is answered without C<prepared> or C<stored>;
+only a C<failed> for a store answer that is neither a success nor a known
+refusal carries that answer in C<stored>.
+
+Every method also answers:
+
+=over 4
+
+=item * C<invalid>, with
+C<< prepared => { ok => 0, errors => { command_id => 'command_id is required' }, values => { %input } } >>,
+when the command id is empty;
+
+=item * C<conflict>, with the command log's message, when the id was used
+for another request or that command is still running;
+
+=item * C<failed> with C<command log failed> when the command log fails, or
+when anything the command runs dies (with a C<command_idempotency> only);
+
+=item * C<failed> with C<thread store failed> or C<post store failed> when
+the store dies or gives an answer that is neither a success nor one of the
+refusals above;
+
+=item * on a replay, the stored response as a result with C<< idempotent => 1 >>,
+C<prepared> rebuilt for an C<invalid> answer, and C<stored> rebuilt from the
+ids kept in the response, as each entry says.
+
+=back
+
+=head2 new
+
+Mojo::Base constructor. The collaborators are attributes without defaults:
+C<category_reader> (L<GPForum::Service::Forum::CategoryReader>),
+C<thread_detail_reader> (L<GPForum::Service::Forum::ThreadDetailReader>),
+C<post_reader> (L<GPForum::Service::Forum::PostReader>), C<thread_composer>
+(L<GPForum::Service::Forum::ThreadComposer>), C<post_composer>
+(L<GPForum::Service::Forum::PostComposer>), C<thread_store>
+(L<GPForum::Service::Forum::ThreadStore>), C<post_store>
+(L<GPForum::Service::Forum::PostStore>) and C<mention_store>
+(L<GPForum::Service::Community::MentionStore>). C<command_idempotency> and
+C<logger> (anything with C<error> and C<warn>, such as L<Mojo::Log>) are
+optional. A method uses only the collaborators its path calls.
+
+=head2 create_thread
+
+Takes C<category_id>, C<title>, C<body_source> and an optional
+C<visibility>. Returns C<not_found> (C<category not found>) when a category
+id is given that the viewer cannot read, and C<invalid> with the composer's
+answer when L<GPForum::Service::Forum::ThreadComposer/prepare> rejects the
+input (an empty category id among the reasons). Otherwise stores the thread
+with L<GPForum::Service::Forum::ThreadStore/create_thread>, records the
+mentions in the opening post, and returns C<ok> with C<prepared> (holding
+the command) and C<stored>, the store's answer (C<thread>, C<post> and
+C<skipped>). Command type C<thread.create>; a replay's C<stored> is
+C<< { ok => 1, thread => { thread_id }, post => { post_id } } >>.
+
+=head2 create_reply
+
+Takes C<thread_id>, C<body_source> and an optional C<visibility>. Returns
+C<not_found> (C<thread not found>) when the viewer cannot read the thread,
+C<forbidden> (C<thread is locked>) when it is locked, and C<invalid> when
+L<GPForum::Service::Forum::PostComposer/prepare> rejects the input.
+Otherwise stores the post, at the thread's next position, with
+L<GPForum::Service::Forum::PostStore/create_post>, records its mentions, and
+returns C<ok> with C<prepared> and C<stored>, the post store's answer; a
+refusal of the post store is answered as described above. Command type
+C<reply.create>; a replay's C<stored> is
+C<< { ok => 1, post => { post_id, thread_id } } >>.
+
+=head2 edit_thread
+
+Takes C<thread_id> and C<title>. Returns C<not_found> (C<thread not found>)
+when the viewer cannot read the thread or it is deleted; C<forbidden> when
+the requester is not its author (C<not the thread author>), its moderation
+state is C<hidden> (C<thread is hidden>) or it is locked
+(C<thread is locked>); and C<invalid> when
+L<GPForum::Service::Forum::ThreadComposer/prepare_title> rejects the title.
+Otherwise stores the new title and slug with
+L<GPForum::Service::Forum::ThreadStore/edit_thread> and returns C<ok> with
+C<prepared> and C<stored> (C<thread>, and C<skipped> when nothing changed).
+Command type C<thread.edit>; a replay's C<stored> is
+C<< { ok => 1, thread => { thread_id, title, slug } } >>.
+
+=head2 move_thread
+
+Takes C<thread_id> and C<category_id>, the target. Gives the C<not_found>
+and C<forbidden> answers of L</edit_thread>, so only the thread's author may
+move it; then C<not_found> (C<category not found>) when a target id is given
+that the viewer cannot read, and C<invalid> when
+L<GPForum::Service::Forum::ThreadComposer/prepare_move> rejects the input
+(an empty target among the reasons). Otherwise moves the thread with
+L<GPForum::Service::Forum::ThreadStore/move_thread> and returns C<ok> with
+C<prepared> and C<stored> (C<thread>, and C<skipped> when it was already
+there). Command type C<thread.move>; a replay's C<stored> is
+C<< { ok => 1, thread => { thread_id, category_id } } >>.
+
+=head2 delete_thread
+
+Takes C<thread_id>. Gives the C<not_found> and C<forbidden> answers of
+L</edit_thread>; there is nothing to validate, so no composer runs and
+C<prepared> is undefined. Otherwise soft-deletes the thread with
+L<GPForum::Service::Forum::ThreadStore/delete_thread>, the requester as
+C<deleted_by>, and returns C<ok> with C<stored> (C<thread>). Command type
+C<thread.delete>; a replay's C<stored> is
+C<< { ok => 1, thread => { thread_id } } >>.
+
+=head2 restore_thread
+
+Takes C<thread_id>. Returns C<not_found> (C<thread not found>) unless the
+viewer can read the thread and it is deleted (the thread detail reader shows
+a deleted thread to its author only), then the C<forbidden> answers of
+L</edit_thread>. Otherwise restores the thread with
+L<GPForum::Service::Forum::ThreadStore/restore_thread>, the requester as
+C<restored_by>, and returns C<ok> with C<stored> (C<thread>). Command type
+C<thread.restore>; replayed as L</delete_thread> is.
+
+=head2 edit_post
+
+Takes C<post_id>, C<body_source> and an optional C<edit_reason>. Returns
+C<not_found> with C<post not found> when the post is missing or deleted, and
+with C<thread not found> when the viewer cannot read its thread; C<forbidden>
+when the requester is not its author (C<not the post author>), the post is
+hidden (C<post is hidden>: it has a C<hidden_at>, or its moderation state is
+C<hidden>) or the thread is locked (C<thread is locked>); and C<invalid>
+when L<GPForum::Service::Forum::PostComposer/prepare_revision> rejects the
+input. Otherwise stores the new revision with
+L<GPForum::Service::Forum::PostStore/edit_post>, records the mentions in the
+new body, and returns C<ok> with C<prepared> and C<stored>, the post store's
+answer. Command type C<post.edit>; a replay's C<stored> is
+C<< { ok => 1, post => { post_id, thread_id } } >>.
+
+=head2 delete_post
+
+Takes C<post_id>. Gives the C<not_found> and C<forbidden> answers of
+L</edit_post>; no composer runs. Otherwise soft-deletes the post with
+L<GPForum::Service::Forum::PostStore/delete_post>, the requester as
+C<deleted_by>, and returns C<ok> with C<stored>. Command type
+C<post.delete>; replayed as L</edit_post> is.
+
+=head2 restore_post
+
+Takes C<post_id>. Returns C<not_found> with C<post not found> unless the
+post is deleted, and with C<thread not found> when the viewer cannot read
+its thread; then the C<forbidden> answers of L</edit_post>. Otherwise
+restores the post with L<GPForum::Service::Forum::PostStore/restore_post>,
+the requester as C<restored_by>, and returns C<ok> with C<stored>. Command
+type C<post.restore>; replayed as L</edit_post> is.
+
+=head1 DIAGNOSTICS
+
+A store's or the command log's error is caught and logged through C<logger>
+at error level (C<thread create failed>, C<reply create failed>,
+C<thread edit failed>, C<thread move failed>, C<thread delete failed>,
+C<thread restore failed>, C<post edit failed>, C<post delete failed>,
+C<post restore failed> or C<command log failed>, followed by the error), and
+the result is C<failed>. A mention store error is logged at warning level as
+C<mention recording degraded>. Without a C<command_idempotency>, an error in
+a reader or a composer, an unset one included, dies out of the method; with
+one, it is caught as C<command log failed>. Nothing is logged without a
+C<logger>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Forum::Viewer>, L<GPForum::Service::Forum::Visibility>,
+L<GPForum::Infrastructure::Row>, L<Digest::SHA>, L<English>, L<Const::Fast>,
+L<Mojo::Base>, and the collaborators listed under L</new>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+A replay rebuilds C<stored> from the response kept in the command log, so it
+holds only the ids (and, for a title edit or a move, the new title and slug
+or category), not the rows a first run returns.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

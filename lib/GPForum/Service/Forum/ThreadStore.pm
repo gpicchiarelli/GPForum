@@ -1096,3 +1096,199 @@ sub _idempotency_key ( $command, $event_type, $aggregate_id ) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Forum::ThreadStore - Write a new thread, and its title edits, moves, deletes and restores.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Forum::ThreadStore->new(
+        clock      => $clock,
+        id_service => $id_service,
+        schema     => $schema,
+    );
+
+    # The command GPForum::Service::Forum::ThreadComposer->prepare built.
+    my $created = $store->create_thread($command);
+    my $thread  = $created->{thread};
+
+    my $edited = $store->edit_thread($title_command);
+    if ( !$edited->{ok} ) {
+        # $edited->{error} is 'thread not found' or 'thread is locked'
+    }
+
+    $store->move_thread($move_command);
+    $store->delete_thread(
+        {
+            idempotency_key => $key,
+            thread          => {
+                category_id => $category_id,
+                deleted_by  => $user_id,
+                thread_id   => $thread_id,
+            },
+        }
+    );
+
+=head1 DESCRIPTION
+
+The write side of a thread for L<GPForum::Service::Forum::PostingWorkflow>.
+It takes the commands L<GPForum::Service::Forum::ThreadComposer> builds,
+and the delete and restore commands the workflow builds itself, and writes
+each in one transaction, together with its events (in the event log, each
+with its outbox message) and its audit row, recorded through
+L<GPForum::Infrastructure::EventRecorder>.
+
+A new thread is five rows: the thread, its opening post, the post's body,
+its first revision and the thread's reply counter; the post is then pointed
+at its body and revision. Each insert runs through
+L<GPForum::Infrastructure::UniqueConflict>, under a savepoint inside a live
+PostgreSQL transaction, so a primary-key conflict does not abort the
+transaction. A conflicting row that belongs to this same command (a thread
+with the same category and slug, a post in the same thread, a body or a
+revision of the same post, or the thread's counter) is the leftover of an
+earlier attempt: it is reused and the rows still missing are inserted after
+it. A conflict with another row's id is retried once with a fresh UUID.
+When the earlier attempt's thread and opening post are found, nothing more
+is written and the answer is marked C<skipped>. Events are recorded only
+when this call inserted the thread row.
+
+A title edit, a move, a delete and a restore first lock the thread's row
+(C<SELECT ... FOR UPDATE>). The workflow checked the thread before the
+transaction; a moderator may have locked or hidden it since, or its author
+deleted it in another tab. The lock orders the write against those writes,
+which lock the row too, and the store checks the thread again as they left
+it. A title edit checks again what the workflow checked, except authorship,
+which nothing changes; a move and a delete check that the thread exists and
+is not deleted, and a restore that it exists and is deleted. A refusal is
+returned, not thrown. Each change increments the thread's C<version>.
+
+Every event's idempotency key is C<command:KEY:TYPE> when the command has an
+C<idempotency_key>, and C<TYPE:AGGREGATE_ID> otherwise.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> must be set: the L<DBIx::Class> schema, or
+an in-memory double with C<txn_do> and C<resultset>. C<clock> defaults to
+L<GPForum::Service::Clock>, C<id_service> to L<GPForum::Infrastructure::Id>,
+and C<recorder> to a L<GPForum::Infrastructure::EventRecorder> on the same id
+service and schema.
+
+=head2 create_thread
+
+Takes the command L<GPForum::Service::Forum::ThreadComposer/prepare> builds:
+a hash reference with C<idempotency_key> and the C<thread>, C<post>,
+C<body>, C<revision> and C<counter> records. In one transaction it inserts
+them as described above and then, only when it inserted the thread row,
+records the C<thread.created> event, the C<post.created> event it causes,
+and the C<thread.created> audit row, under one new correlation id.
+
+Returns C<< { ok => 1, thread => $thread, post => $post, skipped => $skipped } >>,
+where C<$thread> and C<$post> are the rows written or found, and C<$skipped>
+is true when an earlier attempt had already written them. It never returns a
+refusal: it dies, and the transaction rolls back, when an insert fails for
+any reason other than the conflicts it resolves, or when the retry with a
+fresh id fails too.
+
+=head2 edit_thread
+
+Takes the command L<GPForum::Service::Forum::ThreadComposer/prepare_title>
+builds: C<idempotency_key> and
+C<< thread => { thread_id, title, slug, editor_user_id } >>. In one
+transaction, under the thread's row lock, it returns
+C<< { ok => 0, error => 'thread not found' } >> when the thread is missing,
+deleted, or in a moderation state other than C<visible> and C<locked>, and
+C<< { ok => 0, error => 'thread is locked' } >> when it is locked. When the
+title and the slug are both unchanged it writes nothing and returns
+C<< { ok => 1, skipped => 1, thread => $thread } >>. Otherwise it sets the
+title and the slug, records the C<thread.updated> event and audit row, and
+returns C<< { ok => 1, thread => $thread } >> with the updated row.
+
+=head2 delete_thread
+
+Takes C<idempotency_key> and
+C<< thread => { thread_id, deleted_by, category_id } >>. In one transaction,
+under the thread's row lock, it returns
+C<< { ok => 0, error => 'thread not found' } >> when the thread is missing
+or already deleted. Otherwise it sets C<deleted_at> to the clock's now and
+C<deleted_by>, records the C<thread.deleted> event and audit row (with the
+thread's category, from the row or else from the command), and returns
+C<< { ok => 1, thread => $thread } >>.
+
+=head2 restore_thread
+
+Takes C<idempotency_key> and
+C<< thread => { thread_id, restored_by, author_user_id, category_id } >>.
+In one transaction, under the thread's row lock, it returns
+C<< { ok => 0, error => 'thread not found' } >> when the thread is missing
+or not deleted. Otherwise it clears C<deleted_at> and C<deleted_by>, records
+the C<thread.undeleted> event and audit row, and returns
+C<< { ok => 1, thread => $thread } >>.
+
+=head2 move_thread
+
+Takes the command L<GPForum::Service::Forum::ThreadComposer/prepare_move>
+builds: C<idempotency_key> and
+C<< thread => { thread_id, category_id, editor_user_id } >>. In one
+transaction, under the thread's row lock, it returns
+C<< { ok => 0, error => 'thread not found' } >> when the thread is missing
+or deleted, and C<< { ok => 1, skipped => 1, thread => $thread } >>, writing
+nothing, when it is already in that category. Otherwise it adds the current
+category to the command as C<previous_category_id> in its C<thread> record
+(the command is changed in place), sets the new category, records the
+C<thread.moved> event and audit row with both categories, and returns
+C<< { ok => 1, thread => $thread } >>. Whether the target category exists
+and the mover may read it is checked by the workflow, not here.
+
+=head1 DIAGNOSTICS
+
+Refusals are returned as C<< { ok => 0, error => $message } >>, with the
+messages C<thread not found> and C<thread is locked>;
+L<GPForum::Service::Forum::PostingWorkflow> answers them with the statuses
+its own check gives for the same words. Everything else dies and rolls the
+transaction back: a database error, a unique violation on a constraint the
+store does not resolve, a second conflict after the retry with a fresh id,
+or a failure to record an event or an audit row.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Infrastructure::Id>, L<GPForum::Service::Clock>, L<Const::Fast>,
+L<Mojo::Base>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Conflicts are told apart by the constraint name in the error text
+(C<threads_pkey>, C<posts_pkey>, C<post_bodies_pkey>,
+C<post_revisions_pkey>, C<thread_counters_pkey>), so a driver must report it
+the way PostgreSQL does. A schema without a DBI handle (the in-memory
+doubles) takes no row lock, and a title edit through it is not checked
+again.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut
