@@ -21,7 +21,7 @@ my $session_secret_prefix =
   qr/GPFORUM_SESSION_SECRETS [ ] must [ ] not [ ] include/msx;
 my $session_secret_suffix = qr/the [ ] development [ ] default/msx;
 
-const my $EXPECTED_TESTS             => 117;
+const my $EXPECTED_TESTS             => 122;
 const my $DEFAULT_LOG_LEVEL          => 'info';
 const my $DEFAULT_RUNTIME_LISTEN     => 'http://127.0.0.1:8080';
 const my $DEFAULT_RUNTIME_BACKLOG    => 256;
@@ -63,6 +63,7 @@ const my $DEFAULT_SEARCH_TIMEOUT_MS    => 2_000;
 const my $DEFAULT_SEARCH_CANDIDATES    => 1_000;
 const my $CUSTOM_SEARCH_TIMEOUT_MS     => 500;
 const my $CUSTOM_SEARCH_CANDIDATES     => 250;
+const my $LOWERED_STATEMENT_TIMEOUT_MS => 1_500;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -358,6 +359,62 @@ throws_ok(
     },
     qr/\A search_statement_timeout_ms [ ] must [ ] be [ ] >= [ ] 0/msx,
     'negative search statement timeout fails validation',
+);
+
+# Search is cut off before every other query, never after. An operator who
+# lowered the connection's statement timeout below search's default gave
+# search more time than anything else; it is now held to the connection's.
+is(
+    GPForum::Config->from_environment(
+        {
+            %environment,
+            GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS =>
+              $LOWERED_STATEMENT_TIMEOUT_MS,
+        }
+    )->search_statement_timeout_ms,
+    $LOWERED_STATEMENT_TIMEOUT_MS,
+    q{search's timeout is lowered to a lower connection timeout}
+);
+is(
+    GPForum::Config->from_environment(
+        {
+            %environment,
+            GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS =>
+              $LOWERED_STATEMENT_TIMEOUT_MS,
+            GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS => $CUSTOM_SEARCH_TIMEOUT_MS,
+        }
+    )->search_statement_timeout_ms,
+    $CUSTOM_SEARCH_TIMEOUT_MS,
+    'and left alone when it is already below it'
+);
+is(
+    GPForum::Config->from_environment(
+        { %environment, GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS => 0 }
+    )->search_statement_timeout_ms,
+    $DEFAULT_SEARCH_TIMEOUT_MS,
+    'a connection without a timeout leaves search its own'
+);
+is(
+    GPForum::Config->from_environment(
+        {
+            %environment,
+            GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS =>
+              $LOWERED_STATEMENT_TIMEOUT_MS,
+            GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS => 0,
+        }
+    )->search_statement_timeout_ms,
+    0,
+    q{and zero for search still means the connection's}
+);
+throws_ok(
+    sub {
+        GPForum::Config->new(
+            database_statement_timeout_ms => $LOWERED_STATEMENT_TIMEOUT_MS,
+            search_statement_timeout_ms   => $DEFAULT_SEARCH_TIMEOUT_MS,
+        )->validate;
+    },
+    qr/\A search_statement_timeout_ms [ ] must [ ] not [ ] exceed/msx,
+    'a built configuration whose search outlasts the connection is refused',
 );
 
 throws_ok(

@@ -174,6 +174,8 @@ FROM (
   SELECT me.* FROM search_documents me
     JOIN categories category ... JOIN spaces space ...
   WHERE <readable by the actor>
+    AND me.category_id = <its thread's category now>
+    AND category.space_id = me.space_id
     AND (<full text> OR <trigram> OR <title contains>)
   ORDER BY me.source_created_at DESC, me.entity_id DESC
   LIMIT 1000            -- GPFORUM_SEARCH_CANDIDATE_LIMIT
@@ -190,6 +192,23 @@ on 20,000 documents. The index is not partial: readability is judged in the
 query, against the live category and space (ADR 0102). When every candidate
 slot was filled the page says the results were ranked among the most recent
 matches only, and that a word or a filter reaches older ones.
+
+A document's category is its thread's when it was indexed, and a moved
+thread's documents are indexed again through the outbox, its posts 500 to a
+message. Search used to judge a document by the category it was indexed
+under, so a thread moved from a public category into a private one stayed
+readable through search until its batch ran. A document is now searched only
+while its category is still its thread's, and its space that category's
+(ADR 0102); one not yet indexed again is hidden until it is. The thread's
+category is read with scalar subqueries -- `threads` by primary key for a
+thread's document, `posts` and then `threads` by primary key for a post's --
+which the planner cannot flatten into a join, so neither table is ever
+scanned and both plans above stand (`postgres-search-plan.t` pins the
+`posts_pkey` lookups and that `posts` is never read whole). Two lookups per
+candidate, bounded by the candidate cap and not the corpus: on that test's
+20,000 documents, a word every one holds went from 4 to 6.4 ms on
+PostgreSQL 18, and a rare word did not change. A single subquery joining
+`posts` to `threads` was slower (8.2 ms).
 
 The walk depends on statistics for `categories` and `spaces`: without them the
 planner cannot tell how many matches survive the readability join, and it
@@ -210,7 +229,10 @@ Every search and autocomplete also runs under its own `statement_timeout`,
 runs in, so it ends with it. A search that still runs long is cancelled and the
 page renders degraded, instead of holding one of the few web workers for the
 15 s every other query may take. Zero leaves search under
-`GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`.
+`GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS`, and a value above that one (when it
+is not zero) is lowered to it: an operator who lowers the connection's
+timeout to shed load lowers search's with it, rather than leaving search the
+longest-running query allowed.
 
 ### Dropped: the partial `permission_scope` search indexes
 

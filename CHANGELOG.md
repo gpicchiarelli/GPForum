@@ -94,6 +94,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **Search no longer shows a moved thread's documents under the category it
+  left** (ADR 0102): a thread moved from a public category into a private
+  one stayed searchable by anyone until its reindex batch ran. Documents
+  whose live placement disagrees are hidden until the outbox reindexes them.
+
 - **A cancelled search no longer logs the visitor's search text.** The
   degraded-search log line carried the whole database error, with the SQL
   and its bound values; it now holds only the error.
@@ -728,6 +733,13 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- **Malformed search filters are ignored instead of reaching PostgreSQL**
+  (a non-uuid id, a date that is not a day or an RFC 3339 time, an offset
+  beyond +/-23:59); `to=<day>` includes the whole day. Each step of a console
+  search rebuild records its next step and outbox message in one transaction.
+  `GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS` is lowered to the global statement
+  timeout when that is lower.
 
 - **A mark-read whose badge count or NOTIFY fails after the write committed
   gets the write's own answer**, not a 500; inside a post's transaction a

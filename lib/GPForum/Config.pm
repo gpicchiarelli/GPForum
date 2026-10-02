@@ -267,11 +267,8 @@ sub from_environment ( $class, $environment = undef ) {
             $environment, 'GPFORUM_DATABASE_LOCK_TIMEOUT_MS',
             $DEFAULT_LOCK_TIMEOUT_MS
         ),
-        search_statement_timeout_ms => _env_integer(
-            $environment, 'GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS',
-            $DEFAULT_SEARCH_TIMEOUT_MS
-        ),
-        search_candidate_limit => _env_integer(
+        search_statement_timeout_ms => _search_statement_timeout($environment),
+        search_candidate_limit      => _env_integer(
             $environment, 'GPFORUM_SEARCH_CANDIDATE_LIMIT',
             $DEFAULT_SEARCH_CANDIDATES
         ),
@@ -491,6 +488,7 @@ sub validate ($self) {
     _require_non_empty( 'database_dsn',    $self->database_dsn );
     _require_non_empty( 'database_user',   $self->database_user );
     $self->_validate_database_timeouts;
+    $self->_validate_search_timeout;
     _require_positive_integer( 'search_candidate_limit',
         $self->search_candidate_limit );
     _require_process_count( 'web_processes',      $self->web_processes );
@@ -666,6 +664,35 @@ sub _validate_database_timeouts ($self) {
         $self->database_lock_timeout_ms );
     _require_non_negative_integer( 'search_statement_timeout_ms',
         $self->search_statement_timeout_ms );
+
+    return;
+}
+
+# Search's timeout is there to cut it off before every other query, never
+# after. An operator who lowered GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS below
+# it -- to shed load, say -- gave search more time than anything else, so it
+# is held to the connection's. Zero there is no timeout at all, and zero for
+# search already means the connection's: both are left as they are.
+sub _search_statement_timeout ($environment) {
+    my $search =
+      _env_integer( $environment, 'GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS',
+        $DEFAULT_SEARCH_TIMEOUT_MS );
+    my $connection =
+      _env_integer( $environment, 'GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS',
+        $DEFAULT_STATEMENT_TIMEOUT_MS );
+
+    return $connection && $search > $connection ? $connection : $search;
+}
+
+# A configuration built rather than read from the environment is held to the
+# same rule: refused, since nothing says which of the two was meant.
+sub _validate_search_timeout ($self) {
+    my $connection = $self->database_statement_timeout_ms;
+
+    croak 'search_statement_timeout_ms must not exceed'
+      . ' database_statement_timeout_ms'
+      if $connection
+      && $self->search_statement_timeout_ms > $connection;
 
     return;
 }
@@ -1094,10 +1121,13 @@ Search and autocomplete run under their own C<statement_timeout>,
 C<GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS> (C<search_statement_timeout_ms>, 2000
 by default), set for the transaction each one runs in; a search it cancels
 renders degraded. Zero leaves them under
-C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>. Search ranks only the newest
+C<GPFORUM_DATABASE_STATEMENT_TIMEOUT_MS>, and a value above that one (when
+it is not zero) is lowered to it: search is never given longer than every
+other query. Search ranks only the newest
 C<GPFORUM_SEARCH_CANDIDATE_LIMIT> matches (C<search_candidate_limit>, 1000 by
-default) and the page says when it did. L</validate> refuses a negative timeout
-and a limit below 1.
+default) and the page says when it did. L</validate> refuses a negative timeout,
+a search timeout above a non-zero C<database_statement_timeout_ms>, and a limit
+below 1.
 
 =head1 DEPENDENCIES
 

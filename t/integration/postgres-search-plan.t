@@ -36,24 +36,36 @@ const my $ANALYZE_THRESHOLDS_SQL => join q{ },
   q{SELECT relname, array_to_string(reloptions, ',') FROM pg_class},
   q{WHERE relname IN ('categories', 'spaces') AND relkind = 'r'},
   q{AND pg_table_is_visible(oid) ORDER BY relname};
+
+# The corpus is a thread's replies, each a real post: search reads every
+# document's live thread category (ADR 0102), so a document with no post
+# behind it is never a result.
+const my $CORPUS_THREAD_SQL => join q{ },
+  q{INSERT INTO threads (thread_id, category_id, author_user_id, title, slug)},
+  q{SELECT gen_random_uuid(), category_id, ?, 'Plan corpus', 'plan-corpus'},
+  q{FROM categories WHERE deleted_at IS NULL AND visibility = 'public'},
+  q{ORDER BY category_id LIMIT 1 RETURNING thread_id};
+const my $CORPUS_POSTS_SQL => join q{ },
+  q{INSERT INTO posts (post_id, thread_id, author_user_id, position)},
+  q{SELECT gen_random_uuid(), ?, ?, n FROM generate_series(1, ?) AS n};
 const my $CORPUS_SQL => join q{ },
   q{INSERT INTO search_documents},
   q{(search_document_id, entity_type, entity_id, category_id,},
   q{author_user_id, space_id, visibility, permission_scope,},
   q{visibility_version, permission_version, language, title,},
   q{body, search_vector, source_version, source_created_at)},
-  q{SELECT gen_random_uuid(), 'post', gen_random_uuid(),},
-  q{c.category_id, ?, c.space_id, 'public', 'public', 1, 1,},
-  q{'simple', 'Reply ' || n, d.body,},
-  q{to_tsvector('simple', 'Reply ' || n || ' ' || d.body), 1,},
-  q{now() - make_interval(mins => n)},
-  q{FROM generate_series(1, ?) AS n},
+  q{SELECT gen_random_uuid(), 'post', p.post_id,},
+  q{c.category_id, p.author_user_id, c.space_id, 'public', 'public', 1, 1,},
+  q{'simple', 'Reply ' || p.position, d.body,},
+  q{to_tsvector('simple', 'Reply ' || p.position || ' ' || d.body), 1,},
+  q{now() - make_interval(mins => p.position::integer)},
+  q{FROM posts p JOIN threads t ON t.thread_id = p.thread_id},
+  q{JOIN categories c ON c.category_id = t.category_id},
   q{CROSS JOIN LATERAL (},
-  q{SELECT 'the reply number ' || n || ' is about topic' || (n % 97)},
-  q{|| CASE WHEN n % ? = 1 THEN ' zymurgy' ELSE '' END AS body) d},
-  q{CROSS JOIN (SELECT category_id, space_id FROM categories},
-  q{WHERE deleted_at IS NULL AND visibility = 'public'},
-  q{ORDER BY category_id LIMIT 1) c};
+  q{SELECT 'the reply number ' || p.position || ' is about topic'},
+  q{|| (p.position % 97)},
+  q{|| CASE WHEN p.position % ? = 1 THEN ' zymurgy' ELSE '' END AS body) d},
+  q{WHERE p.thread_id = ?};
 const my @UNUSABLE_INDEXES => qw(
   idx_search_documents_public_latest
   idx_search_documents_public_title_prefix
@@ -196,6 +208,13 @@ for my $viewer (@viewers) {
         q{<=}, $CANDIDATES,
         "$label: and stops at the candidate cap, not the corpus" );
 
+    # Each candidate's live thread category (ADR 0102) is a lookup by key,
+    # not a join the planner could turn into a scan of every post.
+    ok( _has_node( $common, 'posts_pkey' ),
+        "$label: each candidate's post is found by its key" );
+    is( scalar _scans_of( $common, 'posts' ),
+        0, "$label: and posts are never read whole" );
+
     my $capped = $searcher->ranked_search( $actor, 'the', { limit => $LIMIT } );
     is( scalar @{ $capped->{results} }, $LIMIT, "$label: it fills the page" );
     is( $capped->{ranking_capped},
@@ -276,7 +295,9 @@ done_testing();
 # the statistics on categories and spaces that autovacuum gathers in
 # production once migration 048 lowered their threshold.
 sub _seed_corpus {
-    $dbh->do( $CORPUS_SQL, undef, $member, $CORPUS, $RARE_EVERY );
+    my ($thread) = $dbh->selectrow_array( $CORPUS_THREAD_SQL, undef, $member );
+    $dbh->do( $CORPUS_POSTS_SQL, undef, $thread, $member, $CORPUS );
+    $dbh->do( $CORPUS_SQL, undef, $RARE_EVERY, $thread );
     $dbh->do('VACUUM ANALYZE');
 
     return;
@@ -320,6 +341,15 @@ sub _document_scans {
     return
       grep { ( $_->{'Relation Name'} // q{} ) eq 'search_documents' }
       _nodes($plan);
+}
+
+sub _scans_of {
+    my ( $plan, $relation ) = @_;
+
+    return grep {
+             ( $_->{'Node Type'} // q{} ) eq 'Seq Scan'
+          && ( $_->{'Relation Name'} // q{} ) eq $relation
+    } _nodes($plan);
 }
 
 sub _has_node {

@@ -18,9 +18,14 @@ use GPForum::Service::Admin::Maintenance;
 use GPForum::Service::Outbox::Dispatcher;
 use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Service::Search::Indexer;
+use GPForum::Service::Operations::LocalCache;
+use GPForum::Service::Operations::SharedCache;
+use GPForum::Service::Operations::TieredCache;
 use GPForum::Service::Search::RebuildRun;
 use GPForum::Test::LongThread;
+use GPForum::Test::OperationsClock;
 use GPForum::Test::PostgresHarness;
+use GPForum::Test::SharedCacheClient;
 use GPForum::Test::TagCache;
 use GPForum::Worker::Handler::SearchIndexing;
 
@@ -223,6 +228,86 @@ is_deeply(
     $cache->invalidated,
     [qw(forum:public-html categories forum-index)],
     'and the purge drops every public page and its reader caches'
+);
+
+# A purge that could not reach GlifiStore said "purged": the pages there
+# stayed current until their TTL. The answer and the audit row now say so.
+my $paused_l2 = GPForum::Service::Operations::SharedCache->new(
+    client => GPForum::Test::SharedCacheClient->new,
+    clock  => GPForum::Test::OperationsClock->new,
+);
+$paused_l2->retry_after_epoch( $paused_l2->clock->now_epoch + 1 );
+my $local_only = GPForum::Service::Admin::Maintenance->new(
+    cache => GPForum::Service::Operations::TieredCache->new(
+        l1 => GPForum::Service::Operations::LocalCache->new,
+        l2 => $paused_l2,
+    ),
+    schema => $schema,
+);
+my $purged = $schema->txn_do(
+    sub {
+        return $local_only->purge_public_cache( { actor_user_id => $admin } );
+    }
+);
+is( $purged->{status}, 'purged_locally',
+    'a purge that did not reach the shared cache is purged locally' );
+is_deeply(
+    $dbh->selectall_arrayref(
+        q{SELECT metadata->>'status', metadata->'unreached_tags' #>> '{}'}
+          . q{ FROM audit_log WHERE actor_id = ?}
+          . q{ AND action = 'admin.cache_purged'}
+          . q{ ORDER BY metadata->>'status'},
+        undef,
+        $admin
+    ),
+    [
+        [ 'purged', '[]' ],
+        [
+            'purged_locally',
+            '["forum:public-html", "categories", "forum-index"]'
+        ],
+    ],
+    'each audit row records how far its purge went, and the tags it left'
+);
+
+# A step records the next one and its outbox message together or not at all.
+# They were written under autocommit: an outbox write that failed left the
+# event, whose key then said the step was recorded, so every retry returned
+# at once and the run stopped there with no message to carry it on. Last in
+# this file, so the run it starts disturbs nothing above.
+$dbh->do( q{CREATE FUNCTION test_refuse_outbox() RETURNS trigger}
+      . q{ LANGUAGE plpgsql AS $$ BEGIN}
+      . q{ RAISE EXCEPTION 'the outbox is unavailable'; END $$} );
+$dbh->do( q{CREATE TRIGGER test_refuse_outbox BEFORE INSERT ON outbox_messages}
+      . q{ FOR EACH ROW EXECUTE FUNCTION test_refuse_outbox()} );
+my $stalled = {
+    domain_payload => {
+        entity_type => 'thread',
+        run_id      => $run->id_service->uuid,
+        step        => 0,
+        totals      => {},
+    },
+    event_id   => $run->id_service->uuid,
+    event_type => 'search.rebuild_requested',
+};
+my $stalled_run = $stalled->{domain_payload}{run_id};
+my $stepped     = eval { $run->step($stalled); 1 };
+ok( !$stepped, 'a step whose outbox message cannot be written fails' );
+is( _steps($stalled_run), 0, 'and leaves no next step behind' );
+
+$dbh->do('DROP TRIGGER test_refuse_outbox ON outbox_messages');
+$dbh->do('DROP FUNCTION test_refuse_outbox()');
+$run->step($stalled);
+is_deeply(
+    $dbh->selectrow_arrayref(
+        q{SELECT count(DISTINCT e.event_id), count(o.event_id) FROM event_log e}
+          . q{ LEFT JOIN outbox_messages o ON o.event_id = e.event_id}
+          . q{ WHERE e.aggregate_id = ?},
+        undef,
+        $stalled_run
+    ),
+    [ 1, 1 ],
+    'its retry records the next step, with its message'
 );
 
 $schema->storage->disconnect;

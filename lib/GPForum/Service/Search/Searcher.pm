@@ -11,7 +11,9 @@ use Mojo::Base -base, -signatures;
 
 use GPForum::Infrastructure::Row;
 use GPForum::Service::Search::DocumentBuilder;
-use Mojo::Util qw(html_unescape xml_escape);
+use Mojo::Date;
+use Mojo::Util  qw(html_unescape xml_escape);
+use Time::Local qw(timegm_modern);
 
 our $VERSION = '0.001';
 
@@ -23,6 +25,34 @@ const my $SNIPPET_MAX_LENGTH => 220;
 const my $EMPTY_TEXT         => q{};
 const my $SPACE              => q{ };
 const my $ELLIPSIS           => q{...};
+const my $SECONDS_PER_DAY    => 86_400;
+const my $GMTIME_BASE_YEAR   => 1_900;
+const my $EPOCH_YEAR         => 1_970;
+
+# What a filter may be before it is bound. Each was bound as it came, so
+# from=garbage reached PostgreSQL, which refused it: the page degraded and the
+# log line quoted what the visitor had typed. /a: a POSIX class would match
+# any script's digits otherwise, and PostgreSQL reads ASCII ones only.
+const my $UUID_FILTER =>
+  qr/\A [[:xdigit:]]{8} (?: - [[:xdigit:]]{4} ){3} - [[:xdigit:]]{12} \z/amsx;
+const my $DAY_FILTER =>
+  qr/\A ([[:digit:]]{4}) - ([[:digit:]]{2}) - ([[:digit:]]{2}) \z/amsx;
+
+# An RFC 3339 time, whole, which Mojo::Date then parses and range-checks.
+# Its own pattern takes a year, and an offset's hours and minutes, of any
+# length: a year past PostgreSQL's range, or an offset of a hundred billion
+# hours (-99999999999:00), failed there just as the garbage did, and a
+# longer offset was past gmtime's too. The offset is RFC 3339's, at most
+# 23:59. The year is held to 1970 on: Mojo::Date refuses an earlier instant,
+# and Time::Local, under it, reads a year below 1000 as another one -- 0500
+# as 2400.
+const my $INSTANT_DAY => qr/([[:digit:]]{4}) (?: - [[:digit:]]{2} ){2}/amsx;
+const my $INSTANT_TIME =>
+  qr/[[:digit:]]{2} (?: : [[:digit:]]{2} ){2} (?: [.] [[:digit:]]+ )?/amsx;
+const my $INSTANT_OFFSET =>
+  qr/[Zz] | [+-] (?: [01][[:digit:]] | 2[0-3] ) : [0-5][[:digit:]]/amsx;
+const my $INSTANT_FILTER =>
+  qr/\A $INSTANT_DAY [Tt ] $INSTANT_TIME (?: $INSTANT_OFFSET )? \z/amsx;
 
 # Every search used to be a sequential scan of search_documents followed by a
 # top-N sort, because none of the three match arms could use an index:
@@ -56,6 +86,34 @@ const my $FTS_CONDITION =>
 const my $TRIGRAM_CONDITION => q{me.title_normalized % lower(?)};
 const my $TITLE_CONTAINS_CONDITION =>
   q{me.title_normalized LIKE lower(?) ESCAPE '\'};
+
+# ADR 0102 for a thread that moved. A document's category is its thread's at
+# index time, and a move reindexes the thread's documents through the outbox,
+# its posts a batch per message. Until each batch ran, search judged the
+# documents by the category they had left: a thread moved from a public
+# category into a private one stayed readable through search, to anyone. The
+# permission condition reads category and space through me.category_id and
+# me.space_id; requiring the first to be the thread's category now, and the
+# second that category's space, makes the rule read the live ones. A document
+# not yet reindexed is not shown at all, even where its new category would
+# allow it, and comes back with its batch.
+#
+# Scalar subqueries, never a join: the planner cannot flatten one, so each is
+# a primary-key lookup for each document examined, not a scan of posts or
+# threads, and search keeps its two plans (search_resultset). The cost is two
+# lookups per candidate, so the candidate cap bounds it, not the corpus: a
+# word every document of postgres-search-plan.t's corpus holds -- 1,000
+# candidates -- went from 4 to 6.4 ms on PostgreSQL 18; a rare word is
+# unchanged. One subquery joining posts to threads was slower (8.2 ms).
+const my $LIVE_CATEGORY => join q{ },
+  q{(CASE me.entity_type},
+  q{WHEN 'thread' THEN (SELECT live_thread.category_id},
+  q{FROM threads live_thread WHERE live_thread.thread_id = me.entity_id)},
+  q{WHEN 'post' THEN (SELECT live_thread.category_id},
+  q{FROM threads live_thread WHERE live_thread.thread_id =},
+  q{(SELECT live_post.thread_id FROM posts live_post},
+  q{WHERE live_post.post_id = me.entity_id))},
+  q{END)};
 
 # How many candidates the ranked query was given, on every row it returns:
 # the window runs over the joined candidates before the outer LIMIT, and the
@@ -178,7 +236,7 @@ sub autocomplete_resultset ( $self, $actor, $prefix, $options = undef ) {
         # title too, so without this a thread with fifty replies filled every
         # suggestion with the same title.
         {
-            -and                  => [ $self->_permission_condition($actor) ],
+            -and => [ $self->_permission_condition($actor), _live_scope() ],
             'me.entity_type'      => 'thread',
             'me.title_normalized' =>
               { -like => _like_pattern($normalized) . q{%} },
@@ -271,6 +329,15 @@ sub _permission_condition ( $self, $actor ) {
     return $self->permission_engine->search_condition($actor);
 }
 
+# The category and space the permission condition reads through
+# me.category_id and me.space_id are the document's live ones ($LIVE_CATEGORY).
+sub _live_scope {
+    return (
+        { 'me.category_id'    => { q{=}   => \$LIVE_CATEGORY } },
+        { 'category.space_id' => { -ident => 'me.space_id' } },
+    );
+}
+
 sub _visibility_for ( $self, $actor, $options ) {
     return $self->permission_engine->search_visibility_for( $actor, $options )
       if $self->permission_engine;
@@ -304,25 +371,85 @@ sub _search_query ( $permission, $query, $options ) {
     # the rows come back: the database applies LIMIT, so anything filtered
     # afterwards is a result the actor silently never receives.
     my $where = {
-        -and => [$permission],
+        -and => [ $permission, _live_scope() ],
         -or  => _match_clauses($query),
     };
 
-    $where->{'me.category_id'} = $options->{category_id}
-      if _defined_non_empty( $options->{category_id} );
-    $where->{'me.author_user_id'} = $options->{author_user_id}
-      if _defined_non_empty( $options->{author_user_id} );
+    # A malformed filter is no filter: it can only narrow what the actor may
+    # read, so dropping it widens nothing the permission condition allows.
+    if ( _is_uuid( $options->{category_id} ) ) {
+        $where->{'me.category_id'} = $options->{category_id};
+    }
+    if ( _is_uuid( $options->{author_user_id} ) ) {
+        $where->{'me.author_user_id'} = $options->{author_user_id};
+    }
 
     my @date_filters;
-    push @date_filters,
-      { 'me.source_created_at' => { '>=' => $options->{from} } }
-      if _defined_non_empty( $options->{from} );
-    push @date_filters, { 'me.source_created_at' => { '<=' => $options->{to} } }
-      if _defined_non_empty( $options->{to} );
+    for my $bound (qw(from to)) {
+        my $bounds = _date_bounds( $options->{$bound} );
+        next if !$bounds;
+
+        push @date_filters, { 'me.source_created_at' => $bounds->{$bound} };
+    }
 
     return $where if !@date_filters;
 
     return { -and => [ $where, @date_filters ] };
+}
+
+sub _is_uuid ($value) {
+    return defined $value && $value =~ $UUID_FILTER ? 1 : 0;
+}
+
+# A date filter as the condition it makes a lower bound (from) and an upper
+# one (to), both inclusive; undef when it is malformed. A day is what the
+# form's date inputs send, and as an upper bound it covers the whole day: it
+# was compared with the day's first instant, so to=<the day a reply was
+# written> left the reply out. An RFC 3339 time is bound as the instant it
+# parsed to, not as it was typed.
+sub _date_bounds ($value) {
+    my $undefined;
+    return $undefined if !defined $value;
+
+    if ( my ( $year, $month, $day ) = $value =~ $DAY_FILTER ) {
+        my $start = _day_start( $year, $month, $day );
+        return $undefined if !defined $start;
+
+        return {
+            from => { q{>=} => $value },
+            to   => { q{<}  => _day_of( $start + $SECONDS_PER_DAY ) },
+        };
+    }
+
+    my ($instant_year) = $value =~ $INSTANT_FILTER;
+    return $undefined if !defined $instant_year || $instant_year < $EPOCH_YEAR;
+
+    my $epoch = Mojo::Date->new($value)->epoch;
+    return $undefined if !defined $epoch;
+
+    # Set, not parsed back: new() reads its argument as a date, and an epoch
+    # Perl prints in exponent form (1e-08, from 1970-01-01T00:00:00.00000001Z)
+    # is not one -- the instant was rendered from no epoch at all, and the
+    # visitor's input put two "uninitialized value" warnings in the log.
+    my $instant = Mojo::Date->new->epoch($epoch)->to_datetime;
+
+    return { from => { q{>=} => $instant }, to => { q{<=} => $instant } };
+}
+
+# The day's first second as an epoch, or undef for a day the calendar does
+# not have -- timegm_modern dies on those. PostgreSQL has no year 0.
+sub _day_start ( $year, $month, $day ) {
+    my $undefined;
+    return $undefined if $year < 1;
+
+    return eval { timegm_modern( 0, 0, 0, $day, $month - 1, $year ) };
+}
+
+sub _day_of ($epoch) {
+    my ( undef, undef, undef, $day, $month, $year ) = gmtime $epoch;
+
+    return sprintf '%04d-%02d-%02d', $year + $GMTIME_BASE_YEAR, $month + 1,
+      $day;
 }
 
 sub _match_clauses ($query) {
@@ -417,10 +544,6 @@ sub _normalized_query ($query) {
     $query =~ s/\s+/$SPACE/gmsx;
 
     return $query;
-}
-
-sub _defined_non_empty ($value) {
-    return defined $value && length $value ? 1 : 0;
 }
 
 sub _like_pattern ($value) {
@@ -572,6 +695,17 @@ is used (or, for an engine without one, the visibilities its
 C<search_visibility_for> lists), and each returned row is checked again
 with its C<permits> for C<search.view> before it is shown.
 
+The category and space that rule reads are the document's live ones (ADR
+0102): a document is searched only while its category is still its
+thread's, looked up by primary key, and its space still that category's.
+A document whose thread has moved is not found until the outbox has
+indexed it again under the new category.
+
+A filter is bound only when it is well formed: C<category_id> and
+C<author_user_id> a UUID, C<from> and C<to> a day (C<YYYY-MM-DD>) or an
+RFC 3339 time from 1970 on. Anything else is ignored, never sent to the
+database.
+
 When C<statement_timeout_ms> is set and not zero, the query runs in a
 transaction of its own with that C<statement_timeout> set locally, so the
 connection goes back to its usual timeout afterwards. Zero or undef keeps
@@ -605,7 +739,9 @@ each matching word in C<< <mark> >>).
 Takes an actor, a query string and an optional hash reference with
 C<limit> (1 to 50, default 20; anything else is 20, and more than 50 is
 50), C<category_id>, C<author_user_id>, and C<from> and C<to> (bounds on
-C<source_created_at>, inclusive). Returns the unexecuted resultset that
+C<source_created_at>, inclusive: a day given as C<to> includes the whole
+day). Malformed filters are ignored (see L</DESCRIPTION>). Returns the
+unexecuted resultset that
 C<ranked_search> runs, with the author, category and space joined and
 C<rank_score>, C<author_username>, C<author_display_name>,
 C<category_visibility>, C<space_visibility> and C<candidate_count>
@@ -658,6 +794,13 @@ None known.
 A match older than the newest C<candidate_limit> is never ranked, however
 well it would score; C<ranking_capped> reports when that may have
 happened.
+
+The documents of a thread that has moved are hidden from everyone, readers
+of its new category included, until the outbox has indexed them again; a
+large thread's posts come back a batch at a time.
+
+A day is bounded in the session's time zone, as PostgreSQL reads a date
+compared with a C<timestamptz>.
 
 =head1 AUTHOR
 

@@ -46,6 +46,11 @@ const my $REMOVAL_TRANSACTIONS => 4;
 # The thread's own transaction and the first batch, which finds it live.
 const my $LATE_REMOVAL_TRANSACTIONS => 2;
 
+# Search binds an id filter only when it is a UUID, as the columns are.
+const my $FILTER_CATEGORY => '0b9c1b52-6a43-4c3e-9d47-0f1c2a3b4c5d';
+const my $FILTER_AUTHOR   => '7e2f9a10-3c5d-4e6f-8a9b-1c2d3e4f5a6b';
+const my $OTHER_AUTHOR    => '5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d';
+
 my $category = GPForum::Test::SearchRow->new(
     data => {
         category_id => 'category-1',
@@ -304,8 +309,8 @@ my $search_documents = GPForum::Test::SearchResultSet->new(
             data => {
                 entity_type      => 'thread',
                 entity_id        => 'thread-1',
-                category_id      => 'category-1',
-                author_user_id   => 'user-1',
+                category_id      => $FILTER_CATEGORY,
+                author_user_id   => $FILTER_AUTHOR,
                 title            => 'Welcome to GPForum',
                 title_normalized => 'welcome to gpforum',
                 body       => 'A durable <script>x</script> Perl forum post',
@@ -320,8 +325,8 @@ my $search_documents = GPForum::Test::SearchResultSet->new(
             data => {
                 entity_type       => 'post',
                 entity_id         => 'post-denied',
-                category_id       => 'category-1',
-                author_user_id    => 'user-3',
+                category_id       => $FILTER_CATEGORY,
+                author_user_id    => $OTHER_AUTHOR,
                 title             => 'Private GPForum result',
                 title_normalized  => 'private gpforum result',
                 body              => 'private text must not leak',
@@ -349,8 +354,8 @@ my $results = $searcher->search(
     'forum',
     {
         limit          => $SEARCH_LIMIT,
-        category_id    => 'category-1',
-        author_user_id => 'user-1',
+        category_id    => $FILTER_CATEGORY,
+        author_user_id => $FILTER_AUTHOR,
         from           => '2026-05-01',
         to             => '2026-06-01',
     }
@@ -370,15 +375,36 @@ is_deeply(
     'search applies the permission predicate in the WHERE clause'
 );
 is( $search_documents->last_query->{-and}[0]{'me.category_id'},
-    'category-1', 'search applies category filter' );
+    $FILTER_CATEGORY, 'search applies category filter' );
 is( $search_documents->last_query->{-and}[0]{'me.author_user_id'},
-    'user-1', 'search applies author filter' );
+    $FILTER_AUTHOR, 'search applies author filter' );
 ok(
     _author_qualified( [ keys %{ $search_documents->last_query->{-and}[0] } ] ),
     'search qualifies every column against the joined author'
 );
 is( $search_documents->last_query->{-and}[1]{'me.source_created_at'}{'>='},
     '2026-05-01', 'search applies lower date bound' );
+is_deeply(
+    $search_documents->last_query->{-and}[2]{'me.source_created_at'},
+    { q{<} => '2026-06-02' },
+    'and an upper one that covers the whole of its day'
+);
+
+# ADR 0102 for a moved thread. A document keeps the category it was indexed
+# under until the outbox reindexes it, and the permission condition reads
+# category and space through those columns: they must still be the thread's.
+my ( undef, $live_category, $live_space ) =
+  @{ $search_documents->last_query->{-and}[0]{-and} };
+like(
+    ${ $live_category->{'me.category_id'}{q{=}} },
+    qr/FROM [ ] threads .* FROM [ ] posts [ ] live_post/msx,
+    q{search reads each document's live thread category, a post's included}
+);
+is_deeply(
+    $live_space,
+    { 'category.space_id' => { -ident => 'me.space_id' } },
+    q{and that category's space}
+);
 like( ${ $search_documents->last_query->{-and}[0]{-or}[0] }->[0],
     qr/websearch_to_tsquery/msx, 'search applies PostgreSQL websearch query' );
 
@@ -424,6 +450,106 @@ my $autocomplete =
 is( scalar @{$autocomplete}, 1, 'autocomplete filters denied render results' );
 is( $search_documents->last_query->{'me.title_normalized'}{-like},
     'wel%', 'autocomplete uses normalized title prefix' );
+is_deeply(
+    [ @{ $search_documents->last_query->{-and} }[ 1, 2 ] ],
+    [ $live_category, $live_space ],
+    'autocomplete reads the live category and space too'
+);
+
+# A filter is bound only when it is well formed. Each was bound as it came:
+# from=garbage reached PostgreSQL, which refused it, and the log line that
+# reported the degraded page quoted what the visitor had typed.
+$searcher->search(
+    { user_id => 'user-1' },
+    'forum',
+    {
+        author_user_id => q{1' OR '1'='1},
+        category_id    => 'category-1',
+        from           => 'garbage',
+        to             => '2026-02-30',
+    }
+);
+is_deeply(
+    [ sort keys %{ $search_documents->last_query } ],
+    [qw(-and -or)],
+    'malformed filters bind nothing: the query is the permission and the match'
+);
+is_deeply(
+    _date_conditions(
+        $searcher, $search_documents,
+        { from => '2026-05-01T10:00:00+02:00', to => '2026-05-01T10:30:00Z' }
+    ),
+    [
+        { q{>=} => '2026-05-01T08:00:00Z' }, { q{<=} => '2026-05-01T10:30:00Z' }
+    ],
+    'an RFC 3339 time is bound as the instant it names'
+);
+is_deeply(
+    _date_conditions( $searcher, $search_documents, { to => '2024-02-28' } ),
+    [ { q{<} => '2024-02-29' } ],
+    q{a day's end is the next day's start, in a leap year too}
+);
+is_deeply(
+    _date_conditions(
+        $searcher, $search_documents,
+        { from => '0000-01-01', to => '2026-05-01T25:00:00Z' }
+    ),
+    [],
+    'year 0 and hour 25 are not dates'
+);
+
+# Time::Local, under Mojo::Date, reads a year below 1000 as another: 0500
+# would have been bound as 2400.
+is_deeply(
+    _date_conditions(
+        $searcher, $search_documents,
+        { from => '0500-01-01T00:00:00Z', to => '1969-12-31T23:59:59Z' }
+    ),
+    [],
+    'an instant before 1970 is not read as another year'
+);
+
+# Mojo::Date takes an offset of any length. A hundred billion hours put the
+# instant in year 11409972, past PostgreSQL's range, so the search failed
+# there as the garbage had; RFC 3339's offset is at most 23:59.
+is_deeply(
+    _date_conditions(
+        $searcher,
+        $search_documents,
+        {
+            from => '2026-05-01T10:00:00-99999999999:00',
+            to   => '2026-05-01T10:00:00+24:00',
+        }
+    ),
+    [],
+    'an offset RFC 3339 does not allow is not a time'
+);
+is_deeply(
+    _date_conditions(
+        $searcher, $search_documents,
+        { from => '2026-05-01T10:00:00.25-23:59' }
+    ),
+    [ { q{>=} => '2026-05-02T09:59:00.25Z' } ],
+    'the largest offset it does allow is still read'
+);
+
+# An instant a hair after 1970's first second parses to an epoch Perl prints
+# as 1e-08, which Mojo::Date->new does not read as a date: the bound was
+# rendered from no epoch, and what the visitor typed put two warnings in the
+# log.
+my @instant_warnings;
+{
+    local $SIG{__WARN__} = sub { push @instant_warnings, @_; return; };
+    is_deeply(
+        _date_conditions(
+            $searcher, $search_documents,
+            { from => '1970-01-01T00:00:00.00000001Z' }
+        ),
+        [ { q{>=} => '1970-01-01T00:00:00Z' } ],
+        'an instant just after the epoch is bound from its own epoch'
+    );
+}
+is_deeply( \@instant_warnings, [], 'and warns nothing' );
 
 $searcher->search( { user_id => 'user-1' }, 'forum', { limit => 10_000 } );
 is( $search_documents->last_attrs->{rows},
@@ -829,6 +955,19 @@ is(
 );
 
 done_testing();
+
+# The conditions on source_created_at a search with these filters binds.
+sub _date_conditions {
+    my ( $search_service, $documents, $filters ) = @_;
+
+    $search_service->search( { user_id => 'user-1' }, 'forum', $filters );
+    my $query = $documents->last_query;
+    return [] if exists $query->{-or};
+
+    my ( undef, @bounds ) = @{ $query->{-and} };
+
+    return [ map { $_->{'me.source_created_at'} } @bounds ];
+}
 
 sub _deleted_entity {
     my ( $rows, $type, $id ) = @_;

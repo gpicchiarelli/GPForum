@@ -31,6 +31,15 @@ notifications and realtime are delivered between the batches. Those
 messages count in `pending` until the thread is done; a retried one does not
 start a second chain.
 
+Until its batch runs, a document of a moved thread is not shown by search
+or autocomplete, to anyone -- readers of the new category included. Search
+only shows a document whose category is still its thread's, and whose space
+is still that category's (ADR 0102): it used to judge a document by the
+category it was indexed under, so a thread moved from a public category into
+a private one stayed readable through search, to anyone, until its batch
+ran. A large thread's replies come back 500 at a time, as their batches run;
+a `pending` that does not fall keeps them hidden.
+
 A hidden or deleted thread leaves search in one message: its title first,
 out of the suggestions at once, then its posts 500 to a transaction. No
 transaction holds more than 500 document locks, however long the thread. A
@@ -49,6 +58,10 @@ console, with its totals, and has two buttons:
   `search.rebuild_completed` event records its totals. Whatever runs the
   dispatcher runs it; a failed step is retried and dead-lettered like any
   other message, and a large forum never holds the dispatcher for long.
+  Each step records the next one and its outbox message in one transaction:
+  a step that fails part way records nothing, and its retry carries the run
+  on (before, an outbox write that failed left the event alone, and every
+  retry took it for the next step already recorded -- the run stopped).
 - **Purge page cache** drops every cached public page, in every web process,
   and the anonymous category list. Pages are rendered again on their next
   visit.

@@ -125,21 +125,34 @@ sub handles ( $, $event_type ) {
     return ( $event_type // q{} ) eq $REQUESTED ? 1 : 0;
 }
 
+# The check, the event and its outbox message are one transaction, as
+# SearchIndexing's batch chain records its own. They were three statements
+# under autocommit: an outbox write that failed left the event behind, its
+# key then said the step was recorded, and every retry returned at once --
+# the run stopped there, with no message left to carry it on. Inside the
+# caller's transaction (request's) this is part of it.
 sub _record_once ( $self, $type, $payload, $cause ) {
     my $key = join q{:}, $type, $payload->{run_id},
       $payload->{stage} // 'start',
       $payload->{after} // 'start';
-    return if $self->recorder->event_recorded($key);
+    my $recorder = $self->recorder;
 
-    return $self->recorder->record_event(
-        actor_id        => $cause->{actor_id},
-        aggregate_id    => $payload->{run_id},
-        aggregate_type  => $AGGREGATE,
-        causation_id    => $cause->{event_id},
-        correlation_id  => $cause->{correlation_id} || $self->id_service->uuid,
-        event_type      => $type,
-        idempotency_key => $key,
-        payload         => $payload,
+    return $recorder->schema->txn_do(
+        sub {
+            return 0 if $recorder->event_recorded($key);
+
+            return $recorder->record_event(
+                actor_id       => $cause->{actor_id},
+                aggregate_id   => $payload->{run_id},
+                aggregate_type => $AGGREGATE,
+                causation_id   => $cause->{event_id},
+                correlation_id => $cause->{correlation_id}
+                  || $self->id_service->uuid,
+                event_type      => $type,
+                idempotency_key => $key,
+                payload         => $payload,
+            );
+        }
     );
 }
 
@@ -171,7 +184,10 @@ Splits L<GPForum::Service::Search::Indexer>'s rebuild into steps
 (C<rebuild_batch>), each carried by a C<search.rebuild_requested> event and
 its outbox message, and closed by C<search.rebuild_completed> with the run's
 totals. Each next step is recorded once, keyed by the run, stage and cursor,
-so a retried message never forks the run.
+so a retried message never forks the run. The check and the event with its
+outbox message are written in one transaction (the caller's, when there is
+one), so a step that fails part way records nothing and its retry records
+it whole.
 
 =head1 SUBROUTINES/METHODS
 
