@@ -18,7 +18,9 @@ use GPForum::Service::Search::Indexer;
 
 our $VERSION = '0.001';
 
+const my $COMMAND  => 'gpforum-search-rebuild';
 const my %ENTITIES => map { $_ => 1 } qw(all post thread);
+const my @COUNTS   => qw(indexed unchanged pruned);
 
 has indexer => undef;
 has schema  => undef;
@@ -31,38 +33,77 @@ sub run ( $self, @arguments ) {
     return GPForum::Command::Usage->help( \*STDOUT, _usage() )
       if GPForum::Command::Usage->wants_help(@arguments);
 
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
+    my $options = eval { return _options(@arguments); };
+    if ( !$options ) {
+        my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
+        return GPForum::Command::Usage->error( undef, $error )
+          if GPForum::Command::Usage->is_usage($error);
 
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( GPForum::Command::Usage->is_usage($error) ) {
-        return GPForum::Command::Usage->error( undef, $error );
-    }
-    if ( $error =~ /\A Unknown [ ] option: /msx ) {
         return GPForum::Command::Usage->error( $error, _usage() );
     }
-    die "$error\n";
+
+    my $status = eval { return $self->_run($options); };
+    return $status if defined $status;
+
+    # The database or the indexer failed: 1 with the reason, not the 255 of
+    # an uncaught exception, and under --json a document still.
+    return GPForum::Command::Usage->failure(
+        $EVAL_ERROR,
+        $options->{json}
+        ? (
+            \*STDOUT,
+            {
+                command => $COMMAND,
+                mode    => $options->{status} ? 'status' : 'rebuild'
+            }
+          )
+        : ()
+    );
 }
 
-sub _run ( $self, @arguments ) {
-    my $options = _options(@arguments);
-
-    return $self->_status if $options->{status};
+sub _run ( $self, $options ) {
+    return $self->_status($options) if $options->{status};
 
     my $rebuilt =
       $self->_indexer->rebuild( { entity_type => $options->{entity} } );
-    _say(
-        join q{ },
-        'rebuilt',
-        map { "$_=" . ( $rebuilt->{$_} // 0 ) }
-          qw(entity_type indexed unchanged pruned)
-    );
+    if ( $options->{json} ) {
+        GPForum::Command::Usage->json(
+            \*STDOUT,
+            {
+                command     => $COMMAND,
+                entity_type => $rebuilt->{entity_type} // $options->{entity},
+                mode        => 'rebuild',
+                status      => 'ok',
+                map { $_ => $rebuilt->{$_} // 0 } @COUNTS,
+            }
+        );
+        return $GPForum::Command::Usage::EXIT_OK;
+    }
+    _say( join q{ }, 'rebuilt',
+        map { "$_=" . ( $rebuilt->{$_} // 0 ) } 'entity_type', @COUNTS );
 
     return $GPForum::Command::Usage::EXIT_OK;
 }
 
-sub _status ($self) {
+# Under --json the projection's own state is lag_status, "current" or
+# "behind": status is the command's, ok, as the exit code says.
+sub _status ( $self, $options ) {
     my $lag = $self->_indexer->observe_lag || {};
+    if ( $options->{json} ) {
+        GPForum::Command::Usage->json(
+            \*STDOUT,
+            {
+                command           => $COMMAND,
+                lag_seconds       => $lag->{lag_seconds} // 0,
+                lag_status        => $lag->{status}      // 'unknown',
+                mode              => 'status',
+                oldest_pending_at => $lag->{oldest_pending_at},
+                pending           => $lag->{pending} // 0,
+                status            => 'ok',
+            }
+        );
+        return $GPForum::Command::Usage::EXIT_OK;
+    }
     _say(
         join q{ },
         'search',
@@ -89,12 +130,15 @@ sub _schema ($self) {
 }
 
 sub _options (@arguments) {
-    my %options = ( entity => 'all', status => 0 );
+    my %options = ( entity => 'all', json => 0, status => 0 );
     my $entity_given;
     while (@arguments) {
         my $flag = shift @arguments;
         if ( $flag eq '--status' ) {
             $options{status} = 1;
+        }
+        elsif ( $flag eq '--json' ) {
+            $options{json} = 1;
         }
         elsif ( $flag eq '--entity' ) {
             $options{entity} = shift @arguments // q{};
@@ -122,8 +166,8 @@ sub usage_text ($class) {
 
 sub _usage {
     return <<'USAGE';
-Usage: bin/gpforum-search-rebuild [--entity thread|post|all]
-       bin/gpforum-search-rebuild --status
+Usage: bin/gpforum-search-rebuild [--entity thread|post|all] [--json]
+       bin/gpforum-search-rebuild --status [--json]
 
 Rebuild the search index from the forum's threads and posts: every live
 thread and post is indexed again, in batches, and documents whose thread or
@@ -132,6 +176,8 @@ serves; documents that did not change are left alone.
 
 --status reports how far search may be behind: the outbox messages not yet
 delivered, and the age of the oldest.
+
+--json prints one JSON object on stdout instead of the line.
 USAGE
 }
 
@@ -170,7 +216,8 @@ The usage text, for the front door.
 
 =head1 DIAGNOSTICS
 
-Exit 0 on success, 2 on misuse; a database failure dies with its error.
+Exit 0 on success, 1 when the database or the indexer fails (the reason on
+standard error), 2 on misuse.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

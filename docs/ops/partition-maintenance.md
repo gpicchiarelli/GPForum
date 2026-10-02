@@ -15,16 +15,37 @@ script/gpforum-carton exec bin/gpforum-partition-maintenance --plan
 `--apply` executes it.
 
 ```
-Usage: bin/gpforum-partition-maintenance [--plan|--apply] [--lookahead N]
+Usage: bin/gpforum-partition-maintenance [--plan|--apply] [--lookahead N] [--json]
 
   --plan       report the DDL without executing it (default)
   --apply      execute CREATE TABLE ... PARTITION OF and upsert the registry
   --lookahead  months to keep ahead, including the current month (default 3)
+  --json       one JSON object on stdout instead of lines
   --help       show this help
 ```
 
 Exit status is 0 on success, 1 when a partition cannot be created, 2 for a
 usage error.
+
+`--json` prints the same result as one object, for a script or an alert:
+
+```json
+{"command":"gpforum-partition-maintenance","mode":"plan","status":"ok",
+ "lookahead_months":3,"created":[],"existing":[],"planned":[...],
+ "conflicts":[],"errors":[]}
+```
+
+`status` is `ok` or `fail`, as the exit code. Each list holds one object per
+partition with `table_name`, `partition_name`, `range_start`, `range_end` and
+`default_partition`, plus `create_sql` when the DDL was planned or run,
+`conflicting_rows`, `message` and `remediation` (a list of statements) for a
+conflict, and `error` for an error. When the run itself fails -- the database
+cannot be reached -- the object has empty lists, `status` `fail` and the
+reason in `error`. For example, to alert on conflicts:
+
+```sh
+bin/gpforum-partition-maintenance --plan --json | jq -e '.conflicts == []'
+```
 
 ## Run it in a maintenance window
 

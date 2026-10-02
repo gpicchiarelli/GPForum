@@ -15,6 +15,8 @@ use GPForum::Command::Usage;
 
 our $VERSION = '0.001';
 
+const my $COMMAND               => 'gpforum-outbox-dispatch';
+const my @COUNT_KEYS            => qw(selected dispatched failed dead_lettered);
 const my $DEFAULT_LIMIT         => 100;
 const my $DEFAULT_SLEEP_SECONDS => 5;
 
@@ -35,25 +37,33 @@ has sleeper    => sub {
     };
 };
 
-# A usage croak becomes the documented usage exit instead of an uncaught
-# exception: same text, on stderr, status 2, without croak's " at FILE line N".
-# Anything else is rethrown, so a real failure is not relabelled as misuse.
+# Misuse is the documented usage exit, 2, with the usage on stderr: an
+# unknown option used to die with status 255, since its text starts with the
+# complaint rather than the usage line. A failure of the dispatch itself --
+# the database gone -- exits 1 with its reason, and under --json still prints
+# a document.
 sub run ( $self, @arguments ) {
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
-
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( !GPForum::Command::Usage->is_usage($error) ) {
-        die "$error\n";
+    my $options = eval { return _parse_arguments(@arguments); };
+    if ( !$options ) {
+        return GPForum::Command::Usage->error( undef,
+            GPForum::Command::Usage->trimmed($EVAL_ERROR) );
     }
-
-    return GPForum::Command::Usage->error( undef, $error );
-}
-
-sub _run ( $self, @arguments ) {
-    my $options = _parse_arguments(@arguments);
     return _print_usage( $self->output ) if $options->{help};
 
+    my $status = eval { return $self->_run($options); };
+    return $status if defined $status;
+
+    return GPForum::Command::Usage->failure(
+        $EVAL_ERROR,
+        $options->{json}
+        ? (
+            $self->output, { command => $COMMAND, map { $_ => 0 } @COUNT_KEYS }
+          )
+        : ()
+    );
+}
+
+sub _run ( $self, $options ) {
     my $stop_requested = 0;
     local $SIG{INT} = local $SIG{TERM} = sub {
         $stop_requested = 1;
@@ -62,7 +72,13 @@ sub _run ( $self, @arguments ) {
     my $iterations = 0;
     while (1) {
         my $summary = $self->dispatch_once( $options->{limit} );
-        _print_summary( $self->output, $summary );
+        if ( $options->{json} ) {
+            GPForum::Command::Usage->json( $self->output,
+                _json_document($summary) );
+        }
+        else {
+            _print_summary( $self->output, $summary );
+        }
 
         $iterations++;
         last if $options->{once};
@@ -104,6 +120,7 @@ sub _application ($self) {
 
 sub _parse_arguments (@arguments) {
     my %options = (
+        json          => 0,
         limit         => $DEFAULT_LIMIT,
         once          => 1,
         sleep_seconds => $DEFAULT_SLEEP_SECONDS,
@@ -119,6 +136,9 @@ sub _parse_arguments (@arguments) {
         }
         elsif ( $argument eq '--loop' ) {
             $options{once} = 0;
+        }
+        elsif ( $argument eq '--json' ) {
+            $options{json} = 1;
         }
         elsif ( $argument eq '--limit' ) {
             $options{limit} = _positive_integer( $argument, shift @arguments );
@@ -146,11 +166,22 @@ sub _positive_integer ( $option, $value ) {
     return int $value;
 }
 
+# One object per batch, so --loop --json reads as JSON Lines. A message that
+# failed is retried after its backoff, as the line says, so the batch's status
+# is ok: the counts carry what happened.
+sub _json_document ($summary) {
+    return {
+        command => $COMMAND,
+        status  => 'ok',
+        map { $_ => $summary->{$_} // 0 } @COUNT_KEYS,
+    };
+}
+
 sub _print_summary ( $output, $summary ) {
     print {$output} join( q{ },
         'outbox_dispatch',
         map { $_ . q{=} . ( defined $summary->{$_} ? $summary->{$_} : 0 ) }
-          qw(selected dispatched failed dead_lettered) ),
+          @COUNT_KEYS ),
       "\n"
       or croak 'failed to write outbox dispatch summary';
 
@@ -171,7 +202,7 @@ sub usage_text ($class) {
 
 sub _usage ( $message = undef ) {
     return ( defined $message ? "$message\n" : q{} )
-      . "Usage: bin/gpforum-outbox-dispatch [--once|--loop] [--limit N] [--sleep N] [--max-iterations N]\n";
+      . "Usage: bin/gpforum-outbox-dispatch [--once|--loop] [--limit N] [--sleep N] [--max-iterations N] [--json]\n";
 }
 
 1;

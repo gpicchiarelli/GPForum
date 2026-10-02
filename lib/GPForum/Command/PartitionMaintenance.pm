@@ -11,11 +11,18 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 
+use GPForum::Command::Usage;
+
 our $VERSION = '0.001';
 
 const my $EXIT_FAILURE => 1;
 const my $EXIT_USAGE   => 2;
 const my @COUNT_KEYS   => qw(created existing planned conflicts errors);
+
+# What --json keeps of a partition row: the fields the lines print, under the
+# lifecycle's own names, and nothing it may add for its own use later.
+const my @ROW_KEYS => qw(conflicting_rows create_sql default_partition error
+  message partition_name range_end range_start remediation table_name);
 
 has dbh       => undef;
 has lifecycle => undef;
@@ -30,9 +37,24 @@ sub run ( $self, @arguments ) {
 
     my $result = eval { return $self->ensure($options) };
     if ( !$result ) {
-        return _print_error( _trim($EVAL_ERROR), $EXIT_FAILURE );
+        return _print_error( _trim($EVAL_ERROR), $EXIT_FAILURE )
+          if !$options->{json};
+        return GPForum::Command::Usage->failure(
+            $EVAL_ERROR,
+            $self->output,
+            {
+                %{ _json_head($options) },
+                lookahead_months => $options->{lookahead},
+            }
+        );
     }
-    $self->_print_result( $result, $options );
+    if ( $options->{json} ) {
+        GPForum::Command::Usage->json( $self->output,
+            _json_document( $result, $options ) );
+    }
+    else {
+        $self->_print_result( $result, $options );
+    }
 
     return $result->{ok} ? 0 : $EXIT_FAILURE;
 }
@@ -58,6 +80,31 @@ sub _lifecycle ($self) {
 
     return GPForum::Service::Operations::PartitionLifecycle->new(
         schema => $schema );
+}
+
+# The lines' content as one object: the summary's counts become the lists
+# themselves, so a script reads how many from their length.
+sub _json_document ( $result, $options ) {
+    return {
+        %{ _json_head($options) },
+        lookahead_months => $result->{lookahead_months},
+        status           => $result->{ok} ? 'ok' : 'fail',
+        map {
+            $_ => [ map { _json_row($_) } @{ $result->{$_} || [] } ]
+        } @COUNT_KEYS,
+    };
+}
+
+sub _json_head ($options) {
+    return {
+        command => 'gpforum-partition-maintenance',
+        mode    => $options->{apply} ? 'apply' : 'plan',
+        map { $_ => [] } @COUNT_KEYS,
+    };
+}
+
+sub _json_row ($row) {
+    return { map { $_ => $row->{$_} } grep { defined $row->{$_} } @ROW_KEYS };
 }
 
 sub _print_result ( $self, $result, $options ) {
@@ -126,6 +173,7 @@ sub _parse_arguments (@arguments) {
     my %options = (
         apply => 0,
         help  => 0,
+        json  => 0,
     );
     while (@arguments) {
         my $argument = shift @arguments;
@@ -139,6 +187,7 @@ sub _apply_argument ( $options, $argument, $arguments ) {
     my %flag = (
         '--apply' => sub { $options->{apply} = 1 },
         '--help'  => sub { $options->{help}  = 1 },
+        '--json'  => sub { $options->{json}  = 1 },
         '--plan'  => sub { $options->{apply} = 0 },
     );
     if ( $flag{$argument} ) {
@@ -184,7 +233,7 @@ sub usage_text ($class) {
 
 sub _usage ( $message = undef ) {
     return ( defined $message ? "$message\n" : q{} ) . <<'USAGE';
-Usage: bin/gpforum-partition-maintenance [--plan|--apply] [--lookahead N]
+Usage: bin/gpforum-partition-maintenance [--plan|--apply] [--lookahead N] [--json]
 
 Creates the monthly range partitions of event_log, audit_log and
 notifications ahead of time and records them in partition_registry.
@@ -192,6 +241,7 @@ notifications ahead of time and records them in partition_registry.
   --plan       report the DDL without executing it (default)
   --apply      execute CREATE TABLE ... PARTITION OF and upsert the registry
   --lookahead  months to keep ahead, including the current month (default 3)
+  --json       one JSON object on stdout instead of lines
   --help       show this help
 
 Exit status is 1 when a partition cannot be created, including when rows in
@@ -238,9 +288,10 @@ executing anything, so the DDL can be reviewed or applied by hand.
 
 =head2 run
 
-Parses CLI options, runs one maintenance pass, prints the result, and returns
-the exit status: 0 when every partition is in place, 1 when a partition is
-missing because of a conflict or error, 2 for usage errors.
+Parses CLI options, runs one maintenance pass, prints the result -- as lines,
+or with C<--json> as one JSON object -- and returns the exit status: 0 when
+every partition is in place, 1 when a partition is missing because of a
+conflict or error, 2 for usage errors.
 
 =head2 ensure
 

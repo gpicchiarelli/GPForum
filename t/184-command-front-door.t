@@ -8,7 +8,8 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
-use English qw(-no_match_vars);
+use English       qw(-no_match_vars);
+use JSON::MaybeXS qw(decode_json);
 use Test::More;
 
 use lib 'lib';
@@ -71,14 +72,26 @@ for my $adapter (@adapters) {
 is( GPForum::Command::Usage->help( \*STDOUT, q{} ), $EXIT_OK, 'help succeeds' );
 ok( GPForum::Command::Usage->is_usage('Usage: bin/x'),
     'a usage message is recognised' );
+ok( GPForum::Command::Usage->is_usage("unknown option --bad\nUsage: bin/x"),
+    'so is one that says first what was wrong' );
 ok(
     !GPForum::Command::Usage->is_usage('database is down'),
     'a real failure is not mistaken for misuse'
+);
+ok(
+    !GPForum::Command::Usage->is_usage("one\ntwo\nUsage: bin/x"),
+    'nor is a longer text that happens to hold a usage line'
 );
 is(
     GPForum::Command::Usage->trimmed('Usage: bin/x at bin/x line 17.'),
     'Usage: bin/x',
     'croak location is stripped from operator text'
+);
+is(
+    GPForum::Command::Usage->trimmed(
+        "refused at lib/DBI.pm line 1639.\n at bin/x line 9\n"),
+    'refused',
+    'every location a rethrow added is stripped'
 );
 isnt( $EXIT_USAGE, $EXIT_FAILURE, 'misuse and failure are distinguishable' );
 
@@ -88,6 +101,15 @@ my $status = system {$EXECUTABLE_NAME} $EXECUTABLE_NAME, '-Ilib', 'bin/gpforum',
   'search_rebuild', '--entity', 'bogus';
 is( $status >> $EXIT_STATUS_SHIFT,
     $EXIT_USAGE, 'bin/gpforum exits 2 on misuse, as the command does' );
+
+# --json reaches the command through the front door too.
+open my $json, q{-|}, $EXECUTABLE_NAME, '-Ilib', 'bin/gpforum', 'query_budget',
+  '--print', '--json'
+  or croak "bin/gpforum: $ERRNO";
+my $printed = do { local $INPUT_RECORD_SEPARATOR = undef; <$json> };
+close $json or croak 'bin/gpforum query_budget --json failed';
+is( decode_json($printed)->{status},
+    'ok', 'bin/gpforum query_budget --json prints a document' );
 
 done_testing();
 

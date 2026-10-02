@@ -15,6 +15,7 @@ use GPForum::Command::Usage;
 
 our $VERSION = '0.001';
 
+const my $COMMAND       => 'gpforum-scheduled-jobs';
 const my $DEFAULT_LIMIT => 100;
 
 # The application, or a code reference that builds it -- built only when work
@@ -25,27 +26,37 @@ has app    => undef;
 has jobs   => undef;
 has output => sub { return \*STDOUT; };
 
-# A usage croak becomes the documented usage exit instead of an uncaught
-# exception: same text, on stderr, status 2, without croak's " at FILE line N".
-# Anything else is rethrown, so a real failure is not relabelled as misuse.
+# Misuse -- an unknown option or job name, all the parser croaks for -- is the
+# documented usage exit: same text, on stderr, status 2, without croak's " at
+# FILE line N". A failure of the run itself -- the database gone -- is kept
+# apart from it: 1 with its reason rather than the 255 of an uncaught
+# exception, and under --json still a document.
 sub run ( $self, @arguments ) {
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
-
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( !GPForum::Command::Usage->is_usage($error) ) {
-        die "$error\n";
+    my $options = eval { return _parse_arguments(@arguments); };
+    if ( !$options ) {
+        return GPForum::Command::Usage->error( undef,
+            GPForum::Command::Usage->trimmed($EVAL_ERROR) );
     }
-
-    return GPForum::Command::Usage->error( undef, $error );
-}
-
-sub _run ( $self, @arguments ) {
-    my $options = _parse_arguments(@arguments);
     return _print_usage( $self->output ) if $options->{help};
 
+    my $status = eval { return $self->_run($options); };
+    return $status if defined $status;
+
+    return GPForum::Command::Usage->failure( $EVAL_ERROR,
+        $options->{json}
+        ? ( $self->output, { command => $COMMAND, jobs => [] } )
+        : () );
+}
+
+sub _run ( $self, $options ) {
     my $summary = $self->run_once($options);
-    _print_summary( $self->output, $summary );
+    if ( $options->{json} ) {
+        GPForum::Command::Usage->json( $self->output,
+            _json_document($summary) );
+    }
+    else {
+        _print_summary( $self->output, $summary );
+    }
 
     # Non-zero when a job failed, so the timer unit is marked failed and can
     # alert rather than recording a clean run.
@@ -77,6 +88,7 @@ sub _application ($self) {
 sub _parse_arguments (@arguments) {
     my %options = (
         jobs  => [],
+        json  => 0,
         limit => $DEFAULT_LIMIT,
     );
 
@@ -94,6 +106,10 @@ sub _apply_argument ( $options, $argument, $arguments ) {
         return;
     }
     if ( $argument eq '--once' ) {
+        return;
+    }
+    if ( $argument eq '--json' ) {
+        $options->{json} = 1;
         return;
     }
     if ( $argument eq '--limit' ) {
@@ -141,6 +157,42 @@ sub _print_summary ( $output, $summary ) {
       or croak 'failed to write scheduled jobs summary';
 
     return;
+}
+
+# The summary line as one object: a job per entry, in name order, with the
+# count the line prints and, when there are any, why it did nothing and what
+# went wrong.
+sub _json_document ($summary) {
+    my @jobs;
+    for my $name ( grep { $_ ne 'ok' } sort keys %{$summary} ) {
+        push @jobs, _json_job( $name, $summary->{$name} );
+    }
+
+    return {
+        command => $COMMAND,
+        jobs    => \@jobs,
+        status  => $summary->{ok} ? 'ok' : 'fail',
+    };
+}
+
+sub _json_job ( $name, $result ) {
+    if ( ref $result ne 'HASH' ) {
+        return { count => $result // 0, name => $name };
+    }
+    my %job = ( count => _job_count($result), name => $name );
+    if ( exists $result->{ok} ) {
+        $job{ok} = $result->{ok} ? 1 : 0;
+    }
+    for my $note (qw(skipped error)) {
+        if ( defined $result->{$note} ) {
+            $job{$note} = $result->{$note};
+        }
+    }
+    if ( ref $result->{errors} eq 'ARRAY' ) {
+        $job{errors} = scalar @{ $result->{errors} };
+    }
+
+    return \%job;
 }
 
 sub _summary_keys ($summary) {
@@ -201,7 +253,7 @@ sub usage_text ($class) {
 
 sub _usage ( $message = undef ) {
     return ( defined $message ? "$message\n" : q{} )
-      . "Usage: bin/gpforum-scheduled-jobs [--once] [--limit N] [--job NAME]\n";
+      . "Usage: bin/gpforum-scheduled-jobs [--once] [--limit N] [--job NAME] [--json]\n";
 }
 
 1;
@@ -230,7 +282,9 @@ intervals invoke this command; it is not a long-running daemon.
 
 =head2 run
 
-Parses CLI options, runs one batch, and prints a summary.
+Parses CLI options, runs one batch, and prints a summary: one line, or with
+C<--json> one JSON object. Returns 0, 1 when a job or the run failed, and 2
+on misuse.
 
 =head2 run_once
 
@@ -238,7 +292,8 @@ Runs the selected jobs with the parsed options.
 
 =head1 DIAGNOSTICS
 
-Throws for unknown options or job names.
+An unknown option or job name prints the usage to standard error and returns
+2; a run that cannot start prints its reason there and returns 1.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

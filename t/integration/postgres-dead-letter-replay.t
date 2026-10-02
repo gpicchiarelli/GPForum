@@ -8,6 +8,7 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
+use JSON::MaybeXS qw(decode_json);
 use Test::More;
 
 use lib 'lib';
@@ -212,6 +213,27 @@ my ( $refused, $refused_status ) =
   _capture( sub { $command->run( '--id', $shell->{dead_letter_id} ) } );
 is( $refused_status, $EXIT_FAILURE, 'a refused replay exits 1' );
 like( $refused, qr/\A not [ ] replayed .* conflict/msx, 'and says why' );
+
+# --json: the same review and the same refusal as one document each, with
+# the timestamps PostgreSQL returns encoded as strings.
+my ( $listed_json, $listed_json_status ) =
+  _capture( sub { $command->run( '--list', '--json' ) } );
+is( $listed_json_status, $EXIT_OK, '--list --json succeeds' );
+my $review = decode_json($listed_json);
+is( $review->{status}, 'ok', 'and says ok' );
+my ($listed_shell) =
+  grep { $_->{dead_letter_id} eq $shell->{dead_letter_id} }
+  @{ $review->{dead_letters} };
+is( $listed_shell->{replay_status}, 'pending', 'with how its replay is doing' );
+is( $listed_shell->{failure_type},  'permanent', 'and failure type' );
+ok( !ref $listed_shell->{last_failed_at}, 'and when, as a string' );
+
+my ( $refused_json, $refused_json_status ) = _capture(
+    sub { $command->run( '--id', $shell->{dead_letter_id}, '--json' ) } );
+is( $refused_json_status, $EXIT_FAILURE, 'a refused replay is 1 under --json' );
+my $refusal = decode_json($refused_json);
+is( $refusal->{status},              'fail',     'the document says fail' );
+is( $refusal->{outcomes}[0]{status}, 'conflict', 'and why' );
 
 # From the console the replay runs inside the command's transaction. A
 # failure after the new message is written -- here, the audit -- must take

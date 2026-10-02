@@ -8,8 +8,12 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
-use English qw(-no_match_vars);
+use English       qw(-no_match_vars);
+use IO::Handle    ();
+use JSON::MaybeXS ();
 use Mojo::Base -base, -signatures;
+
+use GPForum::Service::Admin::Settings;
 
 our $VERSION = '0.001';
 
@@ -23,6 +27,10 @@ our $VERSION = '0.001';
 const our $EXIT_OK      => 0;
 const our $EXIT_FAILURE => 1;
 const our $EXIT_USAGE   => 2;
+
+# Sorted keys: the same state prints the same bytes, so two runs diff cleanly
+# and a test can compare a document whole.
+const my %JSON_SETTINGS => ( canonical => 1, utf8 => 1 );
 
 # Help goes to stdout and succeeds: an operator running `cmd --help | less`
 # should not be reading stderr, and a wrapper script should not see a failure.
@@ -64,11 +72,54 @@ sub error ( $, $message, $text ) {
 # wrapper that execs the bin/ one -- so $0 is the truthful, runnable name
 # whichever was typed.
 # A croak that begins with the usage line is misuse; anything else is a
-# genuine failure and must keep its own exit status.
+# genuine failure and must keep its own exit status. The usage may follow one
+# line saying what was wrong ("unknown option --bad"), the way most parsers
+# here croak: recognising only a text that starts with the usage line is how
+# scheduled-jobs and outbox-dispatch came to exit 255 on misuse.
 sub is_usage ( $, $text ) {
     return 0 if !defined $text;
 
-    return $text =~ /\A Usage: /msx ? 1 : 0;
+    return $text =~ /\A (?: [^\n]* \n )? Usage: /msx ? 1 : 0;
+}
+
+# --json: one JSON object per line on stdout, always with a "status" a script
+# can branch on beside the exit code. A command printing several documents (a
+# dispatcher looping) prints one line each, so the output reads as JSON Lines.
+sub json ( $, $output, $document ) {
+    croak 'a --json document carries a status'
+      if !defined $document->{status};
+
+    print {$output} JSON::MaybeXS->new(%JSON_SETTINGS)->encode($document), "\n"
+      or croak 'failed to write JSON';
+
+    # Each document reaches its reader when it is printed. Standard output
+    # into a pipe is block-buffered, so `outbox-dispatch --loop --json | jq`
+    # saw nothing until 8 KB of batches had piled up -- six minutes of idle
+    # passes -- and a kill lost them.
+    $output->flush or croak 'failed to write JSON';
+
+    return;
+}
+
+# The work itself failed. The reason goes to stderr without croak's location,
+# and the status is 1, "the work failed": an uncaught exception made Perl exit
+# 255, which is no status a caller can branch on. Given a document, --json
+# also prints it on stdout with status "fail" and the reason, so a script
+# reading stdout finds a status rather than nothing.
+#
+# The reason can quote a secret: DBI's connect error repeats the DSN, so a
+# password= the operator put there came out on stderr and in the document,
+# where a log keeps it. It is redacted as the settings page redacts a DSN.
+sub failure ( $class, $error, $output = undef, $document = undef ) {
+    my $text   = $class->trimmed($error);
+    my $reason = GPForum::Service::Admin::Settings->new->redact( $text, [] );
+    print {*STDERR} "$reason\n" or croak 'failed to write failure';
+    if ( defined $document ) {
+        $class->json( $output,
+            { %{$document}, error => $reason, status => 'fail' } );
+    }
+
+    return $EXIT_FAILURE;
 }
 
 sub wants_help ( $, @arguments ) {
@@ -77,10 +128,15 @@ sub wants_help ( $, @arguments ) {
 
 # croak appends " at FILE line N.", which is debugging information for a
 # programmer and noise for an operator reading how to use a program. Fifty-nine
-# croak _usage() sites leaked it into help text.
+# croak _usage() sites leaked it into help text. A rethrown error carries one
+# per throw -- a DBIx::Class connection failure ends "at DBI.pm line 1639. at
+# Migrate.pm line 9" -- so every trailing one goes.
 sub trimmed ( $, $error ) {
     my $text = defined $error ? "$error" : q{};
-    $text =~ s/\s+ at \s+ \S+ \s+ line \s+ [[:digit:]]+ [.]? \s*\z//msx;
+    while (
+        $text =~ s/\s+ at \s+ \S+ \s+ line \s+ [[:digit:]]+ [.]? \s*\z//msx )
+    {
+    }
     $text =~ s/\s+\z//msx;
 
     return $text;
@@ -119,11 +175,16 @@ Version 0.001.
 
     return GPForum::Command::Usage->error( "unknown option $name", _usage() );
 
+    GPForum::Command::Usage->json( \*STDOUT, { status => 'ok', ... } );
+
 =head1 DESCRIPTION
 
 Gives every entrypoint the same operator-facing behaviour: C<--help> prints to
 standard output and exits 0, a usage error prints to standard error and exits
-2, and neither leaks the C<at FILE line N> suffix that C<croak> appends.
+2, and neither leaks the C<at FILE line N> suffix that C<croak> appends. A
+failure of the work itself exits 1 with its reason on standard error, and a
+command's C<--json> mode prints one JSON object per line, each with a
+C<status>; F<docs/ops/console-and-cli.md> lists the shapes.
 
 =head1 SUBROUTINES/METHODS
 
@@ -137,7 +198,21 @@ Prints the usage text to the given handle and returns C<$EXIT_OK>.
 
 =head2 is_usage
 
-True when an error text is a usage message rather than a failure.
+True when an error text is a usage message rather than a failure: the usage
+line comes first, or second after one line saying what was wrong.
+
+=head2 json
+
+Prints a document as one line of JSON with sorted keys, and flushes the
+handle so a reader sees it at once. Croaks when the document has no
+C<status>.
+
+=head2 failure
+
+Prints a failure's reason to standard error and, given a document, the
+document with C<status> C<fail> and the C<error> as JSON; returns
+C<$EXIT_FAILURE>. An inline password in the reason, such as a DSN's
+C<password=>, is redacted in both.
 
 =head2 wants_help
 
@@ -166,7 +241,8 @@ No environment variables are read.
 
 =head1 DEPENDENCIES
 
-Uses L<Const::Fast> and L<Mojo::Base>.
+Uses L<Const::Fast>, L<JSON::MaybeXS>, L<Mojo::Base> and, for its
+redaction, L<GPForum::Service::Admin::Settings>.
 
 =head1 INCOMPATIBILITIES
 

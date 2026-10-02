@@ -26,6 +26,35 @@ type and the state of each one's replay if it has one. From the shell:
 script/dead-letter-replay --list --limit 100
 ```
 
+With `--json` the list is one JSON object, for a script or an alert:
+
+```json
+{"command":"gpforum-dead-letter-replay","mode":"list","status":"ok",
+ "dead_letters":[{"dead_letter_id":"...","source_table":"outbox_messages",
+   "source_id":"...","failure_type":"permanent","retry_count":5,
+   "error_class":"...","error_message":"...","first_failed_at":"...",
+   "last_failed_at":"...","replay_status":null}]}
+```
+
+`replay_status` is `null` for a dead letter never replayed, otherwise the
+status of its replay message (`pending`, `done`, ...), or `replayed` once
+retention has purged that message. A replay with `--json`
+prints `{"mode":"replay","status":"ok"|"fail","outcomes":[...]}`, one outcome
+per `--id` with its `dead_letter_id` and `status` -- `replayed` with the new
+`outbox_id`, or the refusal (`not_found`, `conflict`) with its `error`. The
+exit codes do not change: 0, 1 when any id was not replayed or the database
+failed, 2 on misuse. Each id is replayed in its own transaction, so when the
+database fails part way the object says `"status":"fail"`, gives the reason in
+`error`, and keeps in `outcomes` the ids replayed before the failure: those
+are done, and replaying them again is refused as a `conflict`.
+
+`bin/gpforum-outbox-dispatch --json` prints one object per batch -- with
+`--loop`, one line each, JSON Lines -- with the counts the line prints:
+`{"command":"gpforum-outbox-dispatch","status":"ok","selected":..,
+"dispatched":..,"failed":..,"dead_lettered":..}`. A failed message is retried
+after its backoff, so a batch's `status` is `ok`; `dead_lettered` is the count
+to alert on.
+
 On the database:
 
 ```sql

@@ -31,6 +31,7 @@ our $VERSION = '0.001';
 # short, full, none, short, and then full again.
 const my @CLAIMED      => ( 3, 1, 3, 0, 2 );
 const my $DRAIN_PASSES => 6;
+const my $EXIT_USAGE   => 2;
 
 my $minion_unavailable =
   qr{Minion [ ] PostgreSQL [ ] backend [ ] is [ ] unavailable:}msx;
@@ -131,14 +132,27 @@ is_deeply(
 is( scalar @{ $draining->calls },
     $DRAIN_PASSES, 'and the loop still runs every pass' );
 
-throws_ok(
-    sub {
-        GPForum::Command::OutboxDispatch->new( dispatcher => $dispatcher )
+# Misuse is the contract's 2 with the usage on stderr; it used to die, so the
+# service manager saw 255, the status of an uncaught exception.
+{
+    my $errors = q{};
+    open my $stderr, '>', \$errors or croak 'capture stderr';
+    my $misuse_exit;
+    {
+        local *STDERR = $stderr;
+        $misuse_exit =
+          GPForum::Command::OutboxDispatch->new( dispatcher => $dispatcher )
           ->run('--bad-option');
-    },
-    qr/\A unknown [ ] option [ ] --bad-option/msx,
-    'outbox dispatch command rejects unknown options'
-);
+    }
+    close $stderr or croak 'close stderr';
+    is( $misuse_exit, $EXIT_USAGE,
+        'outbox dispatch command rejects unknown options with 2' );
+    like(
+        $errors,
+        qr/\A unknown [ ] option [ ] --bad-option \n Usage:/msx,
+        'saying what was wrong, then the usage'
+    );
+}
 
 ok(
     GPForum::Worker::MinionGuard->requested(

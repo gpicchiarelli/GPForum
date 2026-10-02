@@ -94,6 +94,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **A `password=` in `GPFORUM_DATABASE_DSN` is redacted in command failure
+  messages**, on stderr and in `--json` output; DBI's connect error printed
+  it as is.
+
 - **A static response that writes the session cookie back is marked
   `private`**, so no shared cache can store one visitor's session cookie and
   serve it to another.
@@ -266,6 +270,13 @@ CI, evidence and internal refactors with no change in behaviour.
   4.42+ `allow_nonref` cannot treat scalar payloads as outbox events.
 
 ### Added
+
+- **`--json` on the state-reporting commands** (`migrate`,
+  `partition-maintenance`, `platform-check`, `query-budget`,
+  `scheduled-jobs`, `search-rebuild`, `outbox-dispatch`,
+  `dead-letter-replay`): one JSON object per line with a `status`, flushed as
+  printed; exit codes unchanged. `gpforum-migrate --check` exits 1 when
+  migrations are pending or an applied file changed.
 
 - **Fingerprinted static assets** (quality program 7.7): stylesheet and icon
   URLs carry `?v=<12 hex digits of the file's SHA-256>`, taken at startup; a

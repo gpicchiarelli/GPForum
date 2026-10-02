@@ -6,7 +6,8 @@ package GPForum::Command::DeadLetterReplay;
 use strict;
 use warnings;
 
-use Carp    qw(croak);
+use Carp qw(croak);
+use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 
@@ -18,7 +19,20 @@ use GPForum::Service::Outbox::DeadLetterReplay;
 
 our $VERSION = '0.001';
 
+const my $COMMAND    => 'gpforum-dead-letter-replay';
+const my %SWITCH_FOR => ( '--json' => 'json', '--list' => 'list' );
+
+# What --list --json gives of each dead letter: what a line prints, under the
+# console reader's names, and when it first failed.
+const my @LETTER_KEYS => qw(dead_letter_id error_class error_message
+  failure_type first_failed_at last_failed_at replay_status retry_count
+  source_id source_table);
+
 has schema => undef;
+
+# A GPForum::Service::Outbox::DeadLetterReplay, for a test; otherwise one is
+# built over the schema when the first id is replayed.
+has replayer => undef;
 
 # The CLI side of ADR 0056's review and replay, for the operator on the host:
 # the same service the console's Replay button uses, audited with no actor
@@ -27,40 +41,81 @@ sub run ( $self, @arguments ) {
     return GPForum::Command::Usage->help( \*STDOUT, _usage() )
       if GPForum::Command::Usage->wants_help(@arguments);
 
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
+    my $options = eval { return _options(@arguments); };
+    if ( !$options ) {
+        my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
+        return GPForum::Command::Usage->error( undef, $error )
+          if GPForum::Command::Usage->is_usage($error);
 
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( GPForum::Command::Usage->is_usage($error) ) {
-        return GPForum::Command::Usage->error( undef, $error );
-    }
-    if ( $error =~ /\A Unknown [ ] option: /msx ) {
         return GPForum::Command::Usage->error( $error, _usage() );
     }
 
-    die "$error\n";
+    my @outcomes;
+    my $status = eval { return $self->_run( $options, \@outcomes ); };
+    return $status if defined $status;
+
+    # The database failed: 1 with the reason, not the 255 of an uncaught
+    # exception, and under --json a document still -- holding the ids
+    # replayed before the failure, each in its own transaction, so a script
+    # does not take them for undone and replay them again.
+    return GPForum::Command::Usage->failure( $EVAL_ERROR,
+        $options->{json}
+        ? ( \*STDOUT, _json_head( $options, \@outcomes ) )
+        : () );
 }
 
-sub _run ( $self, @arguments ) {
-    my $options = _options(@arguments);
+sub _run ( $self, $options, $outcomes ) {
     return $self->_list($options) if $options->{list};
 
-    my $replay =
-      GPForum::Service::Outbox::DeadLetterReplay->new(
-        schema => $self->_schema );
-    my $refused = 0;
+    my $replay = $self->_replayer;
     for my $dead_letter_id ( @{ $options->{ids} } ) {
         my $outcome = $replay->replay(
             { dead_letter_id => $dead_letter_id, via => 'cli' } );
-        if ( $outcome->{status} ne 'replayed' ) {
-            $refused++;
+        push @{$outcomes}, _json_outcome( $dead_letter_id, $outcome );
+        if ( !$options->{json} ) {
+            _say( _outcome_line( $dead_letter_id, $outcome ) );
         }
-        _say( _outcome_line( $dead_letter_id, $outcome ) );
+    }
+    my $refused = grep { $_->{status} ne 'replayed' } @{$outcomes};
+    if ( $options->{json} ) {
+        GPForum::Command::Usage->json(
+            \*STDOUT,
+            {
+                %{ _json_head( $options, $outcomes ) },
+                status => $refused ? 'fail' : 'ok',
+            }
+        );
     }
 
     return $refused
       ? $GPForum::Command::Usage::EXIT_FAILURE
       : $GPForum::Command::Usage::EXIT_OK;
+}
+
+sub _json_head ( $options, $outcomes = [] ) {
+    return {
+        command => $COMMAND,
+        $options->{list}
+        ? ( dead_letters => [], mode => 'list' )
+        : ( mode => 'replay', outcomes => $outcomes ),
+    };
+}
+
+# A refusal keeps its own status -- not_found, conflict -- and its reason, as
+# the line does.
+sub _json_outcome ( $dead_letter_id, $outcome ) {
+    my %result = (
+        dead_letter_id => $dead_letter_id,
+        status         => $outcome->{status},
+    );
+    if ( $outcome->{status} eq 'replayed' ) {
+        $result{outbox_id} = $outcome->{replayed}{outbox_id};
+    }
+    else {
+        $result{error} = $outcome->{error};
+    }
+
+    return \%result;
 }
 
 # Newest first, with what an operator reads before deciding: the failure type
@@ -69,6 +124,17 @@ sub _list ( $self, $options ) {
     my $letters =
       GPForum::Service::Admin::ConsoleReader->new( schema => $self->_schema )
       ->list_dead_letters( { limit => $options->{limit} } );
+    if ( $options->{json} ) {
+        GPForum::Command::Usage->json(
+            \*STDOUT,
+            {
+                %{ _json_head($options) },
+                dead_letters => [ map { _json_letter($_) } @{$letters} ],
+                status       => 'ok',
+            }
+        );
+        return $GPForum::Command::Usage::EXIT_OK;
+    }
     for my $letter ( @{$letters} ) {
         _say(
             join q{ },
@@ -85,6 +151,17 @@ sub _list ( $self, $options ) {
     return $GPForum::Command::Usage::EXIT_OK;
 }
 
+sub _json_letter ($letter) {
+    return { map { $_ => $letter->{$_} } @LETTER_KEYS };
+}
+
+sub _replayer ($self) {
+    return $self->replayer if $self->replayer;
+
+    return GPForum::Service::Outbox::DeadLetterReplay->new(
+        schema => $self->_schema );
+}
+
 sub _schema ($self) {
     return $self->schema if $self->schema;
 
@@ -93,11 +170,11 @@ sub _schema ($self) {
 }
 
 sub _options (@arguments) {
-    my %options = ( ids => [], limit => 50, list => 0 );
+    my %options = ( ids => [], json => 0, limit => 50, list => 0 );
     while (@arguments) {
         my $flag = shift @arguments;
-        if ( $flag eq '--list' ) {
-            $options{list} = 1;
+        if ( exists $SWITCH_FOR{$flag} ) {
+            $options{ $SWITCH_FOR{$flag} } = 1;
         }
         elsif ( $flag eq '--id' ) {
             push @{ $options{ids} }, _value( \@arguments );
@@ -153,13 +230,14 @@ sub usage_text ($class) {
 
 sub _usage {
     return <<'USAGE';
-Usage: bin/gpforum-dead-letter-replay --list [--limit N]
-       bin/gpforum-dead-letter-replay --id DEAD_LETTER_ID [--id ...]
+Usage: bin/gpforum-dead-letter-replay --list [--limit N] [--json]
+       bin/gpforum-dead-letter-replay --id DEAD_LETTER_ID [--id ...] [--json]
 
 Review dead letters, and put their work back in the outbox once the cause is
 fixed. A replay is a new outbox message for the same event; the cancelled
 message and the dead letter stay as evidence, and each dead letter can be
-replayed once. Exits 1 when any id was not replayed.
+replayed once. Exits 1 when any id was not replayed. --json prints one JSON
+object on stdout instead of lines.
 USAGE
 }
 
@@ -198,7 +276,8 @@ The usage text, for the front door.
 
 =head1 DIAGNOSTICS
 
-Exit 0 when every id was replayed, 1 when any was not, 2 on misuse.
+Exit 0 when every id was replayed, 1 when any was not or the database
+failed, 2 on misuse.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

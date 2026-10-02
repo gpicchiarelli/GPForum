@@ -22,7 +22,23 @@ outbox queue.
 
 The command prints one line: `ok`, then each job with its count, and for a job
 that did not complete, its `_error`, `_errors` count or `_skipped` reason. It
-exits 1 when any job failed, so a systemd timer marks the unit failed.
+exits 1 when any job failed, so a systemd timer marks the unit failed, and 2
+on misuse (an unknown option or job name; this used to die with 255).
+
+`--json` prints the same summary as one JSON object instead:
+
+```json
+{"command":"gpforum-scheduled-jobs","status":"ok",
+ "jobs":[{"name":"sessions","count":2,"ok":1}, ...]}
+```
+
+`status` is `ok` or `fail`, as the exit code. Each job, in name order, has its
+`name` and the `count` the line prints, `ok` when the job reports one, and
+when there is one its `skipped` reason, its `error`, and `errors`, the number
+of items that failed. A run that fails -- the database gone -- exits 1 with
+`status` `fail`, `jobs` empty and the reason in `error`. Empty means not
+reported, not none run: the jobs before the one that failed did their work,
+and the next run carries on.
 
 ## Timers shipped in-tree
 

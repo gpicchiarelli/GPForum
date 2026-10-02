@@ -48,6 +48,64 @@ the command, or says `none`.
 | `bin/gpforum-staging-host-verify` | none | Verifies a staging host, for release evidence. Operator's shell. |
 | `bin/gpforum-stress-load` | none | Load generator against a running instance. Operator's shell. |
 
+## Machine-readable output
+
+Every command that reports state takes `--json` and prints one JSON object on
+one line of standard output instead of its lines -- a command that loops
+prints one per pass, so its output reads as JSON Lines. Every object has
+`status`, and most a `command` (the `bin/` name) and a `mode`. The exit code
+is the same as without `--json`: 0 ok, 1 a problem, 2 misuse. Misuse prints
+the usage on standard error and nothing on standard output. When the work
+itself fails -- the database cannot be reached -- the reason goes to standard
+error, the exit code is 1, and the object still comes, with `status` `fail`,
+the reason in `error` and the lists empty. Work already done shows where the
+command knows it: `dead-letter-replay` keeps the ids it replayed before the
+failure, and a looping `outbox-dispatch` has printed a line for each batch
+before it. `migrate --apply` leaves `applied` out when a migration failed:
+each one commits as it goes, so those before the failure are in the schema,
+and `--check` lists what is left (`applied` is `[]` only when the database
+was never reached). `scheduled-jobs` lists no job, though the jobs that ran
+before the failure did their work.
+
+No object carries a secret: what is printed is what the lines print, and an
+inline password in a failure's reason -- a DSN's `password=`, which DBI's
+connect error repeats -- is replaced by `[redacted]`, on standard error too.
+Each object is flushed as it is printed, so a reader on a pipe gets every
+batch of a looping command when it ends.
+
+For the commands from `migrate` to `search-rebuild` below, `status` is `ok`
+or `fail` as the exit code says (`platform-check` adds `degraded`), and keys
+are sorted, so the same state prints the same bytes. `os-preflight`,
+`antivirus-check` and the evidence commands keep their own vocabulary (`ok`
+or `pass`, `degraded`, `disabled`, `fail`); the evidence commands print JSON
+by default and their lines with `--human`.
+
+| Command and mode | Object |
+| --- | --- |
+| `gpforum-migrate --plan --json` | `migrations`: every file in `migrations/`, each `{version, description, file}`. Needs no database. |
+| `gpforum-migrate --check --json` | `pending`: the migrations the database has not recorded, as above; `status` `fail` when any are, or (`error`) when an applied file changed since. |
+| `gpforum-migrate --apply --json` | `applied`: each `{version, description, checksum, execution_time_ms}`; left out when a migration failed (above). |
+| `gpforum-partition-maintenance --json` | `lookahead_months` and the lists `created`, `existing`, `planned`, `conflicts`, `errors` (`partition-maintenance.md`). |
+| `gpforum-platform-check --json` | `mode`, `strict`, `checks`: each `{name, status, report}`, `report` being the check's own (`os-preflight --json` for `os_preflight`). `status` is the worst check's, `fail` when the exit code is 1. |
+| `gpforum-query-budget --print --json` | `endpoints`: the catalog, keyed by endpoint name. |
+| `gpforum-query-budget --check --json` | `missing`, `extra`, `mismatched`: endpoint names. |
+| `gpforum-query-budget --sync --json` | `synced`: how many budgets were written. |
+| `gpforum-scheduled-jobs --json` | `jobs`: each `{name, count}` and, when there are any, `ok`, `skipped`, `error`, `errors` (`scheduled-jobs.md`). |
+| `gpforum-outbox-dispatch --json` | One object per batch: `selected`, `dispatched`, `failed`, `dead_lettered` (`dead-letters.md`). |
+| `gpforum-dead-letter-replay --list --json` | `dead_letters`, as `/admin/jobs` lists them (`dead-letters.md`). With `--id` instead, `outcomes`: each `{dead_letter_id, status}`, with `outbox_id` when replayed or `error` when refused. |
+| `gpforum-search-rebuild --status --json` | `lag_status` (`current` or `behind`), `pending`, `lag_seconds`, `oldest_pending_at` (UTC, or `null`). `status` is the command's, `ok`. |
+| `gpforum-search-rebuild --json` | `entity_type`, `indexed`, `unchanged`, `pruned`. |
+| `gpforum-os-preflight --json` | The preflight report: `checks`, each `{name, status}`, and the host it read. |
+| `gpforum-antivirus-check --json` | The antivirus evidence (`antivirus.md`). |
+| `gpforum-dead-letter-check`, `gpforum-mail-check`, `gpforum-mail-lifecycle-check`, `gpforum-evidence-validate`, `gpforum-staging-*`, `gpforum-stress-load` | JSON evidence by default (their runbooks). |
+
+A field may be added; one is not renamed or removed without a CHANGELOG
+entry. For example, to fail a deploy step when the schema is behind:
+
+```sh
+bin/gpforum-migrate --check --json | jq -e '.status == "ok"'
+```
+
 ## Only in the console
 
 Some work has no command, because it is an administrator's decision rather

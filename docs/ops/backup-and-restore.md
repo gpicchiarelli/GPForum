@@ -69,9 +69,10 @@ pg_basebackup -h HOST -U gpforum -D /srv/gpforum/base/$(date -u +%Y%m%dT%H%M%SZ)
 4. `touch recovery.signal` in the data directory.
 5. Start the server. It replays WAL to the target and promotes.
 6. Restore the attachment root to the same instant.
-7. Run `bin/gpforum-migrate --plan`. It should report nothing pending: if it
-   wants to apply migrations, the restore predates a deploy and the application
-   will not match the schema.
+7. Run `bin/gpforum-migrate --check` (`--json` for a script). It should exit
+   0 with `pending=0`: if it lists pending migrations, the restore predates a
+   deploy and the application will not match the schema. (`--plan` lists the
+   files in `migrations/` without asking the database, so it cannot tell.)
 
 Choose the target *before* the damage, not after it. If you do not know when
 the damage happened, restore to a candidate instant, look, and repeat — which

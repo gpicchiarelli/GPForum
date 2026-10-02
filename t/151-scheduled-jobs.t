@@ -22,12 +22,12 @@ use GPForum::Test::FixedClock;
 use GPForum::Test::PartitionLifecycleProbe;
 use GPForum::Test::PurgeSchema;
 use GPForum::Test::ScheduledJobStores;
-use Test::Exception;
 use Test::More;
 
 our $VERSION = '0.001';
 
 const my $BATCH_LIMIT          => 2;
+const my $EXIT_USAGE           => 2;
 const my $DEFAULT_LIMIT        => 100;
 const my $HARD_CAP             => 1_000;
 const my $OVERSIZED_LIMIT      => 5_000;
@@ -260,22 +260,35 @@ like(
     'scheduled jobs command prints the operational summary'
 );
 
-throws_ok(
-    sub {
-        GPForum::Command::ScheduledJobs->new( jobs => $runner )
-          ->run('--bad-option');
-    },
-    qr/\A unknown [ ] option [ ] --bad-option/msx,
-    'scheduled jobs command rejects unknown options'
-);
-throws_ok(
-    sub {
-        GPForum::Command::ScheduledJobs->new( jobs => $runner )
-          ->run( '--job', 'vacuum' );
-    },
-    qr/\A unknown [ ] job [ ] vacuum/msx,
-    'scheduled jobs command rejects unknown job names'
-);
+# Misuse is the contract's 2 with the usage on stderr. Both used to die, so
+# the timer saw 255, the status of an uncaught exception.
+for my $case (
+    [
+        ['--bad-option'],
+        qr/\A unknown [ ] option [ ] --bad-option/msx,
+        'unknown options'
+    ],
+    [
+        [ '--job', 'vacuum' ],
+        qr/\A unknown [ ] job [ ] vacuum/msx,
+        'unknown job names'
+    ],
+  )
+{
+    my ( $arguments, $complaint, $label ) = @{$case};
+    my $errors = q{};
+    open my $stderr, '>', \$errors or croak 'capture stderr';
+    my $exit;
+    {
+        local *STDERR = $stderr;
+        $exit = GPForum::Command::ScheduledJobs->new( jobs => $runner )
+          ->run( @{$arguments} );
+    }
+    close $stderr or croak 'close stderr';
+    is( $exit, $EXIT_USAGE, "scheduled jobs command rejects $label with 2" );
+    like( $errors, $complaint,     'saying what was wrong' );
+    like( $errors, qr/^Usage:/msx, 'with the usage' );
+}
 like( _run_command_output( $runner, '--help' ),
     qr/Usage:/msx, 'scheduled jobs command prints usage' );
 
