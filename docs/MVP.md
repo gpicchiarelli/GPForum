@@ -341,8 +341,10 @@ tests are in `t/integration/postgres-concurrency.t` (`_reply_position_race`,
 `_reply_rechecks_delete`, `_edit_rechecks_thread_lock`,
 `_edit_rechecks_post_hide`, `_edit_rechecks_post_delete`,
 `_title_edit_rechecks_lock`, `_delete_rechecks_thread_lock`,
-`_restore_rechecks_post_hide`); they run against a throwaway PostgreSQL
-database and last passed locally on PostgreSQL 18 on 2026-10-01.
+`_restore_rechecks_post_hide`, `_thread_delete_rechecks_moderation`,
+`_thread_move_rechecks_moderation`, `_thread_restore_rechecks_moderation`);
+they run against a throwaway PostgreSQL database and last passed locally on
+PostgreSQL 18 on 2026-10-03.
 
 Search depends on the `search_documents` projection. If the projection is empty
 or unavailable, the HTTP route returns an explicit degraded empty result rather

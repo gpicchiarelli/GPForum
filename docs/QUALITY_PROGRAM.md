@@ -131,7 +131,7 @@ An outside review finds nothing serious.
 | Login is not replayable; no token in `command_log` | done (migration 045) | `postgres-login-replay.t` |
 | Logins throttled per account and per address; `trusted_proxies` explicit; unknown accounts cost an Argon2 verification; session checks fail closed | done | `t/203`, `t/53`, `t/111`, `t/177` |
 | A reply re-checks the thread's lock and state under its row lock | done (ADR 0111) | `postgres-concurrency.t` |
-| A post edit re-checks the post and the thread's lock under its row lock | done for post edit, delete, restore and title edit (2026-10-01); thread delete, restore and move still re-check only existence | `t/integration/postgres-concurrency.t` |
+| A post edit re-checks the post and the thread's lock under its row lock | done for every author write: post edit, delete, restore, thread title edit, delete, restore and move (2026-10-03) | `t/integration/postgres-concurrency.t` |
 | A written threat model, and a penetration test by someone outside | threat model written (`docs/THREAT_MODEL.md`, 2026-09-30: every mitigation cites its test); no outside test | — |
 
 ### Operations

@@ -195,9 +195,10 @@ number of web processes times nodes, per key and TTL: the fail-open cost ADR
     needs its own ADR amending 0020.
   - `thread_counter_shards` is written on a constant shard and read by
     nothing.
-  - A thread's delete, restore and move by its author re-check only the
-    thread's existence and deletion under their lock, not a lock or hide
-    committed meanwhile.
+  - Closed 2026-10-03: a thread's delete, restore and move by its author
+    re-check its lock and hide under the row lock too. What stays checked in
+    the workflow only is the readability of the thread's category and space,
+    and a move's target category.
 - **Verification.** Each decision is pinned by a test, on PostgreSQL where
   the behaviour is PostgreSQL's (the reply race, the lock mode, the
   notification routing, the search plans). `docs/QUALITY_PROGRAM.md` records

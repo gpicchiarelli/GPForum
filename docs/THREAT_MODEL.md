@@ -119,10 +119,10 @@ decides.
 - **Moderation writes ignore scoped role bindings.** A moderator bound to one
   category can act beyond it through the console's write paths. This is an
   owner decision, recorded in the quality program.
-- **A thread's delete, restore and move by its author** re-check only the
-  thread's existence under their lock, so they can race a moderator's lock
-  or hide (ADR 0111 follow-up). Post edits, deletes and restores and title
-  edits re-check everything.
+- **Category and space readability, and a move's target category,** are
+  checked in the workflow, not again under the row lock: a visibility change
+  committed between the two lets the write through (reads still apply
+  effective visibility, so nothing leaks).
 - **The audit chain's forum-wide advisory lock** serialises every audited
   write; under load it is an availability risk (ADR 0020, ADR 0111).
 - **Per-process realtime quotas.** The per-user connection limit is a memory
