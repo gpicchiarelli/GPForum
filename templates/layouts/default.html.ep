@@ -7,8 +7,8 @@
     <meta name="color-scheme" content="<%= ui_theme_color_scheme %>">
     <meta name="theme-color" content="<%= ui_theme_color %>">
     <title><%= title %></title>
-    <link rel="icon" href="<%= url_for('/gpforum-mark.svg') %>" type="image/svg+xml">
-    <link rel="stylesheet" href="<%= url_for('/gpforum-ssr.css') %>">
+    <link rel="icon" href="<%= ui_asset_url('gpforum-mark.svg') %>" type="image/svg+xml">
+    <link rel="stylesheet" href="<%= ui_asset_url('gpforum-ssr.css') %>">
     % my $page_metadata = stash('page_metadata') || {};
     % if ($page_metadata->{description}) {
       <meta name="description" content="<%= $page_metadata->{description} %>">

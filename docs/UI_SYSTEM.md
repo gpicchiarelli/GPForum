@@ -11,6 +11,8 @@ localizable presentation text.
 - Semantic HTML first. ARIA is used only to name regions, status messages, and
   dialog semantics that native HTML does not provide by itself.
 - No frontend build step. CSS custom properties are the design-token layer.
+  Static files are fingerprinted when the application starts, not by a build
+  (see [Static assets](#static-assets)).
 - Localized presentation. Component callers pass translated labels with `t()`,
   `tc()`, `ui_label()`, and locale-aware helpers.
 - Presenter helpers. Repeated view-model shapes such as page actions,
@@ -97,6 +99,43 @@ CSS rule before adding one-off route markup.
 Theme extensions must add semantic tokens first, then component rules. Avoid
 route-specific styling unless a component cannot express the UI.
 
+## Static assets
+
+The application serves `assets/css` and `assets/img` at the site root
+(`/gpforum-ssr.css`, `/gpforum-mark.svg`), searched in that order. A template
+never writes such a URL by hand: `ui_asset_url('gpforum-ssr.css')` renders
+`/gpforum-ssr.css?v=<digest>`, where the digest is the first twelve hex digits
+of the SHA-256 of the file's bytes. `GPForum::Web::AssetManifest` digests every
+file under those roots once, while the application starts, so no request reads
+a file to name it; a misspelt name fails the render instead of sending a URL
+nothing would ever invalidate.
+
+The digest makes the URL name one version of the file, so the static file
+server answers it with `Cache-Control: public, max-age=31536000, immutable`:
+the browser keeps it for a year without revalidating, and a deploy that
+changes the file changes the URL on the next page load. Every other static
+response gets `public, max-age=3600` and the current bytes: a bare URL, an old
+digest (a page rendered before the deploy), a file changed or renamed over on
+disk since the process started, and a file put since then in an earlier root,
+which hides the one digested. A response
+that writes a cookie back says `private` instead of `public`, with the same
+lifetime: the session guard reads the session on every request, so a visitor
+who has seen a form (its CSRF token lives in the session cookie) gets that
+cookie on the stylesheet's response too, and no shared cache may store it for
+the next visitor. In the `development` mode every static response is
+`no-cache`, because a stylesheet is edited under a running server and the
+digest is only taken at startup.
+
+The shipped `deploy/nginx/gpforum.conf` and `deploy/caddy/Caddyfile` serve the
+same roots from disk with the same two values, chosen by whether the request
+has a `v`; a proxy cannot compare it with the digest (the module's BUGS AND
+LIMITATIONS says when that shows). The browser headers, CSP included, are
+unchanged on the application's responses; a file the proxy serves itself
+carries `X-Content-Type-Options: nosniff` and none of the others.
+
+There is still no minification or bundling: the files in `assets/` are what
+is served.
+
 ## Accessibility Contracts
 
 - Every rendered page has exactly one document `<main>` from the base layout.
@@ -124,3 +163,8 @@ route-specific styling unless a component cannot express the UI.
   helper integration.
 - `t/64-i18n.t` verifies catalog coverage, namespace discipline, fallback,
   pluralization, and locale metadata.
+- `t/233-asset-fingerprints.t` verifies that every asset URL the layout renders
+  carries the digest of the file it names, that a changed file changes its URL,
+  the `Cache-Control` the static file server sends for each case (a response
+  that sets a cookie, a shadowed or renamed-over file included), and that the
+  nginx and Caddy configurations send the same values.

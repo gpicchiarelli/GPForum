@@ -287,6 +287,7 @@ sub _helper_names {
       tc
       ui_action
       ui_actions
+      ui_asset_url
       ui_attr
       ui_badge
       ui_breadcrumbs

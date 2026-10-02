@@ -152,7 +152,7 @@ $test->element_exists(
 'html[lang="it"][dir="ltr"][data-locale="it"][data-direction="ltr"][data-script="Latn"][data-theme="default"][data-color-scheme="light"]'
 );
 $test->element_exists('body.app-shell.typography-latin');
-$test->element_exists('link[rel="stylesheet"][href="/gpforum-ssr.css"]');
+$test->element_exists('link[rel="stylesheet"][href^="/gpforum-ssr.css?v="]');
 $test->element_exists('a.skip-link[href="#content"]');
 $test->element_exists('header.site-header nav[aria-label="Principale"]');
 $test->element_exists('nav.breadcrumbs[aria-label="Percorso"]');

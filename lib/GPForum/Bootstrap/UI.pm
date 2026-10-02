@@ -18,6 +18,7 @@ use GPForum::ViewModel::Identity::Presenter;
 use GPForum::ViewModel::Moderation::Presenter;
 use GPForum::ViewModel::Notifications::Presenter;
 use GPForum::ViewModel::Privacy::Presenter;
+use GPForum::Web::AssetManifest;
 use GPForum::Web::IdentityAccess;
 use GPForum::Web::RenderPolicy;
 
@@ -94,6 +95,7 @@ sub register {
     );
     _register_translation_helpers( $application, $default_timezone );
     _register_presentation_helpers( $application, $theme_cookie );
+    _register_asset_helpers($application);
 
     $application->hook(
         after_dispatch => sub {
@@ -451,6 +453,34 @@ sub _register_presentation_helpers {
             my ($controller) = @_;
 
             return _ui_flash_messages($controller);
+        }
+    );
+
+    return;
+}
+
+# 7.7: the layout names each static file by the digest of its bytes, and a
+# response for that exact URL may be cached for a year. The files are read
+# now, while the application starts (after Core has set the static paths),
+# so Hypnotoad's workers share the digests and no request reads a file to
+# name it.
+sub _register_asset_helpers ($application) {
+    my $asset_manifest = GPForum::Web::AssetManifest->new(
+        roots => [ @{ $application->static->paths } ] );
+    $asset_manifest->files;
+
+    $application->helper(
+        ui_asset_url => sub {
+            my ( $controller, $name ) = @_;
+
+            return $asset_manifest->asset_url( $controller, $name );
+        }
+    );
+    $application->hook(
+        after_static => sub {
+            my ($controller) = @_;
+
+            $asset_manifest->apply($controller);
         }
     );
 

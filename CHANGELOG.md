@@ -94,6 +94,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **A static response that writes the session cookie back is marked
+  `private`**, so no shared cache can store one visitor's session cookie and
+  serve it to another.
+
 - **Search no longer shows a moved thread's documents under the category it
   left** (ADR 0102): a thread moved from a public category into a private
   one stayed searchable by anyone until its reindex batch ran. Documents
@@ -262,6 +266,11 @@ CI, evidence and internal refactors with no change in behaviour.
   4.42+ `allow_nonref` cannot treat scalar payloads as outbox events.
 
 ### Added
+
+- **Fingerprinted static assets** (quality program 7.7): stylesheet and icon
+  URLs carry `?v=<12 hex digits of the file's SHA-256>`, taken at startup; a
+  current digest is served `public, max-age=31536000, immutable`, a bare or
+  stale one `max-age=3600`. The shipped nginx and Caddy configs match.
 
 - **`/admin/settings`**: every configuration variable with its effective
   value and whether it comes from the environment or the default. Secrets
