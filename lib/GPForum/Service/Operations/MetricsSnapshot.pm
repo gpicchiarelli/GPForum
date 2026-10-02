@@ -9,7 +9,8 @@ use warnings;
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
-use Time::HiRes qw(time);
+use Scalar::Util qw(blessed);
+use Time::HiRes  qw(time);
 
 use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::QueryBudget;
@@ -38,6 +39,12 @@ has runtime        => undef;
 has runtime_policy => undef;
 has started_at     => sub { return time; };
 
+# Its counters are the process's (a per-request dispatcher's would die with
+# the request), so the one built for this scrape reads what every request's
+# counted. Without it a badge that failed after a write was counted and
+# never reported.
+has notification_dispatcher => undef;
+
 sub collect ($self) {
     my $runtime = $self->runtime;
 
@@ -57,6 +64,7 @@ sub collect ($self) {
         local_caches        => $self->_local_caches,
         realtime            => $self->_realtime,
         realtime_listener   => $self->_realtime_listener,
+        notifications       => $self->_notifications,
         rate_limits         => $self->_rate_limits,
         security            => $self->_security,
         projections         => $self->_projections,
@@ -129,6 +137,15 @@ sub _realtime_listener ($self) {
     return {} if !$self->realtime_supervisor;
 
     return $self->realtime_supervisor->snapshot;
+}
+
+# A dispatcher that keeps no counters (a stand-in for one) reports none,
+# rather than failing the scrape.
+sub _notifications ($self) {
+    my $dispatcher = $self->notification_dispatcher;
+    return {} if !blessed $dispatcher || !$dispatcher->can('snapshot');
+
+    return $dispatcher->snapshot;
 }
 
 sub _local_caches ($self) {
@@ -286,14 +303,15 @@ Version 0.001.
 =head1 SYNOPSIS
 
     my $metrics = GPForum::Service::Operations::MetricsSnapshot->new(
-        runtime            => $runtime,
-        runtime_policy     => $runtime_policy,
-        schema             => $schema,
-        db_query_stats     => $db_query_stats,
-        realtime_hub       => $realtime_hub,
-        rate_limiter       => $rate_limiter,
-        security_telemetry => $security_telemetry,
-        local_caches       => [$local_cache],
+        runtime                 => $runtime,
+        runtime_policy          => $runtime_policy,
+        schema                  => $schema,
+        db_query_stats          => $db_query_stats,
+        realtime_hub            => $realtime_hub,
+        notification_dispatcher => $notification_dispatcher,
+        rate_limiter            => $rate_limiter,
+        security_telemetry      => $security_telemetry,
+        local_caches            => [$local_cache],
     );
 
     my $snapshot = $metrics->collect;
@@ -303,11 +321,12 @@ Version 0.001.
 Gathers, in one hash, what the operations metrics endpoint reports: the
 process id and uptime, the runtime and its OS profile (snapshot, features,
 sockets, processes and preflight check), runtime enforcement, local caches,
-the realtime hub and its listener supervisor, rate limits, security
-telemetry, projection lag, database query statistics, query budgets and
-their drift, database readiness, the outbox backlog and replication (ADR
-0058). Each collaborator is optional: a section whose collaborator is not set
-comes back empty.
+the realtime hub and its listener supervisor, the notification
+dispatcher's badge failures, rate limits, security telemetry, projection
+lag, database query statistics, query budgets and their drift, database
+readiness, the outbox backlog and replication (ADR 0058). Each collaborator
+is optional: a section whose collaborator is not set comes back empty, and
+so does the notifications section when the dispatcher has no C<snapshot>.
 
 The database section times a C<SELECT 1>; the outbox, query budget drift and
 replication sections are guarded too, so a database that cannot answer turns
@@ -327,7 +346,9 @@ Returns the snapshot hash reference with the keys C<generated_at>,
 C<process> (C<pid>, C<uptime_seconds> since C<started_at>), C<runtime>,
 C<os>, C<os_features>, C<os_sockets>, C<os_processes>, C<os_preflight>,
 C<runtime_enforcement>, C<local_caches>, C<realtime>,
-C<realtime_listener>, C<rate_limits>, C<security>, C<projections>,
+C<realtime_listener>, C<notifications> (the notification dispatcher's
+L<GPForum::Service::Notification::Dispatcher/snapshot>: C<badge_failures>
+and C<last_badge_error>), C<rate_limits>, C<security>, C<projections>,
 C<db_query_stats>, C<query_budgets>, C<query_budget_drift>, C<database>
 (C<status> C<ok> or C<fail>, and C<ready_latency_ms>), C<outbox>
 (C<pending>, C<failed>, C<retry_backlog>, C<dead_letters>) and
@@ -356,7 +377,7 @@ None read here; the bootstrap passes the runtime and its policy.
 L<GPForum::Service::Operations::OSPreflight>,
 L<GPForum::Service::Operations::QueryBudget>,
 L<GPForum::Service::Operations::Replication>,
-L<GPForum::Service::Clock>.
+L<GPForum::Service::Clock>, L<Scalar::Util>.
 
 =head1 INCOMPATIBILITIES
 

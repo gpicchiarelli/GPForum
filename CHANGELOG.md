@@ -275,6 +275,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **Badge failures reach the log and `/metrics`**: `notifications.badge_failures`
+  and `last_badge_error`; each message is logged at most once every five
+  minutes per process, without the SQL, bind values or a DSN password.
+
 - **`make fresh-checkout`** clones the current commit into a temporary
   directory and runs the README quick start and each step of `make check`
   there, timing each; with `GPFORUM_DATABASE_DSN` it also creates a plain

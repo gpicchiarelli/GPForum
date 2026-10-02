@@ -428,7 +428,10 @@ sub _register_notification_helpers {
             my $policy = GPForum::Service::Notification::RecipientPolicy->new(
                 schema => $controller->gp_schema );
 
+            # The application's log, in the web and the worker processes: a
+            # badge that failed after a write was counted and logged nowhere.
             return GPForum::Service::Notification::Dispatcher->new(
+                logger            => $controller->app->log,
                 permission_engine => $policy,
                 preference_store  =>
                   $controller->gp_notification_preference_store,

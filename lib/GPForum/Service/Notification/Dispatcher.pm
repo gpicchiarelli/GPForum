@@ -14,6 +14,7 @@ use Mojo::Base -base, -signatures;
 use GPForum::Infrastructure::Keyset;
 use GPForum::Infrastructure::Row;
 use GPForum::Infrastructure::UniqueConflict;
+use GPForum::Service::Admin::Settings;
 use GPForum::Service::Clock;
 use GPForum::Service::Forum::PageWindow;
 use GPForum::Service::Realtime::EventEnvelope;
@@ -30,13 +31,26 @@ const my $DEFAULT_LIMIT => 25;
 const my $UNREAD_CAP                 => 99;
 const my $NOTIFICATION_ID_CONSTRAINT => 'notifications_pkey';
 const my @CURSOR_COLUMNS             => qw(created_at notification_id);
+const my $ERROR_TEXT_LIMIT           => 300;
+
+# A badge failure is logged at most once in this many seconds per message,
+# and this many messages are remembered for it.
+const my $BADGE_LOG_INTERVAL => 300;
+const my $BADGE_LOG_MESSAGES => 32;
 
 # Bootstrap builds a dispatcher per request, so counters kept on one would
 # die with it. These are the process's, shared by every dispatcher it builds,
 # as the notifier's are.
 my %PROCESS_STATS = ( badge_failures => 0 );
 
-has clock => sub { return GPForum::Service::Clock->new; };
+# The last badge failure (for /metrics) and when each message was last
+# logged, the process's for the same reason: remembered on a dispatcher, it
+# died with its request, and an outage that failed every badge logged a
+# warning per request.
+my %PROCESS_BADGE_ERRORS;
+
+has badge_errors => sub { return \%PROCESS_BADGE_ERRORS; };
+has clock        => sub { return GPForum::Service::Clock->new; };
 has event_contract =>
   sub { return GPForum::Service::Realtime::EventEnvelope->new; };
 has id_service  => sub { return GPForum::Infrastructure::Id->new; };
@@ -594,21 +608,92 @@ sub _notify_badge ( $self, $user_id, $count ) {
     return 1;
 }
 
+# Every failure is counted, and kept as the last one for /metrics; it is
+# logged once in five minutes per message, not on every badge. In an outage
+# every write's badge fails the same way, and a warning per request buried
+# the first one under the flood.
 sub _badge_failed ( $self, $error ) {
     my $undefined;
+    my $message = _badge_error_text($error);
 
     $self->stats->{badge_failures} += 1;
-    if ( $self->logger && $self->logger->can('warn') ) {
-        my ($line) = split /\n/msx, "$error";
-        $self->logger->warn(
-            'notification badge not sent: ' . ( $line // q{} ) );
-    }
+    $self->badge_errors->{last} =
+      { at => $self->clock->now_iso8601, message => $message };
+    $self->_log_badge_failure($message);
 
     return $undefined;
 }
 
+# A badge that goes out does not re-arm the warning: under load some counts
+# still finish, and re-arming on each of them logged nearly every failure of
+# the outage. The line logged again says how many failed the same way in
+# between, which is all a worker, serving no /metrics, tells of them.
+sub _log_badge_failure ( $self, $message ) {
+    my $logger = $self->logger;
+    return if !$logger || !$logger->can('warn');
+
+    my $now    = $self->clock->now_epoch;
+    my $logged = $self->badge_errors->{logged} //= {};
+    my $seen   = $logged->{$message};
+    if ( $seen && $now - $seen->{at} < $BADGE_LOG_INTERVAL ) {
+        $seen->{suppressed} += 1;
+        return;
+    }
+
+    my $suppressed = $seen ? $seen->{suppressed} : 0;
+    if ( !$seen ) {
+        _forget_logged( $logged, $now );
+    }
+    $logged->{$message} = { at => $now, suppressed => 0 };
+    $logger->warn( "notification badge not sent: $message"
+          . ( $suppressed ? " ($suppressed more since last logged)" : q{} ) );
+
+    return;
+}
+
+# The messages are remembered within a bound: past it the stale ones go,
+# and when every one is recent, all of them (each is then logged again).
+sub _forget_logged ( $logged, $now ) {
+    return if keys %{$logged} < $BADGE_LOG_MESSAGES;
+
+    for my $message ( keys %{$logged} ) {
+        if ( $now - $logged->{$message}{at} >= $BADGE_LOG_INTERVAL ) {
+            delete $logged->{$message};
+        }
+    }
+    if ( keys %{$logged} >= $BADGE_LOG_MESSAGES ) {
+        %{$logged} = ();
+    }
+
+    return;
+}
+
+# The first line that says something, without the statement DBI appends to
+# it: that carries the bind values -- the member's id -- so with it every
+# member's badge read as a new message, and /metrics would have shown whose
+# count failed. A count that cannot reconnect fails with DBI's connect
+# error, which repeats the DSN, an inline password and all: that is
+# redacted as the settings page redacts it, before the cut, so the cut
+# cannot leave half of it.
+sub _badge_error_text ($error) {
+    my ($line) = grep { /\S/msx } split /\n/msx, "$error";
+    $line //= q{};
+    $line =~ s/\s* \[for [ ] Statement [ ] .*\z//msx;
+    $line =~ s/\A\s+|\s+\z//gmsx;
+    $line = GPForum::Service::Admin::Settings->new->redact( $line, [] );
+
+    return
+      length $line > $ERROR_TEXT_LIMIT
+      ? substr( $line, 0, $ERROR_TEXT_LIMIT )
+      : $line;
+}
+
 sub snapshot ($self) {
-    return { %{ $self->stats } };
+    my $last_error = $self->badge_errors->{last};
+    my %snapshot   = %{ $self->stats };
+    $snapshot{last_badge_error} = $last_error ? { %{$last_error} } : undef;
+
+    return \%snapshot;
 }
 
 sub _find_inbox ( $self, $query ) {
@@ -814,11 +899,19 @@ NOTIFY until the outer commit. The count is capped: past 99 it stops at
 
 The badge comes after the write, and the write's answer stands whatever
 happens to it. A count that fails, or a NOTIFY the notifier could not send,
-is logged as a warning through C<logger>, counted in C<badge_failures>,
+is counted in C<badge_failures>, kept as the C<last_badge_error>, logged
+as a warning through C<logger> at most once in five minutes per message,
 and left to the next snapshot; the result's C<unread_count> is then undef
-when the count itself failed. Under an outer transaction the count and the
-NOTIFY run in a savepoint, so a failed statement there does not abort the
-transaction the caller still has to commit.
+when the count itself failed. A badge that goes out in between does not
+re-arm the warning, and the line logged again ends with how many failed the
+same way since, C<(N more since last logged)>. The message is the error's
+first line without the statement and bind values DBI appends, so the
+failures of one outage read as one message whoever's badge it was, and with
+an inline password (the DSN DBI's connect error repeats) redacted as
+L<GPForum::Service::Admin::Settings/redact> redacts it. Under an outer
+transaction the count and the NOTIFY run in a savepoint, so a failed
+statement there does not abort the transaction the caller still has to
+commit.
 
 Every collaborator but C<schema> is optional: without C<permission_engine>
 or C<preference_store> everyone is notified, without C<readability> nothing
@@ -894,10 +987,13 @@ the commit.
 
 =head2 snapshot
 
-Returns a copy of the counters, C<< { badge_failures } >>: the badges that
-could not be counted or sent after a write. They are kept per process and
-shared by every dispatcher it builds, since Bootstrap builds one per
-request; a test passes its own C<stats> hash reference.
+Returns C<< { badge_failures, last_badge_error } >>: the number of badges
+that could not be counted or sent after a write, and the last of those
+failures, C<< { at, message } >> (C<at> from the C<clock>), or undef when
+there was none. Both are kept per process and shared by every dispatcher it
+builds, since Bootstrap builds one per request; the metrics snapshot
+reports them as C<notifications>. A test passes its own C<stats> and
+C<badge_errors> hash references.
 
 =head2 unread_count_for_user
 
@@ -930,10 +1026,13 @@ inbox leaves no row to reuse; a conflict on the C<notifications> row
 itself (C<notifications_pkey>) is accepted, the row being already there.
 C<mark_read> and C<mark_all_read> croak likewise when a C<notification_reads>
 insert fails and no stored read can be reused. Nothing after the write is
-raised: a badge whose count or NOTIFY failed is logged at C<warn> level,
-C<notification badge not sent:> and the first line of the error, and
-counted in C<badge_failures>; the rows are written and the next snapshot
-corrects the badge.
+raised: a badge whose count or NOTIFY failed is counted in
+C<badge_failures> and logged at C<warn> level, C<notification badge not
+sent:> and the error's first line (at most 300 characters, without DBI's
+C<[for Statement ...]>, an inline password C<[redacted]>), at most once in
+five minutes per message, with C<(N more since last logged)> when others
+failed the same way in between; the rows are written and the next
+snapshot corrects the badge.
 C<fanout_to_subscribers> dies when C<subscription_store> is not set. Other
 database errors propagate; in a transaction they roll it back.
 
@@ -943,13 +1042,16 @@ None. C<clock>, C<id_service>, C<event_contract> and C<page_window> default
 to L<GPForum::Service::Clock>, L<GPForum::Infrastructure::Id>,
 L<GPForum::Service::Realtime::EventEnvelope> and
 L<GPForum::Service::Forum::PageWindow>. C<logger> is optional (anything
-with a C<warn> method); without it a failed badge is only counted.
+with a C<warn> method; Bootstrap passes the application's log, in the web
+and the worker processes alike); without it a failed badge is only
+counted.
 
 =head1 DEPENDENCIES
 
 L<Const::Fast>, L<Digest::SHA>, L<Mojo::Base>,
 L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Keyset>,
 L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Admin::Settings> (its C<redact>),
 L<GPForum::Service::Clock>, L<GPForum::Service::Forum::PageWindow>,
 L<GPForum::Service::Realtime::EventEnvelope>; passed in:
 L<GPForum::Service::Notification::RecipientPolicy> (as C<permission_engine>
@@ -963,9 +1065,10 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-A preference store that dies is read as the channel being enabled.
-C<badge_failures> reaches C</metrics> only once the metrics snapshot reads
-L</snapshot>.
+A preference store that dies is read as the channel being enabled. The
+counters are per process: C</metrics> reports a web process's, and a worker
+process, which serves no C</metrics>, reports its badge failures only in its
+log.
 
 =head1 AUTHOR
 

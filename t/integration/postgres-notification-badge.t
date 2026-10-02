@@ -7,6 +7,7 @@ use strict;
 use warnings;
 
 use English qw(-no_match_vars);
+use Mojo::Log;
 use Test::More;
 
 use lib 'lib';
@@ -43,7 +44,11 @@ $dbh->do(
 
 my $readability =
   GPForum::Test::FailingNotificationReadability->new( fail_in_sql => 1 );
+my $log        = Mojo::Log->new( level => 'warn' );
+my $warnings   = $log->capture('warn');
 my $dispatcher = GPForum::Service::Notification::Dispatcher->new(
+    badge_errors      => {},
+    logger            => $log,
     readability       => $readability,
     realtime_notifier =>
       GPForum::Service::Realtime::PgNotifier->new( schema => $schema ),
@@ -77,6 +82,25 @@ ok( $delivered && !defined $delivered->{unread_count},
     'without an unread count' );
 is( $dispatcher->snapshot->{badge_failures},
     1, 'the badge that could not be counted is counted' );
+
+# DBI appends the statement and its bind values -- the member's id -- to
+# the error's line. Logged with them, each member's failure was a new
+# message, and /metrics would have said whose count failed.
+like(
+    "$warnings",
+    qr/badge [ ] not [ ] sent: [ ] .* division [ ] by [ ] zero $/msx,
+    'the failed count is logged with PostgreSQL\'s error'
+);
+unlike(
+    "$warnings",
+    qr/ParamValues|\Q$member\E/msx,
+    'without the statement and the member\'s id DBI appends'
+);
+like(
+    $dispatcher->snapshot->{last_badge_error}{message},
+    qr/division [ ] by [ ] zero \z/msx,
+    'which is the last badge failure the snapshot reports'
+);
 
 my ($stored) = $dbh->selectrow_array(
     'SELECT count(*) FROM notification_inbox WHERE recipient_user_id = ?',

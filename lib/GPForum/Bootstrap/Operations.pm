@@ -162,16 +162,23 @@ sub _register_operational_helpers {
               _optional_controller_helper( $controller,
                 'gp_realtime_listener_supervisor' );
 
+            # Forum registers the dispatcher; its badge counters are the
+            # process's, so a fresh one reads what every request counted.
+            my $notification_dispatcher =
+              _optional_controller_helper( $controller,
+                'gp_notification_dispatcher' );
+
             return GPForum::Service::Operations::MetricsSnapshot->new(
-                runtime             => $runtime,
-                runtime_policy      => $runtime_policy,
-                schema              => $controller->gp_schema,
-                db_query_stats      => $controller->gp_db_query_stats,
-                realtime_hub        => $controller->gp_realtime_hub,
-                realtime_supervisor => $realtime_supervisor,
-                rate_limiter        => $controller->gp_rate_limiter,
-                security_telemetry  => $controller->gp_security_telemetry,
-                local_caches        => [ $controller->gp_local_cache ],
+                runtime                 => $runtime,
+                runtime_policy          => $runtime_policy,
+                schema                  => $controller->gp_schema,
+                db_query_stats          => $controller->gp_db_query_stats,
+                realtime_hub            => $controller->gp_realtime_hub,
+                realtime_supervisor     => $realtime_supervisor,
+                notification_dispatcher => $notification_dispatcher,
+                rate_limiter            => $controller->gp_rate_limiter,
+                security_telemetry      => $controller->gp_security_telemetry,
+                local_caches            => [ $controller->gp_local_cache ],
             );
         }
     );

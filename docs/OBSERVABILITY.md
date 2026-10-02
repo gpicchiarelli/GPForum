@@ -108,6 +108,34 @@ cleared on every read), `dropped` counts notifications on channels nobody
 registered, and each channel reports whether it is `listening`. See
 `docs/realtime.md`.
 
+`notifications` is the notification dispatcher's: a member's unread badge is
+counted and NOTIFYed after the write that changed it commits (a mark-read, a
+mention, the worker's fanout), and a count or NOTIFY that fails there leaves
+the write standing and the badge to the next snapshot. The section reports
+them:
+
+| Field | Meaning |
+| --- | --- |
+| `badge_failures` | badges this process could not count or NOTIFY after a write, since it started |
+| `last_badge_error` | the last of them, `{at, message}`, or `null`; `message` is the error's first line (at most 300 characters) without the SQL statement and bind values DBI appends, and with an inline `password=` (the DSN DBI's connect error repeats) shown as `[redacted]` |
+
+The process logs the same failure as a warning, `notification badge not
+sent: MESSAGE`, at most once every five minutes per message: an outage that
+fails every badge the same way writes one line per process every five
+minutes, not one per request, and a badge that still goes out in between
+does not start the lines again. The next line for a message ends with how
+many failed the same way meanwhile, `(N more since last logged)`.
+
+A rising `badge_failures` with `database.status` `ok` points at the unread
+count query (cancelled by `statement_timeout`, or failing on the readability
+lookup it joins) or at NOTIFY (`badge NOTIFY failed: notify_unavailable`,
+`notify_failed`, or a serialization reason such as `payload_too_large`).
+
+The counter is per process. A web worker reports its own on `/metrics`; the
+outbox worker (`bin/gpforum-outbox-dispatch`, or a Minion worker) serves no
+`/metrics`, so its fanout's badge failures are visible only in its log, where
+the `(N more since last logged)` of each line is their count.
+
 Outbox metrics include pending rows, failed rows, ready retry backlog, and dead
 letter count. Failure classification is persisted as `failure_type` with the
 canonical values `transient`, `permanent`, `serialization`, `authorization`, and
