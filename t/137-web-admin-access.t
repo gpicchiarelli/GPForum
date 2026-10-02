@@ -85,6 +85,35 @@ ok(
     'write_flash_key ignores an unmapped status'
 );
 
+# A purge is "purged" only when the shared cache took it too.
+is( $access->cache_purge_status('purged'),
+    'cache_purged', 'cache_purge_status: a purge that reached GlifiStore' );
+is( $access->cache_purge_status('purged_locally'),
+    'cache_purged_locally', 'cache_purge_status: one that did not' );
+is( $access->cache_purge_status(undef),
+    'cache_purged_locally', 'cache_purge_status: never purged by default' );
+is( $access->write_flash_type('cache_purged'),
+    'success', 'a full purge flashes a success' );
+is( $access->write_flash_key('cache_purged_locally'),
+    'admin.cache_purged_locally', 'a partial purge has its own copy' );
+is( $access->write_flash_type('cache_purged_locally'),
+    'warning', 'and flashes a warning' );
+is_deeply(
+    $access->maintenance_flash_variables(
+        { unreached_tags => [qw(forum:public-html categories)] }
+    ),
+    { tags => 'forum:public-html, categories' },
+    'maintenance_flash_variables names the tags not reached'
+);
+
+for my $stored ( { run_id => 'run-1' }, undef, { unreached_tags => 'oops' } ) {
+    is_deeply(
+        $access->maintenance_flash_variables($stored),
+        { tags => q{} },
+        'and nothing for a result without them'
+    );
+}
+
 is_deeply(
     $access->permission_target('manage'),
     {

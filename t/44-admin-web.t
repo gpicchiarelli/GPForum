@@ -331,12 +331,88 @@ $test->post_ok( '/admin/cache/purge' => form =>
 $test->status_is($HTTP_FOUND);
 $test->header_is( Location => '/admin/jobs' );
 $test->get_ok('/admin/jobs');
-$test->content_like(
-    qr/Public [ ] page [ ] cache [ ] purged/msx,
+$test->text_is(
+    'p.flash--success[role="status"]' => 'Public page cache purged.',
     'the purge is confirmed on the jobs page'
 );
+$test->element_exists_not( 'p.flash--warning',
+    'a purge that reached the shared cache warns of nothing' );
 is_deeply( [ map { $_->[0] } @{ $admin_services->maintenance_calls } ],
     [qw(rebuild purge)], 'each ran once, as the signed-in administrator' );
+$test->post_ok(
+    '/admin/cache/purge' => { Accept => 'application/json' } => form => {
+        command_id => 'purge-2',
+        csrf_token => $csrf_token,
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'                => 'cache_purged' );
+$test->json_is( '/result/status'         => 'purged' );
+$test->json_is( '/result/unreached_tags' => [] );
+
+# A purge GlifiStore did not take (paused after a failure, or failing now)
+# left its copies current until their TTL, and the console said "purged" all
+# the same: an operator who purged to take a page down believed it down. It
+# is a warning now, naming the tags left, in the page and in the JSON.
+$admin_services->unreached_purge_tags( [qw(forum:public-html categories)] );
+$test->post_ok(
+    '/admin/cache/purge' => { Accept => 'application/json' } => form => {
+        command_id => 'purge-3',
+        csrf_token => $csrf_token,
+    }
+);
+$test->status_is($HTTP_OK);
+$test->json_is( '/status'        => 'cache_purged_locally' );
+$test->json_is( '/result/status' => 'purged_locally' );
+$test->json_is(
+    '/result/unreached_tags' => [qw(forum:public-html categories)] );
+$test->json_is(
+    '/result/tags' => [qw(forum:public-html categories forum-index)] );
+
+$test->post_ok( '/admin/cache/purge' => form =>
+      { command_id => 'purge-4', csrf_token => $csrf_token } );
+$test->status_is($HTTP_FOUND);
+$test->header_is( Location => '/admin/jobs' );
+$test->get_ok('/admin/jobs');
+$test->element_exists_not( 'p.flash--success',
+    'a purge that missed the shared cache is not confirmed as purged' );
+$test->text_is(
+    'p.flash--warning[role="status"]' =>
+      'Public page cache purged in the web processes only: the shared cache'
+      . ' was unreachable, so its entries expire within their TTL.'
+      . ' Not reached: forum:public-html, categories.',
+    'it is a warning naming the tags the shared cache keeps until their TTL'
+);
+
+$test->post_ok( '/admin/cache/purge' => { 'Accept-Language' => 'it' } => form =>
+      { command_id => 'purge-5', csrf_token => $csrf_token } );
+$test->status_is($HTTP_FOUND);
+$test->get_ok( '/admin/jobs' => { 'Accept-Language' => 'it' } );
+$test->text_like(
+    'p.flash--warning' => qr{solo [ ] nei [ ] processi [ ] web}msx,
+    'in the visitor language'
+);
+$test->text_like(
+    'p.flash--warning' =>
+      qr{Non [ ] raggiunti: [ ] forum:public-html, [ ] categories}msx,
+    'with the same tags'
+);
+$admin_services->unreached_purge_tags( [] );
+
+# The rebuild's form shares the purge's answer: it lands on the jobs page
+# with its own success, and none of the purge's warning.
+$test->post_ok( '/admin/search/rebuild' => form =>
+      { command_id => 'rebuild-2', csrf_token => $csrf_token } );
+$test->status_is($HTTP_FOUND);
+$test->header_is( Location => '/admin/jobs' );
+$test->get_ok('/admin/jobs');
+$test->text_is(
+    'p.flash--success[role="status"]' =>
+      'Search rebuild started: it runs in the background.',
+    'a rebuild from the form is confirmed on the jobs page'
+);
+$test->element_exists_not( 'p.flash--warning',
+    'and the rebuild warns of nothing' );
 
 # ADR 0056: a dead letter is replayed from the jobs page, once.
 $test->get_ok('/admin/jobs');

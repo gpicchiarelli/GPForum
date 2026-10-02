@@ -15,15 +15,21 @@ our $VERSION = '0.001';
 # their next request. Nothing is taken away.
 sub search_rebuild ($self) {
     return $self->_maintenance( 'request_search_rebuild',
-        $self->admin_access->search_rebuild_status );
+        sub { return $self->admin_access->search_rebuild_status; } );
 }
 
+# The answer follows how far the purge went: a purge the shared cache did not
+# take is a warning naming the tags it left, not "purged".
 sub cache_purge ($self) {
-    return $self->_maintenance( 'purge_public_cache',
-        $self->admin_access->cache_purged_status );
+    return $self->_maintenance(
+        'purge_public_cache',
+        sub ($stored) {
+            return $self->admin_access->cache_purge_status( $stored->{status} );
+        }
+    );
 }
 
-sub _maintenance ( $self, $command, $status ) {
+sub _maintenance ( $self, $command, $status_of ) {
     my $actor_user_id = $self->authorized_write_user_id;
     if ( !$actor_user_id ) {
         return;
@@ -38,7 +44,8 @@ sub _maintenance ( $self, $command, $status ) {
     my $failure = $self->write_failure($result);
     return $failure if $failure;
 
-    return $self->maintenance_response( $status, $result->{stored} );
+    my $stored = $result->{stored} || {};
+    return $self->maintenance_response( $status_of->($stored), $stored );
 }
 
 1;
@@ -73,6 +80,10 @@ answers JSON with the run id.
 =head2 cache_purge
 
 Drops every cached public page; redirects to the jobs page, or answers JSON.
+The status is C<cache_purged>, or C<cache_purged_locally> when the shared
+cache was not reached for some tags: the flash is then a warning naming
+them, and the JSON's C<result> carries C<purged_locally> and its
+C<unreached_tags>.
 
 =head1 DIAGNOSTICS
 

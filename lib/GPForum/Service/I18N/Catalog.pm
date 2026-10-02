@@ -123,7 +123,7 @@ sub default_catalogs {
 'Drop every cached public page. Each is rendered again on its next visit; nothing is lost.',
             'admin.cache_purged'         => 'Public page cache purged.',
             'admin.cache_purged_locally' =>
-'Public page cache purged locally; the shared cache is unreachable, so its entries expire within their TTL.',
+'Public page cache purged in the web processes only: the shared cache was unreachable, so its entries expire within their TTL. Not reached: {tags}.',
             'admin.maintenance'           => 'Maintenance',
             'admin.purge_cache'           => 'Purge page cache',
             'admin.rebuild_search'        => 'Rebuild search index',
@@ -244,6 +244,23 @@ sub default_catalogs {
             'admin.no_query_budget'  => 'No query budget catalog is available.',
             'admin.no_role_bindings' =>
               'No active role bindings for this user.',
+
+            # Formatter::relative_datetime's phrases. Kept beside an existing
+            # break, so their multi-line entries leave the alignment around
+            # them as it was.
+            'common.time_now'      => 'just now',
+            'common.time_days_ago' => {
+                one   => 'a day ago',
+                other => '{count} days ago',
+            },
+            'common.time_hours_ago' => {
+                one   => 'an hour ago',
+                other => '{count} hours ago',
+            },
+            'common.time_minutes_ago' => {
+                one   => 'a minute ago',
+                other => '{count} minutes ago',
+            },
             'admin.no_roles'                 => 'No roles have been defined.',
             'admin.no_users'                 => 'No users match this view.',
             'admin.observed_requests'        => 'Observed requests',
@@ -302,6 +319,7 @@ sub default_catalogs {
             'common.target_type'             => 'Target type',
             'common.unassigned'              => 'Unassigned',
             'common.user'                    => 'User',
+            'community.added'                => 'Added',
             'community.added_at'             => 'Added at',
             'community.bookmark_pagination'  => 'Bookmark pagination',
             'community.bookmark_note'        => 'Bookmark note',
@@ -318,6 +336,7 @@ sub default_catalogs {
             'community.older_feed_items'     => 'Older feed items',
             'community.personal_feed'        => 'Personal feed',
             'community.remove_bookmark'      => 'Remove bookmark',
+            'community.saved'                => 'Saved',
             'community.saved_at'             => 'Saved at',
             'community.save_bookmark'        => 'Save bookmark',
             'community.unfollow_thread'      => 'Unfollow thread',
@@ -658,6 +677,7 @@ sub default_catalogs {
             'notifications.preference.in_app.description' =>
               'Show notifications inside your GPForum inbox.',
             'notifications.read'         => 'Read',
+            'notifications.received'     => 'Received',
             'notifications.received_at'  => 'Received at',
             'notifications.title.follow' => 'New activity in a followed thread',
             'notifications.title.mention'      => 'You were mentioned',
@@ -893,7 +913,7 @@ sub default_catalogs {
 'Scarta ogni pagina pubblica in cache. Ciascuna viene ricreata alla visita successiva; non si perde nulla.',
             'admin.cache_purged' => 'Cache delle pagine pubbliche svuotata.',
             'admin.cache_purged_locally' =>
-'Cache delle pagine pubbliche svuotata solo in locale: la cache condivisa non è raggiungibile, le sue voci scadono entro il loro TTL.',
+'Cache delle pagine pubbliche svuotata solo nei processi web: la cache condivisa non era raggiungibile, le sue voci scadono entro il loro TTL. Non raggiunti: {tags}.',
             'admin.maintenance'           => 'Manutenzione',
             'admin.purge_cache'           => 'Svuota la cache delle pagine',
             'admin.rebuild_search'        => 'Ricostruisci l’indice di ricerca',
@@ -1018,6 +1038,23 @@ sub default_catalogs {
               'Nessun catalogo query budget disponibile.',
             'admin.no_role_bindings' =>
               'Nessuna associazione ruolo attiva per questo utente.',
+
+            # Formatter::relative_datetime's phrases. Kept beside an existing
+            # break, so their multi-line entries leave the alignment around
+            # them as it was.
+            'common.time_now'      => 'adesso',
+            'common.time_days_ago' => {
+                one   => 'un giorno fa',
+                other => '{count} giorni fa',
+            },
+            'common.time_hours_ago' => {
+                one   => 'un’ora fa',
+                other => '{count} ore fa',
+            },
+            'common.time_minutes_ago' => {
+                one   => 'un minuto fa',
+                other => '{count} minuti fa',
+            },
             'admin.no_roles' => 'Nessun ruolo definito.',
             'admin.no_users' => 'Nessun utente corrisponde alla vista.',
             'admin.observed_requests'        => 'Richieste osservate',
@@ -1076,6 +1113,7 @@ sub default_catalogs {
             'common.target_type'             => 'Tipo target',
             'common.unassigned'              => 'Non assegnato',
             'common.user'                    => 'Utente',
+            'community.added'                => 'Aggiunto',
             'community.added_at'             => 'Aggiunto alle',
             'community.bookmark_pagination'  => 'Paginazione segnalibri',
             'community.bookmark_note'        => 'Nota segnalibro',
@@ -1092,6 +1130,7 @@ sub default_catalogs {
             'community.older_feed_items'     => 'Elementi feed precedenti',
             'community.personal_feed'        => 'Feed personale',
             'community.remove_bookmark'      => 'Rimuovi segnalibro',
+            'community.saved'                => 'Salvato',
             'community.saved_at'             => 'Salvato alle',
             'community.save_bookmark'        => 'Salva segnalibro',
             'community.unfollow_thread'      => 'Smetti di seguire',
@@ -1439,6 +1478,7 @@ sub default_catalogs {
             'notifications.preference.in_app.description' =>
               'Mostra notifiche nella inbox di GPForum.',
             'notifications.read'         => 'Letta',
+            'notifications.received'     => 'Ricevuta',
             'notifications.received_at'  => 'Ricevuta alle',
             'notifications.title.follow' =>
               'Nuova attività in una discussione seguita',

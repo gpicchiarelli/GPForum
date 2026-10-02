@@ -773,6 +773,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **"Purge page cache" says when GlifiStore was not reached**: a warning,
+  styled as one, names the tags left in the shared cache (they expire within
+  their TTL); the JSON answer says `cache_purged_locally`, and a resubmitted
+  form replays the same warning.
+
 - **The application and `gpforum-migrate --apply` connect as an ordinary
   role.** Every connection ran `SET lc_messages`, which PostgreSQL allows only
   to a superuser, so a production role that owns its database could neither

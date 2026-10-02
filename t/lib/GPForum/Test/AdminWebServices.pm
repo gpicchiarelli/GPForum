@@ -20,6 +20,10 @@ has permission_creates  => sub { return []; };
 has role_binds          => sub { return []; };
 has role_creates        => sub { return []; };
 
+# The tags the next purges leave in the shared cache, as GlifiStore paused or
+# failing would: none by default.
+has unreached_purge_tags => sub { return []; };
+
 sub dashboard_summary {
     return {
         async => {
@@ -294,7 +298,12 @@ sub purge_public_cache {
     my ( $self, $input ) = @_;
 
     push @{ $self->maintenance_calls }, [ 'purge', { %{$input} } ];
-    return { status => 'purged', tags => ['forum:public-html'] };
+    my @unreached = @{ $self->unreached_purge_tags };
+    return {
+        status         => @unreached ? 'purged_locally' : 'purged',
+        tags           => [qw(forum:public-html categories forum-index)],
+        unreached_tags => [@unreached],
+    };
 }
 
 sub replay {

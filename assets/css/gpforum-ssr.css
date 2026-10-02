@@ -608,6 +608,15 @@ button.button--danger:hover,
   color: var(--color-primary);
 }
 
+/* After the rule above, which matches the same flash by its role: a warning
+   (a purge that reached only this process, a failed mail test) must not look
+   like a success. */
+.flash--warning {
+  border-inline-start: 0.35rem solid var(--color-warning);
+  background: var(--color-surface-warning);
+  color: var(--color-warning);
+}
+
 .ui-alert {
   margin: 0;
   border-radius: var(--radius-md);

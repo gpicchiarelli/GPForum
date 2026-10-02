@@ -255,7 +255,8 @@ sub dead_letter_replay_response ( $self, $status, $replayed ) {
 }
 
 # A maintenance command's answer: JSON, or back to the jobs page with a
-# flash.
+# flash -- a warning, naming the tags left, when a purge did not reach the
+# shared cache.
 sub maintenance_response ( $self, $status, $stored ) {
     if ( $self->_wants_json ) {
         return $self->render(
@@ -264,7 +265,17 @@ sub maintenance_response ( $self, $status, $stored ) {
         );
     }
 
-    return $self->_html_success( $status, $self->admin_access->jobs_redirect );
+    my $access    = $self->admin_access;
+    my $flash_key = $access->write_flash_key($status);
+    if ($flash_key) {
+        $self->flash(
+            $access->write_flash_type($status) => $self->t(
+                $flash_key, $access->maintenance_flash_variables($stored)
+            )
+        );
+    }
+
+    return $self->redirect_to( $access->jobs_redirect );
 }
 
 # A test message's or an antivirus check's answer: JSON with the outcome, or
@@ -516,8 +527,10 @@ Maps workflow statuses to HTTP error responses.
 
 =head2 maintenance_response
 
-Answers a maintenance command: JSON, or a redirect to the jobs page with a
-flash.
+Answers a maintenance command: JSON with the status and the stored result,
+or a redirect to the jobs page with a flash whose type follows the status
+(a warning for C<cache_purged_locally>, with the tags the purge did not
+reach).
 
 =head2 dead_letter_replay_response
 

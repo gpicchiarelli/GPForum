@@ -35,6 +35,7 @@ const my $CATEGORIES_REDIRECT         => 'admin_categories';
 const my $STATUS_DEAD_LETTER_REPLAYED => 'dead_letter_replayed';
 const my $STATUS_SEARCH_REBUILD       => 'search_rebuild_requested';
 const my $STATUS_CACHE_PURGED         => 'cache_purged';
+const my $STATUS_CACHE_PURGED_LOCALLY => 'cache_purged_locally';
 const my $JOBS_REDIRECT               => 'admin_jobs';
 const my $STATUS_MAIL_TEST_SENT       => 'mail_test_sent';
 const my $STATUS_MAIL_TEST_FAILED     => 'mail_test_failed';
@@ -48,6 +49,7 @@ const my %WRITE_FLASH => (
     $STATUS_ANTIVIRUS_PASSED     => 'admin.antivirus_check_passed',
     $STATUS_ANTIVIRUS_PROBLEM    => 'admin.antivirus_check_problem',
     $STATUS_CACHE_PURGED         => 'admin.cache_purged',
+    $STATUS_CACHE_PURGED_LOCALLY => 'admin.cache_purged_locally',
     $STATUS_CATEGORY_CREATED     => 'admin.category_created',
     $STATUS_CATEGORY_UPDATED     => 'admin.category_updated',
     $STATUS_DEAD_LETTER_REPLAYED => 'admin.dead_letter_replayed',
@@ -62,11 +64,13 @@ const my %WRITE_FLASH => (
 );
 
 # A diagnostic that ran but did not pass is not a success: its flash says so
-# as a warning, and scanning that is off as a notice.
+# as a warning, and scanning that is off as a notice. So is a purge that left
+# the shared cache's copies in place.
 const my %WRITE_FLASH_TYPE => (
-    $STATUS_ANTIVIRUS_DISABLED => 'notice',
-    $STATUS_ANTIVIRUS_PROBLEM  => 'warning',
-    $STATUS_MAIL_TEST_FAILED   => 'warning',
+    $STATUS_ANTIVIRUS_DISABLED   => 'notice',
+    $STATUS_ANTIVIRUS_PROBLEM    => 'warning',
+    $STATUS_CACHE_PURGED_LOCALLY => 'warning',
+    $STATUS_MAIL_TEST_FAILED     => 'warning',
 );
 
 sub page_limit ( $, $requested ) {
@@ -135,8 +139,23 @@ sub search_rebuild_status {
     return $STATUS_SEARCH_REBUILD;
 }
 
-sub cache_purged_status {
-    return $STATUS_CACHE_PURGED;
+# The answer to a purge: purged only when it reached the shared cache too
+# (Admin::Maintenance's "purged"). Otherwise every process's own copy is gone
+# and GlifiStore's stay until their TTL, which the console must not call
+# purged: an operator who purged to take a page down would believe it down.
+sub cache_purge_status ( $, $purge_status ) {
+    return ( ( $purge_status // q{} ) eq 'purged' )
+      ? $STATUS_CACHE_PURGED
+      : $STATUS_CACHE_PURGED_LOCALLY;
+}
+
+# What a maintenance flash interpolates: the tags a purge did not reach in
+# the shared cache, as one comma-separated list (empty for anything else).
+sub maintenance_flash_variables ( $, $stored ) {
+    my $unreached = ref $stored eq 'HASH' ? $stored->{unreached_tags} : undef;
+    my @tags      = ref $unreached eq 'ARRAY' ? @{$unreached}         : ();
+
+    return { tags => join q{, }, @tags };
 }
 
 sub jobs_redirect {
@@ -316,9 +335,18 @@ Returns C<category_updated>.
 
 Returns C<search_rebuild_requested>.
 
-=head2 cache_purged_status
+=head2 cache_purge_status
 
-Returns C<cache_purged>.
+Takes the status of L<GPForum::Service::Admin::Maintenance/purge_public_cache>.
+Returns C<cache_purged> for C<purged>, and C<cache_purged_locally> for
+anything else (C<purged_locally>: the shared cache was not reached for one
+of the tags).
+
+=head2 maintenance_flash_variables
+
+Takes a maintenance command's stored result. Returns the variables its flash
+interpolates: C<tags>, the result's C<unreached_tags> joined with commas, or
+the empty string when it has none.
 
 =head2 dead_letter_replayed_status
 
@@ -361,7 +389,8 @@ status has no flash copy.
 =head2 write_flash_type
 
 The flash type for a write status: C<success>, or C<warning> and C<notice>
-for a diagnostic that did not pass or had nothing to check.
+for a diagnostic that did not pass or had nothing to check, and C<warning>
+for a purge that did not reach the shared cache.
 
 =head2 is_failed
 
