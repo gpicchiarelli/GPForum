@@ -42,7 +42,8 @@ clock. Public store methods stay unchanged.
 
 - `docs/adr/0022-attachment-download-access.md`
 - `docs/architecture/attachment-workflow.md`
-- `t/22-attachments.t`
+- `t/22-attachments.t` (pure-logic cases) and `t/integration/postgres-attachments.t`
+  (the store, races and access, on PostgreSQL since 2026-10-03)
 - `t/123-attachment-lifecycle.t`
 - `docs/adr/0031-attachment-event.md`
 - `docs/adr/0040-attachment-orphan-cleanup.md`

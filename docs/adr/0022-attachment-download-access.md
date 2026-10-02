@@ -44,5 +44,6 @@ keep their previous grants, including owner override.
 
 - `docs/architecture/attachment-workflow.md`
 - `docs/adr/0027-attachment-lifecycle.md`
-- `t/22-attachments.t`
+- `t/22-attachments.t` (pure-logic cases) and `t/integration/postgres-attachments.t`
+  (the store, races and access, on PostgreSQL since 2026-10-03)
 - `t/118-attachment-download-access.t`
