@@ -556,6 +556,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- **Notifications, attachments and community stores are tested on
+  PostgreSQL** (`t/integration/postgres-{notifications,attachments,community}.t`,
+  over 550 assertions) instead of fake ORMs; concurrent-write recovery is
+  tested against a real second connection. The fake had pinned two wrong
+  results (a removed bookmark still listed, one member's feed showing
+  another's items), now tested as correct.
+
 - **Search runs under its own statement timeout and ranks a capped set**
   (quality program 8.10). `GPFORUM_SEARCH_STATEMENT_TIMEOUT_MS` (2000) cancels
   a slow search, which then shows a degraded page instead of holding a web
