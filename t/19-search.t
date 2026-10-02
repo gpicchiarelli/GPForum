@@ -51,6 +51,9 @@ const my $FILTER_CATEGORY => '0b9c1b52-6a43-4c3e-9d47-0f1c2a3b4c5d';
 const my $FILTER_AUTHOR   => '7e2f9a10-3c5d-4e6f-8a9b-1c2d3e4f5a6b';
 const my $OTHER_AUTHOR    => '5a6b7c8d-9e0f-4a1b-8c2d-3e4f5a6b7c8d';
 
+# More fraction digits than PostgreSQL reads in a timestamp.
+const my $LONG_FRACTION => q{9} x 400;
+
 my $category = GPForum::Test::SearchRow->new(
     data => {
         category_id => 'category-1',
@@ -550,6 +553,42 @@ my @instant_warnings;
     );
 }
 is_deeply( \@instant_warnings, [], 'and warns nothing' );
+
+# A time was rendered from the epoch it parsed to, fraction and all, and a
+# float holds fifteen digits: a typed microsecond came back as ten, and a
+# second a hair short of the next as the next. The fraction is the one typed,
+# to the microsecond a timestamp holds; PostgreSQL refuses hundreds of digits.
+is_deeply(
+    _date_conditions(
+        $searcher,
+        $search_documents,
+        {
+            from => '2026-05-01T10:00:00.123456Z',
+            to   => '2026-05-01T10:00:59.' . $LONG_FRACTION . '+00:00',
+        }
+    ),
+    [
+        { q{>=} => '2026-05-01T10:00:00.123456Z' },
+        { q{<=} => '2026-05-01T10:00:59.999999Z' },
+    ],
+    'a time is bound to the microsecond it names, however many digits it has'
+);
+
+# A time with no offset was bound as UTC, while a day is read in the
+# session's time zone -- from=2026-05-01 and from=2026-05-01T00:00:00 named
+# different instants -- and PostgreSQL had read the time in the session's
+# zone too, before it was checked here. It is bound with no offset still.
+is_deeply(
+    _date_conditions(
+        $searcher, $search_documents,
+        { from => '2026-05-01T00:00:00', to => '2026-05-01 10:00:00.50' }
+    ),
+    [
+        { q{>=} => '2026-05-01T00:00:00' },
+        { q{<=} => '2026-05-01T10:00:00.5' },
+    ],
+    q{a time with no offset is read in the session's time zone, as a day is}
+);
 
 $searcher->search( { user_id => 'user-1' }, 'forum', { limit => 10_000 } );
 is( $search_documents->last_attrs->{rows},

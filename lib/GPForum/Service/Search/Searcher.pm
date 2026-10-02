@@ -28,6 +28,7 @@ const my $ELLIPSIS           => q{...};
 const my $SECONDS_PER_DAY    => 86_400;
 const my $GMTIME_BASE_YEAR   => 1_900;
 const my $EPOCH_YEAR         => 1_970;
+const my $MICROSECOND_DIGITS => 6;
 
 # What a filter may be before it is bound. Each was bound as it came, so
 # from=garbage reached PostgreSQL, which refused it: the page degraded and the
@@ -45,12 +46,12 @@ const my $DAY_FILTER =>
 # longer offset was past gmtime's too. The offset is RFC 3339's, at most
 # 23:59. The year is held to 1970 on: Mojo::Date refuses an earlier instant,
 # and Time::Local, under it, reads a year below 1000 as another one -- 0500
-# as 2400.
+# as 2400. It captures the year, the fraction's digits and the offset.
 const my $INSTANT_DAY => qr/([[:digit:]]{4}) (?: - [[:digit:]]{2} ){2}/amsx;
 const my $INSTANT_TIME =>
-  qr/[[:digit:]]{2} (?: : [[:digit:]]{2} ){2} (?: [.] [[:digit:]]+ )?/amsx;
+  qr/[[:digit:]]{2} (?: : [[:digit:]]{2} ){2} (?: [.] ([[:digit:]]+) )?/amsx;
 const my $INSTANT_OFFSET =>
-  qr/[Zz] | [+-] (?: [01][[:digit:]] | 2[0-3] ) : [0-5][[:digit:]]/amsx;
+  qr/([Zz] | [+-] (?: [01][[:digit:]] | 2[0-3] ) : [0-5][[:digit:]])/amsx;
 const my $INSTANT_FILTER =>
   qr/\A $INSTANT_DAY [Tt ] $INSTANT_TIME (?: $INSTANT_OFFSET )? \z/amsx;
 
@@ -405,8 +406,8 @@ sub _is_uuid ($value) {
 # one (to), both inclusive; undef when it is malformed. A day is what the
 # form's date inputs send, and as an upper bound it covers the whole day: it
 # was compared with the day's first instant, so to=<the day a reply was
-# written> left the reply out. An RFC 3339 time is bound as the instant it
-# parsed to, not as it was typed.
+# written> left the reply out. An RFC 3339 time is bound as _instant renders
+# it, not as it was typed.
 sub _date_bounds ($value) {
     my $undefined;
     return $undefined if !defined $value;
@@ -421,19 +422,44 @@ sub _date_bounds ($value) {
         };
     }
 
-    my ($instant_year) = $value =~ $INSTANT_FILTER;
+    my ( $instant_year, $fraction, $zone ) = $value =~ $INSTANT_FILTER;
     return $undefined if !defined $instant_year || $instant_year < $EPOCH_YEAR;
 
-    my $epoch = Mojo::Date->new($value)->epoch;
+    # Parsed without its fraction, so the epoch is whole seconds (_instant).
+    ( my $whole_seconds = $value ) =~ s/[.][[:digit:]]+//amsx;
+    my $epoch = Mojo::Date->new($whole_seconds)->epoch;
     return $undefined if !defined $epoch;
 
-    # Set, not parsed back: new() reads its argument as a date, and an epoch
-    # Perl prints in exponent form (1e-08, from 1970-01-01T00:00:00.00000001Z)
-    # is not one -- the instant was rendered from no epoch at all, and the
-    # visitor's input put two "uninitialized value" warnings in the log.
-    my $instant = Mojo::Date->new->epoch($epoch)->to_datetime;
+    my $instant = _instant( $epoch, $fraction, $zone );
 
     return { from => { q{>=} => $instant }, to => { q{<=} => $instant } };
+}
+
+# A time as it is bound: its whole seconds as parsed, in UTC, then the
+# fraction as typed (a zone moves a time by whole minutes, so it is still
+# the instant's), cut to the microseconds a timestamp holds -- PostgreSQL
+# refuses a fraction hundreds of digits long. Rendered from the parsed
+# epoch, fraction and all, a float's fifteen digits bound .123456 as .12346
+# and 10:00:59.9999999999 as 10:01:00. A time typed with no zone (Z or
+# +hh:mm) is given none: PostgreSQL reads it in the session's time zone, as
+# it reads a day and as it read the time before it was checked here; it had
+# been bound as UTC. "Zone", not RFC 3339's word for it, which
+# t/86-engineering-correctness.t reads as a paginated query after a search.
+sub _instant ( $epoch, $fraction, $zone ) {
+    my ( $seconds, $minutes, $hours, $day, $month, $year ) = gmtime $epoch;
+    my $instant = sprintf '%04d-%02d-%02dT%02d:%02d:%02d',
+      $year + $GMTIME_BASE_YEAR, $month + 1, $day, $hours, $minutes, $seconds;
+
+    my $digits = substr $fraction // $EMPTY_TEXT, 0, $MICROSECOND_DIGITS;
+    $digits =~ s/0+ \z//msx;
+    if ( length $digits ) {
+        $instant .= q{.} . $digits;
+    }
+    if ( defined $zone ) {
+        $instant .= 'Z';
+    }
+
+    return $instant;
 }
 
 # The day's first second as an epoch, or undef for a day the calendar does
@@ -704,7 +730,9 @@ indexed it again under the new category.
 A filter is bound only when it is well formed: C<category_id> and
 C<author_user_id> a UUID, C<from> and C<to> a day (C<YYYY-MM-DD>) or an
 RFC 3339 time from 1970 on. Anything else is ignored, never sent to the
-database.
+database. A time is bound to the microsecond, as typed; one given without
+a zone (C<Z> or C<+hh:mm>) keeps none, so PostgreSQL reads it in the
+session's time zone.
 
 When C<statement_timeout_ms> is set and not zero, the query runs in a
 transaction of its own with that C<statement_timeout> set locally, so the
@@ -781,7 +809,7 @@ The application builds it from C<search_candidate_limit>
 
 =head1 DEPENDENCIES
 
-L<Const::Fast>, L<Mojo::Base>, L<Mojo::Util>,
+L<Const::Fast>, L<Mojo::Base>, L<Mojo::Date>, L<Mojo::Util>, L<Time::Local>,
 L<GPForum::Infrastructure::Row>,
 L<GPForum::Service::Search::DocumentBuilder>, PostgreSQL with C<pg_trgm>.
 
@@ -799,8 +827,8 @@ The documents of a thread that has moved are hidden from everyone, readers
 of its new category included, until the outbox has indexed them again; a
 large thread's posts come back a batch at a time.
 
-A day is bounded in the session's time zone, as PostgreSQL reads a date
-compared with a C<timestamptz>.
+A day, and a time given without a zone, are bounded in the session's
+time zone, as PostgreSQL reads them compared with a C<timestamptz>.
 
 =head1 AUTHOR
 

@@ -754,6 +754,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **Search time filters keep their meaning**: a time with no offset is read
+  in the database session's zone, as a day is, not as UTC; fractional seconds
+  are kept to the microsecond instead of rounding into the next second.
+
 - **Malformed search filters are ignored instead of reaching PostgreSQL**
   (a non-uuid id, a date that is not a day or an RFC 3339 time, an offset
   beyond +/-23:59); `to=<day>` includes the whole day. Each step of a console

@@ -158,6 +158,25 @@ ok(
     'a search bounded by one day finds what was written that day'
 );
 
+# A time with no offset is read in the session's time zone, as a day is: it
+# was bound as UTC, nine hours after the reply here. And to the microsecond:
+# from and to at the reply's own instant find it only when both are exact.
+$dbh->do(q{SET TIME ZONE 'Asia/Tokyo'});
+my ($reply_local) = $dbh->selectrow_array(
+    q{SELECT to_char(source_created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US')}
+      . q{ FROM search_documents WHERE entity_type = 'post' AND entity_id = ?},
+    undef, $reply
+);
+ok(
+    (
+        grep { $_ eq $reply } _ids(
+            _search( 'zymurgy', { from => $reply_local, to => $reply_local } )
+        )
+    ),
+    'a time with no offset names its instant in the session time zone'
+);
+$dbh->do('RESET TIME ZONE');
+
 # ADR 0102's window for a moved thread. A document keeps the category it was
 # indexed under until the outbox reindexes it -- a thread's posts a batch per
 # message -- and search judged it by that category: a thread moved from a
