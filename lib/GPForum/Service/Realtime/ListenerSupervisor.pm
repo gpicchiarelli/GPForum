@@ -140,7 +140,8 @@ sub poll_once ($self) {
 }
 
 # Read by /metrics and the admin console: a listener whose snapshot dies must
-# not take either down with it, so its error is kept here instead.
+# not take either down with it, so its error is reported in the listener
+# field instead.
 sub snapshot ($self) {
     my $listener = $self->_listener_snapshot;
 

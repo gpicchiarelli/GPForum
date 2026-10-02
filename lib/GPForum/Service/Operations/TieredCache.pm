@@ -178,12 +178,14 @@ sub snapshot ($self) {
     };
 }
 
-# A layer without ping lives in the process (LocalCache as L2) and has no
-# server to lose; asking it died, which took the readiness probe down with it.
+# A layer without ping lives in the process (LocalCache as L2): asking it
+# died, which took the readiness probe down with it. It is no shared cache,
+# so the answer is the one Readiness gives a cache with no ping at all: 0,
+# the local fallback, never a GlifiStore that is not there.
 sub ping ($self) {
     $self->_require_layers;
     if ( !$self->l2->can('ping') ) {
-        return 1;
+        return 0;
     }
 
     return $self->l2->ping;
@@ -291,7 +293,8 @@ C<purge_expired>, C<clear>, C<snapshot> and C<clock>; L2 through C<lookup>,
 C<put>, C<invalidate>, C<invalidate_tag>, C<purge_expired>, C<clear>,
 C<snapshot> and, when it has them, C<ping> and C<ticket>. A LocalCache can
 serve as L2: its entries report no expiry, so a copy into L1 takes L1's
-default TTL, and it has no C<ping>, so L</ping> answers 1 for it.
+default TTL, and it has no C<ping>, so L</ping> answers 0 for it: no shared
+cache is there to reach.
 
 =head1 SUBROUTINES/METHODS
 
@@ -386,7 +389,9 @@ C<undef> without a bus) and a copy of C<stats>.
 
 Returns L2's C<ping>. With SharedCache that is 1 when GlifiStore answers,
 and 0 when it does not or is being skipped after a failed call. An L2
-without C<ping>, such as a LocalCache, is in the process and returns 1.
+without C<ping>, such as a LocalCache, is in the process and is no shared
+cache: 0, which readiness reports as the local fallback, as it does for a
+cache with no C<ping>.
 
 =head1 DIAGNOSTICS
 

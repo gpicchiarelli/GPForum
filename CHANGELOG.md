@@ -754,6 +754,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **Readiness no longer reports a shared cache that is not there**: with an
+  in-process L2 the tiered cache's ping answers 0, so readiness says
+  `local-fallback`. A realtime listener's dying snapshot no longer overwrites
+  the error that made it degraded.
+
 - **`scheduled-jobs` printed `attachments=ARRAY(0x...)`** and its `--json`
   carried each deleted attachment's row; it now counts them. `migrate
   --plan` outside the app root, a malformed setting in `os-preflight`, and a

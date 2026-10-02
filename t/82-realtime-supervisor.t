@@ -342,8 +342,8 @@ is_deeply(
 );
 is( $contained->{stats}{snapshot_failures},
     1, 'the failed listener snapshot is counted' );
-is( $contained->{last_error}, undef,
-    'a failed snapshot is not a failure of the listener itself' );
+is( $contained->{last_error},
+    undef, 'a failed snapshot is not a failure of the listener itself' );
 is( $contained->{status}, 'running',
     'a failed snapshot does not change the listener status' );
 is( $disabled->snapshot->{status},
@@ -375,9 +375,11 @@ is_deeply(
     },
     'and its last error is still the listener\'s, past two failed snapshots'
 );
-is( $broken_snapshot->{listener}{error},
+is(
+    $broken_snapshot->{listener}{error},
     'notification queue is gone',
-    'while the snapshot error stays on the listener field' );
+    'while the snapshot error stays on the listener field'
+);
 
 # A second outage that fails as the first one did is logged again. Compared
 # with last_error, which a recovery keeps, it was taken for a repeat of the

@@ -19,6 +19,7 @@ use GPForum::Service::Admin::Maintenance;
 use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Operations::CacheInvalidationBus;
 use GPForum::Service::Operations::LocalCache;
+use GPForum::Service::Operations::Readiness;
 use GPForum::Service::Operations::SharedCache;
 use GPForum::Service::Operations::TieredCache;
 use GPForum::Test::AdminAuditLog;
@@ -27,6 +28,8 @@ use GPForum::Test::ForumReadRow;
 use GPForum::Test::ForumReadSchema;
 use GPForum::Test::OperationsClock;
 use GPForum::Test::PublicPageController;
+use GPForum::Test::ReadinessRuntime;
+use GPForum::Test::ReadinessSchema;
 use GPForum::Test::RealtimeBusDbh;
 use GPForum::Test::RealtimeBusSchema;
 use GPForum::Test::SharedCacheClient;
@@ -468,13 +471,31 @@ is_deeply(
 );
 
 # A LocalCache serves as L2 in tests and benchmarks. It has no ping, and the
-# readiness probe asking the tiered cache died.
+# readiness probe asking the tiered cache died. It is no shared cache either:
+# the probe reads it as the local fallback, as it reads a cache with no ping,
+# and does not report a GlifiStore that is not there.
 my $local_l2_tiered = GPForum::Service::Operations::TieredCache->new(
     l1 => GPForum::Service::Operations::LocalCache->new,
     l2 => GPForum::Service::Operations::LocalCache->new,
 );
 my $local_ping = eval { $local_l2_tiered->ping };
-is( $local_ping, 1, 'an L2 in the process answers ping' );
+is( $local_ping, 0, 'an L2 in the process answers ping as no shared cache' );
+my $local_readiness = GPForum::Service::Operations::Readiness->new(
+    cache          => $local_l2_tiered,
+    environment    => 'test',
+    glifistore_url => "tcp://127.0.0.1:$GLIFISTORE_TCP_PORT",
+    runtime        => GPForum::Test::ReadinessRuntime->new,
+    schema         => GPForum::Test::ReadinessSchema->new,
+);
+is_deeply(
+    [
+        map  { [ $_->{status}, $_->{mode} ] }
+        grep { $_->{name} eq 'shared_cache' }
+          @{ $local_readiness->check->{checks} }
+    ],
+    [ [ 'degraded', 'local-fallback' ] ],
+    'so readiness reports the local fallback, not a shared cache'
+);
 
 # L1 keeps a filled entry no longer than L2 has left for it: the fill used to
 # take L1's own default, and an entry with a second left lived another minute.
