@@ -42,6 +42,11 @@ const my $ONCE              => 1;
 const my $EXPORT_WRITE_ROWS => 2;
 const my $PNG_SIGNATURE     => pack 'H*', '89504e470d0a1a0a';
 
+# The moderation rows of GPForum::Test::ForumWebServices. Their ids are uuids:
+# a moderation route answers 404 for a path id that is not one.
+const my %ID => map { $_ => GPForum::Test::ForumWebServices->moderation_id($_) }
+  qw(action post report suspension thread user);
+
 my $test  = Test::Mojo->new('GPForum');
 my $forum = _install_forum_fakes($test);
 _install_test_session_route($test);
@@ -218,12 +223,12 @@ my $hide_form       = {
     csrf_token => $moderation_csrf,
     reason     => 'spam',
 };
-_post_json( $test, '/moderation/posts/post-1/hide', $hide_form );
+_post_json( $test, "/moderation/posts/$ID{post}/hide", $hide_form );
 $test->status_is($HTTP_OK);
 my $action_payload = $test->tx->res->json;
 my $action_id      = $action_payload->{action}{moderation_action_id};
 ok( $action_id, 'first hide commit returns an action id' );
-_post_json( $test, '/moderation/posts/post-1/hide', $hide_form );
+_post_json( $test, "/moderation/posts/$ID{post}/hide", $hide_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/moderation_action_id' => $action_id );
 is( scalar @{ $actions->created_for('ModerationAction') },
@@ -236,10 +241,10 @@ my $assign_form = {
     command_id => 'assign-lost-response-1',
     csrf_token => $moderation_csrf,
 };
-_post_json( $test, '/moderation/reports/report-1/assign', $assign_form );
+_post_json( $test, "/moderation/reports/$ID{report}/assign", $assign_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/report/assigned_moderator_user_id' => 'moderator-1' );
-_post_json( $test, '/moderation/reports/report-1/assign', $assign_form );
+_post_json( $test, "/moderation/reports/$ID{report}/assign", $assign_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/report/assigned_moderator_user_id' => 'moderator-1' );
 is( scalar @{ $forum->{services}->report_assigns },
@@ -250,12 +255,10 @@ my $reverse_form = {
     csrf_token => $moderation_csrf,
     reason     => 'appeal accepted',
 };
-_post_json( $test, '/moderation/actions/action-post-hide/reverse',
-    $reverse_form );
+_post_json( $test, "/moderation/actions/$ID{action}/reverse", $reverse_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/reversed_by_user_id' => 'moderator-1' );
-_post_json( $test, '/moderation/actions/action-post-hide/reverse',
-    $reverse_form );
+_post_json( $test, "/moderation/actions/$ID{action}/reverse", $reverse_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/reversed_by_user_id' => 'moderator-1' );
 is( scalar @{ $forum->{services}->action_reverses },
@@ -267,12 +270,12 @@ my $suspend_form = {
     csrf_token => $moderation_csrf,
     reason     => 'abuse campaign',
 };
-_post_json( $test, '/moderation/users/user-2/suspend', $suspend_form );
+_post_json( $test, "/moderation/users/$ID{user}/suspend", $suspend_form );
 $test->status_is($HTTP_OK);
-$test->json_is( '/suspension/user_id' => 'user-2' );
-_post_json( $test, '/moderation/users/user-2/suspend', $suspend_form );
+$test->json_is( '/suspension/user_id' => $ID{user} );
+_post_json( $test, "/moderation/users/$ID{user}/suspend", $suspend_form );
 $test->status_is($HTTP_OK);
-$test->json_is( '/suspension/user_id' => 'user-2' );
+$test->json_is( '/suspension/user_id' => $ID{user} );
 is( scalar @{ $forum->{services}->suspension_creates },
     $ONCE, 'lost suspend response does not persist twice' );
 
@@ -281,11 +284,11 @@ my $revoke_form = {
     csrf_token => $moderation_csrf,
     reason     => 'appeal accepted',
 };
-_post_json( $test, '/moderation/suspensions/suspension-1/revoke',
+_post_json( $test, "/moderation/suspensions/$ID{suspension}/revoke",
     $revoke_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/suspension/revoked_at' => '2026-05-23T12:00:00Z' );
-_post_json( $test, '/moderation/suspensions/suspension-1/revoke',
+_post_json( $test, "/moderation/suspensions/$ID{suspension}/revoke",
     $revoke_form );
 $test->status_is($HTTP_OK);
 $test->json_is( '/suspension/revoked_at' => '2026-05-23T12:00:00Z' );
@@ -723,7 +726,7 @@ sub _install_hide_store {
         {
             hidden_at        => undef,
             moderation_state => 'visible',
-            post_id          => 'post-1',
+            post_id          => $ID{post},
         }
     );
     my $store = GPForum::Service::Moderation::ActionStore->new(

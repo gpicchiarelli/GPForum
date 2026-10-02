@@ -13,11 +13,19 @@ use GPForum::Web::Access;
 use GPForum::Web::Guard;
 use GPForum::Web::PrivacyAccess;
 use GPForum::Web::Responder;
+use GPForum::Web::UrlId;
 
 our $VERSION = '0.001';
 
 const my $HTTP_OK       => 200;
 const my $HTTP_TOO_MANY => 429;
+
+# The workflow's own names for the rows the review placeholders address, so a
+# malformed id answers word for word as one naming no row.
+const my %PATH_ID_NOUN => (
+    job_id     => 'erasure job',
+    request_id => 'deletion request',
+);
 
 sub privacy_access {
     return GPForum::Web::PrivacyAccess->new;
@@ -31,6 +39,16 @@ sub member_user_id ($self) {
     my $user_id = $self->_current_user_id;
     if ( !$user_id ) {
         $self->_unauthorized;
+        return;
+    }
+
+    # Every privacy route passes here before a query. An export, deletion
+    # request or erasure job id that is not a uuid made PostgreSQL refuse the
+    # lookup: the download answered 500 and the staff reviews 503.
+    if ( my $malformed = GPForum::Web::UrlId->malformed_path_id($self) ) {
+        $self->_not_found(
+            GPForum::Web::UrlId->not_found_error( $malformed, \%PATH_ID_NOUN )
+        );
         return;
     }
 
@@ -52,7 +70,10 @@ sub write_user_id ($self) {
         return;
     }
 
-    return $self->_rate_limited_user_id( $self->member_user_id,
+    # scalar: a refusal returns an empty list, which shifted the action into
+    # the user id and died on the signature after the 401 was rendered -- the
+    # client lost the connection instead of reading the 401.
+    return $self->_rate_limited_user_id( scalar $self->member_user_id,
         $self->privacy_access->request_action );
 }
 
@@ -62,8 +83,10 @@ sub authorized_write_user_id ($self) {
         return;
     }
 
+    # scalar, as in write_user_id: a 401, 403 or 404 already rendered.
     return $self->_rate_limited_user_id(
-        $self->authorized_user_id( $self->privacy_access->manage_action ),
+        scalar $self->authorized_user_id(
+            $self->privacy_access->manage_action ),
         $self->privacy_access->review_action,
     );
 }
@@ -370,6 +393,11 @@ failure-status mapping live on L<GPForum::Web::PrivacyAccess>.
 
 =head1 SUBROUTINES/METHODS
 
+=head2 member_user_id
+
+Returns the signed-in actor, or answers 401. A route id that is not a uuid
+answers 404 here, before any query (L<GPForum::Web::UrlId>).
+
 =head2 write_user_id
 
 Rejects invalid CSRF tokens, anonymous member writes, and rate-limited
@@ -412,8 +440,8 @@ Uses permission and privacy helpers registered during application startup.
 =head1 DEPENDENCIES
 
 Uses L<Mojolicious::Controller>, L<GPForum::Web::Access>,
-L<GPForum::Web::Guard>, L<GPForum::Web::PrivacyAccess>, and
-L<GPForum::Web::Responder>.
+L<GPForum::Web::Guard>, L<GPForum::Web::PrivacyAccess>,
+L<GPForum::Web::Responder>, and L<GPForum::Web::UrlId>.
 
 =head1 INCOMPATIBILITIES
 

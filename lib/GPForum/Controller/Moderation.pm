@@ -10,6 +10,8 @@ use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'GPForum::Controller::Moderation::Base', -signatures;
 
+use GPForum::Web::UrlId;
+
 our $VERSION = '0.001';
 
 const my $HTTP_OK => 200;
@@ -58,16 +60,7 @@ sub actions ($self) {
         return;
     }
 
-    my $page = eval {
-        return $self->gp_moderation_review_reader->list_actions(
-            {
-                after       => $self->optional_param('after'),
-                limit       => $self->queue_limit,
-                target_id   => $self->optional_param('target_id'),
-                target_type => $self->optional_param('target_type'),
-            }
-        );
-    };
+    my $page = eval { return $self->_action_history; };
 
     if ($EVAL_ERROR) {
         $self->app->log->error("moderation action history failed: $EVAL_ERROR");
@@ -98,16 +91,7 @@ sub suspensions ($self) {
     }
 
     my $status = $self->suspension_status_param;
-    my $page   = eval {
-        return $self->gp_moderation_review_reader->list_suspensions(
-            {
-                after   => $self->optional_param('after'),
-                limit   => $self->queue_limit,
-                status  => $status,
-                user_id => $self->optional_param('user_id'),
-            }
-        );
-    };
+    my $page   = eval { return $self->_suspension_history($status); };
 
     if ($EVAL_ERROR) {
         $self->app->log->error("moderation suspensions failed: $EVAL_ERROR");
@@ -126,6 +110,48 @@ sub suspensions ($self) {
             template => 'moderation/suspensions',
         }
     );
+}
+
+sub _action_history ($self) {
+    if ( GPForum::Web::UrlId->malformed( $self->optional_param('target_id') ) )
+    {
+        return $self->_empty_page;
+    }
+
+    return $self->gp_moderation_review_reader->list_actions(
+        {
+            after       => $self->optional_param('after'),
+            limit       => $self->queue_limit,
+            target_id   => $self->optional_param('target_id'),
+            target_type => $self->optional_param('target_type'),
+        }
+    );
+}
+
+sub _suspension_history ( $self, $status ) {
+    if ( GPForum::Web::UrlId->malformed( $self->optional_param('user_id') ) ) {
+        return $self->_empty_page;
+    }
+
+    return $self->gp_moderation_review_reader->list_suspensions(
+        {
+            after   => $self->optional_param('after'),
+            limit   => $self->queue_limit,
+            status  => $status,
+            user_id => $self->optional_param('user_id'),
+        }
+    );
+}
+
+# A filter id that is not a uuid names no row, so nothing matches it. The
+# query is not run: PostgreSQL refuses the statement and the page answered
+# 500 for a mistyped filter.
+sub _empty_page {
+    return {
+        has_next    => 0,
+        items       => [],
+        next_cursor => undef,
+    };
 }
 
 sub _actions_page_with_command_ids ( $self, $page ) {
@@ -225,11 +251,13 @@ Renders the moderation report queue.
 
 =head2 actions
 
-Renders keyset-paginated moderation action history.
+Renders keyset-paginated moderation action history. A C<target_id> filter
+that is not a uuid matches nothing: the page is empty and no query runs.
 
 =head2 suspensions
 
-Renders active or historical suspensions.
+Renders active or historical suspensions. A C<user_id> filter that is not
+a uuid matches nothing, as on L</actions>.
 
 =head1 DIAGNOSTICS
 

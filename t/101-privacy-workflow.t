@@ -21,6 +21,10 @@ our $VERSION = '0.001';
 const my $FIRST_EXPORT_ROWS  => 2;
 const my $SECOND_EXPORT_ROWS => 4;
 
+# The rows the double knows, the same ones the privacy routes reach.
+const my %ID => map { $_ => GPForum::Test::PrivacyWebServices->privacy_id($_) }
+  qw(deletion held_job job missing);
+
 my $services = GPForum::Test::PrivacyWebServices->new;
 my $workflow = GPForum::Service::Privacy::Workflow->new(
     deletion_workflow => $services,
@@ -83,7 +87,7 @@ my $approved = $workflow->approve_deletion(
         actor_user_id => 'staff-1',
         command_id    => 'approve-command-1',
         reason        => 'reviewed',
-        request_id    => 'delete-1',
+        request_id    => $ID{deletion},
     }
 );
 ok( $approved->{ok}, 'approve_deletion succeeds for a known request' );
@@ -93,7 +97,7 @@ my $missing_request = $workflow->approve_deletion(
         actor_user_id => 'staff-1',
         command_id    => 'missing-approve-command-1',
         reason        => 'reviewed',
-        request_id    => 'missing',
+        request_id    => $ID{missing},
     }
 );
 is( $missing_request->{status},
@@ -104,7 +108,7 @@ my $held = $workflow->hold_deletion(
         actor_user_id => 'staff-1',
         command_id    => 'hold-command-1',
         reason        => 'legal hold',
-        request_id    => 'delete-1',
+        request_id    => $ID{deletion},
     }
 );
 ok( $held->{ok}, 'hold_deletion succeeds for a known request' );
@@ -116,7 +120,7 @@ my $missing_hold = $workflow->hold_deletion(
         actor_user_id => 'staff-1',
         command_id    => 'missing-hold-command-1',
         reason        => 'legal hold',
-        request_id    => 'missing',
+        request_id    => $ID{missing},
     }
 );
 is( $missing_hold->{status},
@@ -126,7 +130,7 @@ my $erased = $workflow->run_erasure_job(
     {
         actor_user_id => 'staff-1',
         command_id    => 'erasure-command-1',
-        job_id        => 'job-1',
+        job_id        => $ID{job},
     }
 );
 ok( $erased->{ok}, 'run_erasure_job succeeds for a known job' );
@@ -135,7 +139,7 @@ my $blocked = $workflow->run_erasure_job(
     {
         actor_user_id => 'staff-1',
         command_id    => 'erasure-held-command-1',
-        job_id        => 'job-held',
+        job_id        => $ID{held_job},
     }
 );
 is( $blocked->{status},
@@ -145,7 +149,7 @@ my $missing_job = $workflow->run_erasure_job(
     {
         actor_user_id => 'staff-1',
         command_id    => 'missing-erasure-command-1',
-        job_id        => 'missing',
+        job_id        => $ID{missing},
     }
 );
 is( $missing_job->{status},

@@ -8,11 +8,30 @@ use warnings;
 
 use Mojo::Base -base;
 
+use Const::Fast;
+
 our $VERSION = '0.001';
+
+# The rows the privacy routes address, and the id no row has. They are uuids:
+# a privacy route answers 404 for a path id that is not one before the
+# workflow runs (GPForum::Web::UrlId).
+const my %PRIVACY_ID => (
+    deletion => '018f1007-0002-7000-8000-000000000001',
+    export   => '018f1007-0001-7000-8000-000000000001',
+    held_job => '018f1007-0003-7000-8000-000000000002',
+    job      => '018f1007-0003-7000-8000-000000000001',
+    missing  => '018f1007-0000-7000-8000-000000000000',
+);
 
 has created_deletion_requests => sub { return []; };
 has created_export_requests   => sub { return []; };
 has created_holds             => sub { return []; };
+
+sub privacy_id {
+    my ( $class, $kind ) = @_;
+
+    return $PRIVACY_ID{$kind};
+}
 
 sub deletion_requests_for_user {
     my ( $self, $user_id ) = @_;
@@ -39,7 +58,7 @@ sub export_requests_for_user {
     return [
         {
             created_at        => '2026-05-23T12:00:00Z',
-            export_request_id => 'export-own-1',
+            export_request_id => $PRIVACY_ID{export},
             export_type       => 'user_data',
             finished_at       => '2026-05-23T12:00:00Z',
             format            => 'json',
@@ -86,7 +105,7 @@ sub _has_export_id {
     if ( !$export_request_id ) {
         return 0;
     }
-    if ( $export_request_id eq 'missing' ) {
+    if ( $export_request_id eq $PRIVACY_ID{missing} ) {
         return 0;
     }
 
@@ -126,7 +145,7 @@ sub pending_deletion_requests {
         {
             completed_at        => undef,
             created_at          => '2026-05-23T12:00:00Z',
-            deletion_request_id => 'delete-1',
+            deletion_request_id => $PRIVACY_ID{deletion},
             reason              => 'leaving service',
             request_type        => 'anonymize',
             requester_user_id   => 'user-1',
@@ -167,8 +186,8 @@ sub erasure_jobs_by_status {
     return [
         {
             completed_at        => undef,
-            deletion_request_id => 'delete-1',
-            erasure_job_id      => 'job-1',
+            deletion_request_id => $PRIVACY_ID{deletion},
+            erasure_job_id      => $PRIVACY_ID{job},
             last_error          => undef,
             scheduled_at        => '2026-05-23T12:00:00Z',
             status              => 'pending',
@@ -176,7 +195,7 @@ sub erasure_jobs_by_status {
         {
             completed_at        => undef,
             deletion_request_id => 'delete-held',
-            erasure_job_id      => 'job-held',
+            erasure_job_id      => $PRIVACY_ID{held_job},
             last_error          => 'retention hold active',
             scheduled_at        => '2026-05-23T12:00:00Z',
             status              => 'pending',
@@ -187,7 +206,7 @@ sub erasure_jobs_by_status {
 sub deletion_request {
     my ( $self, $request_id ) = @_;
 
-    return if $request_id eq 'missing';
+    return if $request_id eq $PRIVACY_ID{missing};
 
     return {
         completed_at        => undef,
@@ -262,7 +281,7 @@ sub request_deletion {
 sub approve_request {
     my ( $self, $request_id, $actor_id, $reason ) = @_;
 
-    return if $request_id eq 'missing';
+    return if $request_id eq $PRIVACY_ID{missing};
 
     return {
         action => {
@@ -320,13 +339,13 @@ sub hold_request {
 sub complete_job {
     my ( $self, $job_id, $actor_id ) = @_;
 
-    return if $job_id eq 'missing';
+    return if $job_id eq $PRIVACY_ID{missing};
     return {
         error          => 'retention_hold_active',
         erasure_job_id => $job_id,
         ok             => 0,
       }
-      if $job_id eq 'job-held';
+      if $job_id eq $PRIVACY_ID{held_job};
 
     return {
         action => {

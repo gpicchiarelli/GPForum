@@ -6,15 +6,21 @@ package main;
 use strict;
 use warnings;
 
+use Const::Fast;
+use Test::More;
+
 use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Service::Moderation::Workflow;
 use GPForum::Test::CommandIdempotency;
 use GPForum::Test::ForumWebServices;
-use Test::More;
 
 our $VERSION = '0.001';
+
+# The rows the double knows, the same ones the moderation routes reach.
+const my %ID => map { $_ => GPForum::Test::ForumWebServices->moderation_id($_) }
+  qw(action post report suspension thread user);
 
 my $workflow = GPForum::Service::Moderation::Workflow->new(
     action_store     => GPForum::Test::ForumWebServices->new,
@@ -26,7 +32,7 @@ my $hidden = $workflow->hide_post(
     {
         actor_user_id => 'moderator-1',
         command_id    => 'hide-command-1',
-        post_id       => 'post-1',
+        post_id       => $ID{post},
         reason        => 'spam',
     }
 );
@@ -37,7 +43,7 @@ is( $hidden->{stored}{action}{action_type},
 my $missing_reason = $workflow->hide_post(
     {
         actor_user_id => 'moderator-1',
-        post_id       => 'post-1',
+        post_id       => $ID{post},
         reason        => q{},
     }
 );
@@ -51,7 +57,7 @@ is(
 my $missing_hide_command = $workflow->hide_post(
     {
         actor_user_id => 'moderator-1',
-        post_id       => 'post-1',
+        post_id       => $ID{post},
         reason        => 'spam',
     }
 );
@@ -79,7 +85,7 @@ my $hidden_thread = $workflow->hide_thread(
         actor_user_id => 'moderator-1',
         command_id    => 'hide-thread-command-1',
         reason        => 'off-topic',
-        thread_id     => 'thread-1',
+        thread_id     => $ID{thread},
     }
 );
 ok( $hidden_thread->{ok}, 'hide_thread succeeds for a known thread' );
@@ -90,7 +96,7 @@ my $missing_thread_reason = $workflow->hide_thread(
     {
         actor_user_id => 'moderator-1',
         reason        => q{},
-        thread_id     => 'thread-1',
+        thread_id     => $ID{thread},
     }
 );
 is( $missing_thread_reason->{status},
@@ -112,7 +118,7 @@ my $restored_thread = $workflow->restore_thread(
         actor_user_id => 'moderator-1',
         command_id    => 'restore-thread-command-1',
         reason        => 'cleared',
-        thread_id     => 'thread-1',
+        thread_id     => $ID{thread},
     }
 );
 ok( $restored_thread->{ok}, 'restore_thread succeeds for a known thread' );
@@ -121,7 +127,7 @@ my $assigned = $workflow->assign_report(
     {
         actor_user_id => 'moderator-1',
         command_id    => 'assign-command-1',
-        report_id     => 'report-1',
+        report_id     => $ID{report},
     }
 );
 ok( $assigned->{ok}, 'assign_report succeeds for a known report' );
@@ -129,7 +135,7 @@ ok( $assigned->{ok}, 'assign_report succeeds for a known report' );
 my $missing_assign_command = $workflow->assign_report(
     {
         actor_user_id => 'moderator-1',
-        report_id     => 'report-1',
+        report_id     => $ID{report},
     }
 );
 is( $missing_assign_command->{status},
@@ -153,7 +159,7 @@ is( $missing_report->{status},
 my $missing_resolution = $workflow->resolve_report(
     {
         actor_user_id => 'moderator-1',
-        report_id     => 'report-1',
+        report_id     => $ID{report},
         resolution    => q{},
     }
 );
@@ -163,7 +169,7 @@ is( $missing_resolution->{status},
 my $missing_resolve_command = $workflow->resolve_report(
     {
         actor_user_id => 'moderator-1',
-        report_id     => 'report-1',
+        report_id     => $ID{report},
         resolution    => 'handled',
     }
 );
@@ -174,7 +180,7 @@ my $resolved = $workflow->resolve_report(
     {
         actor_user_id => 'moderator-1',
         command_id    => 'resolve-command-1',
-        report_id     => 'report-1',
+        report_id     => $ID{report},
         resolution    => 'handled',
     }
 );
@@ -182,7 +188,7 @@ ok( $resolved->{ok}, 'resolve_report succeeds when a resolution is present' );
 
 my $reversed = $workflow->reverse_action(
     {
-        action_id     => 'action-post-hide',
+        action_id     => $ID{action},
         actor_user_id => 'moderator-1',
         command_id    => 'reverse-command-1',
         reason        => 'appeal accepted',
@@ -192,7 +198,7 @@ ok( $reversed->{ok}, 'reverse_action succeeds when a command_id is present' );
 
 my $missing_reverse_command = $workflow->reverse_action(
     {
-        action_id     => 'action-post-hide',
+        action_id     => $ID{action},
         actor_user_id => 'moderator-1',
         reason        => 'appeal accepted',
     }
@@ -204,7 +210,7 @@ my $missing_suspend_command = $workflow->suspend_user(
     {
         actor_user_id => 'moderator-1',
         reason        => 'abuse campaign',
-        user_id       => 'user-2',
+        user_id       => $ID{user},
     }
 );
 is( $missing_suspend_command->{status},
@@ -220,19 +226,19 @@ my $suspended = $workflow->suspend_user(
         actor_user_id => 'moderator-1',
         command_id    => 'suspend-command-1',
         reason        => 'abuse campaign',
-        user_id       => 'user-2',
+        user_id       => $ID{user},
     }
 );
 ok( $suspended->{ok}, 'suspend_user succeeds for a known user' );
 is( $suspended->{stored}{suspension}{user_id},
-    'user-2', 'suspend_user returns the stored user' );
+    $ID{user}, 'suspend_user returns the stored user' );
 
 my $revoked = $workflow->revoke_suspension(
     {
         actor_user_id => 'moderator-1',
         command_id    => 'revoke-command-1',
         reason        => 'appeal accepted',
-        suspension_id => 'suspension-1',
+        suspension_id => $ID{suspension},
     }
 );
 ok( $revoked->{ok}, 'revoke_suspension succeeds for a known suspension' );
@@ -255,13 +261,13 @@ _replay_moderation(
             actor_user_id => 'moderator-1',
             command_id    => 'suspend-replay-1',
             reason        => 'abuse campaign',
-            user_id       => 'user-2',
+            user_id       => $ID{user},
         },
         method  => 'suspend_user',
         request => {
             actor_user_id => 'moderator-1',
             reason        => 'abuse campaign',
-            user_id       => 'user-2',
+            user_id       => $ID{user},
         },
         services => $services,
     }
@@ -276,13 +282,13 @@ _replay_moderation(
             actor_user_id => 'moderator-1',
             command_id    => 'revoke-replay-1',
             reason        => 'appeal accepted',
-            suspension_id => 'suspension-1',
+            suspension_id => $ID{suspension},
         },
         method  => 'revoke_suspension',
         request => {
             actor_user_id => 'moderator-1',
             reason        => 'appeal accepted',
-            suspension_id => 'suspension-1',
+            suspension_id => $ID{suspension},
         },
         services => $services,
     }
@@ -296,12 +302,12 @@ _replay_moderation(
         input        => {
             actor_user_id => 'moderator-1',
             command_id    => 'assign-replay-1',
-            report_id     => 'report-1',
+            report_id     => $ID{report},
         },
         method  => 'assign_report',
         request => {
             actor_user_id => 'moderator-1',
-            report_id     => 'report-1',
+            report_id     => $ID{report},
         },
         services => $services,
     }
@@ -313,14 +319,14 @@ _replay_moderation(
         counter      => 'action_reverses',
         idempotency  => $idempotency,
         input        => {
-            action_id     => 'action-post-hide',
+            action_id     => $ID{action},
             actor_user_id => 'moderator-1',
             command_id    => 'reverse-replay-1',
             reason        => 'appeal accepted',
         },
         method  => 'reverse_action',
         request => {
-            action_id     => 'action-post-hide',
+            action_id     => $ID{action},
             actor_user_id => 'moderator-1',
             reason        => 'appeal accepted',
         },
@@ -336,13 +342,13 @@ _replay_moderation(
         input        => {
             actor_user_id => 'moderator-1',
             command_id    => 'hide-replay-1',
-            post_id       => 'post-1',
+            post_id       => $ID{post},
             reason        => 'spam',
         },
         method  => 'hide_post',
         request => {
             actor_user_id => 'moderator-1',
-            post_id       => 'post-1',
+            post_id       => $ID{post},
             reason        => 'spam',
         },
         services => $services,

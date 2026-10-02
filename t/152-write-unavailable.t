@@ -31,6 +31,11 @@ const my $HTTP_OK              => 200;
 const my $HTTP_SERVICE_UNAVAIL => 503;
 const my $LEAK_PATTERN         => qr/could [ ] not [ ] connect/msx;
 
+# The moderation rows of GPForum::Test::ForumWebServices. Their ids are uuids:
+# a moderation route answers 404 for a path id that is not one.
+const my %ID => map { $_ => GPForum::Test::ForumWebServices->moderation_id($_) }
+  qw(action post report suspension thread user);
+
 my $test = Test::Mojo->new('GPForum');
 _install_forum_fakes($test);
 _install_test_session_route($test);
@@ -254,7 +259,7 @@ $test->app->helper(
 );
 _post_json(
     $test,
-    '/moderation/posts/post-1/hide',
+    "/moderation/posts/$ID{post}/hide",
     {
         command_id => 'hide-unavailable-1',
         csrf_token => $moderation_csrf,
@@ -270,7 +275,7 @@ $test->app->helper(
 );
 _post_json(
     $test,
-    '/moderation/posts/post-1/hide',
+    "/moderation/posts/$ID{post}/hide",
     {
         command_id => 'hide-unavailable-command-1',
         csrf_token => $moderation_csrf,
@@ -281,7 +286,7 @@ _assert_unavailable($test);
 
 _post_json(
     $test,
-    '/moderation/users/user-2/suspend',
+    "/moderation/users/$ID{user}/suspend",
     {
         confirm    => 1,
         command_id => 'suspend-unavailable-command-1',
@@ -293,7 +298,7 @@ _assert_unavailable($test);
 
 _post_json(
     $test,
-    '/moderation/reports/report-1/assign',
+    "/moderation/reports/$ID{report}/assign",
     {
         command_id => 'assign-unavailable-command-1',
         csrf_token => $moderation_csrf,
@@ -313,7 +318,7 @@ $test->app->helper(
 );
 _post_json(
     $test,
-    '/moderation/reports/report-1/assign',
+    "/moderation/reports/$ID{report}/assign",
     {
         command_id => 'assign-unavailable-1',
         csrf_token => $moderation_csrf,
@@ -328,7 +333,7 @@ $test->app->helper(
 );
 _post_json(
     $test,
-    '/moderation/users/user-2/suspend',
+    "/moderation/users/$ID{user}/suspend",
     {
         confirm    => 1,
         command_id => 'suspend-unavailable-1',
@@ -340,7 +345,7 @@ _assert_unavailable($test);
 
 _post_json(
     $test,
-    '/moderation/suspensions/suspension-1/revoke',
+    "/moderation/suspensions/$ID{suspension}/revoke",
     {
         command_id => 'revoke-unavailable-1',
         csrf_token => $moderation_csrf,

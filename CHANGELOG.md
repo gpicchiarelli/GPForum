@@ -777,6 +777,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A malformed id in a moderation or privacy URL answers 404**, word for
+  word the unknown-id answer, without a query (it was a 500, or 503 for a
+  suspension revoke); filters with a malformed id show an empty page. A
+  signed-out privacy request and a forbidden staff privacy action get their
+  401 or 403 instead of a dropped connection.
+
 - **"Purge page cache" says when GlifiStore was not reached**: a warning,
   styled as one, names the tags left in the shared cache (they expire within
   their TTL); the JSON answer says `cache_purged_locally`, and a resubmitted

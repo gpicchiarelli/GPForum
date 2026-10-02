@@ -30,6 +30,11 @@ const my $HTTP_OK           => 200;
 const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
 
+# The moderation rows of GPForum::Test::ForumWebServices. Their ids are uuids:
+# a moderation route answers 404 for a path id that is not one.
+const my %ID => map { $_ => GPForum::Test::ForumWebServices->moderation_id($_) }
+  qw(action post report suspension thread user);
+
 subtest 'identity audit hashes sensitive request fields' => sub {
     my $schema = GPForum::Test::Schema->new;
     my $audit  = GPForum::Service::Identity::SecurityAudit->new(
@@ -127,8 +132,8 @@ subtest 'normal users cannot cross admin or moderation boundaries' => sub {
     $test->status_is( $HTTP_FORBIDDEN,
         'normal user cannot view moderation queue' );
     $test->post_ok(
-        '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
-          form => {
+        "/moderation/posts/$ID{post}/hide" =>
+          { Accept => 'application/json' } => form => {
             csrf_token => $token,
             reason     => 'forbidden',
           }
@@ -184,7 +189,7 @@ subtest 'permission denial stops before protected service helpers' => sub {
         'denied moderation read does not reach review service' );
 
     $test->post_ok(
-        '/moderation/reports/report-1/assign' =>
+        "/moderation/reports/$ID{report}/assign" =>
           { Accept => 'application/json' } => form => {
             csrf_token => $token,
           }
@@ -193,7 +198,7 @@ subtest 'permission denial stops before protected service helpers' => sub {
         'denied moderation write does not reach report service' );
 
     $test->post_ok(
-        '/moderation/reports/report-1/release' =>
+        "/moderation/reports/$ID{report}/release" =>
           { Accept => 'application/json' } => form => {
             csrf_token => $token,
           }
@@ -231,7 +236,7 @@ subtest 'moderator identity without permission remains forbidden' => sub {
     $test->status_is( $HTTP_FORBIDDEN,
         'moderator label alone cannot view suspension queue' );
     $test->post_ok(
-        '/moderation/users/user-2/suspend' =>
+        "/moderation/users/$ID{user}/suspend" =>
           { Accept => 'application/json' } => form => {
             csrf_token => $token,
             reason     => 'forbidden',
@@ -399,18 +404,18 @@ sub _authenticated_post_paths {
         '/admin/roles/role-1/permissions',
         '/admin/users/user-2/roles',
         '/admin/role-bindings/binding-1/revoke',
-        '/moderation/reports/report-1/assign',
-        '/moderation/reports/report-1/release',
-        '/moderation/reports/report-1/resolve',
-        '/moderation/posts/post-1/hide',
-        '/moderation/posts/post-1/restore',
-        '/moderation/threads/thread-1/lock',
-        '/moderation/threads/thread-1/unlock',
-        '/moderation/threads/thread-1/hide',
-        '/moderation/threads/thread-1/restore',
-        '/moderation/actions/action-post-hide/reverse',
-        '/moderation/users/user-2/suspend',
-        '/moderation/suspensions/suspension-1/revoke',
+        "/moderation/reports/$ID{report}/assign",
+        "/moderation/reports/$ID{report}/release",
+        "/moderation/reports/$ID{report}/resolve",
+        "/moderation/posts/$ID{post}/hide",
+        "/moderation/posts/$ID{post}/restore",
+        "/moderation/threads/$ID{thread}/lock",
+        "/moderation/threads/$ID{thread}/unlock",
+        "/moderation/threads/$ID{thread}/hide",
+        "/moderation/threads/$ID{thread}/restore",
+        "/moderation/actions/$ID{action}/reverse",
+        "/moderation/users/$ID{user}/suspend",
+        "/moderation/suspensions/$ID{suspension}/revoke",
     );
 }
 

@@ -19,6 +19,7 @@ use GPForum::Test::DenyLimiter;
 use GPForum::Test::DenyPermissionGate;
 use GPForum::Test::ForumWebServices;
 use GPForum::Test::IdentityStore;
+use GPForum::Test::RecordingPermissionGate;
 
 our $VERSION = '0.001';
 
@@ -29,6 +30,24 @@ const my $HTTP_UNAUTHORIZED => 401;
 const my $HTTP_FORBIDDEN    => 403;
 const my $HTTP_NOT_FOUND    => 404;
 const my $HTTP_TOO_MANY     => 429;
+
+# The double's moderation rows. Their ids are uuids: a route answers 404 for
+# a path id that is not one before anything reads it.
+const my %ID => map { $_ => GPForum::Test::ForumWebServices->moderation_id($_) }
+  qw(action post report suspension thread user);
+
+# Well formed, and no row of the double: the workflow's not-found.
+const my $UNKNOWN_ID => '018f1006-0000-7000-8000-000000000000';
+
+# Every moderation write route, with an id that is not a uuid.
+const my @MALFORMED_PATHS => map { "/moderation/$_" } qw(
+  reports/report-1/assign reports/report-1/release reports/report-1/resolve
+  posts/post-1/hide posts/post-1/restore
+  threads/thread-1/lock threads/thread-1/unlock
+  threads/thread-1/hide threads/thread-1/restore
+  actions/action-post-hide/reverse users/user-2/suspend
+  suspensions/suspension-1/revoke
+);
 
 my $test     = Test::Mojo->new('GPForum');
 my $services = _install_moderation_fakes($test);
@@ -42,30 +61,34 @@ $test->status_is($HTTP_OK);
 
 _get_json_ok( $test, '/moderation/reports' );
 $test->status_is($HTTP_OK);
-$test->json_is( '/reports/0/report_id'   => 'report-1' );
+$test->json_is( '/reports/0/report_id'   => $ID{report} );
 $test->json_is( '/reports/0/target_type' => 'post' );
 $test->json_is(
-    '/reports/0/ui/post_reason_id' => 'report-report-1-post-reason' );
+    '/reports/0/ui/post_reason_id' => "report-$ID{report}-post-reason" );
 $test->json_is( '/status' => 'open' );
 my $csrf_token = _json_value( $test, 'csrf_token' );
 
 $test->get_ok('/moderation/reports');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Moderation report queue"]});
-$test->element_exists(q{form[action="/moderation/posts/post-1/hide"]});
+$test->element_exists(qq{form[action="/moderation/posts/$ID{post}/hide"]});
 $test->element_exists(
-    q{form[action="/moderation/posts/post-1/hide"] input[name="command_id"]});
-$test->element_exists(q{form[action="/moderation/reports/report-1/assign"]});
-$test->element_exists(
-q{form[action="/moderation/reports/report-1/assign"] input[name="command_id"]}
+    qq{form[action="/moderation/posts/$ID{post}/hide"] input[name="command_id"]}
 );
-$test->element_exists(q{form[action="/moderation/reports/report-1/release"]});
 $test->element_exists(
-q{form[action="/moderation/reports/report-1/release"] input[name="command_id"]}
+    qq{form[action="/moderation/reports/$ID{report}/assign"]});
+$test->element_exists(
+qq{form[action="/moderation/reports/$ID{report}/assign"] input[name="command_id"]}
 );
-$test->element_exists(q{form[action="/moderation/reports/report-1/resolve"]});
 $test->element_exists(
-q{form[action="/moderation/reports/report-1/resolve"] input[name="command_id"]}
+    qq{form[action="/moderation/reports/$ID{report}/release"]});
+$test->element_exists(
+qq{form[action="/moderation/reports/$ID{report}/release"] input[name="command_id"]}
+);
+$test->element_exists(
+    qq{form[action="/moderation/reports/$ID{report}/resolve"]});
+$test->element_exists(
+qq{form[action="/moderation/reports/$ID{report}/resolve"] input[name="command_id"]}
 );
 
 $test->get_ok( '/moderation/reports' => { 'Accept-Language' => 'it' } );
@@ -77,31 +100,31 @@ $test->content_like(qr/Assegna [ ] a [ ] me/msx);
 
 _get_json_ok( $test, '/moderation/actions' );
 $test->status_is($HTTP_OK);
-$test->json_is( '/actions/0/moderation_action_id' => 'action-post-hide' );
+$test->json_is( '/actions/0/moderation_action_id' => $ID{action} );
 $test->json_is( '/actions/0/action_type'          => 'post.hidden' );
-$test->json_is( '/actions/0/ui/reverse_reason_id' =>
-      'action-action-post-hide-reverse-reason' );
+$test->json_is(
+    '/actions/0/ui/reverse_reason_id' => "action-$ID{action}-reverse-reason" );
 $test->json_is( '/next_cursor' => 'action-cursor' );
 
 $test->get_ok('/moderation/actions');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Moderation action history"]});
-$test->element_exists(q{form[action="/moderation/posts/post-1/restore"]});
+$test->element_exists(qq{form[action="/moderation/posts/$ID{post}/restore"]});
 $test->element_exists(
-    q{form[action="/moderation/posts/post-1/restore"] input[name="command_id"]}
+qq{form[action="/moderation/posts/$ID{post}/restore"] input[name="command_id"]}
 );
 $test->element_exists(
-    q{form[action="/moderation/actions/action-post-hide/reverse"]});
+    qq{form[action="/moderation/actions/$ID{action}/reverse"]});
 $test->element_exists(
-q{form[action="/moderation/actions/action-post-hide/reverse"] input[name="command_id"]}
+qq{form[action="/moderation/actions/$ID{action}/reverse"] input[name="command_id"]}
 );
 
 _get_json_ok( $test, '/moderation/suspensions' );
 $test->status_is($HTTP_OK);
-$test->json_is( '/suspensions/0/suspension_id' => 'suspension-1' );
-$test->json_is( '/suspensions/0/user_id'       => 'user-2' );
+$test->json_is( '/suspensions/0/suspension_id' => $ID{suspension} );
+$test->json_is( '/suspensions/0/user_id'       => $ID{user} );
 $test->json_is( '/suspensions/0/ui/revoke_reason_id' =>
-      'suspension-suspension-1-revoke-reason' );
+      "suspension-$ID{suspension}-revoke-reason" );
 $test->json_has('/suspensions/0/revoke_command_id');
 $test->json_is( '/next_cursor' => 'suspension-cursor' );
 
@@ -109,14 +132,14 @@ $test->get_ok('/moderation/suspensions');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{ol[aria-label="Active suspension list"]});
 $test->element_exists(
-q{form[action="/moderation/suspensions/suspension-1/revoke"] input[name="command_id"]}
+qq{form[action="/moderation/suspensions/$ID{suspension}/revoke"] input[name="command_id"]}
 );
 
-$test->post_ok('/moderation/posts/post-1/hide');
+$test->post_ok("/moderation/posts/$ID{post}/hide");
 $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
-    '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
+    "/moderation/posts/$ID{post}/hide" => { Accept => 'application/json' } =>
       form => {
         csrf_token => $csrf_token,
         reason     => q{},
@@ -126,7 +149,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/reason' => 'reason is required' );
 
 $test->post_ok(
-    '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
+    "/moderation/posts/$ID{post}/hide" => { Accept => 'application/json' } =>
       form => {
         command_id => 'hide-command-1',
         csrf_token => $csrf_token,
@@ -139,7 +162,7 @@ is( $services->last_moderation_input->{command_id},
     'hide-command-1', 'hide_post passes command_id into the action store' );
 
 $test->post_ok(
-    '/moderation/posts/post-1/hide' => form => {
+    "/moderation/posts/$ID{post}/hide" => form => {
         command_id => 'html-hide-command-1',
         csrf_token => $csrf_token,
         reason     => 'spam',
@@ -152,7 +175,7 @@ $test->status_is($HTTP_OK);
 $test->text_is( 'p.flash--success[role="status"]' => 'Post hidden' );
 
 $test->post_ok(
-    '/moderation/reports/report-1/assign' => form => {
+    "/moderation/reports/$ID{report}/assign" => form => {
         command_id => 'html-assign-command-1',
         csrf_token => $csrf_token,
     }
@@ -164,8 +187,8 @@ $test->status_is($HTTP_OK);
 $test->text_is( 'p.flash--success[role="status"]' => 'Report assigned' );
 
 $test->post_ok(
-    '/moderation/posts/post-1/restore' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/posts/$ID{post}/restore" =>
+      { Accept => 'application/json' } => form => {
         command_id => 'restore-command-1',
         csrf_token => $csrf_token,
         reason     => 'appeal accepted',
@@ -178,8 +201,8 @@ is( $services->last_moderation_input->{command_id},
     'restore_post passes command_id into the action store' );
 
 $test->post_ok(
-    '/moderation/threads/thread-1/lock' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/threads/$ID{thread}/lock" =>
+      { Accept => 'application/json' } => form => {
         command_id => 'lock-command-1',
         csrf_token => $csrf_token,
         reason     => 'heated discussion',
@@ -191,7 +214,7 @@ is( $services->last_moderation_input->{command_id},
     'lock-command-1', 'lock_thread passes command_id into the action store' );
 
 $test->post_ok(
-    '/moderation/threads/thread-1/unlock' =>
+    "/moderation/threads/$ID{thread}/unlock" =>
       { Accept => 'application/json' } => form => {
         command_id => 'unlock-command-1',
         csrf_token => $csrf_token,
@@ -205,8 +228,8 @@ is( $services->last_moderation_input->{command_id},
     'unlock_thread passes command_id into the action store' );
 
 $test->post_ok(
-    '/moderation/threads/thread-1/hide' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/threads/$ID{thread}/hide" =>
+      { Accept => 'application/json' } => form => {
         command_id => 'hide-thread-command-1',
         csrf_token => $csrf_token,
         reason     => 'off-topic',
@@ -219,7 +242,7 @@ is( $services->last_moderation_input->{command_id},
     'hide_thread passes command_id into the action store' );
 
 $test->post_ok(
-    '/moderation/threads/thread-1/restore' =>
+    "/moderation/threads/$ID{thread}/restore" =>
       { Accept => 'application/json' } => form => {
         command_id => 'restore-thread-command-1',
         csrf_token => $csrf_token,
@@ -233,7 +256,7 @@ is( $services->last_moderation_input->{command_id},
     'restore_thread passes command_id into the action store' );
 
 $test->post_ok(
-    '/moderation/actions/action-post-hide/reverse' =>
+    "/moderation/actions/$ID{action}/reverse" =>
       { Accept => 'application/json' } => form => {
         csrf_token => $csrf_token,
       }
@@ -242,7 +265,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/command_id' => 'command_id is required' );
 
 $test->post_ok(
-    '/moderation/actions/action-post-hide/reverse' =>
+    "/moderation/actions/$ID{action}/reverse" =>
       { Accept => 'application/json' } => form => {
         command_id => 'reverse-command-1',
         csrf_token => $csrf_token,
@@ -252,7 +275,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/reason' => 'reason is required' );
 
 $test->post_ok(
-    '/moderation/actions/action-post-hide/reverse' =>
+    "/moderation/actions/$ID{action}/reverse" =>
       { Accept => 'application/json' } => form => {
         command_id => 'reverse-command-1',
         csrf_token => $csrf_token,
@@ -262,12 +285,12 @@ $test->post_ok(
 $test->status_is($HTTP_OK);
 $test->json_is( '/action/reversed_by_user_id' => 'moderator-1' );
 
-$test->post_ok('/moderation/users/user-2/suspend');
+$test->post_ok("/moderation/users/$ID{user}/suspend");
 $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
-    '/moderation/users/user-2/suspend' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/users/$ID{user}/suspend" =>
+      { Accept => 'application/json' } => form => {
         confirm    => 1,
         csrf_token => $csrf_token,
         reason     => q{},
@@ -277,8 +300,8 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/reason' => 'reason is required' );
 
 $test->post_ok(
-    '/moderation/users/user-2/suspend' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/users/$ID{user}/suspend" =>
+      { Accept => 'application/json' } => form => {
         command_id => 'suspend-unconfirmed',
         csrf_token => $csrf_token,
         reason     => 'abuse campaign',
@@ -291,8 +314,8 @@ $test->json_like(
 );
 
 $test->post_ok(
-    '/moderation/users/user-2/suspend' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/users/$ID{user}/suspend" =>
+      { Accept => 'application/json' } => form => {
         confirm    => 1,
         command_id => 'suspend-command-1',
         csrf_token => $csrf_token,
@@ -302,11 +325,11 @@ $test->post_ok(
 );
 $test->status_is($HTTP_OK);
 $test->json_is( '/status'              => 'user_suspended' );
-$test->json_is( '/suspension/user_id'  => 'user-2' );
+$test->json_is( '/suspension/user_id'  => $ID{user} );
 $test->json_is( '/suspension/valid_to' => '2026-05-24T12:00:00Z' );
 
 $test->post_ok(
-    '/moderation/suspensions/suspension-1/revoke' =>
+    "/moderation/suspensions/$ID{suspension}/revoke" =>
       { Accept => 'application/json' } => form => {
         csrf_token => $csrf_token,
       }
@@ -315,7 +338,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/reason' => 'reason is required' );
 
 $test->post_ok(
-    '/moderation/suspensions/suspension-1/revoke' =>
+    "/moderation/suspensions/$ID{suspension}/revoke" =>
       { Accept => 'application/json' } => form => {
         command_id => 'revoke-command-1',
         csrf_token => $csrf_token,
@@ -327,8 +350,8 @@ $test->json_is( '/status'                => 'suspension_revoked' );
 $test->json_is( '/suspension/revoked_at' => '2026-05-23T12:00:00Z' );
 
 $test->post_ok(
-    '/moderation/users/missing/suspend' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/users/$UNKNOWN_ID/suspend" =>
+      { Accept => 'application/json' } => form => {
         confirm    => 1,
         command_id => 'missing-suspend-command-1',
         csrf_token => $csrf_token,
@@ -338,8 +361,8 @@ $test->post_ok(
 $test->status_is($HTTP_NOT_FOUND);
 
 $test->post_ok(
-    '/moderation/posts/missing/restore' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/posts/$UNKNOWN_ID/restore" =>
+      { Accept => 'application/json' } => form => {
         command_id => 'missing-restore-command-1',
         csrf_token => $csrf_token,
         reason     => 'missing target',
@@ -347,11 +370,11 @@ $test->post_ok(
 );
 $test->status_is($HTTP_NOT_FOUND);
 
-$test->post_ok('/moderation/reports/report-1/assign');
+$test->post_ok("/moderation/reports/$ID{report}/assign");
 $test->status_is($HTTP_FORBIDDEN);
 
 $test->post_ok(
-    '/moderation/reports/report-1/assign' =>
+    "/moderation/reports/$ID{report}/assign" =>
       { Accept => 'application/json' } => form => {
         csrf_token => $csrf_token,
       }
@@ -360,7 +383,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/command_id' => 'command_id is required' );
 
 $test->post_ok(
-    '/moderation/reports/report-1/assign' =>
+    "/moderation/reports/$ID{report}/assign" =>
       { Accept => 'application/json' } => form => {
         command_id => 'assign-command-1',
         csrf_token => $csrf_token,
@@ -371,7 +394,7 @@ $test->json_is( '/status'                            => 'assigned' );
 $test->json_is( '/report/assigned_moderator_user_id' => 'moderator-1' );
 
 $test->post_ok(
-    '/moderation/reports/report-1/release' =>
+    "/moderation/reports/$ID{report}/release" =>
       { Accept => 'application/json' } => form => {
         csrf_token => $csrf_token,
       }
@@ -380,7 +403,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/command_id' => 'command_id is required' );
 
 $test->post_ok(
-    '/moderation/reports/report-1/release' =>
+    "/moderation/reports/$ID{report}/release" =>
       { Accept => 'application/json' } => form => {
         command_id => 'release-command-1',
         csrf_token => $csrf_token,
@@ -391,7 +414,7 @@ $test->json_is( '/status'                            => 'released' );
 $test->json_is( '/report/assigned_moderator_user_id' => undef );
 
 $test->post_ok(
-    '/moderation/reports/report-1/resolve' =>
+    "/moderation/reports/$ID{report}/resolve" =>
       { Accept => 'application/json' } => form => {
         csrf_token => $csrf_token,
         resolution => q{},
@@ -401,7 +424,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/resolution' => 'resolution is required' );
 
 $test->post_ok(
-    '/moderation/reports/report-1/resolve' =>
+    "/moderation/reports/$ID{report}/resolve" =>
       { Accept => 'application/json' } => form => {
         csrf_token => $csrf_token,
         resolution => 'content_hidden',
@@ -411,7 +434,7 @@ $test->status_is($HTTP_BAD_REQUEST);
 $test->json_is( '/errors/command_id' => 'command_id is required' );
 
 $test->post_ok(
-    '/moderation/reports/report-1/resolve' =>
+    "/moderation/reports/$ID{report}/resolve" =>
       { Accept => 'application/json' } => form => {
         command_id => 'resolve-command-1',
         csrf_token => $csrf_token,
@@ -460,18 +483,20 @@ $test->post_ok(
 $test->status_is($HTTP_NOT_FOUND);
 
 $test->post_ok(
-    '/moderation/reports/missing/assign' => { Accept => 'application/json' } =>
-      form => {
+    "/moderation/reports/$UNKNOWN_ID/assign" =>
+      { Accept => 'application/json' } => form => {
         command_id => 'missing-assign-command-1',
         csrf_token => $csrf_token,
       }
 );
 $test->status_is($HTTP_NOT_FOUND);
 
+_malformed_ids_are_not_found( $test, $services, $csrf_token );
+
 $test->app->helper(
     gp_rate_limiter => sub { return GPForum::Test::DenyLimiter->new; } );
 $test->post_ok(
-    '/moderation/posts/post-1/hide' => { Accept => 'application/json' } =>
+    "/moderation/posts/$ID{post}/hide" => { Accept => 'application/json' } =>
       form => {
         csrf_token => $csrf_token,
         reason     => 'too fast',
@@ -517,6 +542,96 @@ sub _install_moderation_fakes {
     );
 
     return $fakes;
+}
+
+# A path id that is not a uuid names no row. PostgreSQL refuses a statement
+# binding one, and these routes answered 500 (the permission gate's role
+# binding lookup) or 503 (the workflow's store, on revoke). Now they answer
+# 404 before the permission gate or any store is asked.
+sub _malformed_ids_are_not_found {
+    my ( $test_object, $fakes, $csrf ) = @_;
+
+    my $gate = GPForum::Test::RecordingPermissionGate->new;
+    $test_object->app->helper( gp_permission_gate => sub { return $gate; } );
+    my %before = _store_calls($fakes);
+
+    for my $path (@MALFORMED_PATHS) {
+        $test_object->post_ok(
+            $path => { Accept => 'application/json' } => form => {
+                command_id => "malformed-$path",
+                confirm    => 1,
+                csrf_token => $csrf,
+                reason     => 'malformed id',
+                resolution => 'dismissed',
+            }
+        );
+        $test_object->status_is( $HTTP_NOT_FOUND, "$path is not found" );
+        $test_object->json_is( '/status' => 'not_found' );
+    }
+    $test_object->json_is(
+        '/error' => 'suspension not found',
+        'the error names what was not found, as for a missing row'
+    );
+
+    # Word for word the workflow's: "action not found" was a second answer.
+    $test_object->post_ok(
+        '/moderation/actions/action-post-hide/reverse' =>
+          { Accept => 'application/json' } => form => {
+            command_id => 'malformed-reverse',
+            csrf_token => $csrf,
+            reason     => 'malformed id',
+          }
+    );
+    $test_object->status_is($HTTP_NOT_FOUND);
+    $test_object->json_is(
+        '/error' => 'moderation action not found',
+        'a malformed action id is named as the workflow names a missing one'
+    );
+
+    is_deeply( $gate->last_permission, {},
+        'the permission gate is never asked about a malformed id' );
+    is_deeply( { _store_calls($fakes) }, \%before, 'and no store sees one' );
+
+    # CSRF and the session are still checked first.
+    my $anonymous = Test::Mojo->new( $test_object->app );
+    $anonymous->post_ok(
+        $MALFORMED_PATHS[0] => { Accept => 'application/json' } );
+    $anonymous->status_is( $HTTP_FORBIDDEN, 'a bad CSRF token is refused' );
+    $anonymous->get_ok('/login');
+    my $login = $anonymous->tx->res->dom;
+    $anonymous->post_ok(
+        $MALFORMED_PATHS[0] => { Accept => 'application/json' } => form => {
+            csrf_token => $login->at('input[name=csrf_token]')->attr('value'),
+        }
+    );
+    $anonymous->status_is( $HTTP_UNAUTHORIZED, 'and so is a signed-out one' );
+
+    _get_json_ok( $test_object,
+        '/moderation/actions?target_type=post&target_id=post-1' );
+    $test_object->status_is( $HTTP_OK,
+        'a malformed action history filter is a page' );
+    $test_object->json_is( '/actions' => [], 'with nothing on it' );
+    _get_json_ok( $test_object, '/moderation/suspensions?user_id=user-2' );
+    $test_object->status_is( $HTTP_OK,
+        'a malformed suspension filter is a page' );
+    $test_object->json_is( '/suspensions' => [], 'with nothing on it' );
+
+    $test_object->app->helper(
+        gp_permission_gate => sub {
+            return GPForum::Test::AllowPermissionGate->new;
+        }
+    );
+
+    return;
+}
+
+sub _store_calls {
+    my ($fakes) = @_;
+
+    return map { $_ => scalar @{ $fakes->$_ } } qw(
+      action_reverses post_hides report_assigns report_releases
+      report_resolves suspension_creates suspension_revokes
+    );
 }
 
 sub _get_json_ok {

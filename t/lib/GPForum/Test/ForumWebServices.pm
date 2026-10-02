@@ -8,7 +8,22 @@ use warnings;
 
 use Mojo::Base -base;
 
+use Const::Fast;
+
 our $VERSION = '0.001';
+
+# The rows the moderation routes act on. Their ids are uuids: a route answers
+# 404 for a path id that is not one before the workflow runs
+# (GPForum::Web::UrlId), so a double answering only to 'post-1' could never be
+# reached through a route.
+const my %MODERATION_ID => (
+    action     => '018f1006-0004-7000-8000-000000000001',
+    post       => '018f1006-0001-7000-8000-000000000001',
+    report     => '018f1006-0003-7000-8000-000000000001',
+    suspension => '018f1006-0006-7000-8000-000000000001',
+    thread     => '018f1006-0002-7000-8000-000000000001',
+    user       => '018f1006-0005-7000-8000-000000000002',
+);
 
 has bookmark_removes      => sub { return []; };
 has bookmark_saves        => sub { return []; };
@@ -25,6 +40,12 @@ has subscription_revokes  => sub { return []; };
 has subscription_saves    => sub { return []; };
 has suspension_creates    => sub { return []; };
 has suspension_revokes    => sub { return []; };
+
+sub moderation_id {
+    my ( $class, $kind ) = @_;
+
+    return $MODERATION_ID{$kind};
+}
 
 sub can_participate {
     return { ok => 1 };
@@ -530,10 +551,10 @@ sub create_report {
 sub list_queue {
     return [
         {
-            report_id                  => 'report-1',
+            report_id                  => $MODERATION_ID{report},
             reporter_user_id           => 'user-1',
             target_type                => 'post',
-            target_id                  => 'post-1',
+            target_id                  => $MODERATION_ID{post},
             reason                     => 'spam',
             details                    => 'Repeated links',
             status                     => 'open',
@@ -549,11 +570,11 @@ sub list_actions {
     return {
         items => [
             {
-                moderation_action_id => 'action-post-hide',
+                moderation_action_id => $MODERATION_ID{action},
                 actor_user_id        => 'moderator-1',
                 action_type          => 'post.hidden',
                 target_type          => 'post',
-                target_id            => 'post-1',
+                target_id            => $MODERATION_ID{post},
                 reason               => 'spam',
                 metadata             => {},
                 created_at           => '2026-05-23T12:00:00Z',
@@ -569,8 +590,8 @@ sub list_suspensions {
     return {
         items => [
             {
-                suspension_id => 'suspension-1',
-                user_id       => 'user-2',
+                suspension_id => $MODERATION_ID{suspension},
+                user_id       => $MODERATION_ID{user},
                 actor_user_id => 'moderator-1',
                 reason        => 'abuse campaign',
                 valid_from    => '2026-05-23T12:00:00Z',
@@ -591,7 +612,7 @@ sub assign_report {
         actor_user_id => $moderator_user_id,
         report_id     => $report_id,
       };
-    if ( $report_id ne 'report-1' ) {
+    if ( $report_id ne $MODERATION_ID{report} ) {
         return;
     }
 
@@ -609,7 +630,7 @@ sub release_report {
         actor_user_id => $moderator_user_id,
         report_id     => $report_id,
       };
-    if ( $report_id ne 'report-1' ) {
+    if ( $report_id ne $MODERATION_ID{report} ) {
         return;
     }
 
@@ -628,7 +649,7 @@ sub resolve_report {
         report_id  => $report_id,
         resolution => $resolution,
       };
-    if ( $report_id ne 'report-1' ) {
+    if ( $report_id ne $MODERATION_ID{report} ) {
         return;
     }
 
@@ -645,14 +666,14 @@ sub hide_post {
 
     $self->last_moderation_input($input);
     push @{ $self->post_hides }, $input;
-    if ( $input->{post_id} ne 'post-1' ) {
+    if ( $input->{post_id} ne $MODERATION_ID{post} ) {
         return;
     }
 
     return {
         ok     => 1,
         action => {
-            moderation_action_id => 'action-post-hide',
+            moderation_action_id => $MODERATION_ID{action},
             action_type          => 'post.hidden',
             target_type          => 'post',
             target_id            => $input->{post_id},
@@ -671,7 +692,7 @@ sub restore_post {
     }
 
     $self->last_moderation_input($input);
-    return if $input->{post_id} ne 'post-1';
+    return if $input->{post_id} ne $MODERATION_ID{post};
 
     return {
         ok     => 1,
@@ -711,7 +732,7 @@ sub lock_thread {
     my ( $self, $input ) = @_;
 
     $self->last_moderation_input($input);
-    return if $input->{thread_id} ne 'thread-1';
+    return if $input->{thread_id} ne $MODERATION_ID{thread};
 
     return {
         ok     => 1,
@@ -731,7 +752,7 @@ sub unlock_thread {
     my ( $self, $input ) = @_;
 
     $self->last_moderation_input($input);
-    return if $input->{thread_id} ne 'thread-1';
+    return if $input->{thread_id} ne $MODERATION_ID{thread};
 
     return {
         ok     => 1,
@@ -751,7 +772,7 @@ sub hide_thread {
     my ( $self, $input ) = @_;
 
     $self->last_moderation_input($input);
-    if ( $input->{thread_id} ne 'thread-1' ) {
+    if ( $input->{thread_id} ne $MODERATION_ID{thread} ) {
         return;
     }
 
@@ -777,7 +798,7 @@ sub restore_thread {
     }
 
     $self->last_moderation_input($input);
-    if ( $input->{thread_id} ne 'thread-1' ) {
+    if ( $input->{thread_id} ne $MODERATION_ID{thread} ) {
         return;
     }
 
@@ -824,7 +845,7 @@ sub reverse_action {
         actor_user_id => $reversed_by_user_id,
         reason        => $reason,
       };
-    if ( $action_id ne 'action-post-hide' ) {
+    if ( $action_id ne $MODERATION_ID{action} ) {
         return;
     }
 
@@ -840,14 +861,14 @@ sub create_suspension {
     my ( $self, $input ) = @_;
 
     push @{ $self->suspension_creates }, $input;
-    if ( $input->{user_id} ne 'user-2' ) {
+    if ( $input->{user_id} ne $MODERATION_ID{user} ) {
         return;
     }
 
     return {
         ok         => 1,
         suspension => {
-            suspension_id => 'suspension-1',
+            suspension_id => $MODERATION_ID{suspension},
             user_id       => $input->{user_id},
             actor_user_id => $input->{actor_user_id},
             reason        => $input->{reason},
@@ -867,7 +888,7 @@ sub revoke_suspension {
         reason        => $reason,
         suspension_id => $suspension_id,
       };
-    if ( $suspension_id ne 'suspension-1' ) {
+    if ( $suspension_id ne $MODERATION_ID{suspension} ) {
         return;
     }
 

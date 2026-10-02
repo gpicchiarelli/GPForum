@@ -13,6 +13,7 @@ use GPForum::Web::Access;
 use GPForum::Web::Guard;
 use GPForum::Web::ModerationAccess;
 use GPForum::Web::Responder;
+use GPForum::Web::UrlId;
 
 our $VERSION = '0.001';
 
@@ -32,6 +33,10 @@ const my %WRITE_SCOPE_CAPTURE => (
     thread            => 'thread_id',
     user              => 'user_id',
 );
+
+# The workflow's own name for a row whose placeholder says less, so a
+# malformed id answers word for word as one naming no row.
+const my %PATH_ID_NOUN => ( action_id => 'moderation action' );
 
 sub moderation_access {
     return GPForum::Web::ModerationAccess->new;
@@ -105,6 +110,16 @@ sub _scoped_user_id ( $self, $decision, $scope ) {
     my $user_id = $self->_current_user_id;
     if ( !$user_id ) {
         $self->_unauthorized;
+        return;
+    }
+
+    # Before the permission gate: it binds the path id as a role binding's
+    # resource_id, and PostgreSQL refusing a malformed one answered 500 (503
+    # from the workflow when no binding was scoped to it, as on revoke).
+    if ( my $malformed = GPForum::Web::UrlId->malformed_path_id($self) ) {
+        $self->_not_found(
+            GPForum::Web::UrlId->not_found_error( $malformed, \%PATH_ID_NOUN )
+        );
         return;
     }
     my $permission = {
@@ -432,7 +447,9 @@ L<GPForum::Web::ModerationAccess>.
 
 Rejects invalid CSRF tokens, unauthorized moderation writes, and
 rate-limited actors. The permission check carries the scope returned by
-L</write_permission_scope>.
+L</write_permission_scope>. A signed-in actor whose route id is not a
+uuid gets 404 before the permission gate or the workflow runs a query
+(L<GPForum::Web::UrlId>).
 
 =head2 authorized_user_id
 
@@ -475,8 +492,8 @@ Uses permission and moderation helpers registered during application startup.
 =head1 DEPENDENCIES
 
 Uses L<Mojolicious::Controller>, L<GPForum::Web::Access>,
-L<GPForum::Web::Guard>, L<GPForum::Web::ModerationAccess>, and
-L<GPForum::Web::Responder>.
+L<GPForum::Web::Guard>, L<GPForum::Web::ModerationAccess>,
+L<GPForum::Web::Responder>, and L<GPForum::Web::UrlId>.
 
 =head1 INCOMPATIBILITIES
 
