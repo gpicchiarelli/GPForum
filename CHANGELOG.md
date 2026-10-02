@@ -754,6 +754,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **`scheduled-jobs` printed `attachments=ARRAY(0x...)`** and its `--json`
+  carried each deleted attachment's row; it now counts them. `migrate
+  --plan` outside the app root, a malformed setting in `os-preflight`, and a
+  `partition-maintenance` failure without `--json` now exit 1 with a redacted
+  reason instead of 2, 255 or a stack location.
+
 - **A refused byte range (416) or a proxy error page is no longer cached for
   a year** under a fingerprinted asset URL: the app sends a lifetime only on
   200, 206 and 304, nginx no longer adds it to its own error pages, and Caddy

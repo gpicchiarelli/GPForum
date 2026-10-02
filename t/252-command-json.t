@@ -8,6 +8,7 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
+use Cwd           qw(getcwd);
 use English       qw(-no_match_vars);
 use File::Temp    qw(tempdir);
 use JSON::MaybeXS qw(decode_json encode_json);
@@ -194,6 +195,7 @@ _assert_outbox_dispatch();
 _assert_search_rebuild();
 _assert_dead_letter_replay();
 _assert_run_failures();
+_assert_os_preflight_failure();
 _assert_evidence_commands();
 
 done_testing();
@@ -275,6 +277,7 @@ qr/^pending [ ] .+ ^migrate [ ] check [ ] status=fail [ ] pending=1$/msx,
 
     _assert_migrate_unreached();
     _assert_migrate_drift();
+    _assert_migrate_plan_elsewhere();
 
     like( GPForum::Command::Migrate->usage_text,
         qr/schema_versions/msx, 'the help names the table it records in' );
@@ -332,6 +335,42 @@ sub _assert_migrate_drift {
     my $human = _run( $drifted->(), '--check' );
     is( $human->{status}, $EXIT_FAILURE, 'so do the lines' );
     like( $human->{errors}, qr/changed [ ] after/msx, 'with the reason' );
+
+    return;
+}
+
+# --plan reads migrations/ from the working directory. Run anywhere else, its
+# croak escaped uncaught, and Perl took the exit status from $! -- 2, the
+# missing directory's ENOENT, which reads as misuse -- with no document.
+sub _assert_migrate_plan_elsewhere {
+    my @modes = ( '--plan', '--plan --json' );
+    my $home  = getcwd();
+    chdir tempdir( CLEANUP => 1 ) or croak "chdir: $ERRNO";
+    my %result;
+    for my $label (@modes) {
+        $result{$label} =
+          _run( GPForum::Command::Migrate->new, split q{ }, $label );
+    }
+    chdir $home or croak "chdir $home: $ERRNO";
+
+    for my $label (@modes) {
+        my $result = $result{$label};
+        is( $result->{status}, $EXIT_FAILURE,
+            "$label without migrations/ is a failure, 1" );
+        like(
+            $result->{errors},
+            qr/\A migration [ ] directory [ ] not [ ] found/msx,
+            'with the reason on stderr'
+        );
+        unlike(
+            $result->{errors},
+            qr/[ ] line [ ] \d+/msx,
+            'without the code location'
+        );
+    }
+    my $document = _document( $result{'--plan --json'}, 'plan gone' );
+    is( $document->{status}, 'fail', 'and --json still prints a document' );
+    is_deeply( $document->{migrations}, [], 'listing no migration' );
 
     return;
 }
@@ -454,6 +493,7 @@ sub _assert_scheduled_jobs {
         [ { count => 2, name => 'sessions', ok => 1 } ],
         'each job with the count the line prints'
     );
+    _assert_orphan_count();
 
     my $failed = _run(
         GPForum::Command::ScheduledJobs->new(
@@ -485,6 +525,45 @@ sub _assert_scheduled_jobs {
         _document( $gone, 'jobs gone' )->{error},
         'database gone',
         'and the document says why'
+    );
+
+    return;
+}
+
+# The orphan-attachment cleanup answers with the rows it deleted, not a
+# number: the line printed "attachments=ARRAY(0x...)", and --json put each
+# row -- owner, object key -- where the count belongs.
+sub _assert_orphan_count {
+    my @orphans = map {
+        {
+            attachment_id => "orphan-$_",
+            object_key    => "objects/orphan-$_",
+            owner_user_id => "owner-$_",
+        }
+    } 1 .. 2;
+    my $cleanup = sub {
+        return GPForum::Command::ScheduledJobs->new(
+            jobs => GPForum::Test::ScheduledJobsRunner->new(
+                summary => {
+                    attachments => { deleted => [@orphans], ok => 1 },
+                    ok          => 1,
+                }
+            )
+        );
+    };
+
+    my $result = _run( $cleanup->(), '--json' );
+    is_deeply(
+        _document( $result, 'orphan cleanup' )->{jobs},
+        [ { count => scalar @orphans, name => 'attachments', ok => 1 } ],
+        'the orphan cleanup counts the attachments it deleted'
+    );
+    unlike( $result->{output}, qr/owner-1|objects\//msx,
+        'without printing their rows' );
+    like(
+        _run( $cleanup->() )->{output},
+        qr/[ ] attachments=2 (?:[ ]|$)/msx,
+        'and the line prints the same count'
     );
 
     return;
@@ -630,12 +709,48 @@ sub _assert_run_failures {
         like( $lines->{errors}, qr/database/msx, 'with the reason on stderr' );
         is( $lines->{output}, q{}, 'and no line on stdout' );
 
+        # partition-maintenance printed its lines' failure with croak's
+        # "at .../PartitionMaintenance.pm line 69." still on, where --json
+        # and every other command strip it.
+        unlike(
+            $lines->{errors},
+            qr/[ ] line [ ] \d+/msx,
+            'without the code location'
+        );
+
         my $json = _run( $build->(), @arguments, '--json' );
         is( $json->{status}, $EXIT_FAILURE, "$label --json failing is 1" );
         my $document = _document( $json, "$label failing" );
         is( $document->{status}, 'fail', 'and the document says fail' );
         like( $document->{error}, qr/database/msx, 'and why' );
     }
+
+    return;
+}
+
+# A setting that does not parse stops os-preflight before it checks anything.
+# That was rethrown as an uncaught exception: 255, or whatever $! held -- 2,
+# misuse, after a failed file lookup -- and under --json no document at all.
+sub _assert_os_preflight_failure {
+    local $ENV{GPFORUM_WEB_PROCESSES} = 'many';
+
+    my $lines = _run( GPForum::Command::OsPreflight->new );
+    is( $lines->{status}, $EXIT_FAILURE,
+        'os-preflight that cannot start is 1' );
+    like(
+        $lines->{errors},
+qr/\A GPFORUM_WEB_PROCESSES [ ] must [ ] be [ ] an [ ] integer \n \z/msx,
+        'with the reason alone on stderr'
+    );
+    is( $lines->{output}, q{}, 'and no report on stdout' );
+
+    my $json = _run( GPForum::Command::OsPreflight->new, '--json' );
+    is( $json->{status}, $EXIT_FAILURE,
+        'os-preflight --json that cannot start is 1' );
+    my $document = _document( $json, 'os-preflight failing' );
+    is( $document->{status}, 'fail', 'and the document says fail' );
+    like( $document->{error}, qr/GPFORUM_WEB_PROCESSES/msx, 'and why' );
+    is_deeply( $document->{checks}, [], 'having run no check' );
 
     return;
 }

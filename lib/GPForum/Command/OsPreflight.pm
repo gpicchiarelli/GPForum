@@ -17,28 +17,31 @@ our $VERSION = '0.001';
 has config  => undef;
 has runtime => undef;
 
-# A usage croak becomes the documented usage exit instead of an uncaught
-# exception: same text, on stderr, status 2, without croak's " at FILE line N".
-# Anything else is rethrown, so a real failure is not relabelled as misuse.
+# Misuse -- an option this command does not know, all its parser croaks for --
+# is the documented usage exit: the usage on stderr, status 2. A check that
+# cannot start -- a setting that does not parse -- is a failure, 1 with its
+# reason, and under --json still a document. It used to be rethrown, and an
+# uncaught exception exits 255, or with whatever $! held: 2, misuse, after a
+# failed file lookup.
 sub run ( $self, @arguments ) {
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
-
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( !GPForum::Command::Usage->is_usage($error) ) {
-        die "$error\n";
+    my $options = eval { return _options(@arguments); };
+    if ( !$options ) {
+        return GPForum::Command::Usage->error( undef,
+            GPForum::Command::Usage->trimmed($EVAL_ERROR) );
     }
-
-    return GPForum::Command::Usage->error( undef, $error );
-}
-
-sub _run ( $self, @arguments ) {
-    my $options = _options(@arguments);
     if ( $options->{help} ) {
         print _usage() or croak 'failed to write usage';
         return 0;
     }
 
+    my $status = eval { return $self->_run($options); };
+    return $status if defined $status;
+
+    return GPForum::Command::Usage->failure( $EVAL_ERROR,
+        $options->{json} ? ( \*STDOUT, { checks => [] } ) : () );
+}
+
+sub _run ( $self, $options ) {
     my $preflight = $self->_preflight;
     my $report    = $preflight->report;
     my $output =

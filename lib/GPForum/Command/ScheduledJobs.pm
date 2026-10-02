@@ -225,9 +225,16 @@ sub _job_notes ( $name, $result ) {
     return @notes;
 }
 
+# The purges count what they deleted; the orphan-attachment cleanup answers
+# with the deleted rows themselves. Taken as a count, they printed as
+# "attachments=ARRAY(0x...)", and --json put each row -- its owner, its object
+# key -- where the number belongs.
 sub _job_count ($result) {
     if ( exists $result->{deleted} ) {
-        return $result->{deleted};
+        return
+          ref $result->{deleted} eq 'ARRAY'
+          ? scalar @{ $result->{deleted} }
+          : $result->{deleted};
     }
     if ( exists $result->{plans} ) {
         return scalar @{ $result->{plans} };

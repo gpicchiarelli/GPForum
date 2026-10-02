@@ -91,8 +91,15 @@ behind, 2 usage error.
 USAGE
 }
 
+# migrations/ is read from the working directory. Run from anywhere else, the
+# plan's croak escaped uncaught, and Perl took the exit status from $!: 2, the
+# missing directory's ENOENT, which a deploy script reads as misuse.
 sub _plan ( $self, $options ) {
-    my $plan = GPForum::Migration::Plan->new->summary;
+    my $plan = eval { return GPForum::Migration::Plan->new->summary; };
+    if ( !$plan ) {
+        return GPForum::Command::Usage->failure( $EVAL_ERROR,
+            _json_failure( $options, { migrations => [], mode => 'plan' } ) );
+    }
     if ( $options->{json} ) {
         return _json( { migrations => $plan, mode => 'plan', status => 'ok' } );
     }

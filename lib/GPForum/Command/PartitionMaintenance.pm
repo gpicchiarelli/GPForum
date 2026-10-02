@@ -35,17 +35,21 @@ sub run ( $self, @arguments ) {
     }
     return _print_usage( $self->output ) if $options->{help};
 
+    # The lines got the reason with croak's "at FILE line N" still on, and
+    # unredacted, where --json had both handled: one path for both now.
     my $result = eval { return $self->ensure($options) };
     if ( !$result ) {
-        return _print_error( _trim($EVAL_ERROR), $EXIT_FAILURE )
-          if !$options->{json};
         return GPForum::Command::Usage->failure(
             $EVAL_ERROR,
-            $self->output,
-            {
-                %{ _json_head($options) },
-                lookahead_months => $options->{lookahead},
-            }
+            $options->{json}
+            ? (
+                $self->output,
+                {
+                    %{ _json_head($options) },
+                    lookahead_months => $options->{lookahead},
+                }
+              )
+            : ()
         );
     }
     if ( $options->{json} ) {

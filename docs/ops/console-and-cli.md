@@ -67,9 +67,11 @@ and `--check` lists what is left (`applied` is `[]` only when the database
 was never reached). `scheduled-jobs` lists no job, though the jobs that ran
 before the failure did their work.
 
-No object carries a secret: what is printed is what the lines print, and an
-inline password in a failure's reason -- a DSN's `password=`, which DBI's
-connect error repeats -- is replaced by `[redacted]`, on standard error too.
+No object carries a secret. What is printed is what the lines print, except
+that `platform-check` adds each check's report: what `os-preflight --json`
+prints, and the operational profile's floors. An inline password in a
+failure's reason -- a DSN's `password=`, which DBI's connect error repeats --
+is replaced by `[redacted]`, on standard error too.
 Each object is flushed as it is printed, so a reader on a pipe gets every
 batch of a looping command when it ends.
 
@@ -89,7 +91,7 @@ by default and their lines with `--human`.
 | `gpforum-platform-check --json` | `mode`, `strict`, `checks`: each `{name, status, report}`, `report` being the check's own (`os-preflight --json` for `os_preflight`). `status` is the worst check's, `fail` when the exit code is 1. |
 | `gpforum-query-budget --print --json` | `endpoints`: the catalog, keyed by endpoint name. |
 | `gpforum-query-budget --check --json` | `missing`, `extra`, `mismatched`: endpoint names. |
-| `gpforum-query-budget --sync --json` | `synced`: how many budgets were written. |
+| `gpforum-query-budget --sync --json` | `synced`: the number the line prints, every endpoint in the catalog, whether its row was written or already matched. |
 | `gpforum-scheduled-jobs --json` | `jobs`: each `{name, count}` and, when there are any, `ok`, `skipped`, `error`, `errors` (`scheduled-jobs.md`). |
 | `gpforum-outbox-dispatch --json` | One object per batch: `selected`, `dispatched`, `failed`, `dead_lettered` (`dead-letters.md`). |
 | `gpforum-dead-letter-replay --list --json` | `dead_letters`, as `/admin/jobs` lists them (`dead-letters.md`). With `--id` instead, `outcomes`: each `{dead_letter_id, status}`, with `outbox_id` when replayed or `error` when refused. |
