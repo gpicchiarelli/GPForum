@@ -14,14 +14,11 @@ use GPForum::Test::CommunitySearch;
 
 our $VERSION = '0.001';
 
-has created         => sub { return []; };
-has deleted         => sub { return []; };
-has find_misses     => 0;
-has rows            => sub { return {}; };
-has last_query      => sub { return {}; };
-has last_attrs      => sub { return {}; };
-has last_find_attrs => undef;
-has schema          => undef;
+has created     => sub { return []; };
+has deleted     => sub { return []; };
+has find_misses => 0;
+has rows        => sub { return {}; };
+has schema      => undef;
 
 sub create {
     my ( $self, $row ) = @_;
@@ -47,10 +44,9 @@ sub update_or_create {
 }
 
 sub find {
-    my ( $self, $query, $attributes ) = @_;
+    my ( $self, $query ) = @_;
 
     $self->_assert_usable;
-    $self->last_find_attrs($attributes);
     if ( $self->find_misses ) {
         $self->find_misses( $self->find_misses - 1 );
         return;
@@ -70,11 +66,9 @@ sub search_rs {
 }
 
 sub search {
-    my ( $self, $query, $attrs ) = @_;
+    my ( $self, $query ) = @_;
 
     $self->_assert_usable;
-    $self->last_query($query);
-    $self->last_attrs( $attrs || {} );
 
     my %seen;
     my @rows = grep { !$seen{ 0 + $_ }++ } values %{ $self->rows };
