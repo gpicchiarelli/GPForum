@@ -304,10 +304,11 @@ is_deeply(
         q{SET application_name = 'gpforum'},
 
         # UniqueConflict falls back to matching the server's English error
-        # text when no SQLSTATE is visible. Under any other lc_messages a real
-        # unique violation reads as an unknown error and savepoint recovery
-        # rethrows it, so the locale is pinned rather than inherited.
-        q{SET lc_messages = 'C'},
+        # text when no SQLSTATE is visible, so the locale is pinned -- asked
+        # for, not demanded: PostgreSQL lets only a superuser set it, and an
+        # ordinary role must still connect (t/integration/postgres-plain-role.t).
+        q{DO $$ BEGIN PERFORM set_config('lc_messages', 'C', false);}
+          . q{ EXCEPTION WHEN insufficient_privilege THEN NULL; END $$},
 
         # Search's fuzzy-title arm uses pg_trgm's % operator so it can use the
         # trigram index; % reads this threshold, and without it the default of

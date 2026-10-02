@@ -773,6 +773,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **The application and `gpforum-migrate --apply` connect as an ordinary
+  role.** Every connection ran `SET lc_messages`, which PostgreSQL allows only
+  to a superuser, so a production role that owns its database could neither
+  migrate nor serve. The locale is now asked for and, when refused, left at
+  the server's setting; unique-conflict recovery reads the SQLSTATE first.
+
 - **A moderator can hide and unhide a thread on PostgreSQL**: the action
   wrote a `hidden_at` column the threads table does not have and died, so
   the hide-thread route never worked. Locking now means `locked_at`, so a

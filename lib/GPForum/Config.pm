@@ -38,7 +38,14 @@ const my $SET_APPLICATION_NAME           => q{SET application_name = 'gpforum'};
 # constraint" in the server's error text when it cannot see a SQLSTATE. Those
 # are English strings: under any other lc_messages a real unique violation
 # would read as an unknown error and the savepoint recovery would rethrow it.
-const my $SET_MESSAGE_LOCALE => q{SET lc_messages = 'C'};
+# PostgreSQL lets only a superuser set lc_messages, and production connects
+# as an ordinary role: a plain SET refused every connection, migrations
+# included. So it is asked for and, when refused, left at the server's
+# setting -- the SQLSTATE, which UniqueConflict reads first, does not depend
+# on it.
+const my $SET_MESSAGE_LOCALE => join q{ },
+  q{DO $$ BEGIN PERFORM set_config('lc_messages', 'C', false);},
+  q{EXCEPTION WHEN insufficient_privilege THEN NULL; END $$};
 
 # The fuzzy-title threshold for search. Searcher matches titles with the pg_trgm
 # % operator, which reads this setting, because % can use the trigram index and
