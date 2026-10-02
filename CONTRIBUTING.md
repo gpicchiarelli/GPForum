@@ -13,13 +13,15 @@ PostgreSQL-authoritative, operable, and explicit.
    `brew install perl cpanminus postgresql@18`, install Carton for that perl,
    and `eval "$(script/gpforum-homebrew-env)"` before client-tool checks.
    Confirm with `make system-perl` (`which perl`, `perl -v`, `perl -V`).
-2. Install dependencies with `make install-deps` (`script/bootstrap-deps`).
+2. Install dependencies with `make install-deps-postgres`
+   (`script/bootstrap-deps --postgres`), as the README quick start does.
    That runs `carton install --deployment` from `cpanfile.snapshot` over
-   HTTPS MetaCPAN under system Perl. Use `script/bootstrap-deps --update`
-   only when refreshing the lock after a `cpanfile` change, then commit
+   HTTPS MetaCPAN under system Perl, PostgreSQL driver included. Use
+   `script/bootstrap-deps --update --postgres` only when refreshing the lock
+   after a `cpanfile` change, as the README says (without `--postgres` the
+   PostgreSQL feature can drop out of the lock), then commit
    `cpanfile.snapshot`.
-3. Run `script/system-preflight` before enabling PostgreSQL-specific modules
-   (`make install-deps-postgres`).
+3. Run `script/system-preflight` to check the host.
 4. Make small changes around one bounded context.
 5. Update prompts or ADRs for architecture-changing work.
 6. Run the quality gate before opening a pull request:
@@ -27,6 +29,23 @@ PostgreSQL-authoritative, operable, and explicit.
 ```sh
 make check
 ```
+
+When a change touches what a new contributor runs first — the README quick
+start, `cpanfile` or `cpanfile.snapshot`, `script/bootstrap-deps`, or the
+`check` target — also run:
+
+```sh
+make fresh-checkout
+```
+
+It clones the last commit into a temporary directory and runs the quick start
+and `make check` there, so it catches what an already set-up checkout hides: a
+file that is present but untracked, a module only your `local/` has, a step the
+README leaves out. Commit first, since uncommitted changes are not part of the
+run. It installs every dependency again and takes a while; with
+`GPFORUM_DATABASE_DSN` set it also migrates a throwaway database and runs the
+integration tier. `t/166-deploy-contract.t` keeps its steps and the README's
+commands in step.
 
 Run profiling for performance-sensitive changes:
 

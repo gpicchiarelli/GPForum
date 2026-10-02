@@ -1,4 +1,4 @@
-.PHONY: help install-deps-production pitr-drill standby-drill partition-maintenance antivirus-check architecture bootstrap check cpan-audit critic dead-letter-check evidence-archive-check evidence-live evidence-meta evidence-validate install-deps install-deps-postgres homebrew-env mail-check mail-lifecycle-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test integration tidy
+.PHONY: help install-deps-production pitr-drill standby-drill partition-maintenance antivirus-check architecture bootstrap check cpan-audit critic dead-letter-check evidence-archive-check evidence-live evidence-meta evidence-validate fresh-checkout install-deps install-deps-postgres homebrew-env mail-check mail-lifecycle-check preflight private-beta-checklist staging-drill staging-drill-attachments staging-host-verify stress-load stress-load-dry syntax system-perl test integration tidy
 
 # All targets use the OS system Perl via script/gpforum-carton /
 # script/gpforum-system-perl (not version managers or custom PREFIX builds).
@@ -55,6 +55,15 @@ architecture: ## Run the architecture invariants
 	script/architecture-check
 
 check: system-perl syntax test critic tidy architecture ## system-perl, syntax, test, critic, tidy, architecture
+
+# The proof that the README is enough: clones the current commit into a
+# temporary directory and runs the quick start there, then every prerequisite
+# of `check`, timing each step. With GPFORUM_DATABASE_DSN set it also creates
+# and migrates a throwaway role and database, then runs `integration`. It
+# installs every dependency from MetaCPAN into the clone, so it needs the
+# network and takes a while; not part of `make check`.
+fresh-checkout: ## Prove a clean clone of HEAD passes make check from the README quick start (slow)
+	script/fresh-checkout-check
 
 install-deps: ## Install runtime, test and develop dependencies
 	script/bootstrap-deps

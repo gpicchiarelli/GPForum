@@ -1,0 +1,492 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Prove that a fresh checkout reaches a green `make check` from the README
+# quick start alone.
+#
+# Nothing else checks the quick start. Every gate runs in a checkout that is
+# already set up, so a step that works only because local/ is populated, a
+# file is present but untracked, or the shell still carries a PERL5LIB passes
+# there and fails for the next person to clone the repository. This clones a
+# commit into a temporary directory, clears what a working shell carries over,
+# and runs the quick start's commands there in the README's order, then every
+# prerequisite of `make check`, timing each one.
+#
+# It writes nothing to this checkout or to its local/: the clone installs its
+# own local/, cpanm builds inside the temporary directory, and the directory is
+# removed afterwards unless --keep is given. Uncommitted changes are not part
+# of the run, because a fresh checkout does not have them either.
+
+set -eu
+# Nothing here is meant as a file pattern: a --skip of `*` must stay `*`, not
+# become the names of the files in this checkout.
+set -f
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+ref=HEAD
+keep=0
+keep_going=0
+plan_only=0
+skip=' '
+make_command=${MAKE:-make}
+
+usage() {
+    cat <<'USAGE'
+Usage: script/fresh-checkout-check [--ref REV] [--skip STEP]... [--keep-going] [--keep] [--plan]
+
+Clones REV of this repository into a temporary directory and runs the README
+quick start there, then every prerequisite of `make check`, reporting each
+step's result and duration.
+
+When GPFORUM_DATABASE_DSN is set (with GPFORUM_DATABASE_USER and
+GPFORUM_DATABASE_PASSWORD as the README describes), the quick start's database
+commands run too: a throwaway plain role and a database it owns are created on
+that server, the database is migrated as that role, as it is by the role the
+README's createuser makes, and both are dropped afterwards. The PostgreSQL
+integration tier (`make integration`) then runs last, as the DSN's role.
+That role must be allowed to create roles and databases, and the server must
+let the new role sign in with a password, or trust it, where the DSN connects.
+Without a DSN all of this is left out, and `make check` needs no database.
+
+  --ref REV    the commit to check out (default HEAD); uncommitted changes in
+               this checkout are never part of the run
+  --skip STEP  leave a step out (repeatable), e.g. --skip critic; the run then
+               does not prove a green `make check`, and says so
+  --keep-going run every step even after one fails, and report them all; the
+               run still fails if any step did
+  --keep       keep the temporary directory: the clone, its local/, and one
+               log per step under logs/ (the throwaway role and database
+               are dropped either way)
+  --plan       print the steps for REV and exit without cloning anything
+  --help       show this help
+
+The steps install every dependency from MetaCPAN into the clone's own local/,
+so the run needs the network and takes a while. The host prerequisites the
+README lists first (system Perl, Carton, the PostgreSQL client files) must
+already be installed.
+
+Exit status: 0 every step passed, 1 a step failed, 2 usage error.
+USAGE
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --keep) keep=1 ;;
+        --keep-going) keep_going=1 ;;
+        --plan) plan_only=1 ;;
+        --ref|--skip)
+            if [ $# -lt 2 ]; then
+                echo "fresh-checkout-check: $1 needs a value" >&2
+                exit 2
+            fi
+            if [ "$1" = --ref ]; then ref=$2; else skip="$skip$2 "; fi
+            shift
+            ;;
+        --ref=*) ref=${1#--ref=} ;;
+        --skip=*) skip="$skip${1#--skip=} " ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "fresh-checkout-check: unknown option $1" >&2
+            echo "Usage: script/fresh-checkout-check [--ref REV] [--skip STEP]... [--keep-going] [--keep] [--plan]" >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+if ! command -v git >/dev/null 2>&1 \
+    || ! git -C "$root" rev-parse --git-dir >/dev/null 2>&1; then
+    echo "fresh-checkout-check: this is not a git checkout, so there is no commit to clone" >&2
+    exit 2
+fi
+if ! commit=$(git -C "$root" rev-parse --verify --quiet "$ref^{commit}"); then
+    echo "fresh-checkout-check: $ref is not a commit in this repository" >&2
+    exit 2
+fi
+short=$(git -C "$root" rev-parse --short "$commit")
+
+# The database settings are read once, here, and handed only to the steps that
+# use them; everything else runs the way `make check` does, without a database.
+db_dsn=${GPFORUM_DATABASE_DSN:-}
+db_user=${GPFORUM_DATABASE_USER:-}
+db_password=${GPFORUM_DATABASE_PASSWORD:-}
+
+# The throwaway role and database the quick start's commands create and
+# migrate. The README's `createuser gpforum` makes a plain role, and the
+# application connects as it, so the run does too: migrating as the DSN's
+# role, often a superuser, passes where the README's role is refused. The role
+# gets a generated password, because createuser asks for one only on a
+# terminal and a server that does not trust 127.0.0.1 wants one.
+fresh_name="gpforum_fresh_$(date +%s)_$$"
+fresh_db=$fresh_name
+fresh_role=$fresh_name
+fresh_password=$(LC_ALL=C tr -dc 'A-Za-z0-9' </dev/urandom 2>/dev/null | head -c 32)
+maintenance_db=''
+fresh_dsn=''
+if [ -n "$db_dsn" ]; then
+    case "$db_dsn" in
+        [dD][bB][iI]:Pg:*|[dD][bB][iI]:Pg\(*) ;;
+        *)
+            echo "fresh-checkout-check: GPFORUM_DATABASE_DSN is not a dbi:Pg: DSN" >&2
+            exit 2
+            ;;
+    esac
+    # DBD::Pg takes libpq's keywords separated by semicolons, and accepts db=
+    # and database= for dbname=; psql, createdb and dropdb want libpq's own.
+    dsn_pairs=$(printf '%s\n' "$db_dsn" \
+        | sed -E 's/^[dD][bB][iI]:Pg(\([^)]*\))?://' | tr ';' '\n' \
+        | sed -E 's/^[[:space:]]+//; s/^(db|database)=/dbname=/; /^$/d')
+    maintenance_db=$(printf '%s\n' "$dsn_pairs" | paste -sd ' ' -)
+    server_pairs=$(printf '%s\n' "$dsn_pairs" | sed '/^dbname=/d' | paste -sd ';' -)
+    fresh_dsn="dbi:Pg:${server_pairs:+$server_pairs;}dbname=$fresh_db"
+fi
+
+# The quick start's commands for a host that already has the prerequisites,
+# in the README's order. Each line is "name command"; a command is shown as it
+# is written here, so the database's connection details and password are
+# expanded only when it runs.
+quick_start_names='system-perl install-deps-postgres system-preflight'
+quick_start_steps() {
+    printf '%s\n' \
+        "system-perl $make_command system-perl" \
+        "install-deps-postgres $make_command install-deps-postgres" \
+        "system-preflight script/system-preflight"
+    if [ -n "$db_dsn" ]; then
+        printf '%s\n' "createuser createuser_with_password \"\$fresh_role\""
+        if [ -n "$db_user" ]; then
+            printf '%s\n' "createdb createdb --maintenance-db=\"\$maintenance_db\" --username=\"\$db_user\" --owner=\"\$fresh_role\" \"\$fresh_db\""
+        else
+            printf '%s\n' "createdb createdb --maintenance-db=\"\$maintenance_db\" --owner=\"\$fresh_role\" \"\$fresh_db\""
+        fi
+        printf '%s\n' \
+            "migrate-plan script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --plan" \
+            "migrate-apply script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --apply"
+    fi
+}
+
+# `make check` is read from the commit's own Makefile rather than restated
+# here, so the run cannot drift from the gate. Its prerequisites run one at a
+# time, which is what `make check` does, but each gets its own timing.
+check_prerequisites() {
+    sed -n 's/^check:\([^#]*\).*/\1/p' | tr -s '[:blank:]' '\n' | sed '/^$/d'
+}
+
+# Writes one "name command" line per step.
+plan_steps() {
+    makefile_text=$1
+    quick_start_steps
+    targets=$(printf '%s\n' "$makefile_text" | check_prerequisites)
+    if [ -z "$targets" ]; then
+        echo "fresh-checkout-check: the Makefile at $short has no check target" >&2
+        return 1
+    fi
+    for target in $targets; do
+        case " $quick_start_names " in
+            *" $target "*) continue ;;
+        esac
+        printf '%s %s %s\n' "$target" "$make_command" "$target"
+    done
+    if [ -n "$db_dsn" ]; then
+        printf 'integration %s integration\n' "$make_command"
+    fi
+}
+
+if ! makefile_text=$(git -C "$root" show "$commit:Makefile" 2>/dev/null); then
+    echo "fresh-checkout-check: there is no Makefile at $short" >&2
+    exit 1
+fi
+steps=$(plan_steps "$makefile_text") || exit 1
+
+# A misspelt --skip would otherwise run the step it meant to leave out, after
+# the minutes the dependency install takes. The name must be a step's exactly:
+# matched as a pattern, `te.t` passed here and then left nothing out.
+for name in $skip; do
+    if ! printf '%s\n' "$steps" | sed 's/ .*//' | grep -qxF -e "$name"; then
+        echo "fresh-checkout-check: --skip $name names no step; the steps are:" >&2
+        printf '%s\n' "$steps" | sed 's/ .*//; s/^/  /' >&2
+        exit 2
+    fi
+done
+
+if [ "$plan_only" -eq 1 ]; then
+    printf 'fresh-checkout-check: plan for commit %s\n' "$short"
+    printf '  %-22s %s\n' clone "git clone --no-hardlinks, then check out $short"
+    while read -r name command; do
+        case "$skip" in
+            *" $name "*) command="(skipped) $command" ;;
+        esac
+        printf '  %-22s %s\n' "$name" "$command"
+    done <<STEPS
+$steps
+STEPS
+    if [ -n "$db_dsn" ]; then
+        printf '  %-22s %s\n' dropdb "the throwaway database and role $fresh_name, always"
+    else
+        printf '  GPFORUM_DATABASE_DSN is not set: the database commands and the integration tier are left out\n'
+    fi
+    exit 0
+fi
+
+tmp_base=${TMPDIR:-/tmp}
+workdir=$(mktemp -d "${tmp_base%/}/gpforum-fresh-checkout.XXXXXX")
+checkout="$workdir/gpforum"
+logs="$workdir/logs"
+mkdir -p "$logs"
+database_made=0
+
+# psql on the server the DSN names, as the DSN's role. Its password, when there
+# is one, is exported only inside the steps and the cleanup that need it.
+dsn_psql() {
+    if [ -n "$db_user" ]; then
+        set -- --username="$db_user" "$@"
+    fi
+    psql --no-psqlrc --quiet --set=ON_ERROR_STOP=1 --dbname="$maintenance_db" "$@"
+}
+
+# The README's createuser, with a password. A role that may create roles but is
+# no superuser must also be a member of the new one before it may give it a
+# database (PostgreSQL 16 and later), hence the GRANT.
+createuser_with_password() {
+    dsn_psql <<SQL
+CREATE ROLE "$1" LOGIN PASSWORD '$fresh_password';
+GRANT "$1" TO CURRENT_USER;
+SQL
+}
+
+use_dsn_password() {
+    if [ -n "$db_password" ]; then
+        PGPASSWORD=$db_password
+        export PGPASSWORD
+    fi
+}
+
+drop_database() {
+    [ "$database_made" -eq 1 ] || return 0
+    if (
+        use_dsn_password
+        if [ -n "$db_user" ]; then
+            set -- --username="$db_user"
+        fi
+        dropdb --maintenance-db="$maintenance_db" "$@" --if-exists "$fresh_db" \
+            && dsn_psql --command="DROP ROLE IF EXISTS \"$fresh_role\""
+    ) >>"$logs/dropdb.log" 2>&1; then
+        database_made=0
+    else
+        printf 'fresh-checkout-check: could not drop the throwaway database and role %s; drop them by hand\n' \
+            "$fresh_name" >&2
+    fi
+}
+
+cleanup() {
+    drop_database
+    if [ "$keep" -eq 1 ]; then
+        printf 'fresh-checkout-check: kept %s\n' "$workdir"
+        return
+    fi
+    chmod -R u+w "$workdir" 2>/dev/null || true
+    rm -rf "$workdir"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# A working shell carries state a fresh one does not. PERL5LIB or a
+# local::lib can hand the clone this checkout's modules, and PERL_CARTON_PATH
+# would make Carton install into another local/ altogether, so the clone
+# would pass on dependencies it never installed. A leftover GPFORUM_* setting
+# would make it pass or fail on configuration the README never mentions; only
+# GPFORUM_CARTON, which the README names for locating Carton, is kept. The
+# database settings were read above, and PGPASSWORD goes only to the steps
+# that sign in as the DSN's role.
+#
+# Run as `make fresh-checkout`, the script inherits make's own flags, and every
+# inner make would honour them: under `make -i` each would ignore its errors,
+# and a failing test tier would pass; a VAR=value on that command line would
+# reach every step. HARNESS_PERL_SWITCHES can hand prove another -I as
+# PERL5LIB can, and PERL_CARTON_MIRROR would install from somewhere other than
+# the MetaCPAN the README's commands use.
+unset PERL5LIB PERL5OPT PERL_LOCAL_LIB_ROOT PERL_MB_OPT PERL_MM_OPT \
+    PERL_CARTON_PATH PERL_CARTON_CPANFILE PERL_CARTON_MIRROR PGPASSWORD \
+    MAKEFLAGS MFLAGS MAKELEVEL MAKEOVERRIDES GNUMAKEFLAGS \
+    HARNESS_PERL_SWITCHES
+for variable in $(env | sed -n 's/^\(GPFORUM_[A-Za-z0-9_]*\)=.*/\1/p'); do
+    [ "$variable" = GPFORUM_CARTON ] || unset "$variable"
+done
+PERL_CPANM_HOME="$workdir/cpanm"
+export PERL_CPANM_HOME
+
+total=0
+steps_run=0
+skipped=''
+failed=''
+
+# One line a log can be searched for: the result, and which steps failed or
+# were left out.
+finish() {
+    printf '\nfresh-checkout-check status=%s commit=%s steps=%s failed=%s skipped=%s total=%ss\n' \
+        "$1" "$short" "$steps_run" \
+        "$(printf '%s' "${failed:- none}" | sed 's/^ //; s/ /,/g')" \
+        "$(printf '%s' "${skipped:- none}" | sed 's/^ //; s/ /,/g')" "$total"
+}
+
+# The lines worth keeping from a step's log: the harness's and the gates' own
+# totals, and how many migrations there were.
+summarise() {
+    indent='                                        '
+    case "$1" in
+        migrate-plan)
+            printf '%s%s migrations planned\n' "$indent" \
+                "$(grep -cE '^[0-9]+ ' "$2" 2>/dev/null || true)"
+            ;;
+        migrate-apply)
+            printf '%s%s migrations applied\n' "$indent" \
+                "$(grep -c '^applied ' "$2" 2>/dev/null || true)"
+            ;;
+        *)
+            grep -E '^(Files=|Result: |[a-z-]+ status=)' "$2" 2>/dev/null \
+                | sed "s/^/$indent/" || true
+            ;;
+    esac
+}
+
+run_step() {
+    name=$1
+    command=$2
+    case "$skip" in
+        *" $name "*)
+            printf '  %-22s %-6s %6s  %s\n' "$name" skip - "$command"
+            skipped="$skipped $name"
+            return 0
+            ;;
+    esac
+    log="$logs/$name.log"
+    # These two leave something outside the directory, so the cleanup must
+    # know to drop it even when the step itself fails.
+    case "$name" in
+        createuser|createdb) database_made=1 ;;
+    esac
+    started=$(date +%s)
+    # `set -e` does not apply inside an `if` condition, so a failed cd would
+    # carry on and run the step here, in the working checkout, where
+    # install-deps-postgres writes its local/.
+    if (
+        cd "$checkout" || exit 1
+        case "$name" in
+            createuser|createdb)
+                use_dsn_password
+                ;;
+            migrate-*)
+                GPFORUM_DATABASE_DSN=$fresh_dsn
+                GPFORUM_DATABASE_USER=$fresh_role
+                GPFORUM_DATABASE_PASSWORD=$fresh_password
+                export GPFORUM_DATABASE_DSN GPFORUM_DATABASE_USER \
+                    GPFORUM_DATABASE_PASSWORD
+                ;;
+            integration)
+                GPFORUM_DATABASE_DSN=$db_dsn
+                GPFORUM_DATABASE_USER=$db_user
+                GPFORUM_DATABASE_PASSWORD=$db_password
+                export GPFORUM_DATABASE_DSN GPFORUM_DATABASE_USER \
+                    GPFORUM_DATABASE_PASSWORD
+                ;;
+        esac
+        eval "$command"
+    ) >"$log" 2>&1 </dev/null; then
+        result=pass
+    else
+        result=fail
+    fi
+    elapsed=$(($(date +%s) - started))
+    total=$((total + elapsed))
+    steps_run=$((steps_run + 1))
+    printf '  %-22s %-6s %5ss  %s\n' "$name" "$result" "$elapsed" "$command"
+    summarise "$name" "$log"
+    if [ "$result" = fail ]; then
+        failed="$failed $name"
+        printf '\n--- the last 40 lines of the %s log ---\n' "$name" >&2
+        tail -n 40 "$log" >&2
+        printf -- '--- end of the %s log ---\n\n' "$name" >&2
+        if [ "$keep_going" -eq 0 ]; then
+            [ "$keep" -eq 1 ] || printf 'rerun with --keep to keep every log\n' >&2
+            finish fail
+            exit 1
+        fi
+    fi
+}
+
+clone_step() {
+    started=$(date +%s)
+    if git clone --quiet --no-hardlinks --no-checkout "$root" "$checkout" \
+        >"$logs/clone.log" 2>&1 \
+        && git -C "$checkout" checkout --quiet --detach "$commit" \
+        >>"$logs/clone.log" 2>&1; then
+        result=pass
+    else
+        result=fail
+    fi
+    elapsed=$(($(date +%s) - started))
+    total=$((total + elapsed))
+    steps_run=$((steps_run + 1))
+    printf '  %-22s %-6s %5ss  %s\n' clone "$result" "$elapsed" \
+        "git clone --no-hardlinks, then check out $short"
+    if [ "$result" = fail ]; then
+        cat "$logs/clone.log" >&2
+        finish fail
+        exit 1
+    fi
+}
+
+printf 'fresh-checkout-check: commit %s (%s)\n' "$short" \
+    "$(git -C "$root" log -1 --format=%s "$commit")"
+if [ "$keep" -eq 1 ]; then
+    printf '  working directory %s\n' "$workdir"
+else
+    printf '  working directory: a temporary one, removed afterwards (--keep keeps it)\n'
+fi
+uncommitted=$(git -C "$root" --no-optional-locks status --porcelain 2>/dev/null | wc -l | tr -d ' ')
+if [ "$uncommitted" -gt 0 ]; then
+    printf '  %s uncommitted paths in this checkout are not part of the run\n' "$uncommitted"
+fi
+if [ -n "$db_dsn" ]; then
+    printf '  GPFORUM_DATABASE_DSN is set: the quick start makes and migrates the throwaway role and\n'
+    printf '  database %s, dropped afterwards, and the integration tier runs last\n' "$fresh_name"
+else
+    printf '  GPFORUM_DATABASE_DSN is not set: the database commands and the integration tier are left out\n'
+fi
+printf '\n  %-22s %-6s %6s  %s\n' step result time command
+
+clone_step
+
+# The README's macOS line: Homebrew's PostgreSQL is keg-only, so its client
+# tools are not on PATH until this puts them there. A no-op elsewhere.
+eval "$(cd "$checkout" && script/gpforum-homebrew-env 2>/dev/null || true)"
+
+while read -r name command; do
+    run_step "$name" "$command"
+done <<STEPS
+$steps
+STEPS
+
+perl_version=$(cd "$checkout" \
+    && "$(script/gpforum-system-perl --require)" -e 'printf q{v%vd}, $^V' 2>/dev/null \
+    || echo unknown)
+printf '\n  host %s, perl %s' "$(uname -sm)" "$perl_version"
+if command -v pg_config >/dev/null 2>&1; then
+    printf ', %s client' "$(pg_config --version)"
+fi
+printf '\n'
+if [ -n "$failed" ]; then
+    finish fail
+    exit 1
+fi
+if [ -n "$skipped" ]; then
+    printf '  steps were left out, so this run does not prove a green make check\n'
+fi
+finish pass

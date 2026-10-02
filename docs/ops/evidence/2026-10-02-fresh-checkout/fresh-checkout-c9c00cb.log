@@ -1,0 +1,45 @@
+fresh-checkout-check: commit c9c00cb (Document the forum stores and gate POD coverage in Service and Web)
+  working directory: a temporary one, removed afterwards (--keep keeps it)
+  106 uncommitted paths in this checkout are not part of the run
+  GPFORUM_DATABASE_DSN is set: the quick start makes and migrates the throwaway role and
+  database gpforum_fresh_1790951442_72089, dropped afterwards, and the integration tier runs last
+
+  step                   result   time  command
+  clone                  pass       0s  git clone --no-hardlinks, then check out c9c00cb
+  system-perl            pass       1s  make system-perl
+  install-deps-postgres  pass     151s  make install-deps-postgres
+  system-preflight       pass       1s  script/system-preflight
+  createuser             pass       0s  createuser_with_password "$fresh_role"
+  createdb               pass       0s  createdb --maintenance-db="$maintenance_db" --username="$db_user" --owner="$fresh_role" "$fresh_db"
+  migrate-plan           pass       1s  script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --plan
+                                        48 migrations planned
+  migrate-apply          fail       1s  script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --apply
+                                        0 migrations applied
+
+--- the last 40 lines of the migrate-apply log ---
+DBIx::Class::Storage::DBI::_do_query(): DBI Exception: DBD::Pg::db do failed: ERROR:  permission denied to set parameter "lc_messages" at $TMPDIR/gpforum-fresh-checkout.XXXXXX/gpforum/bin/../lib/GPForum/Migration/Runner.pm line 250
+--- end of the migrate-apply log ---
+
+  syntax                 pass      83s  make syntax
+  test                   pass      79s  make test
+                                        Files=242, Tests=10709, 78 wallclock secs ( 0.66 usr  0.36 sys + 59.12 cusr 10.41 csys = 70.55 CPU)
+                                        Result: PASS
+  critic                 fail     101s  make critic
+
+--- the last 40 lines of the critic log ---
+script/perlcritic
+perlcritic: found 1 violation(s) outside baseline
+[Subroutines::ProhibitReturnSort] "return" statement followed by "sort" at t/integration/postgres-search-results.t line <line>, column <column>. Severity: 5. Behavior is undefined if called in scalar context. return sort keys %thread;
+perlcritic: 69 baseline violation(s) disappeared; update etc/perlcritic-baseline.txt after review
+make: *** [critic] Error 1
+--- end of the critic log ---
+
+  tidy                   pass     498s  make tidy
+  architecture           pass       3s  make architecture
+  integration            pass      41s  make integration
+                                        Files=31, Tests=951, 41 wallclock secs ( 0.11 usr  0.04 sys + 19.40 cusr  3.16 csys = 22.71 CPU)
+                                        Result: PASS
+
+  host Darwin arm64, perl v5.44.0, PostgreSQL 18.6 (Homebrew) client
+
+fresh-checkout-check status=fail commit=c9c00cb steps=14 failed=migrate-apply,critic skipped=none total=960s

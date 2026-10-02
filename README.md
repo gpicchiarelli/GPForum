@@ -189,9 +189,15 @@ make install-deps-postgres          # carton install --deployment from the lock
 # or: script/bootstrap-deps --postgres
 script/system-preflight             # check the host
 
-# A database for the application. The defaults are the role `gpforum` and the
+# A database for the application, on a running PostgreSQL server: the client
+# packages above do not start one. The defaults are the role `gpforum` and the
 # database `gpforum` on 127.0.0.1:5432; export GPFORUM_DATABASE_DSN (and
 # GPFORUM_DATABASE_USER / GPFORUM_DATABASE_PASSWORD) to use another.
+#   Debian/Ubuntu: `sudo apt install postgresql` starts one. Run the two
+#   commands below as `sudo -u postgres`, give createuser `--pwprompt`, and
+#   export that password as GPFORUM_DATABASE_PASSWORD: this server asks for
+#   one on 127.0.0.1.
+#   macOS: `brew services start postgresql@18`; the two commands run as you.
 createuser gpforum
 createdb --owner gpforum gpforum
 
@@ -224,6 +230,17 @@ make check
 `GPFORUM_DATABASE_DSN` is set, and each creates and drops its own throwaway
 database from it, so point it at a server where the configured role may create
 databases. `make help` lists every target.
+
+`make fresh-checkout` checks this section itself. It clones the current commit
+into a temporary directory and runs the commands above there in order, from
+`make system-perl` on (the host packages must already be installed), then each
+step of `make check`, and reports every step's result and time. The database
+commands need `GPFORUM_DATABASE_DSN`: with it set, a throwaway plain role and
+database stand in for `gpforum`, are migrated as that role and dropped
+afterwards, and `make integration` runs last; without it they are left out.
+Your checkout and its `local/` are not touched. It installs every dependency
+again, so it takes a while; the last recorded run is in
+[docs/ops/evidence/2026-10-02-fresh-checkout/](docs/ops/evidence/2026-10-02-fresh-checkout/).
 
 Coverage, benchmarks, and profiling:
 

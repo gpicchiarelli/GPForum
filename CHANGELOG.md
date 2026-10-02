@@ -275,6 +275,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **`make fresh-checkout`** clones the current commit into a temporary
+  directory and runs the README quick start and each step of `make check`
+  there, timing each; with `GPFORUM_DATABASE_DSN` it also creates a plain
+  role and database and runs the integration tier. The README now says the
+  database commands need a running PostgreSQL and how to start one.
+
 - **Replication on `/metrics`** (ADR 0058): on a primary, each standby's
   state, replay lag and bytes behind, and each slot's retained WAL; on a
   standby, the age of its last replay. `/health/ready` gains a
