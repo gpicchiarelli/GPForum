@@ -164,6 +164,17 @@ sub _stored_result ( $not_found, $value ) {
             status => 'not_found',
         );
     }
+
+    # A store that refused the input (an unknown notification channel) is
+    # an invalid request, not a missing row: read as not_found, the refusal
+    # would answer the settings form with a 500 and log a degraded store.
+    if ( _is_refused($value) ) {
+        return _result(
+            error  => $value->{error},
+            errors => $value->{errors},
+            status => 'invalid',
+        );
+    }
     if ( _is_missing($value) ) {
         return _result(
             error  => $value->{error} || $not_found,
@@ -175,6 +186,14 @@ sub _stored_result ( $not_found, $value ) {
         status => 'ok',
         stored => $value,
     );
+}
+
+sub _is_refused ($value) {
+    if ( ref $value ne 'HASH' ) {
+        return 0;
+    }
+
+    return ( $value->{status} // q{} ) eq 'invalid' ? 1 : 0;
 }
 
 sub _is_missing ($value) {
@@ -254,9 +273,10 @@ C<command_id> and replays from C<command_log> when the helper is present.
 
 =head1 DIAGNOSTICS
 
-Returns C<not_found> or C<failed> statuses instead of throwing for expected
-write outcomes. Unexpected store exceptions are logged and mapped to
-C<failed>.
+Returns C<invalid>, C<not_found> or C<failed> statuses instead of throwing
+for expected write outcomes: C<invalid> (with the store's C<error> and
+C<errors>) when the preference store refused the input, such as an unknown
+channel. Unexpected store exceptions are logged and mapped to C<failed>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

@@ -729,6 +729,16 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A mark-read whose badge count or NOTIFY fails after the write committed
+  gets the write's own answer**, not a 500; inside a post's transaction a
+  failed count no longer rolls the post back (`badge_failures`).
+- **A realtime listener whose snapshot dies no longer takes down /metrics or
+  the console**; `/metrics` shows `realtime_listener.status` and
+  `last_error`, and each outage is logged once.
+- **An unknown notification channel is refused** (400, nothing saved)
+  instead of silently turning off a member's in-app notifications;
+  `enabled_channels` applies the defaults.
+
 - **"Purge page cache" no longer reports "purged" when GlifiStore was paused
   or failing**: the result and its audit row record `purged_locally` and the
   tags not reached (they expire within their TTL).

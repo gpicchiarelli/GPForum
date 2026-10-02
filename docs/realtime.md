@@ -239,7 +239,26 @@ queue: `received`, `dropped` (unregistered channel), `overflowed`, `gaps`
 its L1 is being cleared on every read.
 
 `ListenerSupervisor` exposes enabled/running state, scheduled polls, poll
-failures, reconnects and heartbeats.
+failures, reconnects and heartbeats, and `realtime_listener.status`
+(`stopped`, `running`, `degraded` or `disabled`) with
+`realtime_listener.last_error`: what last failed (`during`: `start`, `poll`
+or `reconnect`) and its `message` -- the listener's reason, or the first
+non-blank line (at most 300 characters) of the error it died with. The
+error is also logged as a warning, once per outage: a retry that fails with
+the same message is not logged again, a new message is, and so is the first
+failure after a poll that worked. A listener whose own snapshot dies reads as
+`listener: {status: unavailable, error: ...}` and counts in
+`snapshot_failures`, leaving `status` and `last_error` to say why the
+listener itself is degraded; `/metrics` and the admin console keep
+answering.
+
+The notification dispatcher counts `badge_failures` per process (its
+`snapshot`): badges it could not count or NOTIFY after a write committed.
+Given a logger, it logs each as a warning (`notification badge not sent:
+...`). The write's answer stands, and the next snapshot corrects the badge.
+`/metrics` does not read this counter yet, and the dispatcher Bootstrap
+builds is given no logger yet: until both are wired, these failures are only
+counted in the process.
 
 ## Security Model
 
@@ -276,7 +295,10 @@ message bodies or private resource contents.
 | LISTEN unavailable | listener status becomes `polling`; the outbox backstop is the only path while the process has sockets; every poll tries the LISTEN again |
 | database reconnect | the notification queue LISTENs again on the new connection and reports a gap: L1 is cleared once, badge snapshots are re-sent, the backstop cursor is kept |
 | LISTEN refused (standby) | each take reports a gap: L1 is cleared on every read until a LISTEN succeeds; badge snapshots are re-sent once it does |
-| supervisor start failure | reconnect is scheduled after bounded backoff; SSR and polling continue |
+| supervisor start failure | reconnect is scheduled after bounded backoff; SSR and polling continue; the reason or the listener's error is in `realtime_listener.last_error` |
+| listener dies on poll | reported as `poll_failed`, one reconnect is tried at once; the error is kept in `last_error` and logged once per outage |
+| listener snapshot dies | `realtime_listener.listener` reads `{status: unavailable, error: ...}`, `snapshot_failures` counts it; `last_error` keeps the listener's own failure; `/metrics` still answers |
+| badge count or NOTIFY fails after a write | the write's answer stands (`unread_count` is null when the count failed); counted in `badge_failures`, and logged when the dispatcher has a logger; under an outer transaction it runs in a savepoint, so the post still commits |
 | malformed NOTIFY payload | listener rejects payload and increments invalid counters |
 | duplicate NOTIFY payload | listener suppresses recent duplicate event ids with bounded best-effort memory |
 | websocket send failure | hub records failed delivery and does not affect canonical writes |

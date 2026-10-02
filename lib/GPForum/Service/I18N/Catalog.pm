@@ -121,7 +121,9 @@ sub default_catalogs {
               'Dead letter replayed: its work is queued again.',
             'admin.cache_purge_hint' =>
 'Drop every cached public page. Each is rendered again on its next visit; nothing is lost.',
-            'admin.cache_purged'          => 'Public page cache purged.',
+            'admin.cache_purged'         => 'Public page cache purged.',
+            'admin.cache_purged_locally' =>
+'Public page cache purged locally; the shared cache is unreachable, so its entries expire within their TTL.',
             'admin.maintenance'           => 'Maintenance',
             'admin.purge_cache'           => 'Purge page cache',
             'admin.rebuild_search'        => 'Rebuild search index',
@@ -889,11 +891,13 @@ sub default_catalogs {
               'Dead letter rimessa in coda: il lavoro è di nuovo in coda.',
             'admin.cache_purge_hint' =>
 'Scarta ogni pagina pubblica in cache. Ciascuna viene ricreata alla visita successiva; non si perde nulla.',
-            'admin.cache_purged'   => 'Cache delle pagine pubbliche svuotata.',
-            'admin.maintenance'    => 'Manutenzione',
-            'admin.purge_cache'    => 'Svuota la cache delle pagine',
-            'admin.rebuild_search' => 'Ricostruisci l’indice di ricerca',
-            'admin.search_index'   => 'Indice di ricerca',
+            'admin.cache_purged' => 'Cache delle pagine pubbliche svuotata.',
+            'admin.cache_purged_locally' =>
+'Cache delle pagine pubbliche svuotata solo in locale: la cache condivisa non è raggiungibile, le sue voci scadono entro il loro TTL.',
+            'admin.maintenance'           => 'Manutenzione',
+            'admin.purge_cache'           => 'Svuota la cache delle pagine',
+            'admin.rebuild_search'        => 'Ricostruisci l’indice di ricerca',
+            'admin.search_index'          => 'Indice di ricerca',
             'admin.search_last_rebuild'   => 'Ultima ricostruzione',
             'admin.search_never_rebuilt'  => 'Mai ricostruito dalla console',
             'admin.search_oldest_pending' => 'In attesa da',

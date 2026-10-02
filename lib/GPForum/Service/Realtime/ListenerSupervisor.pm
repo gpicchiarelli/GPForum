@@ -6,11 +6,25 @@ package GPForum::Service::Realtime::ListenerSupervisor;
 use strict;
 use warnings;
 
+use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 use Mojo::IOLoop;
 use Scalar::Util qw(weaken);
 
 our $VERSION = '0.001';
+
+# Enough of a driver's message to name the failure in /metrics and the log;
+# a DBI error can run to a whole statement.
+const my $ERROR_TEXT_LIMIT => 300;
+
+# The reason a failure is reported under when the listener died instead of
+# giving one.
+const my %FALLBACK_REASON => (
+    poll      => 'poll_failed',
+    reconnect => 'reconnect_failed',
+    start     => 'listener_failed',
+);
 
 has enabled                    => 1;
 has heartbeat_interval_seconds => 30;
@@ -22,20 +36,33 @@ has reconnect_backoff_seconds  => 5;
 has reconnect_timer_id         => undef;
 has heartbeat_timer_id         => undef;
 has finish_handler_registered  => 0;
-has poll_timer_id              => undef;
-has running                    => 0;
-has stats                      => sub {
+
+# What the listener last failed at, and with which message. A listener that
+# died on start or poll was reported only as degraded, and its message was
+# lost: /metrics said something broke but not what.
+has last_error => undef;
+
+# The message last logged for the listener (its start, poll and reconnect)
+# and for its snapshot. A working poll, or a working snapshot, forgets its
+# own: compared with last_error alone, which a recovery keeps, a second
+# outage that failed as the first one did was never logged.
+has logged_errors => sub { return {}; };
+has poll_timer_id => undef;
+has running       => 0;
+has stats         => sub {
     return {
-        degraded        => 0,
-        heartbeats      => 0,
-        poll_failures   => 0,
-        polls           => 0,
-        reconnects      => 0,
-        scheduled_polls => 0,
-        starts          => 0,
-        stops           => 0,
+        degraded          => 0,
+        heartbeats        => 0,
+        poll_failures     => 0,
+        polls             => 0,
+        reconnects        => 0,
+        scheduled_polls   => 0,
+        snapshot_failures => 0,
+        starts            => 0,
+        stops             => 0,
     };
 };
+has status => 'stopped';
 
 sub start ( $self, $options = undef ) {
     $options ||= {};
@@ -46,17 +73,19 @@ sub start ( $self, $options = undef ) {
 
     my $started = eval { return $self->listener->start; };
     if ( !$started || !$started->{ok} ) {
+        my $reason = $self->_record_failure( 'start', $started, $EVAL_ERROR );
         $self->stats->{degraded} += 1;
         $self->_schedule_reconnect if !$options->{without_timers};
         return {
             ok       => 0,
             degraded => 1,
             status   => 'degraded',
-            reason   => $started ? $started->{reason} : 'listener_failed',
+            reason   => $reason,
         };
     }
 
     $self->running(1);
+    $self->status('running');
     $self->stats->{starts} += 1;
     $self->_register_finish_handler;
     $self->_schedule_timers if !$options->{without_timers};
@@ -74,6 +103,7 @@ sub stop ($self) {
     $self->_remove_timer('reconnect_timer_id');
     eval { $self->listener->stop } if $self->listener;
     $self->running(0);
+    $self->status('stopped');
     $self->stats->{stops} += 1;
 
     return { ok => 1, status => 'stopped' };
@@ -92,28 +122,112 @@ sub poll_once ($self) {
     $self->stats->{polls} += 1;
 
     if ( !$result || !$result->{ok} ) {
+        my $reason = $self->_record_failure( 'poll', $result, $EVAL_ERROR );
         $self->stats->{poll_failures} += 1;
         $self->_reconnect_now;
         return {
             ok       => 0,
             degraded => 1,
             status   => 'degraded',
-            reason   => $result ? $result->{reason} : 'poll_failed',
+            reason   => $reason,
         };
     }
+
+    # The listener works again: its next failure is a new outage.
+    delete $self->logged_errors->{listener};
 
     return $result;
 }
 
+# Read by /metrics and the admin console: a listener whose snapshot dies must
+# not take either down with it, so its error is kept here instead.
 sub snapshot ($self) {
+    my $listener = $self->_listener_snapshot;
+
     return {
-        enabled  => $self->enabled ? 1 : 0,
-        running  => $self->running ? 1 : 0,
-        stats    => { %{ $self->stats } },
-        listener => $self->listener && $self->listener->can('snapshot')
-        ? $self->listener->snapshot
-        : {},
+        enabled    => $self->enabled    ? 1                          : 0,
+        last_error => $self->last_error ? { %{ $self->last_error } } : undef,
+        listener   => $listener,
+        running    => $self->running ? 1 : 0,
+        stats      => { %{ $self->stats } },
+        status     => $self->enabled ? $self->status : 'disabled',
     };
+}
+
+# A snapshot that died is reported on the listener field, not in last_error:
+# snapshot() reads the listener first, so kept there it replaced the start
+# or poll error on every read of /metrics, and a degraded listener showed
+# only that its snapshot had failed.
+sub _listener_snapshot ($self) {
+    return {} if !$self->listener || !$self->listener->can('snapshot');
+
+    my $snapshot = eval { return $self->listener->snapshot; };
+    if ( ref $snapshot eq 'HASH' ) {
+        delete $self->logged_errors->{snapshot};
+        return $snapshot;
+    }
+
+    my $message =
+      _error_text( $EVAL_ERROR || 'listener snapshot is not a hash' );
+    $self->stats->{snapshot_failures} += 1;
+    $self->_log_once( 'snapshot', 'snapshot', $message );
+
+    return { error => $message, status => 'unavailable' };
+}
+
+# A failure the listener reported keeps its reason; one it died with is
+# reported under the fallback reason, and its message is kept in last_error
+# either way.
+sub _record_failure ( $self, $during, $result, $error ) {
+    my $fallback = $FALLBACK_REASON{$during};
+    $self->status('degraded');
+    if ( ref $result eq 'HASH' ) {
+        my $reason = $result->{reason} || $fallback;
+        $self->_remember_error( $during, $reason );
+        return $reason;
+    }
+
+    $self->_remember_error( $during, $error || $fallback );
+
+    return $fallback;
+}
+
+sub _remember_error ( $self, $during, $error ) {
+    my $message = _error_text($error);
+    $self->last_error( { during => $during, message => $message } );
+    $self->_log_once( 'listener', $during, $message );
+
+    return;
+}
+
+# Logged when the message changes, not on every attempt: a listener that
+# cannot reach the database fails its start once a poll interval and its
+# reconnect once a backoff, with the same message, and a warning a second
+# buries the first one. The listener's failures and its snapshot's are
+# remembered apart, so that neither hides the other.
+sub _log_once ( $self, $kind, $during, $message ) {
+    my $logged = $self->logged_errors;
+    return if defined $logged->{$kind} && $logged->{$kind} eq $message;
+
+    $logged->{$kind} = $message;
+    if ( $self->logger && $self->logger->can('warn') ) {
+        $self->logger->warn("realtime listener $during failed: $message");
+    }
+
+    return;
+}
+
+# The first line that says something: an error that opens with a newline
+# read as an empty message.
+sub _error_text ($error) {
+    my ($line) = grep { /\S/msx } split /\n/msx, "$error";
+    $line //= q{};
+    $line =~ s/\A\s+|\s+\z//gmsx;
+
+    return
+      length $line > $ERROR_TEXT_LIMIT
+      ? substr( $line, 0, $ERROR_TEXT_LIMIT )
+      : $line;
 }
 
 sub _schedule_timers ($self) {
@@ -183,12 +297,14 @@ sub _reconnect_now ($self) {
     my $result = eval { return $self->listener->reconnect; };
 
     if ( !$result || !$result->{ok} ) {
+        $self->_record_failure( 'reconnect', $result, $EVAL_ERROR );
         $self->running(0);
         $self->_schedule_reconnect;
         return $undefined;
     }
 
     $self->running(1);
+    $self->status('running');
     $self->_schedule_timers;
 
     return $undefined;
@@ -248,10 +364,19 @@ every C<reconnect_backoff_seconds> until a reconnect succeeds. Once started,
 it stops the listener and its timers when the IOLoop finishes.
 
 A listener that fails does not take the request down: its C<start>, C<stop>,
-C<poll_once> and C<reconnect> calls are wrapped in C<eval>. A failed start or
-poll is reported as a C<degraded> status, and the supervisor counts what
-it does in C<stats> (C<starts>, C<stops>, C<polls>, C<poll_failures>,
-C<reconnects>, C<degraded>, C<heartbeats>, C<scheduled_polls>).
+C<poll_once>, C<reconnect> and C<snapshot> calls are wrapped in C<eval>. A
+failed start, poll or reconnect turns C<status> to C<degraded> and is kept
+in C<last_error> -- what failed (C<during>: C<start>, C<poll> or
+C<reconnect>) and the listener's reason or, when it died, the first
+non-blank line of its message. A listener snapshot that dies is reported
+on the snapshot's C<listener> field instead, so that it never hides the
+error the listener is degraded by. A failure is logged as a warning when
+its message changes, or when it is the first failure since a poll worked
+(since a snapshot worked, for a snapshot failure): a repeated attempt is
+not logged again, a second outage is. The supervisor counts what it does
+in C<stats> (C<starts>,
+C<stops>, C<polls>, C<poll_failures>, C<reconnects>, C<degraded>,
+C<heartbeats>, C<scheduled_polls>, C<snapshot_failures>).
 
 The C<listener> attribute must answer C<start>, C<stop>, C<poll_once> and
 C<reconnect> with a hash reference whose C<ok> is true on success, and may
@@ -287,13 +412,25 @@ trying one reconnect.
 
 =head2 snapshot
 
-Returns C<enabled>, C<running>, a copy of C<stats>, and the listener's own
-C<snapshot> (or an empty hash when it has none).
+Returns C<enabled>, C<running>, C<status> (C<stopped>, C<running>,
+C<degraded>, or C<disabled> when not enabled), C<last_error> (a copy of
+C<< { during, message } >>, or undef), a copy of C<stats>, and the
+listener's own C<snapshot> (an empty hash when it has none). A listener
+snapshot that dies or is not a hash reference reads as
+C<< { status => 'unavailable', error => $message } >> and counts in
+C<snapshot_failures>; it leaves C<last_error> and C<status> as they were,
+since they describe the listener's own start, poll and reconnect. It never
+dies itself, since C</metrics> and the admin console read it.
 
 =head1 DIAGNOSTICS
 
-None. Listener failures are caught and returned as C<degraded>; when the
-listener dies, its message is not kept.
+None raised. Listener failures are caught and returned as C<degraded>; the
+reason, or the first non-blank line (at most 300 characters) of the message
+it died with, is kept in C<last_error> (in the C<listener> field's C<error>,
+for a snapshot that died) and logged at C<warn> level through C<logger> as
+C<realtime listener $during failed: $message> when the message differs from
+the last one logged, or comes after a poll (a snapshot, for a snapshot
+failure) that worked.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -307,6 +444,7 @@ each request is dispatched.
 
 =head1 DEPENDENCIES
 
+L<Const::Fast>,
 L<Mojo::IOLoop>,
 L<Scalar::Util>.
 
@@ -317,8 +455,9 @@ None known.
 =head1 BUGS AND LIMITATIONS
 
 The heartbeat only logs at debug level and counts; it does not probe the
-listener. The reconnect backoff is fixed, not exponential. L</snapshot> calls
-the listener's C<snapshot> without an C<eval>, so an error there propagates.
+listener. The reconnect backoff is fixed, not exponential. C<last_error>
+keeps only the latest failure and is not cleared by a recovery: C<status>
+says whether the listener is running again.
 
 =head1 AUTHOR
 

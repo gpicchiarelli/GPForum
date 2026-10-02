@@ -9,6 +9,7 @@ use utf8;
 
 use Const::Fast;
 use MIME::Base64 qw(encode_base64url);
+use Mojo::Log;
 use Test::More;
 
 use lib 'lib';
@@ -20,7 +21,9 @@ use GPForum::Service::Notification::Renderer;
 use GPForum::Service::Notification::SubscriptionStore;
 use GPForum::Service::Outbox::DomainEventTransport;
 use GPForum::Service::Realtime::Hub;
+use GPForum::Service::Realtime::PgNotifier;
 use GPForum::Test::BadgeBroadcastSpy;
+use GPForum::Test::FailingNotificationReadability;
 use GPForum::Test::FixedClock;
 use GPForum::Test::Id;
 use GPForum::Test::NotificationResultSet;
@@ -35,6 +38,7 @@ our $VERSION = '0.001';
 
 const my $LIST_LIMIT       => 10;
 const my $MARKED_READ_ROWS => 3;
+const my $UNCOUNTED_BADGES => 3;
 
 my $subscriptions = GPForum::Test::NotificationResultSet->new;
 my $preferences   = GPForum::Test::NotificationResultSet->new;
@@ -363,8 +367,62 @@ is( scalar @{ $preferences->created },
 is( scalar @{ $email_row->updates },
     $pref_updates, 'unique preference race does not update the row' );
 
-is_deeply( [ $preference_store->enabled_channels('user-1') ],
-    ['email'], 'enabled channels can be listed' );
+is_deeply(
+    [ $preference_store->enabled_channels('user-1') ],
+    [ 'in_app', 'email' ],
+    'enabled channels read the stored rows over the defaults'
+);
+is_deeply(
+    [ $preference_store->enabled_channels('user-without-rows') ],
+    [ 'in_app', 'email' ],
+    'a member who never saved preferences has the default channels on'
+);
+
+# A misspelt channel was written as in_app: meant for email, it turned the
+# member's in-app notifications off.
+my $created_preferences = scalar @{ $preferences->created };
+my $misspelt            = $preference_store->set_preference(
+    {
+        user_id          => 'user-1',
+        channel          => 'emial',
+        enabled          => 0,
+        digest_frequency => 'daily',
+    }
+);
+ok( !$misspelt->{ok}, 'a misspelt channel is refused' );
+is( $misspelt->{status}, 'invalid', 'as invalid input' );
+ok( $misspelt->{errors}{channel}, 'naming the channel field' );
+is(
+    scalar @{ $preferences->created },
+    $created_preferences,
+    'and nothing is written for it'
+);
+ok( $preference_store->channel_enabled( 'user-1', 'in_app' ),
+    'in-app notifications stay on' );
+
+my $misspelt_batch = $preference_store->set_preferences(
+    {
+        user_id     => 'user-1',
+        preferences => [
+            {
+                channel          => 'email',
+                digest_frequency => 'weekly',
+                enabled          => 0,
+            },
+            {
+                channel          => 'in-app',
+                digest_frequency => 'immediate',
+                enabled          => 0,
+            },
+        ],
+    }
+);
+is( ref $misspelt_batch, 'HASH', 'a batch with a misspelt channel is refused' );
+is( $misspelt_batch->{status}, 'invalid', 'as invalid input' );
+ok(
+    $preference_store->channel_enabled( 'user-1', 'email' ),
+    'and its valid rows are not written either'
+);
 
 my $preference_page = $preference_store->preferences_for_user('user-1');
 is( scalar @{$preference_page},
@@ -406,6 +464,11 @@ is( $saved_preferences->[1]{enabled},
     0, 'bulk preference save persists disabled email' );
 is( $saved_preferences->[2]{digest_frequency},
     'weekly', 'bulk preference save persists digest frequency' );
+is_deeply(
+    [ $preference_store->enabled_channels('user-1') ],
+    [ 'in_app', 'digest' ],
+    'a channel turned off leaves the enabled channels'
+);
 
 my $renderer           = GPForum::Service::Notification::Renderer->new;
 my $reply_presentation = $renderer->render_inbox_item(
@@ -1014,6 +1077,150 @@ my $rolled_back = eval {
 ok( !$rolled_back, 'a failed commit propagates out of create_notification' );
 is( scalar @{ $rollback_spy->badges },
     0, 'no badge is broadcast when the delivery transaction rolls back' );
+
+# The badge is counted after the write committed. A count that failed was
+# raised past the commit: a stored mark-read answered as a failure, and a
+# fanout reported a recipient it had notified as failed.
+my $after_commit_inbox  = GPForum::Test::NotificationResultSet->new;
+my $after_commit_schema = GPForum::Test::NotificationTxnSchema->new(
+    resultsets => {
+        Notification      => GPForum::Test::NotificationResultSet->new,
+        NotificationInbox => $after_commit_inbox,
+        NotificationRead  => GPForum::Test::NotificationResultSet->new,
+        Subscription      => $subscriptions,
+    },
+);
+my $after_commit_readability =
+  GPForum::Test::FailingNotificationReadability->new;
+my $after_commit_log      = Mojo::Log->new( level => 'warn' );
+my $after_commit_warnings = $after_commit_log->capture('warn');
+my $after_commit_spy =
+  GPForum::Test::BadgeBroadcastSpy->new( schema => $after_commit_schema );
+my $after_commit = GPForum::Service::Notification::Dispatcher->new(
+    clock              => $clock,
+    id_service         => GPForum::Test::Id->new,
+    logger             => $after_commit_log,
+    permission_engine  => GPForum::Test::PermissionEngine->new,
+    readability        => $after_commit_readability,
+    realtime_notifier  => $after_commit_spy,
+    schema             => $after_commit_schema,
+    stats              => { badge_failures => 0 },
+    subscription_store => $subscription_store,
+);
+my $stored_delivery = $after_commit->create_notification(
+    {
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-11' },
+        recipient_user_id => 'user-11',
+        source_id         => 'post-11',
+        source_type       => 'post',
+    }
+);
+is( $stored_delivery->{unread_count},
+    1, 'a delivery counts its badge while the count works' );
+
+$after_commit_readability->fail(1);
+my $stored_read = eval {
+    return $after_commit->mark_read(
+        $stored_delivery->{notification}{notification_id}, 'user-11' );
+};
+ok( $stored_read && $stored_read->{ok},
+    'a mark-read whose badge count fails after the commit still answers ok' );
+ok(
+    $stored_read && !defined $stored_read->{unread_count},
+    'and reports no unread count rather than a wrong one'
+);
+is(
+    $after_commit_inbox->find(
+        {
+            notification_id =>
+              $stored_delivery->{notification}{notification_id},
+            recipient_user_id => 'user-11',
+        }
+    )->get_column('read_at'),
+    '2026-05-23T12:00:00Z',
+    'the read is stored'
+);
+is( scalar @{ $after_commit_spy->badges },
+    1, 'no badge is sent without a count' );
+is( $after_commit->snapshot->{badge_failures},
+    1, 'the badge that could not be counted is counted as a failure' );
+like(
+    "$after_commit_warnings",
+    qr/notification [ ] badge [ ] not [ ] sent: [ ] canceling [ ] statement/msx,
+    'and logged as a warning'
+);
+
+my $duplicate_delivery = eval {
+    return $after_commit->create_notification(
+        {
+            notification_type => 'reply',
+            payload           => { thread_id => 'thread-11' },
+            recipient_user_id => 'user-11',
+            source_id         => 'post-11',
+            source_type       => 'post',
+        }
+    );
+};
+ok(
+    $duplicate_delivery && $duplicate_delivery->{duplicate},
+    'a duplicate delivery whose count fails still answers as a duplicate'
+);
+
+$subscription_store->subscribe(
+    {
+        user_id     => 'user-12',
+        target_type => 'thread',
+        target_id   => 'thread-12',
+        preference  => 'all',
+    }
+);
+my $fanout_after_commit = $after_commit->fanout_to_subscribers(
+    {
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-12' },
+        source_id         => 'post-12',
+        source_type       => 'post',
+        target_id         => 'thread-12',
+        target_type       => 'thread',
+    }
+);
+is( scalar @{ $fanout_after_commit->{created} },
+    1, 'a fanout whose badge count fails reports the recipient as notified' );
+is( scalar @{ $fanout_after_commit->{failed} },
+    0, 'and not as failed, so the outbox does not retry a delivery it made' );
+is( $after_commit->snapshot->{badge_failures},
+    $UNCOUNTED_BADGES, 'every badge that could not be counted is counted' );
+
+# A NOTIFY that fails keeps the count: the write and its count stand, and
+# the next snapshot carries the badge.
+my $unsent = GPForum::Service::Notification::Dispatcher->new(
+    clock             => $clock,
+    id_service        => GPForum::Test::Id->new,
+    permission_engine => GPForum::Test::PermissionEngine->new,
+    realtime_notifier => GPForum::Service::Realtime::PgNotifier->new,
+    schema            => GPForum::Test::NotificationTxnSchema->new(
+        resultsets => {
+            Notification      => GPForum::Test::NotificationResultSet->new,
+            NotificationInbox => GPForum::Test::NotificationResultSet->new,
+            NotificationRead  => GPForum::Test::NotificationResultSet->new,
+        },
+    ),
+    stats => { badge_failures => 0 },
+);
+my $unsent_delivery = $unsent->create_notification(
+    {
+        notification_type => 'reply',
+        payload           => { thread_id => 'thread-13' },
+        recipient_user_id => 'user-13',
+        source_id         => 'post-13',
+        source_type       => 'post',
+    }
+);
+ok( $unsent_delivery->{ok}, 'a delivery whose NOTIFY fails succeeds' );
+is( $unsent_delivery->{unread_count}, 1, 'and keeps the unread count it read' );
+is( $unsent->snapshot->{badge_failures},
+    1, 'the badge NOTIFY that failed is counted' );
 
 done_testing();
 

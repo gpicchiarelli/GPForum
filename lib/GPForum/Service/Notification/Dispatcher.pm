@@ -31,10 +31,16 @@ const my $UNREAD_CAP                 => 99;
 const my $NOTIFICATION_ID_CONSTRAINT => 'notifications_pkey';
 const my @CURSOR_COLUMNS             => qw(created_at notification_id);
 
+# Bootstrap builds a dispatcher per request, so counters kept on one would
+# die with it. These are the process's, shared by every dispatcher it builds,
+# as the notifier's are.
+my %PROCESS_STATS = ( badge_failures => 0 );
+
 has clock => sub { return GPForum::Service::Clock->new; };
 has event_contract =>
   sub { return GPForum::Service::Realtime::EventEnvelope->new; };
 has id_service  => sub { return GPForum::Infrastructure::Id->new; };
+has logger      => undef;
 has page_window => sub { return GPForum::Service::Forum::PageWindow->new; };
 has permission_engine => undef;
 has preference_store  => undef;
@@ -51,6 +57,7 @@ has realtime_notifier => undef;
 # private or the recipient lost their grant.
 has readability        => undef;
 has schema             => undef;
+has stats              => sub { return \%PROCESS_STATS; };
 has subscription_store => undef;
 
 sub create_notification ( $self, $input ) {
@@ -82,7 +89,7 @@ sub _settle_delivery_badge ( $self, $result, $recipient_user_id ) {
 
     $result->{unread_count} =
         $result->{duplicate}
-      ? $self->unread_count_for_user($recipient_user_id)
+      ? $self->_unread_count_after_commit($recipient_user_id)
       : $self->_broadcast_unread_count($recipient_user_id);
 
     return $result;
@@ -533,15 +540,75 @@ sub _channel_enabled ( $self, $input, $channel ) {
     return $enabled ? 1 : 0;
 }
 
-# A failed NOTIFY leaves the badge to the next snapshot; the rows are written.
+# The write has committed when the badge is counted, so the write's answer
+# stands whatever happens here. A count that failed was raised past the
+# commit: a mark-read that had been stored answered as a failure, and a
+# fanout reported a delivered recipient as failed. A failed count or NOTIFY
+# is logged and counted instead (unread_count is undef when the count
+# failed), and the next snapshot corrects the badge.
+#
+# Under an outer transaction (a mention inside the command log's) the work
+# runs in a savepoint -- attempt is the savepoint helper -- so a statement
+# that fails here does not abort the transaction the post still has to
+# commit.
 sub _broadcast_unread_count ( $self, $user_id ) {
-    my $count = $self->unread_count_for_user($user_id);
-    return $count if !$self->realtime_notifier;
-
-    $self->realtime_notifier->notify(
-        $self->event_contract->notification_badge( $user_id, $count ) );
+    my $count;
+    my ( undef, $error ) = GPForum::Infrastructure::UniqueConflict->attempt(
+        $self->schema,
+        sub {
+            $count = $self->unread_count_for_user($user_id);
+            return $self->_notify_badge( $user_id, $count );
+        },
+    );
+    if ($error) {
+        $self->_badge_failed($error);
+    }
 
     return $count;
+}
+
+sub _unread_count_after_commit ( $self, $user_id ) {
+    my ( $count, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->unread_count_for_user($user_id); },
+      );
+    if ($error) {
+        return $self->_badge_failed($error);
+    }
+
+    return $count;
+}
+
+# A NOTIFY the notifier could not send is raised here only so that the
+# savepoint is rolled back, its statement having perhaps aborted it; the
+# count already read is kept.
+sub _notify_badge ( $self, $user_id, $count ) {
+    return 1 if !$self->realtime_notifier;
+
+    my $sent = $self->realtime_notifier->notify(
+        $self->event_contract->notification_badge( $user_id, $count ) );
+    if ( ref $sent eq 'HASH' && !$sent->{ok} ) {
+        die 'badge NOTIFY failed: ' . ( $sent->{reason} || 'unknown' ) . "\n";
+    }
+
+    return 1;
+}
+
+sub _badge_failed ( $self, $error ) {
+    my $undefined;
+
+    $self->stats->{badge_failures} += 1;
+    if ( $self->logger && $self->logger->can('warn') ) {
+        my ($line) = split /\n/msx, "$error";
+        $self->logger->warn(
+            'notification badge not sent: ' . ( $line // q{} ) );
+    }
+
+    return $undefined;
+}
+
+sub snapshot ($self) {
+    return { %{ $self->stats } };
 }
 
 sub _find_inbox ( $self, $query ) {
@@ -745,6 +812,14 @@ sockets on every node. Under an outer transaction PostgreSQL holds that
 NOTIFY until the outer commit. The count is capped: past 99 it stops at
 100, which the inbox shows as "more than 99".
 
+The badge comes after the write, and the write's answer stands whatever
+happens to it. A count that fails, or a NOTIFY the notifier could not send,
+is logged as a warning through C<logger>, counted in C<badge_failures>,
+and left to the next snapshot; the result's C<unread_count> is then undef
+when the count itself failed. Under an outer transaction the count and the
+NOTIFY run in a savepoint, so a failed statement there does not abort the
+transaction the caller still has to commit.
+
 Every collaborator but C<schema> is optional: without C<permission_engine>
 or C<preference_store> everyone is notified, without C<readability> nothing
 is filtered, and without C<realtime_notifier> no badge is sent.
@@ -765,7 +840,8 @@ notification, inbox, unread_count } >>: C<notification> and C<inbox> are
 hash references of the stored fields, the notification's C<payload>
 carrying the C<idempotency_key>. C<duplicate> is 1 when the recipient
 already had this notification; then nothing is written and no badge is
-sent, though C<unread_count> is still read.
+sent, though C<unread_count> is still read. C<unread_count> is undef when
+the count failed after the write (see L</DESCRIPTION>).
 
 =head2 fanout_to_subscribers
 
@@ -803,7 +879,8 @@ C<< { ok => 0, error => 'not_found' } >> when the id is not a uuid or the
 recipient has no such notification. Otherwise returns
 C<< { ok => 1, duplicate, notification_id, recipient_user_id, read_at,
 unread_count } >>, with C<duplicate> 1 and the earlier C<read_at> when it
-was already read. A badge with the new count is sent in both cases.
+was already read. A badge with the new count is sent in both cases;
+C<unread_count> is undef when that count failed after the commit.
 
 =head2 mark_all_read
 
@@ -812,7 +889,15 @@ inbox shows read, with one timestamp, in a transaction. Notifications whose
 source the member can no longer read stay unread. Returns
 C<< { ok => 1, duplicate, marked_count, read_at, recipient_user_id,
 unread_count } >>, C<duplicate> being 1 when there was nothing to mark,
-and sends a badge.
+and sends a badge; C<unread_count> is undef when that count failed after
+the commit.
+
+=head2 snapshot
+
+Returns a copy of the counters, C<< { badge_failures } >>: the badges that
+could not be counted or sent after a write. They are kept per process and
+shared by every dispatcher it builds, since Bootstrap builds one per
+request; a test passes its own C<stats> hash reference.
 
 =head2 unread_count_for_user
 
@@ -844,8 +929,11 @@ for any reason other than a unique conflict, or when a conflict on the
 inbox leaves no row to reuse; a conflict on the C<notifications> row
 itself (C<notifications_pkey>) is accepted, the row being already there.
 C<mark_read> and C<mark_all_read> croak likewise when a C<notification_reads>
-insert fails and no stored read can be reused. A failed badge NOTIFY is
-not raised: the rows are written and the next snapshot corrects the badge.
+insert fails and no stored read can be reused. Nothing after the write is
+raised: a badge whose count or NOTIFY failed is logged at C<warn> level,
+C<notification badge not sent:> and the first line of the error, and
+counted in C<badge_failures>; the rows are written and the next snapshot
+corrects the badge.
 C<fanout_to_subscribers> dies when C<subscription_store> is not set. Other
 database errors propagate; in a transaction they roll it back.
 
@@ -854,7 +942,8 @@ database errors propagate; in a transaction they roll it back.
 None. C<clock>, C<id_service>, C<event_contract> and C<page_window> default
 to L<GPForum::Service::Clock>, L<GPForum::Infrastructure::Id>,
 L<GPForum::Service::Realtime::EventEnvelope> and
-L<GPForum::Service::Forum::PageWindow>.
+L<GPForum::Service::Forum::PageWindow>. C<logger> is optional (anything
+with a C<warn> method); without it a failed badge is only counted.
 
 =head1 DEPENDENCIES
 
@@ -875,6 +964,8 @@ None known.
 =head1 BUGS AND LIMITATIONS
 
 A preference store that dies is read as the channel being enabled.
+C<badge_failures> reaches C</metrics> only once the metrics snapshot reads
+L</snapshot>.
 
 =head1 AUTHOR
 

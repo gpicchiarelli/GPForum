@@ -36,6 +36,11 @@ has clock  => sub { return GPForum::Service::Clock->new; };
 has schema => undef;
 
 sub set_preference ( $self, $input ) {
+    my $refused = _refused_channel( $input->{channel} );
+    if ($refused) {
+        return $refused;
+    }
+
     my $normalized = _normalized_preference($input);
     my $existing   = $self->_existing_preference($normalized);
     if ( _same_stored_preference( $existing, $normalized ) ) {
@@ -90,7 +95,7 @@ sub _insert_preference ( $self, $normalized ) {
 
 sub _normalized_preference ($input) {
     return {
-        channel          => _safe_channel( $input->{channel} ),
+        channel          => $input->{channel},
         digest_frequency =>
           _safe_digest_frequency( $input->{digest_frequency} ),
         enabled => $input->{enabled} ? 1 : 0,
@@ -155,8 +160,18 @@ sub _persist_preference ( $self, $normalized ) {
     return $row;
 }
 
+# Every channel is checked before any is written, so a refused request
+# leaves the member's preferences as they were.
 sub set_preferences ( $self, $input ) {
-    for my $preference ( @{ $input->{preferences} || [] } ) {
+    my @preferences = @{ $input->{preferences} || [] };
+    for my $preference (@preferences) {
+        my $refused = _refused_channel( $preference->{channel} );
+        if ($refused) {
+            return $refused;
+        }
+    }
+
+    for my $preference (@preferences) {
         $self->set_preference(
             {
                 %{$preference}, user_id => $input->{user_id},
@@ -228,15 +243,31 @@ sub digest_frequency_options {
     ];
 }
 
+# Read through the defaults, as channel_enabled is. Read from the stored
+# rows alone, a member who never saved the settings form had no channel on,
+# though every delivery treated in-app and email as on.
 sub enabled_channels ( $self, $user_id ) {
-    my $search = $self->schema->resultset('NotificationPreference')->search_rs(
-        {
-            user_id => $user_id,
-            enabled => 1,
-        }
-    );
+    return map { $_->{channel} }
+      grep { $_->{enabled} } @{ $self->preferences_for_user($user_id) };
+}
 
-    return map { $_->get_column('channel') } _rows($search);
+# A misspelt channel was written as in_app: a request meant for email turned
+# the member's in-app notifications off. It is refused instead, as invalid
+# input, before anything is written.
+sub _refused_channel ($channel) {
+    if ( _is_channel($channel) ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    my $message = 'channel must be one of ' . join q{, }, @CHANNELS;
+
+    return {
+        error  => $message,
+        errors => { channel => $message },
+        ok     => 0,
+        status => 'invalid',
+    };
 }
 
 sub _safe_channel ($channel) {
@@ -303,18 +334,22 @@ defaults: in-app on and immediate, email on with a daily digest frequency,
 digest off and daily. The settings page reads and writes through this store,
 and the notification dispatcher asks it whether a channel is on.
 
-Input is coerced rather than refused: an unknown channel is treated as
-C<in_app>, an unknown digest frequency as C<daily>, and C<enabled> as a
-boolean. A write that would store what is already stored is skipped, and an
-insert that loses a race with a concurrent one for the same member and
-channel falls back to the row that won.
+A write names a known channel or is refused: an unknown channel is
+answered with C<< { ok => 0, status => 'invalid', error, errors =>
+{ channel } } >> and nothing is written, which the notification workflow
+passes up as an invalid request (a 400 from the settings form). The rest of
+the input is coerced: an unknown digest frequency is stored as C<daily>, and
+C<enabled> as a boolean. A write that would store what is already stored is
+skipped, and an insert that loses a race with a concurrent one for the same
+member and channel falls back to the row that won.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 set_preference
 
 Takes a hash reference with C<user_id>, C<channel>, C<enabled> and
-C<digest_frequency>, coerced as above. Returns the hash reference written
+C<digest_frequency>, checked and coerced as above. Returns the refusal hash
+reference when the channel is unknown; otherwise the hash reference written
 (C<user_id>, C<channel>, C<enabled>, C<digest_frequency>, C<updated_at>), or,
 when the stored row already says the same, that row's values with
 C<< skipped => 1 >> and nothing written. A new row is inserted under a
@@ -323,8 +358,10 @@ savepoint.
 =head2 set_preferences
 
 Takes C<user_id> and C<preferences>, an array reference of hashes as for
-L</set_preference> (the outer C<user_id> wins), applies each in order, and
-returns L</preferences_for_user> for that member.
+L</set_preference> (the outer C<user_id> wins). When any of them names an
+unknown channel, returns the refusal hash reference and writes none of
+them. Otherwise applies each in order and returns L</preferences_for_user>
+(an array reference) for that member.
 
 =head2 preferences_for_user
 
@@ -351,15 +388,18 @@ C<daily>, C<weekly> and C<never>. Needs no instance.
 
 =head2 enabled_channels
 
-Takes a user id and returns a list of the channel names whose stored row has
-C<enabled> set. Unlike the methods above it applies no defaults and no
-channel filter: a member with no stored rows gets an empty list.
+Takes a user id and returns a list of the channel names that are on for the
+member, in the order of L</preferences_for_user> and with its defaults: a
+member with no stored rows gets C<in_app> and C<email>.
 
 =head1 DIAGNOSTICS
 
-L</set_preference> rethrows an insert error that is not a unique conflict,
-and a unique conflict after which no row can be found. Other database errors
-propagate.
+An unknown channel is not raised: L</set_preference> and
+L</set_preferences> return C<< { ok => 0, status => 'invalid' } >> with
+C<error> and C<< errors => { channel } >> saying
+C<channel must be one of in_app, email, digest>. L</set_preference> rethrows
+an insert error that is not a unique conflict, and a unique conflict after
+which no row can be found. Other database errors propagate.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -377,9 +417,8 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-A misspelt channel is written to C<in_app>, not refused. Nothing in
-F<lib/> calls L</enabled_channels>, whose results differ from
-L</channel_enabled> for a member without stored rows.
+L</channel_enabled> still reads an unknown channel as C<in_app>. Nothing in
+F<lib/> calls L</enabled_channels>.
 
 =head1 AUTHOR
 
