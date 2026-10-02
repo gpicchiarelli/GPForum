@@ -16,13 +16,9 @@ use GPForum::Test::AttachmentRow;
 
 our $VERSION = '0.001';
 
-has created     => sub { return []; };
-has find_misses => 0;
-has last_attrs  => sub { return {}; };
-has last_query  => sub { return {}; };
-has rows        => sub { return {}; };
-has schema      => undef;
-has skip_search => 0;
+has created => sub { return []; };
+has rows    => sub { return {}; };
+has schema  => undef;
 
 sub create {
     my ( $self, $row ) = @_;
@@ -95,10 +91,6 @@ sub find {
     my ( $self, $id ) = @_;
 
     $self->_assert_usable;
-    if ( $self->find_misses ) {
-        $self->find_misses( $self->find_misses - 1 );
-        return;
-    }
 
     return $self->rows->{$id};
 }
@@ -115,13 +107,6 @@ sub search {
     my ( $self, $query, $attrs ) = @_;
 
     $self->_assert_usable;
-    $self->last_query( $query || {} );
-    $self->last_attrs( $attrs || {} );
-
-    my $skipped = $self->_skipped_search;
-    if ($skipped) {
-        return $skipped;
-    }
 
     my @rows = values %{ $self->rows };
     my %seen;
@@ -194,18 +179,6 @@ sub _matches_field {
     return !defined $actual if !defined $expected;
 
     return defined $actual && $actual eq $expected ? 1 : 0;
-}
-
-sub _skipped_search {
-    my ($self) = @_;
-
-    if ( !$self->skip_search ) {
-        return;
-    }
-
-    $self->skip_search( $self->skip_search - 1 );
-
-    return GPForum::Test::AttachmentSearch->new( rows => [] );
 }
 
 sub _assert_intent_unique {

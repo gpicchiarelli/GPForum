@@ -556,6 +556,7 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+
 - **Notifications, attachments and community stores are tested on
   PostgreSQL** (`t/integration/postgres-{notifications,attachments,community}.t`,
   over 550 assertions) instead of fake ORMs; concurrent-write recovery is
