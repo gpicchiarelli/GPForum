@@ -25,14 +25,15 @@ use GPForum::Test::SharedCacheClient;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS              => 43;
-const my $CHECK_COUNT                 => 13;
+const my $EXPECTED_TESTS              => 45;
+const my $CHECK_COUNT                 => 14;
 const my $ENDPOINT_BUDGET_CHECK_INDEX => 7;
 const my $QUERY_BUDGET_DRIFT_INDEX    => 8;
 const my $SHARED_CACHE_CHECK_INDEX    => 9;
 const my $ANTIVIRUS_CHECK_INDEX       => 10;
 const my $PARTITION_CHECK_INDEX       => 11;
 const my $PROFILE_CHECK_INDEX         => 12;
+const my $REPLICATION_CHECK_INDEX     => 13;
 const my $SMALL_CACHE                 => 2_048;
 const my $SMALL_WEB                   => 4;
 
@@ -82,6 +83,12 @@ is( $ready->{checks}[$PROFILE_CHECK_INDEX]{name},
     'operational_profile', 'readiness checks the operational profile' );
 is( $ready->{checks}[$PROFILE_CHECK_INDEX]{status},
     'ok', 'default config meets the development profile' );
+
+# ADR 0058: replication slots are watched (t/241 covers the slot rules).
+is( $ready->{checks}[$REPLICATION_CHECK_INDEX]{name},
+    'replication_slots', 'readiness checks the replication slots' );
+is( $ready->{checks}[$REPLICATION_CHECK_INDEX]{mode},
+    'no catalog', 'which a schema without a database handle cannot read' );
 is( $ready_schema->search_count,
     3, 'readiness executes bounded resultset probes' );
 ok( defined $ready->{latency_ms}, 'readiness reports latency' );

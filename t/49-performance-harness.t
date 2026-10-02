@@ -84,10 +84,12 @@ is_deeply(
         qw(
           home categories category_threads category_threads_signed_in
           thread_view search autocomplete feed notifications outbox_claim
-          moderation_queue health_ready metrics
+          moderation_queue health_ready metrics home_signed_in home_deep
+          category_threads_deep category_threads_deep_signed_in
+          thread_view_signed_in thread_view_deep thread_view_deep_signed_in
         )
     ],
-    'query plan evidence covers the hot endpoints, signed-in pages included'
+    'query plan evidence covers the hot endpoints, signed-in and deep pages'
 );
 my ($autocomplete_endpoint) =
   grep { $_->{endpoint} eq 'autocomplete' } @{ $query_plan->{endpoints} };

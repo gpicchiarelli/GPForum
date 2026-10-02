@@ -113,6 +113,38 @@ letter count. Failure classification is persisted as `failure_type` with the
 canonical values `transient`, `permanent`, `serialization`, `authorization`, and
 `transport`.
 
+## Replication Signals
+
+ADR 0058 requires replication lag to be monitored. `/metrics` carries a
+`replication` section, read on every scrape from PostgreSQL's in-memory
+views -- three short queries that take no lock -- as the node the process is
+connected to sees it:
+
+* on a primary, `standbys[]` from `pg_stat_replication`: each standby's
+  `application_name`, `state`, `sync_state`, `replay_lag_seconds` and
+  `bytes_behind` (WAL not yet replayed, from the primary's write position);
+* on both, `slots[]` from `pg_replication_slots`: `slot_name`, `slot_type`,
+  `active`, `wal_status` and the WAL each one keeps (`retained_bytes`);
+* on a standby, `replay_age_seconds` (since the last replayed transaction),
+  `replay_pending_bytes` (received, not yet replayed) and `receiving` (1
+  while its WAL receiver is connected): the age grows on an idle primary
+  too, and a standby cut off from its primary has nothing pending, so only
+  `receiving` tells the two apart.
+
+`role` says which the node is. The standby rows need `pg_read_all_stats` on
+the application role -- not `pg_monitor`, whose `pg_read_all_settings` reads
+a standby's `primary_conninfo` -- and without it `standby_details_visible` is
+0 and their fields are empty. A database that cannot answer turns the section
+into `status: unavailable` with the `error`, and the rest of `/metrics` is
+still served.
+
+`/health/ready` carries a `replication_slots` check: `degraded`, never
+`fail`, when an inactive slot keeps more than 1 GiB of WAL or a slot is
+`lost`, with the slots and the problems in its `report`. A slot nobody reads
+costs the primary disk, not service. The runbook --
+[ops/standby-and-failover.md](ops/standby-and-failover.md#watch-the-lag) --
+says which fields to read together and when to drop a slot.
+
 ## Benchmark Methodology
 
 Current benchmark discipline:
@@ -163,10 +195,38 @@ Covered endpoints:
 | moderation queue | `reports_queue` |
 | health ready | `readiness_event_log_probe` |
 | metrics | `outbox_retry_backlog` |
+| home, signed in | `threads_public_activity_viewer` |
+| home, halfway down | `threads_public_activity_keyset` |
+| category thread list, halfway down | `threads_category_activity_keyset` |
+| category thread list, halfway down, signed in | `threads_category_viewer_union_keyset` |
+| thread view, signed in | `posts_thread_position_viewer` |
+| thread view, halfway down the longest thread | `posts_visible_thread_position_keyset` |
+| thread view, halfway down, signed in | `posts_thread_position_viewer_keyset` |
 
 Each statement is the one the application executes, rendered from the method
 that builds it; [PERFORMANCE_EVIDENCE.md](PERFORMANCE_EVIDENCE.md) names each
 source.
+
+Signed in is a member (ADR 0102) with a `category.read` grant on another
+category than the one paged, passed to the readers as the controllers pass
+it: the account, and its grants decided for the category. Its plans cover
+what a member adds -- the members' level, their own private and deleted
+rows, and on the home page the granted category.
+
+A first page proves nothing about the hundredth. A keyset predicate the
+index cannot start from reads every row before the cursor and filters it
+out, and costs nothing on page one (`Infrastructure::Keyset` records page 800
+of a 50,000-post thread filtering 39,008 rows). Each `_deep` endpoint
+EXPLAINs the page halfway down the longest thread, the largest category or
+the latest public threads, with the cursor its reader mints and the
+reader's own predicate (`Infrastructure::Keyset`'s, or the category list's,
+which leads with `pinned`), and the first page of the same list. Its
+`summary.depth` records `rows_before_cursor` and the
+`rows_removed_first_page` and `rows_removed_deep_page` (Rows Removed by
+Filter over every scan and loop, but a sequential scan of a table under the
+small-table threshold or small by construction, which reads all of it at any
+depth), and the text report ends the endpoint's line with
+`depth=N rows_removed=FIRST/DEEP`.
 
 Failure rules:
 
@@ -177,6 +237,28 @@ Failure rules:
 | heavy sort | fail above configured row threshold |
 | explosive nested loop | fail above configured row threshold |
 | page-skipping pagination | fail on `OFFSET` in hot-path application/template code |
+| filtering that grows with depth | `filter_grows_with_depth:FIRST:DEEP` when the deep page filters out more than a page (26 rows) more than the first page |
+| a cursor the reader ignores | `cursor_ignored` when the deep page's statement is the first page's: the reader did not accept the cursor |
+
+The deep pages also warn, without failing: `no_deep_page` when the database
+has nothing to page through; `shallow_page:N` when fewer than 52 rows precede
+the cursor -- too few to tell a scan that reads its way there from one that
+does not; the small seed's longest thread has eight posts;
+`filter_growth_unmeasured` under `--no-analyze`, which records no removed
+rows; and `filter_growth_unmeasured:TABLE` when the deep page reads a table
+under the small-table threshold whole and that scan filters out more than a
+page more than the first page's. Reading it whole is the planner's right
+plan there, and it hides the growth instead of showing it: the `medium`
+seed's 120 threads put the latest list's deep page 59 rows down, and it is
+read that way with its keyset bound or without. The deep-page rule only
+bites on a dataset with long lists the planner reads by index: the
+`hot-thread` seed's 120-post threads measure the thread pages, the category
+and latest lists need more threads than any seed profile writes (a
+`--threads` seed, or a production-sized copy).
+`t/integration/postgres-query-plan-depth.t` builds a 3,000-post thread and a
+1,500-thread category and checks both that the readers pass and that every
+deep page, signed in or not, fails once its predicate loses the bound on the
+sort column (Keyset's, or the category list's own).
 
 ## PostgreSQL Operational Visibility
 

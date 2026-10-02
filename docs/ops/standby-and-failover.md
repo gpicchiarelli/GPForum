@@ -82,18 +82,73 @@ proves this with the application's own connection.
 
 ## Watch the lag
 
-On the primary:
+`/metrics` reports replication on every scrape, under `replication`, as the
+node the application is connected to sees it (ADR 0058):
+
+| Field | On | Meaning |
+| --- | --- | --- |
+| `role` | both | `primary`, or `standby` when the node is in recovery |
+| `standbys[]` | primary | one row per standby streaming from it: `application_name`, `state`, `sync_state`, `replay_lag_seconds`, `bytes_behind` |
+| `standby_details_visible` | primary | 0 when the database role cannot read the standbys' state and positions |
+| `slots[]` | both | one row per replication slot: `slot_name`, `slot_type`, `active` (0 or 1), `wal_status`, `retained_bytes` |
+| `replay_age_seconds` | standby | how long ago the last replayed transaction committed on the primary |
+| `replay_pending_bytes` | standby | WAL received and not yet replayed |
+| `receiving` | standby | 1 while its WAL receiver is connected to the primary, else 0 |
+| `status` | both | `ok`, or `unavailable` with the `error` when the views could not be read |
+
+`bytes_behind` is the WAL the standby has still to replay, measured from the
+primary's current write position. `replay_lag_seconds` is empty once a
+standby has caught up and the primary is idle. On a standby,
+`replay_age_seconds` also grows while the primary is idle, so read the three
+together: a growing age with `receiving` 1 and `replay_pending_bytes` 0 is an
+idle primary; with pending bytes, a standby that has stopped replaying; with
+`receiving` 0, a standby cut off from its primary -- it has nothing pending
+because it receives nothing.
+
+PostgreSQL shows a standby's state and positions only to a role with
+`pg_read_all_stats`. Grant it to the application's database role
+(`GRANT pg_read_all_stats TO gpforum;`), or every standby reads as an
+`application_name` with empty fields and `standby_details_visible` is 0.
+Grant that role, not `pg_monitor`: `pg_monitor` adds `pg_read_all_settings`,
+which reads the settings only a superuser should -- on a standby,
+`primary_conninfo`, with the replication password when one was given to
+`pg_basebackup -R`.
+
+`/health/ready` carries a `replication_slots` check. It turns `degraded` --
+the node keeps serving -- when an inactive slot keeps more than 1 GiB of WAL
+or a slot is `lost`, and names the slot in `report.problems`. An inactive
+slot with growing `retained_bytes` is a standby that has stopped following,
+and a slot whose standby is gone for good keeps the primary's WAL until its
+disk fills:
+
+1. Find out whether the standby is coming back. If it is, bring it up: it
+   catches up through the slot, and the check clears once the slot is active.
+2. If it is not, drop its slot on the primary:
+   `SELECT pg_drop_replication_slot('<slot>');`. The WAL is recycled at the
+   next checkpoint.
+3. A `lost` slot's standby has missed WAL the primary no longer has. Drop the
+   slot and rebuild the standby with a fresh `pg_basebackup`, as in
+   [Set up the standby](#set-up-the-standby).
+
+The same numbers by hand, on the primary:
 
 ```sql
-SELECT application_name, state, replay_lag, pg_wal_lsn_diff(sent_lsn, replay_lsn) AS bytes_behind
+SELECT application_name, state, replay_lag,
+       pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn) AS bytes_behind
 FROM pg_stat_replication;
 
-SELECT slot_name, active, pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS retained_bytes
+SELECT slot_name, active, wal_status,
+       pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn) AS retained_bytes
 FROM pg_replication_slots;
 ```
 
-An inactive slot with growing `retained_bytes` is a standby that has stopped
-following.
+and on a standby:
+
+```sql
+SELECT now() - pg_last_xact_replay_timestamp() AS replay_age,
+       pg_wal_lsn_diff(pg_last_wal_receive_lsn(), pg_last_wal_replay_lsn()) AS replay_pending_bytes,
+       EXISTS (SELECT 1 FROM pg_stat_wal_receiver) AS receiving;
+```
 
 ## Fail over
 

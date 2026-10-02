@@ -32,6 +32,14 @@ has relation_rows => 1_000_000;
 has statements    => sub { return []; };
 has transactions  => sub { return []; };
 
+# Plans answered in turn, before `plan` takes over: a deep endpoint EXPLAINs
+# its first page, then the deep one.
+has plans => sub { return []; };
+
+# The row the deep-page query finds, as DBD::Pg returns it; none -- a
+# database with nothing to page through -- unless a test gives one.
+has deep_page => undef;
+
 # Records what was EXPLAINed, so a test can check it is the application's
 # SQL, and answers with the configured plan.
 sub selectrow_array {
@@ -40,11 +48,19 @@ sub selectrow_array {
     push @{ $self->statements }, { sql => $sql, bind => \@bind };
     return $self->relation_rows if $sql =~ /\b pg_class \b/msx;
 
-    my $plan =
-        $self->{seqscan_off} && $self->forced_plan
-      ? $self->forced_plan
-      : $self->plan;
-    return encode_json( [$plan] );
+    if ( $self->{seqscan_off} ) {
+        return encode_json( [ $self->forced_plan || $self->plan ] );
+    }
+
+    return encode_json( [ shift @{ $self->plans } || $self->plan ] );
+}
+
+sub selectrow_hashref {
+    my ( $self, $sql ) = @_;
+
+    push @{ $self->statements }, { sql => $sql, bind => [] };
+
+    return $self->deep_page;
 }
 
 ## no critic (Subroutines::ProhibitBuiltinHomonyms)

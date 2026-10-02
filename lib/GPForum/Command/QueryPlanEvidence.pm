@@ -10,6 +10,7 @@ use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(decode_json encode_json);
+use MIME::Base64  qw(encode_base64url);
 use Mojo::Base -base, -signatures;
 
 use GPForum::Command::Usage;
@@ -21,6 +22,7 @@ use GPForum::Service::Forum::CategoryReader;
 use GPForum::Service::Forum::PostReader;
 use GPForum::Service::Forum::Readability;
 use GPForum::Service::Forum::ThreadReader;
+use GPForum::Service::Forum::Viewer;
 use GPForum::Service::Moderation::ReportStore;
 use GPForum::Service::Notification::Dispatcher;
 use GPForum::Service::Operations::MetricsSnapshot;
@@ -48,13 +50,82 @@ const my $RELATION_ROWS_SQL => join q{ },
   q{WHERE c.oid = to_regclass(?)};
 const my $SQL_PAGE_SKIP_KEYWORD => join q{}, 'OFF', 'SET';
 const my $CATEGORY_ID           => '018f1001-0001-7000-8000-000000000001';
+const my $GRANTED_CATEGORY_ID   => '018f1001-0002-7000-8000-000000000002';
+const my $SPACE_ID              => '018f1000-0001-7000-8000-000000000001';
 const my $THREAD_ID             => '018f1004-0001-7000-8000-000000000001';
 const my $USER_ID               => '018f1002-0001-7000-8000-000000000001';
 const my $PAGE_ROWS             => 26;
-const my $SEARCH_ROWS           => 20;
-const my $AUTOCOMPLETE_ROWS     => 10;
-const my $CLAIM_ROWS            => 100;
-const my $CLAIM_LEASE_SECONDS   => 60;
+
+# A keyset page costs the same at any depth only if its scan starts at the
+# cursor; one that reads its way there filters out every row before it. A
+# deep page may filter out a page's worth of rows more than the first page --
+# hidden posts, the row equal to the cursor -- and no more. With fewer than
+# $DEEP_PAGE_MIN_ROWS rows before the cursor a scan that reads its way there
+# hardly exceeds that allowance, and the evidence says so instead of passing
+# quietly: the small seed's longest thread has eight posts.
+const my $DEPTH_FILTER_SLACK => $PAGE_ROWS;
+const my $DEEP_PAGE_MIN_ROWS => 2 * $PAGE_ROWS;
+
+# The deep pages' cursors: the row halfway down the longest thread, the
+# largest category and the latest public threads, in each reader's own
+# order. Halfway, because a scan that ignores the cursor shows either way
+# from there: walking from the top it filters out the first half, fetching
+# what follows the cursor it sorts the second. Read outside the plans, once
+# per report: the window runs over one thread or one category, though finding
+# the longest thread counts every thread's posts.
+const my $DEEP_THREAD_SQL => join q{ },
+  'WITH longest AS (SELECT thread_id FROM posts GROUP BY thread_id',
+  'ORDER BY count(*) DESC, thread_id LIMIT 1),',
+  'ranked AS (SELECT p.thread_id, p.position, p.post_id,',
+  'row_number() OVER (ORDER BY p.position, p.post_id) AS rank,',
+  'count(*) OVER () AS total FROM posts p JOIN longest USING (thread_id))',
+  'SELECT r.thread_id, t.category_id, c.space_id, r.position, r.post_id,',
+  'r.rank - 1 AS depth FROM ranked r JOIN threads t USING (thread_id)',
+  'JOIN categories c ON c.category_id = t.category_id',
+  'WHERE r.rank = (r.total + 1) / 2';
+const my $DEEP_CATEGORY_SQL => join q{ },
+  'WITH largest AS (SELECT category_id FROM threads WHERE deleted_at IS NULL',
+  'GROUP BY category_id ORDER BY count(*) DESC, category_id LIMIT 1),',
+  'ranked AS (SELECT t.category_id, t.pinned, t.last_activity_at,',
+  't.thread_id, row_number() OVER (ORDER BY t.pinned DESC,',
+  't.last_activity_at DESC, t.thread_id DESC) AS rank,',
+  'count(*) OVER () AS total FROM threads t JOIN largest USING (category_id)',
+  'WHERE t.deleted_at IS NULL)',
+  'SELECT r.category_id, c.space_id, r.pinned, r.last_activity_at,',
+  'r.thread_id, r.rank - 1 AS depth FROM ranked r',
+  'JOIN categories c USING (category_id) WHERE r.rank = (r.total + 1) / 2';
+const my $DEEP_LATEST_SQL => join q{ },
+  'WITH ranked AS (SELECT t.last_activity_at, t.thread_id,',
+  'row_number() OVER (ORDER BY t.last_activity_at DESC, t.thread_id DESC)',
+  'AS rank, count(*) OVER () AS total FROM threads t',
+  q{WHERE t.deleted_at IS NULL AND t.visibility = 'public'},
+  q{AND t.moderation_state IN ('visible', 'locked'))},
+  'SELECT last_activity_at, thread_id, rank - 1 AS depth FROM ranked',
+  'WHERE rank = (total + 1) / 2';
+
+# Each list's cursor, as its reader mints it: PageWindow joins the sort value
+# and the id, ThreadReader leads the category's with pinned. Written out here
+# because the readers mint cursors only from the rows of a page they fetched;
+# a cursor the reader no longer accepts shows as cursor_ignored, not as a
+# deep page that passed.
+const my %DEEP_PAGE => (
+    category => {
+        sql    => $DEEP_CATEGORY_SQL,
+        cursor => [qw(pinned last_activity_at thread_id)],
+    },
+    latest => {
+        sql    => $DEEP_LATEST_SQL,
+        cursor => [qw(last_activity_at thread_id)],
+    },
+    thread => {
+        sql    => $DEEP_THREAD_SQL,
+        cursor => [qw(position post_id)],
+    },
+);
+const my $SEARCH_ROWS         => 20;
+const my $AUTOCOMPLETE_ROWS   => 10;
+const my $CLAIM_ROWS          => 100;
+const my $CLAIM_LEASE_SECONDS => 60;
 const my @DEFAULT_ENDPOINT_NAMES => qw(
   home
   categories
@@ -68,6 +139,13 @@ const my @DEFAULT_ENDPOINT_NAMES => qw(
   moderation_queue
   health_ready
   metrics
+  home_signed_in
+  home_deep
+  category_threads_deep
+  category_threads_deep_signed_in
+  thread_view_signed_in
+  thread_view_deep
+  thread_view_deep_signed_in
 );
 
 # Tables small by construction, where a sequential scan is the right plan
@@ -77,6 +155,10 @@ const my %ALLOWED_SEQ_SCAN_RELATION => map { $_ => 1 }
 
 has dbh    => undef;
 has schema => undef;
+
+# The deep pages the report being taken has read, by kind of list: two
+# endpoints that page the same list page it at the same cursor.
+has deep_pages => sub { return {}; };
 
 # A usage croak becomes the documented usage exit instead of an uncaught
 # exception: same text, on stderr, status 2, without croak's " at FILE line N".
@@ -117,6 +199,7 @@ sub evidence_report ( $self, $options ) {
     }
 
     my $dbh = $self->_dbh;
+    $self->deep_pages( {} );
     my @reports;
     for my $endpoint (@endpoints) {
         push @reports, $self->_endpoint_report( $dbh, $endpoint, $options );
@@ -135,6 +218,8 @@ sub evidence_report ( $self, $options ) {
             seq_scan_relation_rows => $SMALL_RELATION_ROWS,
             sort_plan_rows         => $PLAN_ROWS_SORT_OK,
             nested_loop_plan_rows  => $PLAN_ROWS_NESTED_OK,
+            deep_page_filter_rows  => $DEPTH_FILTER_SLACK,
+            deep_page_min_rows     => $DEEP_PAGE_MIN_ROWS,
         },
     };
 }
@@ -145,15 +230,25 @@ sub format_report ( $self, $report, $format ) {
     return _text_report($report);
 }
 
+# A deep endpoint EXPLAINs two pages of the same list: the first, and one
+# halfway down it. The deep page's plan is judged like any other; the first
+# page's is the baseline the deep page's filtering is compared with.
 sub _endpoint_report ( $self, $dbh, $endpoint, $options ) {
     my $definition = _endpoint_definition($endpoint);
-    my $statement  = $self->_statement($definition);
-    my $explained  = _explain( $dbh, $statement, $options );
+    my $page       = $self->_deep_page( $dbh, $definition->{deep} );
+    my $statement  = $self->_statement( $definition, $page );
+    my $first      = $self->_first_page_statement( $definition, $page );
+    my $explained  = _explain( $dbh, $statement, $options, $first );
     my $plan       = decode_json( $explained->{plan} )->[0];
     my $analysis   = _analyze_plan( $definition, $statement, $plan );
     _small_table_scans_are_warnings( $dbh, $analysis, $definition );
     push @{ $analysis->{violations} },
       _unindexable( $definition, decode_json( $explained->{forced} )->[0] );
+    my $depth =
+      $page
+      ? _depth_evidence( $dbh, $analysis, $page,
+        { deep => $plan, _first_page_plan( $explained, $first, $statement ) } )
+      : undef;
     $analysis->{status} = @{ $analysis->{violations} } ? 'fail' : 'ok';
 
     return {
@@ -171,8 +266,151 @@ sub _endpoint_report ( $self, $dbh, $endpoint, $options ) {
             actual_time_ms => $plan->{Plan}{'Actual Total Time'} || 0,
             shared_hit  => _plan_value( $plan->{Plan}, 'Shared Hit Blocks' ),
             shared_read => _plan_value( $plan->{Plan}, 'Shared Read Blocks' ),
+            ( $depth ? ( depth => $depth ) : () ),
         },
     };
+}
+
+# The page a deep endpoint EXPLAINs, read once per report for each kind of
+# list; nothing for an endpoint that is not deep.
+sub _deep_page ( $self, $dbh, $kind ) {
+    return if !defined $kind;
+
+    return $self->deep_pages->{$kind} //= _read_deep_page( $dbh, $kind );
+}
+
+# The first page of the list the deep page is in, when there is a deep page.
+sub _first_page_statement ( $self, $definition, $page ) {
+    return if !$page || !defined $page->{after};
+
+    return $self->_statement( $definition, { %{$page}, after => undef } );
+}
+
+# The first page's plan, and whether the reader made the two pages one
+# statement.
+sub _first_page_plan ( $explained, $first, $statement ) {
+    return if !$first;
+
+    return (
+        first          => decode_json( $explained->{first} )->[0],
+        same_statement => _same_statement( $first, $statement ),
+    );
+}
+
+# The thread, category or latest thread halfway down, and its cursor. A
+# database with nothing to page through gets the seeded ids' first page,
+# flagged no_deep_page by _depth_evidence.
+sub _read_deep_page ( $dbh, $kind ) {
+    my $deep = $DEEP_PAGE{$kind};
+    my $row  = $dbh->selectrow_hashref( $deep->{sql} );
+    return _seeded_page() if !$row;
+
+    return {
+        %{ _seeded_page() },
+        %{$row},
+        after => encode_base64url(
+            join q{|}, map { $_ // q{} } @{$row}{ @{ $deep->{cursor} } }
+        ),
+        depth => 0 + ( $row->{depth} // 0 ),
+    };
+}
+
+# Rows Removed by Filter needs ANALYZE; without it the growth is not
+# measured, and the evidence says so. A cursor the reader would not decode
+# leaves the first page's statement: a deep page that is not one.
+sub _depth_evidence ( $dbh, $analysis, $page, $plans ) {
+    my $depth = { rows_before_cursor => $page->{depth} };
+    if ( !defined $page->{after} ) {
+        push @{ $analysis->{warnings} }, 'no_deep_page';
+        return $depth;
+    }
+    if ( $plans->{same_statement} ) {
+        push @{ $analysis->{violations} }, 'cursor_ignored';
+        return $depth;
+    }
+    if ( $page->{depth} < $DEEP_PAGE_MIN_ROWS ) {
+        push @{ $analysis->{warnings} }, "shallow_page:$page->{depth}";
+    }
+    if (   !defined $plans->{deep}{Plan}{'Actual Rows'}
+        || !defined $plans->{first}{Plan}{'Actual Rows'} )
+    {
+        push @{ $analysis->{warnings} }, 'filter_growth_unmeasured';
+        return $depth;
+    }
+
+    my ( $first, $deep ) =
+      map { _rows_removed( $dbh, $plans->{$_}{Plan} ) } qw(first deep);
+    $depth->{rows_removed_first_page} = $first->{counted};
+    $depth->{rows_removed_deep_page}  = $deep->{counted};
+    if ( $deep->{counted} - $first->{counted} > $DEPTH_FILTER_SLACK ) {
+        push @{ $analysis->{violations} },
+          sprintf 'filter_grows_with_depth:%.0f:%.0f', $first->{counted},
+          $deep->{counted};
+    }
+    push @{ $analysis->{warnings} },
+      _hidden_growth( $first->{read_whole}, $deep->{read_whole} );
+
+    return $depth;
+}
+
+# The rows the page's scans read and threw away, EXPLAIN printing them per
+# loop; what small tables read whole threw away is kept apart, by table.
+sub _rows_removed ( $dbh, $root ) {
+    my $removed = { counted => 0, read_whole => {} };
+    _walk_plan(
+        $root,
+        sub {
+            my ($node)   = @_;
+            my $loops    = $node->{'Actual Loops'} || 1;
+            my $filtered = ( $node->{'Rows Removed by Filter'} // 0 ) * $loops;
+            return if !$filtered;
+            if ( !_small_table_scan( $dbh, $node, $filtered, $loops ) ) {
+                $removed->{counted} += $filtered;
+                return;
+            }
+            my $relation = $node->{'Relation Name'} // q{};
+            return if exists $ALLOWED_SEQ_SCAN_RELATION{$relation};
+            $removed->{read_whole}{$relation} += $filtered;
+        }
+    );
+
+    return $removed;
+}
+
+# A small table read whole filters out the rows before the cursor too, and
+# the planner is right to read it so: the growth is hidden, not absent. The
+# medium seed's latest list is read that way with its keyset bound or
+# without, so the deep page says it could not tell, as a shallow one does.
+# A table filtered alike on both pages -- the signed-in union's arm for the
+# reader's own deleted threads -- hides nothing.
+sub _hidden_growth ( $first, $deep ) {
+    return map { "filter_growth_unmeasured:$_" }
+      grep { $deep->{$_} - ( $first->{$_} // 0 ) > $DEPTH_FILTER_SLACK }
+      sort keys %{$deep};
+}
+
+# A sequential scan of a small table reads all of it whatever the depth --
+# the small seed's thread page filters out the other threads' posts on both
+# pages -- and is the planner's right answer there. One of a large table
+# counts like an index scan: leaving it to the sequential scan rule let a
+# deep page through that read a large table to return fewer rows than that
+# rule looks at.
+sub _small_table_scan ( $dbh, $node, $filtered, $loops ) {
+    return 0 if ( $node->{'Node Type'} // q{} ) ne 'Seq Scan';
+
+    my $relation = $node->{'Relation Name'} // q{};
+    return 1 if exists $ALLOWED_SEQ_SCAN_RELATION{$relation};
+
+    my $size =
+      _relation_size( $dbh, $relation, $filtered + _node_rows($node) * $loops );
+
+    return defined $size && $size <= $SMALL_RELATION_ROWS ? 1 : 0;
+}
+
+sub _same_statement ( $first, $second ) {
+    return
+      join( "\0", map { $_ // q{} } @{$first} ) eq
+      join( "\0", map { $_ // q{} } @{$second} ) ? 1 : 0;
 }
 
 # A sequential scan is recorded, not failed, when it is the planner's right
@@ -192,10 +430,7 @@ sub _small_table_scans_are_warnings ( $dbh, $analysis, $definition ) {
             push @violations, $violation;
             next;
         }
-        my $size = _relation_rows( $dbh, $relation );
-        if ( defined $size && $size < $rows ) {
-            $size = $rows;
-        }
+        my $size = _relation_size( $dbh, $relation, $rows );
         if ( defined $size && $size <= $SMALL_RELATION_ROWS ) {
             push @{ $analysis->{warnings} }, "seq_scan_small_table:$relation";
             next;
@@ -218,6 +453,15 @@ sub _relation_rows ( $dbh, $relation ) {
     my ($rows) = $dbh->selectrow_array( $RELATION_ROWS_SQL, undef, $relation );
 
     return $rows;
+}
+
+# The rows the catalog says a table holds, and at least the rows a scan of it
+# read; undef for a table the catalog does not know.
+sub _relation_size ( $dbh, $relation, $scanned ) {
+    my $size = _relation_rows( $dbh, $relation );
+    return $size if !defined $size;
+
+    return $size < $scanned ? $scanned : $size;
 }
 
 sub _dbh ($self) {
@@ -243,12 +487,17 @@ sub _schema ($self) {
 # What the application executes for the endpoint: the resultset lib/ builds,
 # as DBIx::Class renders it, or -- where lib/ issues raw SQL -- lib/'s own
 # statement. Nothing is transcribed, so changing a reader's query changes what
-# this gate EXPLAINs. Returns [ $sql, @bind ].
-sub _statement ( $self, $definition ) {
+# this gate EXPLAINs. A deep endpoint's resultset takes the page it is
+# asked for. Returns [ $sql, @bind ].
+sub _statement ( $self, $definition, $page = undef ) {
     return $definition->{statement}->() if $definition->{statement};
 
-    my ( $sql, @bind ) =
-      @{ ${ $definition->{resultset}->( $self->_schema )->as_query } };
+    my ( $sql, @bind ) = @{
+        ${
+            $definition->{resultset}
+              ->( $self->_schema, ( $page ? ($page) : () ) )->as_query
+        }
+    };
 
     return [ $sql, map { ref $_ eq 'ARRAY' ? $_->[1] : $_ } @bind ];
 }
@@ -261,9 +510,10 @@ sub _statement ( $self, $definition ) {
 # row thresholds only notice once the table is already large.
 #
 # EXPLAIN ANALYZE executes the statement, and the outbox claim is an UPDATE.
-# Both plans are taken inside a transaction that is rolled back, so gathering
-# evidence never changes the data it measures, and SET LOCAL ends with it.
-sub _explain ( $dbh, $statement, $options ) {
+# Every plan is taken inside a transaction that is rolled back, so gathering
+# evidence never changes the data it measures, and SET LOCAL ends with it. A
+# deep endpoint's first page is planned there too, before the forced plan.
+sub _explain ( $dbh, $statement, $options, $first = undef ) {
     my $flags =
       $options->{analyze}
       ? 'ANALYZE, BUFFERS, FORMAT JSON'
@@ -272,12 +522,19 @@ sub _explain ( $dbh, $statement, $options ) {
 
     $dbh->begin_work;
     my $explained = eval {
-        my $plan =
+        my %plans;
+        if ($first) {
+            my ( $first_sql, @first_bind ) = @{$first};
+            $plans{first} =
+              $dbh->selectrow_array( "EXPLAIN ($flags) $first_sql",
+                undef, @first_bind );
+        }
+        $plans{plan} =
           $dbh->selectrow_array( "EXPLAIN ($flags) $sql", undef, @bind );
         $dbh->do('SET LOCAL enable_seqscan = off');
-        my $forced =
+        $plans{forced} =
           $dbh->selectrow_array( "EXPLAIN (FORMAT JSON) $sql", undef, @bind );
-        return { plan => $plan, forced => $forced };
+        return \%plans;
     };
     my $error = $EVAL_ERROR;
     $dbh->rollback;
@@ -443,9 +700,22 @@ sub _endpoint_definition ($endpoint) {
             purpose   => 'latest public thread listing',
             sql_label => 'threads_public_activity',
             resultset => sub ($schema) {
-                return GPForum::Service::Forum::ThreadReader->new(
-                    schema => $schema )->latest_threads_resultset( {} );
+                return _latest_threads( $schema, _seeded_page() );
             },
+        },
+        home_signed_in => {
+            purpose   => 'latest public thread listing, member with a grant',
+            sql_label => 'threads_public_activity_viewer',
+            resultset => sub ($schema) {
+                return _latest_threads( $schema, _seeded_page(),
+                    _member_viewer() );
+            },
+        },
+        home_deep => {
+            purpose   => 'latest public thread listing, halfway down',
+            sql_label => 'threads_public_activity_keyset',
+            deep      => 'latest',
+            resultset => \&_latest_threads,
         },
         categories => {
             purpose   => 'category index',
@@ -459,30 +729,59 @@ sub _endpoint_definition ($endpoint) {
             purpose   => 'keyset category thread list, anonymous',
             sql_label => 'threads_category_activity_visible_locked',
             resultset => sub ($schema) {
-                return GPForum::Service::Forum::ThreadReader->new(
-                    schema => $schema )
-                  ->category_threads_resultset(
-                    { category_id => $CATEGORY_ID } );
+                return _category_threads( $schema, _seeded_page() );
             },
         },
         category_threads_signed_in => {
             purpose   => 'keyset category thread list, signed in',
             sql_label => 'threads_category_viewer_union',
             resultset => sub ($schema) {
-                return GPForum::Service::Forum::ThreadReader->new(
-                    schema => $schema )
-                  ->category_threads_resultset(
-                    { category_id => $CATEGORY_ID, viewer_user_id => $USER_ID }
-                  );
+                return _category_threads( $schema, _seeded_page(),
+                    _member_viewer() );
+            },
+        },
+        category_threads_deep => {
+            purpose   => 'keyset category thread list, halfway down',
+            sql_label => 'threads_category_activity_keyset',
+            deep      => 'category',
+            resultset => \&_category_threads,
+        },
+        category_threads_deep_signed_in => {
+            purpose   => 'keyset category thread list, halfway down, signed in',
+            sql_label => 'threads_category_viewer_union_keyset',
+            deep      => 'category',
+            resultset => sub ( $schema, $page ) {
+                return _category_threads( $schema, $page, _member_viewer() );
             },
         },
         thread_view => {
             purpose   => 'thread post page with current body',
             sql_label => 'posts_visible_thread_position',
             resultset => sub ($schema) {
-                return GPForum::Service::Forum::PostReader->new(
-                    schema => $schema )
-                  ->thread_posts_resultset( { thread_id => $THREAD_ID } );
+                return _thread_posts( $schema, _seeded_page() );
+            },
+        },
+        thread_view_signed_in => {
+            purpose   => 'thread post page, signed in',
+            sql_label => 'posts_thread_position_viewer',
+            resultset => sub ($schema) {
+                return _thread_posts( $schema, _seeded_page(),
+                    _member_viewer() );
+            },
+        },
+        thread_view_deep => {
+            purpose   => 'thread post page halfway down the longest thread',
+            sql_label => 'posts_visible_thread_position_keyset',
+            deep      => 'thread',
+            resultset => \&_thread_posts,
+        },
+        thread_view_deep_signed_in => {
+            purpose =>
+              'thread post page halfway down the longest thread, signed in',
+            sql_label => 'posts_thread_position_viewer_keyset',
+            deep      => 'thread',
+            resultset => sub ( $schema, $page ) {
+                return _thread_posts( $schema, $page, _member_viewer() );
             },
         },
 
@@ -579,6 +878,72 @@ sub _readability ($schema) {
     return GPForum::Service::Forum::Readability->new( schema => $schema );
 }
 
+# The seeded benchmark ids, without a cursor: the page every list endpoint
+# that is not a deep one reads.
+sub _seeded_page {
+    return {
+        after       => undef,
+        category_id => $CATEGORY_ID,
+        depth       => 0,
+        space_id    => $SPACE_ID,
+        thread_id   => $THREAD_ID,
+    };
+}
+
+# The signed-in reader: an account (a member, ADR 0102) with a category.read
+# grant on another category than the one paged, as a member with any grant
+# usually is. Its conditions carry both branches a member adds -- the
+# members' level and their own private rows -- and, on the home page, the
+# granted category.
+sub _member_viewer {
+    return GPForum::Service::Forum::Viewer->new(
+        category_ids => [$GRANTED_CATEGORY_ID],
+        member       => 1,
+        user_id      => $USER_ID,
+    );
+}
+
+# What HomePageReader asks ThreadReader for.
+sub _latest_threads ( $schema, $page, $viewer = undef ) {
+    return GPForum::Service::Forum::ThreadReader->new( schema => $schema )
+      ->latest_threads_resultset(
+        { after => $page->{after}, ( $viewer ? ( viewer => $viewer ) : () ) } );
+}
+
+# What Controller::Forum asks ThreadReader for: a signed-in reader adds the
+# account and its grants decided for the category.
+sub _category_threads ( $schema, $page, $viewer = undef ) {
+    return GPForum::Service::Forum::ThreadReader->new( schema => $schema )
+      ->category_threads_resultset(
+        {
+            after       => $page->{after},
+            category_id => $page->{category_id},
+            _signed_in( $page, $viewer ),
+        }
+      );
+}
+
+# What ThreadDetailReader asks PostReader for, the same way.
+sub _thread_posts ( $schema, $page, $viewer = undef ) {
+    return GPForum::Service::Forum::PostReader->new( schema => $schema )
+      ->thread_posts_resultset(
+        {
+            after     => $page->{after},
+            thread_id => $page->{thread_id},
+            _signed_in( $page, $viewer ),
+        }
+      );
+}
+
+sub _signed_in ( $page, $viewer ) {
+    return if !$viewer;
+
+    return (
+        viewer_scope   => $viewer->within( @{$page}{qw(category_id space_id)} ),
+        viewer_user_id => $viewer->user_id,
+    );
+}
+
 # Search ranks under the configured candidate cap, as the application's does.
 # The cap is the inner LIMIT, which decides between walking
 # idx_search_documents_created and sorting every match, so evidence taken at
@@ -647,10 +1012,26 @@ sub _text_report ($report) {
           'sql_label=' . $endpoint->{sql_label},
           'violations=' . _list_text( $endpoint->{violations} ),
           'warnings=' . _list_text( $endpoint->{warnings} ),
+          _depth_text( $endpoint->{summary} ),
           "\n";
     }
 
     return $text;
+}
+
+# How deep a deep endpoint paged and what each page filtered, so a CI log
+# shows whether the deep-page rule had anything to measure.
+sub _depth_text ($summary) {
+    my $depth = $summary ? $summary->{depth} : undef;
+    return if !$depth;
+
+    my @text = ( 'depth=' . $depth->{rows_before_cursor} );
+    if ( defined $depth->{rows_removed_deep_page} ) {
+        push @text, sprintf 'rows_removed=%.0f/%.0f',
+          @{$depth}{qw(rows_removed_first_page rows_removed_deep_page)};
+    }
+
+    return @text;
 }
 
 sub _list_text ($values) {

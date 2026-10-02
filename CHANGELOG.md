@@ -94,6 +94,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- **The replication docs no longer recommend `pg_monitor`**, which also
+  grants `pg_read_all_settings` and with it a standby's `primary_conninfo`,
+  replication password included; `pg_read_all_stats` is enough.
+
 - **A `password=` in `GPFORUM_DATABASE_DSN` is redacted in command failure
   messages**, on stderr and in `--json` output; DBI's connect error printed
   it as is.
@@ -270,6 +274,15 @@ CI, evidence and internal refactors with no change in behaviour.
   4.42+ `allow_nonref` cannot treat scalar payloads as outbox events.
 
 ### Added
+
+- **Replication on `/metrics`** (ADR 0058): on a primary, each standby's
+  state, replay lag and bytes behind, and each slot's retained WAL; on a
+  standby, the age of its last replay. `/health/ready` gains a
+  `replication_slots` check, degraded when an inactive slot keeps more than
+  1 GiB of WAL. Grant `pg_read_all_stats` to see standby details.
+- **The plan gate checks deep and signed-in pages**: halfway down the longest
+  thread, the largest category and the latest threads; it fails when a deep
+  page filters more rows than its first page or ignores its cursor.
 
 - **`--json` on the state-reporting commands** (`migrate`,
   `partition-maintenance`, `platform-check`, `query-budget`,

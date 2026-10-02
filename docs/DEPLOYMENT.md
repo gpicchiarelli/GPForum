@@ -412,7 +412,18 @@ Minimum recommended posture:
   them under the 15s above) and rank only the newest 1000 matches
   (`GPFORUM_SEARCH_CANDIDATE_LIMIT`);
 - `application_name=gpforum` is set on connect;
-- backups and restore tests exist before production launch.
+- backups and restore tests exist before production launch;
+- with a streaming standby ([ops/standby-and-failover.md](ops/standby-and-failover.md)),
+  the application role is granted `pg_read_all_stats`
+  (`GRANT pg_read_all_stats TO gpforum;`): `/metrics` reports each standby's
+  replay lag and bytes behind under `replication`, and without the grant
+  PostgreSQL hides them (`standby_details_visible` is 0). Not `pg_monitor`:
+  it adds `pg_read_all_settings`, which reads a standby's `primary_conninfo`,
+  replication password included when one was given. `/health/ready` degrades
+  its `replication_slots` check when an inactive replication slot keeps more
+  than 1 GiB of WAL or a slot is lost: a standby that stopped following, whose
+  slot keeps the primary's WAL until the disk fills. The runbook is
+  [ops/standby-and-failover.md#watch-the-lag](ops/standby-and-failover.md#watch-the-lag).
 
 For a repeatable local/staging migrate + `pg_dump`/`pg_restore` rehearsal on
 throwaway databases, see `docs/ops/staging-drills.md`

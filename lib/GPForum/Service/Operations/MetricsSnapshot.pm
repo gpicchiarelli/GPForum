@@ -13,11 +13,13 @@ use Time::HiRes qw(time);
 
 use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::QueryBudget;
+use GPForum::Service::Operations::Replication;
 use GPForum::Service::Clock;
 
 our $VERSION = '0.001';
 
 const my $MILLISECONDS_PER_SECOND => 1000;
+const my $MAX_ERROR_LENGTH        => 240;
 
 has clock               => sub { return GPForum::Service::Clock->new; };
 has db_query_stats      => undef;
@@ -30,6 +32,8 @@ has security_telemetry  => undef;
 has projection_trackers => sub { return []; };
 has query_budget =>
   sub { return GPForum::Service::Operations::QueryBudget->new; };
+has replication =>
+  sub { return GPForum::Service::Operations::Replication->new; };
 has runtime        => undef;
 has runtime_policy => undef;
 has started_at     => sub { return time; };
@@ -61,6 +65,7 @@ sub collect ($self) {
         query_budget_drift  => $self->_query_budget_drift,
         database            => $self->_database,
         outbox              => $self->_outbox,
+        replication         => $self->_replication,
     };
 }
 
@@ -233,6 +238,32 @@ sub _outbox ($self) {
     return $snapshot;
 }
 
+# ADR 0058: replication lag is monitored. Read on every scrape -- three
+# catalog queries -- and guarded like the database section, so a node that
+# cannot read the replication views reports it here instead of failing the
+# whole snapshot.
+sub _replication ($self) {
+    return {} if !$self->schema;
+
+    my $snapshot = eval {
+        return $self->replication->snapshot( $self->schema->storage->dbh );
+    };
+    return $snapshot if $snapshot;
+
+    return {
+        error  => _compact_error($EVAL_ERROR),
+        status => 'unavailable',
+    };
+}
+
+sub _compact_error ($error) {
+    $error //= q{};
+    $error =~ s/\s+/ /gmsx;
+    $error =~ s/\A\s+|\s+\z//gmsx;
+
+    return substr $error, 0, $MAX_ERROR_LENGTH;
+}
+
 sub _degraded_rate_limiter_active ( $snapshot, $stats ) {
     return 1 if ( $snapshot->{status}     || q{} ) eq 'degraded';
     return 1 if ( $stats->{fallback_used} || 0 ) > 0;
@@ -274,12 +305,16 @@ process id and uptime, the runtime and its OS profile (snapshot, features,
 sockets, processes and preflight check), runtime enforcement, local caches,
 the realtime hub and its listener supervisor, rate limits, security
 telemetry, projection lag, database query statistics, query budgets and
-their drift, database readiness and the outbox backlog. Each collaborator is
-optional: a section whose collaborator is not set comes back empty.
+their drift, database readiness, the outbox backlog and replication (ADR
+0058). Each collaborator is optional: a section whose collaborator is not set
+comes back empty.
 
-The database section times a C<SELECT 1>; the outbox and query budget drift
-sections are guarded too, so a database that cannot answer turns them empty
-or C<fail> rather than failing the whole snapshot. The rate limit section
+The database section times a C<SELECT 1>; the outbox, query budget drift and
+replication sections are guarded too, so a database that cannot answer turns
+them empty, C<fail> or C<unavailable> rather than failing the whole snapshot.
+The replication section is L<GPForum::Service::Operations::Replication/snapshot>:
+on a primary each standby's replay lag and bytes behind and each slot's
+retained WAL, on a standby the age of the last replayed transaction. The rate limit section
 adds C<rate_limit_allowed>, C<rate_limit_blocked> and
 C<degraded_rate_limiter_active>, which is 1 when the limiter reports
 C<degraded> or has used its fallback store.
@@ -294,8 +329,10 @@ C<os>, C<os_features>, C<os_sockets>, C<os_processes>, C<os_preflight>,
 C<runtime_enforcement>, C<local_caches>, C<realtime>,
 C<realtime_listener>, C<rate_limits>, C<security>, C<projections>,
 C<db_query_stats>, C<query_budgets>, C<query_budget_drift>, C<database>
-(C<status> C<ok> or C<fail>, and C<ready_latency_ms>) and C<outbox>
-(C<pending>, C<failed>, C<retry_backlog>, C<dead_letters>).
+(C<status> C<ok> or C<fail>, and C<ready_latency_ms>), C<outbox>
+(C<pending>, C<failed>, C<retry_backlog>, C<dead_letters>) and
+C<replication> (the replication snapshot, or C<status> C<unavailable> and the
+C<error>).
 
 =head2 retry_backlog_resultset
 
@@ -306,8 +343,8 @@ Needs C<schema>.
 
 =head1 DIAGNOSTICS
 
-The database, outbox and query budget drift sections catch their own
-errors. Errors from the other collaborators' snapshots propagate from
+The database, outbox, query budget drift and replication sections catch
+their own errors. Errors from the other collaborators' snapshots propagate from
 C<collect>. C<retry_backlog_resultset> dies without a C<schema>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
@@ -318,6 +355,7 @@ None read here; the bootstrap passes the runtime and its policy.
 
 L<GPForum::Service::Operations::OSPreflight>,
 L<GPForum::Service::Operations::QueryBudget>,
+L<GPForum::Service::Operations::Replication>,
 L<GPForum::Service::Clock>.
 
 =head1 INCOMPATIBILITIES

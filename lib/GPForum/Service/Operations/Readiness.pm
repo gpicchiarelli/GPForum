@@ -17,6 +17,7 @@ use GPForum::Service::Operations::OSPreflight;
 use GPForum::Service::Operations::PartitionLifecycle;
 use GPForum::Service::Operations::Profile;
 use GPForum::Service::Operations::QueryBudget;
+use GPForum::Service::Operations::Replication;
 
 our $VERSION = '0.001';
 
@@ -30,9 +31,13 @@ has clock          => sub { return GPForum::Service::Clock->new; };
 has config         => undef;
 has environment    => 'development';
 has glifistore_url => sub { return q{}; };
-has runtime        => undef;
-has runtime_policy => undef;
-has schema         => undef;
+
+# The WAL an inactive replication slot may keep before readiness degrades.
+# Undef takes the configuration's, then Replication's default (1 GiB).
+has replication_slot_max_retained_bytes => undef;
+has runtime                             => undef;
+has runtime_policy                      => undef;
+has schema                              => undef;
 
 # Where the operator goes when a check is not ok: every check readiness can
 # return has a runbook, and a check that is degraded or failed carries its
@@ -50,6 +55,7 @@ const my %RUNBOOK => (
     partition_horizon    => 'docs/ops/partition-maintenance.md',
     projectiongeneration => $MIGRATIONS_RUNBOOK,
     query_budget_drift   => 'docs/QUERY_BUDGET_POLICY.md',
+    replication_slots    => 'docs/ops/standby-and-failover.md#watch-the-lag',
     runtime              => 'docs/OS_RUNTIME_ENFORCEMENT.md',
     runtime_enforcement  => 'docs/OS_RUNTIME_ENFORCEMENT.md',
     shared_cache         => 'docs/DEPLOYMENT.md#glifistore-required-l2',
@@ -76,6 +82,7 @@ sub check ($self) {
         $self->_antivirus_check,
         $self->_partition_horizon_check,
         $self->_profile_check,
+        $self->_replication_slot_check,
     );
 
     for my $check (@checks) {
@@ -279,6 +286,60 @@ sub _partition_horizon_check ($self) {
     };
 }
 
+# Degraded, never failed, when an inactive slot keeps more WAL than the limit
+# or a slot is lost (ADR 0058): the primary still serves, and taking it out
+# of service would not drop the slot. Read like the partition horizon, and a
+# schema without a DBI handle -- a test double -- has no catalog to read.
+sub _replication_slot_check ($self) {
+    my $started = time;
+    my $storage =
+        $self->schema && $self->schema->can('storage')
+      ? $self->schema->storage
+      : undef;
+    if ( !$storage || !$storage->can('dbh_do') ) {
+        return _mode_check( 'replication_slots', $started, 'ok', 'no catalog' );
+    }
+
+    my $replication = GPForum::Service::Operations::Replication->new(
+        max_retained_bytes => $self->_replication_slot_limit );
+    my $report = eval {
+        return $storage->dbh_do(
+            sub ( $, $dbh ) {
+                return $replication->slot_report(
+                    $replication->snapshot($dbh) );
+            }
+        );
+    };
+    if ( !$report ) {
+        my $check = _failed_check( 'replication_slots', $started, $EVAL_ERROR );
+        $check->{status} = 'degraded';
+        return $check;
+    }
+
+    return {
+        %{ _ok_check( 'replication_slots', $started ) },
+        report => $report,
+        status => $report->{status},
+    };
+}
+
+# The configuration owns the knob (GPFORUM_REPLICATION_SLOT_MAX_RETAINED_BYTES)
+# once it carries one; until then, and for a configuration that predates it,
+# Replication's default applies.
+sub _replication_slot_limit ($self) {
+    return $self->replication_slot_max_retained_bytes
+      if defined $self->replication_slot_max_retained_bytes;
+
+    my $config = $self->_config;
+    if ( $config->can('replication_slot_max_retained_bytes') ) {
+        my $limit = $config->replication_slot_max_retained_bytes;
+        return $limit if defined $limit;
+    }
+
+    return
+      GPForum::Service::Operations::Replication->default_max_retained_bytes;
+}
+
 sub _mode_check ( $name, $started, $status, $mode ) {
     my $check = _ok_check( $name, $started );
     $check->{status} = $status;
@@ -409,10 +470,13 @@ Version 0.001.
 
 Whether this node should take traffic: the database answers, the runtime and
 OS posture hold, the tables the forum needs exist, the query budgets match,
-the shared cache, the antivirus and the partition horizon are healthy, and the
-configuration fits its operational profile. A check that cannot pass without
-the node being useless fails; one the forum can live without for a while is
-degraded. Every check that is not ok names its runbook.
+the shared cache, the antivirus and the partition horizon are healthy, the
+configuration fits its operational profile, and no replication slot is lost
+or keeps more WAL for an absent standby than the limit
+(C<replication_slot_max_retained_bytes>, 1 GiB by default). A check that
+cannot pass without the node being useless fails; one the forum can live
+without for a while is degraded. Every check that is not ok names its
+runbook.
 
 =head1 SUBROUTINES/METHODS
 
@@ -432,15 +496,19 @@ The one-row query a table check runs.
 
 =head1 DIAGNOSTICS
 
-Never dies: a check that throws is reported failed with its error.
+Never dies: a check that throws is reported failed with its error, or
+degraded for the partition horizon and the replication slots, which the forum
+can serve without.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Reads L<GPForum::Config>.
+Reads L<GPForum::Config>, including C<replication_slot_max_retained_bytes>
+when the configuration offers it; the attribute of the same name overrides it.
 
 =head1 DEPENDENCIES
 
 L<GPForum::Service::Operations::PartitionLifecycle>,
+L<GPForum::Service::Operations::Replication>,
 L<GPForum::Service::Operations::QueryBudget>,
 L<GPForum::Service::Operations::Profile>.
 
