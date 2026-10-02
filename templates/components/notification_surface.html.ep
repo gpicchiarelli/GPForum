@@ -3,7 +3,7 @@
 % my $summary = stash('summary') || q{};
 % my $href = stash('href') || q{};
 % my $action_label = stash('action_label') || t('notifications.open_discussion');
-% my $time_label = stash('time_label') || t('notifications.received_at');
+% my $time_label = stash('time_label') || t('notifications.received');
 % my $created_at = stash('created_at') || q{};
 % my $read = stash('read') || 0;
 % my $read_action = stash('read_action') || q{};
@@ -18,8 +18,8 @@
   % }
   % if (length $created_at) {
     <p>
-      <%= $time_label %>
-      <time datetime="<%= $created_at %>"><%= dt($created_at) %></time>
+      <%= $time_label %>:
+      <%= include 'components/timestamp', at => $created_at %>
     </p>
   % }
   % if ($read) {

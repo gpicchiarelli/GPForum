@@ -54,7 +54,7 @@
             % }
           </p>
           % if ($result->{source_created_at}) {
-            <time datetime="<%= $result->{source_created_at} %>"><%= dt($result->{source_created_at}) %></time>
+            <%= include 'components/timestamp', at => $result->{source_created_at} %>
           % }
           % if ($result->{author_username}) {
             <p>

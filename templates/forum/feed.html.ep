@@ -16,8 +16,8 @@
               % }
             </h2>
             <p>
-              <%= t('community.added_at') %>
-              <time datetime="<%= $item->{created_at} %>"><%= dt($item->{created_at}) %></time>
+              <%= t('community.added') %>:
+              <%= include 'components/timestamp', at => $item->{created_at} %>
             </p>
           </article>
         </li>

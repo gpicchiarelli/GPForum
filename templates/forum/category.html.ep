@@ -29,7 +29,7 @@
           </h2>
           <p class="ui-meta">
             <%= t('forum.last_activity') %>:
-            <time datetime="<%= $thread->{last_activity_at} // q{} %>"><%= $thread->{last_activity_at} // t('state.unknown') %></time>
+            <%= include 'components/timestamp', at => $thread->{last_activity_at}, missing => t('state.unknown') %>
           </p>
           % if ($thread->{author_username}) {
             <p class="ui-meta">

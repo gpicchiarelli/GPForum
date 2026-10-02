@@ -16,7 +16,7 @@
             % if (length($bookmark->{note} // q{})) {
               <p><%= $bookmark->{note} %></p>
             % }
-            <p><%= t('community.saved_at') %> <time datetime="<%= $bookmark->{created_at} %>"><%= dt($bookmark->{created_at}) %></time></p>
+            <p><%= t('community.saved') %>: <%= include 'components/timestamp', at => $bookmark->{created_at} %></p>
           </article>
         </li>
       % }

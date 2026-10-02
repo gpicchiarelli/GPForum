@@ -275,6 +275,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Added
 
+- **Relative times** ("3 minutes ago", "3 minuti fa") in a `<time>` element
+  whose title keeps the absolute local time, per the reader's locale and zone,
+  without JavaScript. Cached anonymous pages never carry a signed-out
+  member's time zone.
+
 - **Badge failures reach the log and `/metrics`**: `notifications.badge_failures`
   and `last_badge_error`; each message is logged at most once every five
   minutes per process, without the SQL, bind values or a DSN password.
