@@ -729,6 +729,15 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **"Purge page cache" no longer reports "purged" when GlifiStore was paused
+  or failing**: the result and its audit row record `purged_locally` and the
+  tags not reached (they expire within their TTL).
+- **Junk URLs no longer create public-cache entries**: a wrong thread slug or
+  an id written another way gets a 301 to the real URL, a trailing slash or a
+  percent-escaped character shares the page's entry, and `?limit=` is keyed
+  by the page size shown. The tiered cache's readiness ping no longer dies on
+  an in-process L2; `SharedCache->try_connect`, unused, is removed.
+
 - **Two administrators revoking the same role binding at once no longer both
   succeed**: the second waits on the row lock and reports the binding as
   already revoked, with one revocation time and one audit entry. Re-attaching

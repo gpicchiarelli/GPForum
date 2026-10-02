@@ -18,8 +18,9 @@ use GPForum::Test::PostgresHarness;
 our $VERSION = '0.001';
 
 # A thread list's page size, which the category index's key used to name.
-const my $HTTP_OK          => 200;
-const my $THREAD_PAGE_SIZE => 25;
+const my $HTTP_OK                => 200;
+const my $HTTP_MOVED_PERMANENTLY => 301;
+const my $THREAD_PAGE_SIZE       => 25;
 
 if ( !$ENV{GPFORUM_DATABASE_DSN} ) {
     plan skip_all => 'set GPFORUM_DATABASE_DSN to run the public cache test';
@@ -89,6 +90,18 @@ is( _listed_categories(), $full_index,
 _get( '/categories?limit=abc', 'en' );
 is( _listed_categories(), $full_index, 'as does one whose limit is no number' );
 
+# Every spelling of the full index is the full index's entry. The key named
+# the limit as asked, so each one minted an entry of its own.
+for my $spelling (qw(abc 100 0100 0)) {
+    _get( "/categories?limit=$spelling", 'en' );
+    is( _state(), 'hit', "?limit=$spelling is served the full index's entry" );
+}
+_get( '/categories?limit=200', 'en' );
+my $largest = _state();
+_get( '/categories?limit=100000', 'en' );
+is( _state(), 'hit',  'and a limit past the largest index is the largest' );
+is( $largest, 'miss', 'which is an entry of its own' );
+
 $client->get_ok(
     '/categories' => {
         'Accept-Language' => 'en',
@@ -124,6 +137,22 @@ delete $dbh->{Callbacks};
 is( _state(), 'hit', 'a cached category page is a hit' );
 is( $sent,    0,     'and costs no query' );
 
+# The router reads a path with a trailing slash, or with a letter written as
+# an escape, as the page's own, and the key named the path as typed: each
+# such spelling of a page minted an entry of its own.
+my $spelled_entries = _cached_entries();
+( my $escaped_category = $category ) =~ s{\A (.)}{sprintf '%%%02X', ord $1}emsx;
+for my $spelling (
+    "/c/$category/", "/c/$escaped_category",
+    '/categories/',  '/%63ategories',
+  )
+{
+    _get( $spelling, 'en' );
+    $client->status_is($HTTP_OK);
+    is( _state(), 'hit', "$spelling is served the page's own entry" );
+}
+is( _cached_entries(), $spelled_entries, 'and none of them mints one' );
+
 # A cached page is bytes. It was kept as characters: a title with a
 # character past U+00FF (a dash, a curly quote, an emoji) failed the page
 # with a 500, and an accented one reached the browser as Latin-1 under a
@@ -141,6 +170,71 @@ for my $round (qw(miss hit)) {
     like( $client->tx->res->text,
         qr/\Q$title\E/msx, "and it reads as written on a $round" );
 }
+
+# Its id written as PostgreSQL also reads a uuid found the category too, and
+# was served under a key of its own.
+my $category_entries = _cached_entries();
+_get( '/c/' . uc($category) . '?limit=10', 'en' );
+$client->status_is( $HTTP_MOVED_PERMANENTLY,
+    'a category id in upper case is redirected' );
+$client->header_is(
+    Location => "/c/$category?limit=10",
+    'to the category\'s URL, the query kept'
+);
+is( _cached_entries(), $category_entries, 'and mints no entry' );
+
+# A thread is one page under /t/ID and /t/ID/SLUG. Any slug used to be
+# served, and each minted an entry: a slug that is not the thread's own is
+# now sent to its URL, whether the page is cached or not.
+my ( $thread, $slug ) =
+  $dbh->selectrow_array( q{SELECT t.thread_id, t.slug FROM threads t}
+      . q{ JOIN categories c ON c.category_id = t.category_id}
+      . q{ JOIN spaces s ON s.space_id = c.space_id}
+      . q{ WHERE t.deleted_at IS NULL AND t.visibility = 'public'}
+      . q{ AND t.moderation_state = 'visible' AND c.visibility = 'public'}
+      . q{ AND s.visibility = 'public' AND c.deleted_at IS NULL LIMIT 1} );
+my $canonical = "/t/$thread/$slug";
+$page_cache->invalidate_tag("forum:thread:$thread");
+_get( "/t/$thread/not-$slug?limit=10", 'en' );
+$client->status_is( $HTTP_MOVED_PERMANENTLY,
+    'a slug that is not the thread\'s is redirected' );
+$client->header_is(
+    Location => "$canonical?limit=10",
+    'to its own URL, the query kept'
+);
+_get( $canonical, 'en' );
+$client->status_is($HTTP_OK);
+is( _state(), 'miss', 'the canonical URL fills the thread\'s entry' );
+_get( "/t/$thread", 'en' );
+is( _state(), 'hit', 'which the URL without a slug is served' );
+_get( "/t/$thread?limit=abc", 'en' );
+is( _state(), 'hit', 'as is one whose page size is no number' );
+my $entries = _cached_entries();
+$sent = 0;
+$dbh->{Callbacks} = {
+    prepare        => sub { $sent++; return; },
+    prepare_cached => sub { $sent++; return; },
+};
+_get( "/t/$thread/anything-else", 'en' );
+delete $dbh->{Callbacks};
+$client->status_is( $HTTP_MOVED_PERMANENTLY,
+    'a junk slug of a cached thread is redirected' );
+$client->header_is( Location => $canonical, 'to the thread\'s URL' );
+is( $sent,             0,        'from the cache, with no query' );
+is( _cached_entries(), $entries, 'and no entry is minted for it' );
+
+# Its id written as PostgreSQL also reads a uuid found the thread too, and
+# was served under a key of its own: every casing of it was another entry.
+( my $bare = $thread ) =~ tr/-//d;
+for my $spelling ( uc $thread, "{$thread}", $bare ) {
+    _get( "/t/$spelling/$slug", 'en' );
+    $client->status_is( $HTTP_MOVED_PERMANENTLY,
+        "the thread's id spelled $spelling is redirected" );
+    $client->header_is( Location => $canonical, 'to the thread\'s URL' );
+}
+_get( '/t/' . uc $thread, 'en' );
+$client->status_is( $HTTP_MOVED_PERMANENTLY, 'as it is without a slug' );
+is( _cached_entries(), $entries, 'and none of them mints an entry' );
 
 $storage->disconnect;
 GPForum::Test::PostgresHarness::drop_database($database);
@@ -161,6 +255,15 @@ sub _state {
 
 sub _listed_categories {
     return $client->tx->res->dom->find('li.ui-card-list__item')->size;
+}
+
+# The entries this process holds: the tiered cache's L1 when GlifiStore is
+# configured, the local cache itself otherwise.
+sub _cached_entries {
+    my $cache = $client->app->build_controller->gp_local_cache;
+    my $local = $cache->can('l1') ? $cache->l1 : $cache;
+
+    return scalar keys %{ $local->entries };
 }
 
 sub _cache_misses {

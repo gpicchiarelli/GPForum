@@ -7,46 +7,55 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use Mojolicious;
 use Test::Exception;
+use Test::Mojo;
 use Test::More;
 
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Service::Admin::Maintenance;
 use GPForum::Service::Forum::CategoryReader;
+use GPForum::Service::Operations::CacheInvalidationBus;
 use GPForum::Service::Operations::LocalCache;
 use GPForum::Service::Operations::SharedCache;
 use GPForum::Service::Operations::TieredCache;
+use GPForum::Test::AdminAuditLog;
 use GPForum::Test::ForumReadResultSet;
 use GPForum::Test::ForumReadRow;
 use GPForum::Test::ForumReadSchema;
 use GPForum::Test::OperationsClock;
 use GPForum::Test::PublicPageController;
+use GPForum::Test::RealtimeBusDbh;
+use GPForum::Test::RealtimeBusSchema;
 use GPForum::Test::SharedCacheClient;
 use GPForum::Web::PublicHttpCache;
 
 our $VERSION = '0.001';
 
-const my $SHORT_TTL_SECONDS   => 5;
-const my $AFTER_TTL_EPOCH     => 106;
-const my $PRODUCER_CALLS      => 1;
-const my $L2_THREAD_ID        => 9;
-const my $NEW_THREAD_ID       => 3;
-const my $GLIFISTORE_TCP_PORT => 7379;
-const my $DEFAULT_TTL_SECONDS => 60;
-const my $START_EPOCH         => 100;
-const my $FILL_READ_EPOCH     => 104;
-const my $FILL_EXPIRY_EPOCH   => 105;
-const my $LAST_PAUSED_EPOCH   => 114;
-const my $PAUSE_ENDS_EPOCH    => 115;
-const my $TAG_PUTS            => 1_000;
-const my $CATEGORY_LIMIT      => 10;
-const my $HTTP_OK             => 200;
-const my $PUBLIC_TAG          => 'forum:public-html';
+const my $SHORT_TTL_SECONDS      => 5;
+const my $AFTER_TTL_EPOCH        => 106;
+const my $PRODUCER_CALLS         => 1;
+const my $L2_THREAD_ID           => 9;
+const my $NEW_THREAD_ID          => 3;
+const my $GLIFISTORE_TCP_PORT    => 7379;
+const my $DEFAULT_TTL_SECONDS    => 60;
+const my $START_EPOCH            => 100;
+const my $FILL_READ_EPOCH        => 104;
+const my $FILL_EXPIRY_EPOCH      => 105;
+const my $LAST_PAUSED_EPOCH      => 114;
+const my $PAUSE_ENDS_EPOCH       => 115;
+const my $TAG_PUTS               => 1_000;
+const my $CATEGORY_LIMIT         => 10;
+const my $HTTP_OK                => 200;
+const my $PUBLIC_TAG             => 'forum:public-html';
+const my $HTTP_MOVED_PERMANENTLY => 301;
+const my $CANONICAL_SLUG         => 'caf%C3%A9';
 
 my $clock  = GPForum::Test::OperationsClock->new;
 my $client = GPForum::Test::SharedCacheClient->new;
-my $shared = GPForum::Service::Operations::SharedCache->try_connect(
+my $shared = GPForum::Service::Operations::SharedCache->connect_required(
     {
         clock       => $clock,
         connector   => sub { return $client },
@@ -96,10 +105,11 @@ is( $shared->get('thread:1'), undef,
 is( $shared->get('thread:2'),
     undef, 'shared tag invalidation drops second key' );
 
-is(
-    GPForum::Service::Operations::SharedCache->try_connect( { url => q{} } ),
-    undef, 'empty GlifiStore URL leaves shared cache disabled',
-);
+# try_connect returned the instance connect_required returns, reachable or
+# not, and undef only for a URL that is a configuration error. Nothing
+# called it.
+ok( !GPForum::Service::Operations::SharedCache->can('try_connect'),
+    'the shared cache has one way in' );
 throws_ok(
     sub {
         GPForum::Service::Operations::SharedCache->connect_required(
@@ -366,6 +376,106 @@ ok( $pausing->ping, 'when the pause ends the next call connects' );
 is( $pause_connects - $connects_while_paused, 1, 'once' );
 is( $pausing->retry_after_epoch, undef, 'and a success leaves L2 unpaused' );
 
+# A purge has to say whether it reached L2. A skipped invalidation answered 0,
+# as a tag with no token does, so the console's purge said "purged" while
+# every page in GlifiStore stayed current until its TTL.
+my $reach_clock  = GPForum::Test::OperationsClock->new;
+my $reach_client = GPForum::Test::SharedCacheClient->new;
+my $reach_l2     = GPForum::Service::Operations::SharedCache->new(
+    client    => $reach_client,
+    clock     => $reach_clock,
+    namespace => 'reach',
+);
+my $reach_l1 =
+  GPForum::Service::Operations::LocalCache->new( clock => $reach_clock );
+my $reaching = GPForum::Service::Operations::TieredCache->new(
+    l1 => $reach_l1,
+    l2 => $reach_l2,
+);
+$reaching->put( 'page:reach', 'page', { tags => [$PUBLIC_TAG] } );
+is( $reach_l2->invalidate_tag('forum:never-cached'),
+    0, 'L2 reached for a tag with no token answers 0' );
+is( $reaching->invalidate_tag($PUBLIC_TAG),
+    1, 'a tiered purge that reached L2 answers what L1 removed' );
+$reaching->put( 'page:reach', 'page', { tags => [$PUBLIC_TAG] } );
+$reach_l2->retry_after_epoch( $reach_clock->now_epoch + 1 );
+is( $reach_l2->invalidate_tag($PUBLIC_TAG),
+    undef, 'a paused L2 answers undef, not 0' );
+is( $reaching->invalidate_tag($PUBLIC_TAG),
+    undef, 'and so does the tiered purge' );
+is( $reach_l1->get('page:reach'), undef, 'which still purges L1' );
+$reach_l2->retry_after_epoch(undef);
+is( $reach_l2->get('page:reach'),
+    'page', 'while the page in L2 stays current' );
+my $failing_reach =
+  _shared_over( GPForum::Test::SharedCacheClient->new( mode => 'down' ),
+    'failing' );
+is( $failing_reach->invalidate_tag($PUBLIC_TAG),
+    undef, 'an ERASE that fails answers undef too' );
+
+# The other processes' copies go on the bus whether or not L2 was reached:
+# the purge that answers undef has still taken them down.
+my $reach_dbh = GPForum::Test::RealtimeBusDbh->new;
+my $bussed    = GPForum::Service::Operations::TieredCache->new(
+    bus => GPForum::Service::Operations::CacheInvalidationBus->new(
+        schema => GPForum::Test::RealtimeBusSchema->new( dbh => $reach_dbh ),
+    ),
+    l1 => GPForum::Service::Operations::LocalCache->new,
+    l2 => $failing_reach,
+);
+is( $bussed->invalidate_tag($PUBLIC_TAG),
+    undef, 'a tiered purge whose L2 fails answers undef' );
+is( $bussed->bus->stats->{published}, 1,
+    'and still tells the other processes' );
+my ($notified) = map { $_->[-1] } @{ $reach_dbh->statements };
+like( $notified // q{}, qr/\Q$PUBLIC_TAG\E/msx, 'to drop the tag it purged' );
+
+# The console's purge reports it, and the audit row records it.
+my $audit       = GPForum::Test::AdminAuditLog->new;
+my $maintenance = GPForum::Service::Admin::Maintenance->new(
+    cache    => $reaching,
+    recorder => $audit,
+);
+is_deeply(
+    $maintenance->purge_public_cache( { actor_user_id => 'admin-1' } ),
+    {
+        status         => 'purged',
+        tags           => [qw(forum:public-html categories forum-index)],
+        unreached_tags => [],
+    },
+    'a purge that reached GlifiStore is purged'
+);
+$reach_l2->retry_after_epoch( $reach_clock->now_epoch + 1 );
+my $local_purge =
+  $maintenance->purge_public_cache( { actor_user_id => 'admin-1' } );
+is( $local_purge->{status},
+    'purged_locally',
+    'a purge while GlifiStore is paused is purged locally only' );
+is_deeply(
+    $local_purge->{unreached_tags},
+    [qw(forum:public-html categories forum-index)],
+    'naming the tags it could not purge there'
+);
+is_deeply(
+    [ map { $_->{metadata}{status} } @{ $audit->rows } ],
+    [qw(purged purged_locally)],
+    'each audit row records how far its purge went'
+);
+is_deeply(
+    $audit->rows->[-1]{metadata}{unreached_tags},
+    [qw(forum:public-html categories forum-index)],
+    'and which tags stay in GlifiStore'
+);
+
+# A LocalCache serves as L2 in tests and benchmarks. It has no ping, and the
+# readiness probe asking the tiered cache died.
+my $local_l2_tiered = GPForum::Service::Operations::TieredCache->new(
+    l1 => GPForum::Service::Operations::LocalCache->new,
+    l2 => GPForum::Service::Operations::LocalCache->new,
+);
+my $local_ping = eval { $local_l2_tiered->ping };
+is( $local_ping, 1, 'an L2 in the process answers ping' );
+
 # L1 keeps a filled entry no longer than L2 has left for it: the fill used to
 # take L1's own default, and an entry with a second left lived another minute.
 my $fill_clock = GPForum::Test::OperationsClock->new;
@@ -617,7 +727,67 @@ ok(
     'but a lookup of a page that does not exist mints no token'
 );
 
+# A thread under any slug is one page, cached under its id. A hit asked for
+# under a slug that is not the page's own is sent to the page's path: the key
+# named the path, and every slug typed after the id minted an entry.
+my $slug_renders = 0;
+my $slug_cache   = GPForum::Web::PublicHttpCache->new(
+    cache => GPForum::Service::Operations::LocalCache->new );
+my $slug_app = Mojolicious->new;
+for my $route ( '/t/:thread_id/:slug', '/t/:thread_id' ) {
+    $slug_app->routes->get($route)
+      ->to(
+        cb => sub { return _slug_page( shift, $slug_cache, \$slug_renders ) } );
+}
+my $slug_client = Test::Mojo->new($slug_app);
+for my $case (
+    [ "/t/7/$CANONICAL_SLUG", 'miss', 'the canonical URL fills the entry' ],
+    [ '/t/7/caf%c3%a9',       'hit',  'its slug escaped otherwise is it' ],
+    [ '/t/7',                 'hit',  'as is the URL without a slug' ],
+  )
+{
+    my ( $path, $state, $name ) = @{$case};
+    $slug_client->get_ok($path)->status_is($HTTP_OK);
+    $slug_client->header_is( 'X-GPForum-Cache' => $state, $name );
+}
+$slug_client->get_ok('/t/7/anything?limit=10');
+$slug_client->status_is( $HTTP_MOVED_PERMANENTLY, 'a junk slug is redirected' );
+$slug_client->header_is(
+    Location => "/t/7/$CANONICAL_SLUG?limit=10",
+    'to the page\'s own path, its query kept'
+);
+$slug_client->header_is(
+    'Cache-Control' => 'private, max-age=30',
+    'for no longer than a page is cached'
+);
+is( $slug_renders, 1, 'and no slug rendered or stored a page of its own' );
+is( scalar keys %{ $slug_cache->cache->entries },
+    1, 'they all share one entry' );
+
 done_testing();
+
+# The thread page as Controller::Forum asks the cache for it: keyed by id,
+# checked against the stored path only when the request names a slug.
+sub _slug_page {
+    my ( $controller, $page_cache, $renders ) = @_;
+
+    my $options = {
+        canonical_only => defined $controller->stash('slug') ? 1 : 0,
+        key            => 'forum-ssr:thread:en:light:/t/7:limit=25',
+        tags           => [ $PUBLIC_TAG, 'forum:thread:7' ],
+    };
+    return if $page_cache->serve_cached( $controller, $options );
+
+    ${$renders} += 1;
+    return $page_cache->render(
+        %{$options},
+        canonical_path => "/t/7/$CANONICAL_SLUG",
+        controller     => $controller,
+        payload        => { inline => '<p>thread</p>' },
+        status         => $HTTP_OK,
+        template       => 'thread',
+    );
+}
 
 sub _tiered_over {
     my ($shared_client) = @_;

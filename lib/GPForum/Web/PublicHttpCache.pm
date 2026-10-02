@@ -13,13 +13,16 @@ use GPForum::Web::Access;
 use GPForum::Web::PublicCacheAccess;
 use Mojo::Base -base, -signatures;
 use Mojo::Date;
-use Mojo::Util qw(encode);
+use Mojo::Path;
+use Mojo::URL;
+use Mojo::Util qw(encode url_escape);
 
 our $VERSION = '0.001';
 
-const my $DEFAULT_TTL_SECONDS => 30;
-const my $HTTP_NOT_MODIFIED   => 304;
-const my $BODY_ENCODING       => 'UTF-8';
+const my $DEFAULT_TTL_SECONDS    => 30;
+const my $HTTP_MOVED_PERMANENTLY => 301;
+const my $HTTP_NOT_MODIFIED      => 304;
+const my $BODY_ENCODING          => 'UTF-8';
 
 has cache        => undef;
 has cache_access => sub { return GPForum::Web::PublicCacheAccess->new; };
@@ -56,9 +59,28 @@ sub serve_cached ( $self, $controller, $options ) {
         return 0;
     }
 
-    $self->_render_entry( $controller, $entry, 'hit' );
+    $self->_serve_entry( $controller, $entry, $options );
 
     return 1;
+}
+
+# A 301 to the path, with the request's query (its page size). A browser keeps
+# a 301 with no lifetime for good, and a thread's slug follows its title: a
+# rename and a rename back would send a kept redirect in a circle. So it is
+# kept for a page's TTL, and privately, since a signed-in author is sent to
+# the slug of a thread only they can read.
+sub redirect_permanently ( $self, $controller, $path ) {
+    my $location = Mojo::URL->new->path($path);
+    my $query    = $controller->req->url->query;
+    if ( length "$query" ) {
+        $location->query("$query");
+    }
+
+    my $res = $controller->res;
+    $res->headers->cache_control( sprintf 'private, max-age=%d',
+        $self->ttl_seconds );
+    $res->code($HTTP_MOVED_PERMANENTLY);
+    return $controller->redirect_to($location);
 }
 
 sub _validate_render_input ( $self, $input ) {
@@ -95,10 +117,42 @@ sub _render_cached ( $self, $input ) {
     my $entry =
       $input->{known_miss} ? undef : $self->_current_entry( $input->{key} );
     if ($entry) {
-        return $self->_render_entry( $input->{controller}, $entry, 'hit' );
+        return $self->_serve_entry( $input->{controller}, $entry, $input );
     }
 
     return $self->_store_and_render($input);
+}
+
+# A hit, unless the page is asked for under a path that is not its own: the
+# entry is shared by every spelling of the page's URL the key does not name
+# (a thread under any slug), so the junk spelling is sent to the page's own
+# path instead of being served, or minting an entry of its own as it did.
+sub _serve_entry ( $self, $controller, $entry, $options ) {
+    my $canonical = _canonical_elsewhere( $controller, $entry, $options );
+    if ( defined $canonical ) {
+        return $self->redirect_permanently( $controller, $canonical );
+    }
+
+    return $self->_render_entry( $controller, $entry, 'hit' );
+}
+
+# The entry's canonical path when the options ask for it (canonical_only) and
+# the request's path is another. Compared segment by segment, decoded, so a
+# slug spelled with escapes in either case, or none, is the same slug.
+sub _canonical_elsewhere ( $controller, $entry, $options ) {
+    my $undefined;
+    my $canonical = $entry->{canonical_path};
+    return $undefined if !$options->{canonical_only} || !defined $canonical;
+
+    my $requested = _segments( $controller->req->url->path );
+    return $undefined if $requested eq _segments( Mojo::Path->new($canonical) );
+
+    return $canonical;
+}
+
+sub _segments ($path) {
+    return join q{/},
+      map { url_escape( encode( $BODY_ENCODING, $_ ) ) } @{ $path->parts };
 }
 
 sub _store_and_render ( $self, $input ) {
@@ -146,6 +200,7 @@ sub _build_entry ( $self, $input ) {
         body                => $body,
         encoding            => $BODY_ENCODING,
         cache_control       => _cache_control( $self->ttl_seconds ),
+        canonical_path      => $input->{canonical_path},
         etag                => 'W/"' . sha1_hex($body) . q{"},
         last_modified       => Mojo::Date->new($epoch)->to_string,
         last_modified_epoch => $epoch,
@@ -254,6 +309,13 @@ also carries the cache's ticket for the page's tags, taken before the
 queries, so a moderation purge that lands while they run retires the page
 L</render> stores instead of missing it.
 
+A page whose URL has spellings the key does not name, such as a thread
+under any slug, stores its own path as the entry's C<canonical_path> and
+asks for C<canonical_only> when the request names the part that varies: a
+hit for another spelling is then a 301 to the page's path
+(L</redirect_permanently>) rather than the page, so a junk slug neither
+mints an entry nor is served as if it were the page's own.
+
 A response served through the cache carries C<Cache-Control>, C<ETag>,
 C<Last-Modified>, C<Vary: Accept, Accept-Language, Cookie>,
 C<X-GPForum-Source: public-http-cache> and C<X-GPForum-Cache>: C<hit> or
@@ -276,24 +338,40 @@ C<status>, all required; C<payload>, a hash reference of template values
 (empty by default), passed to the controller's C<render_to_string> or
 C<render> beside C<template>, so a key Mojolicious reads as a render option
 (C<text>, C<json>, C<data>, C<layout>, C<format> and the like) acts as one;
-C<tags>, an array reference stored with the entry (empty by default); and
-C<known_miss> and C<ticket>, as L</serve_cached> leaves them on its
-options. When the request is not cacheable, renders the template with
-the payload and status and nothing more. Otherwise serves the entry cached
-under the key, unless C<known_miss> says there is none. On a miss it renders
-the template to a string, stores the entry with the tags, C<ttl_seconds> and
-the ticket if there is one, and serves it. Serving sets the headers above and
-renders the body as HTML with the entry's status, or an empty 304 when the
-client's copy is fresh. Returns what the controller's C<render> returns.
+C<tags>, an array reference stored with the entry (empty by default);
+C<canonical_path>, the page's own path, stored with the entry;
+C<canonical_only>, as L</serve_cached> reads it; and C<known_miss> and
+C<ticket>, as L</serve_cached> leaves them on its options. When the request
+is not cacheable, renders the template with the payload and status and
+nothing more. Otherwise serves the entry cached under the key, unless
+C<known_miss> says there is none, or redirects as L</serve_cached> does. On
+a miss it renders the template to a string, stores the entry with the tags,
+C<ttl_seconds> and the ticket if there is one, and serves it. Serving sets
+the headers above and renders the body as HTML with the entry's status, or
+an empty 304 when the client's copy is fresh. Returns what the controller's
+C<render> (or C<redirect_to>) returns.
 
 =head2 serve_cached
 
-Takes the controller and the page's cache options (C<key>, C<tags>). Returns
-1 after serving the entry cached under C<key>, as L</render> serves it.
-Returns 0, having rendered nothing, when the options or their C<key> are
-missing, the request is not cacheable, or the key is not cached. A miss sets
-C<known_miss> on the options and, when the cache has a C<ticket> method,
-C<ticket> to its ticket for the options' C<tags>.
+Takes the controller and the page's cache options (C<key>, C<tags>, and
+optionally C<canonical_only>). Returns 1 after serving the entry cached
+under C<key>, as L</render> serves it, or, when C<canonical_only> is true and
+the entry's C<canonical_path> is not the request's path (compared by decoded
+segment, ignoring a trailing slash), after redirecting there with
+L</redirect_permanently>. Returns 0, having rendered nothing, when the
+options or their C<key> are missing, the request is not cacheable, or the
+key is not cached. A miss sets C<known_miss> on the options and, when the
+cache has a C<ticket> method, C<ticket> to its ticket for the options'
+C<tags>.
+
+=head2 redirect_permanently
+
+Takes the controller and a path, as C<url_for> writes it (escaped). Answers
+301 with C<Location> set to the path and the request's query string, if it
+has one, and C<Cache-Control: private, max-age=N>, N being C<ttl_seconds>.
+Returns what the controller's C<redirect_to> returns. It is for any visitor,
+signed in or not: L</serve_cached> calls it on a hit, and a page calls it on
+a miss once it knows its own path.
 
 =head1 DIAGNOSTICS
 
@@ -301,10 +379,7 @@ L</render> croaks with C<controller is required>, C<cache key is required> or
 C<template is required> when that input is undefined or empty (checked in
 that order), and with C<status is required> when no status is given. These
 are checked before whether the request is cacheable. Errors from the cache
-and from rendering the template propagate, and so does
-C<Wide character in subroutine entry> from L<Digest::SHA> when a page
-rendered for the cache holds a character above U+00FF (see
-L</BUGS AND LIMITATIONS>).
+and from rendering the template propagate.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -316,7 +391,8 @@ C<ttl_seconds>.
 =head1 DEPENDENCIES
 
 L<Carp>, L<Const::Fast>, L<Digest::SHA>, L<Mojo::Base>, L<Mojo::Date>,
-L<GPForum::Web::Access>, L<GPForum::Web::PublicCacheAccess>.
+L<Mojo::Path>, L<Mojo::URL>, L<Mojo::Util>, L<GPForum::Web::Access>,
+L<GPForum::Web::PublicCacheAccess>.
 
 =head1 INCOMPATIBILITIES
 
@@ -330,15 +406,10 @@ does not name is served to every visitor. The entry is stored with whatever
 status the page renders, and C<Last-Modified> is when the entry was
 rendered, not when its content changed.
 
-The body is the character string C<render_to_string> returns, never
-encoded to UTF-8: it is hashed and sent as it is. A page holding a
-character above U+00FF (an em dash, a curly quote, an emoji in a thread
-title) dies in C<sha1_hex> and the visitor gets a 500. A page whose
-non-ASCII characters are all Latin-1, such as the Italian categories page
-with its C<IdentitE<agrave>> label, is sent as Latin-1 bytes under
-C<text/html;charset=UTF-8>, which is not valid UTF-8, so the browser shows
-replacement characters. A signed-in visitor's page, which is not cached, is
-encoded as usual.
+The body is kept, hashed and sent as UTF-8 bytes; an entry cached before
+that, which holds characters, is rendered again rather than served. An
+entry cached before C<canonical_path> existed has none, and is served to
+any spelling of its URL until it expires.
 
 =head1 AUTHOR
 

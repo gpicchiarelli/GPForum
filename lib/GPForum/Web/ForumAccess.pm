@@ -26,6 +26,9 @@ const my $SEARCH_MAX_LIMIT          => 50;
 const my $AUTOCOMPLETE_LIMIT        => 10;
 const my $AUTOCOMPLETE_MIN          => 2;
 const my $LIST_PAGE_LIMIT           => 25;
+const my $LIST_PAGE_MAX             => 100;
+const my $CATEGORY_LIST_LIMIT       => 100;
+const my $CATEGORY_LIST_MAX         => 200;
 const my $TARGET_POST               => 'post';
 const my $TARGET_THREAD             => 'thread';
 const my $TARGET_USER               => 'user';
@@ -189,8 +192,30 @@ sub search_filter_fields {
     return qw(category_id author_user_id from to);
 }
 
-sub list_page_limit ( $, $requested ) {
-    return $requested || $LIST_PAGE_LIMIT;
+# The page size a list is read with, bounded as Forum::PageWindow bounds it,
+# so the public cache's key names the size the page shows. The requested
+# value used to pass through: ?limit=abc, ?limit=007 and ?limit=100000 each
+# keyed an entry of their own for the same page of 25 or 100.
+sub list_page_limit ( $self, $requested ) {
+    return int $self->bounded_limit(
+        {
+            default => $LIST_PAGE_LIMIT,
+            maximum => $LIST_PAGE_MAX,
+            value   => $requested,
+        }
+    );
+}
+
+# The category index's size, bounded as Forum::CategoryReader bounds it (100
+# unless asked for fewer, at most 200), for the same reason.
+sub category_list_limit ( $self, $requested ) {
+    return int $self->bounded_limit(
+        {
+            default => $CATEGORY_LIST_LIMIT,
+            maximum => $CATEGORY_LIST_MAX,
+            value   => $requested,
+        }
+    );
 }
 
 sub post_target {
@@ -426,7 +451,9 @@ True when the value is a digit string, including zero.
 
 =head2 bounded_limit
 
-Returns a default, a capped maximum, or the requested positive limit.
+Takes C<< { value, default, maximum } >>. Returns C<default> when C<value>
+is undefined, not made only of digits, or zero; C<maximum> when it is
+larger; otherwise C<value> as given.
 
 =head2 search_filter_fields
 
@@ -434,8 +461,19 @@ Returns the allowed search filter parameter names.
 
 =head2 list_page_limit
 
-Returns a requested category/thread/feed/bookmark page size or the default
-of 25.
+Takes the requested page size of a category, thread, feed or bookmark list,
+as it came in the URL. Returns 25 when it is undefined, not made only of
+digits, or zero; 100 when it is larger; otherwise its integer value (C<007>
+is 7). These are L<GPForum::Service::Forum::PageWindow>'s bounds, so the
+size returned is the size the list is read with, and the public cache key
+built from it names the page shown.
+
+=head2 category_list_limit
+
+Takes the requested size of the category index. Returns 100 when it is
+undefined, not made only of digits, or zero; 200 when it is larger;
+otherwise its integer value: L<GPForum::Service::Forum::CategoryReader>'s
+bounds.
 
 =head2 post_target
 
@@ -542,7 +580,12 @@ hash constructors keep the following keys.
 
 =head2 public_cache_options
 
-Returns the forum SSR cache key and tags.
+Takes C<< { name, locale, theme, path, limit, tags } >>. Returns
+C<< { key, tags } >>: the key is C<forum-ssr:NAME:LOCALE:THEME:PATH:limit=N>
+and the tags are C<forum:public-html> followed by C<tags>. The caller passes
+the effective page size as C<limit> (L</list_page_limit>,
+L</category_list_limit>) and the page's path without the parts that do not
+change it, so a URL that differs only in those shares the entry.
 
 =head2 read_position_errors
 

@@ -90,22 +90,6 @@ sub connect_required ( $class, $options ) {
     return $class->_instance_for_endpoint( $endpoint, $options );
 }
 
-sub try_connect ( $class, $options ) {
-    my $undefined;
-
-    $options ||= {};
-    if ( !_has_text( $options->{url} ) ) {
-        return $undefined;
-    }
-
-    my $cache = eval { return $class->connect_required($options); };
-    if ( !$cache ) {
-        return $undefined;
-    }
-
-    return $cache;
-}
-
 sub parse_endpoint ( $, $url ) {
     my $unix = _unix_endpoint($url);
     if ($unix) {
@@ -201,7 +185,7 @@ sub ticket ( $self, $tags, $options = undef ) {
 
 sub invalidate ( $self, $key ) {
     $self->_validate_key($key);
-    my $removed = $self->_erase_store_key( $self->_entry_store_key($key) );
+    my $removed = $self->_erase_store_key( $self->_entry_store_key($key) ) // 0;
     $self->stats->{invalidations} += $removed;
     return $removed;
 }
@@ -210,14 +194,17 @@ sub invalidate ( $self, $key ) {
 # token this removes. The tag used to keep a list of its entries, rewritten by
 # read-modify-write on every put: two concurrent puts lost one of the two, a
 # purge then missed the lost key, and a hidden post came back from L2.
-# Returns 1 when a token was erased, 0 when the tag had none or L2 failed.
+# Returns 1 when a token was erased, 0 when the tag had none, and nothing when
+# L2 was not reached. A paused or failed L2 used to answer 0 like a tag with
+# no token, and the console's purge said "purged" while every page in L2
+# stayed current until its TTL.
 sub invalidate_tag ( $self, $tag ) {
     if ( !_has_text($tag) ) {
         return 0;
     }
 
     my $removed = $self->_erase_store_key( $self->_tag_store_key($tag) );
-    $self->stats->{invalidations} += $removed;
+    $self->stats->{invalidations} += $removed // 0;
     return $removed;
 }
 
@@ -522,11 +509,14 @@ sub _client_put ( $self, $store_key, $bytes, $expire_at_ns ) {
     return 0;
 }
 
-# 1 when the key was erased, 0 when it was absent or L2 failed.
+# 1 when the key was erased, 0 when it was absent, nothing when L2 was paused
+# or failed: the key may still be there.
 sub _erase_store_key ( $self, $store_key ) {
+    my $undefined;
+
     my $client = $self->_active_client;
     if ( !$client ) {
-        return 0;
+        return $undefined;
     }
 
     my $result   = eval { return $client->erase($store_key); };
@@ -544,7 +534,7 @@ sub _erase_store_key ( $self, $store_key ) {
     }
 
     $self->_record_failed_call($category);
-    return 0;
+    return $undefined;
 }
 
 # The one gate every call passes, invalidations and ping included. A skipped
@@ -789,9 +779,11 @@ meanwhile was stored under the token minted after the purge, and stayed
 current in L2 until its TTL.
 
 B<Failures.> Every call is fail-open: a GlifiStore error never reaches the
-caller, it reads as a miss, an unstored value or nothing erased. A failed
-call is counted in C<stats.failures> and, by GlifiStore error category
-(client-semantics-v1, section 3), drops the connection and pauses L2
+caller, it reads as a miss, an unstored value or nothing erased (which
+L</invalidate_tag> answers with C<undef>, so a purge can say it did not
+reach L2). A failed call is counted in C<stats.failures> and, by
+GlifiStore error category (client-semantics-v1, section 3), drops the
+connection and pauses L2
 (C<transport>, C<protocol>, C<internal>, C<indeterminate>, C<unavailable>,
 and any unknown category), pauses it but keeps the connection (C<overloaded>:
 reconnecting every process only adds load), or does neither
@@ -831,13 +823,11 @@ A failed connect is not an error: the instance has no client, is not
 paused, and tries again on its first call, so a process that starts before
 GlifiStore still starts. Croaks when the URL is missing or malformed.
 
-=head2 try_connect
-
-Class method. Takes the options of L</connect_required>. Returns C<undef>
-when C<url> is undefined or empty, or when L</connect_required> dies (a
-malformed URL); otherwise the instance L</connect_required> returns, which
-is also the case when the server could not be reached. Never croaks. The
-application builds its cache with L</connect_required> instead (ADR 0048).
+The degradation is this, and the fail-open calls below. C<try_connect>,
+removed, added none: it returned this same instance whether or not the
+server answered, and C<undef> only for a missing or malformed URL, a
+configuration error to report rather than a cache to go without. Nothing
+had called it since ADR 0048.
 
 =head2 parse_endpoint
 
@@ -909,9 +899,13 @@ C<stats.invalidations>.
 
 Takes a tag and erases its token, which retires every entry written under
 it: they miss from then on and GlifiStore drops them at their expiry.
-Returns 1 when the tag's key was erased, 0 for an undefined or empty tag,
-a tag whose key is absent, or L2 paused or failed; the result is added to
-C<stats.invalidations>.
+Returns 1 when the tag's key was erased, and 0 for an undefined or empty
+tag or a tag whose key is absent: either way no entry under the tag is
+current any more. Returns C<undef> when L2 was not reached (paused, or the
+ERASE failed or its outcome is unknown): entries written under the tag may
+stay current until their TTL. A caller that reports the purge, such as the
+console's (L<GPForum::Service::Admin::Maintenance>), tells the two apart
+with C<defined>. The 1 is added to C<stats.invalidations>.
 
 =head2 purge_expired
 

@@ -401,19 +401,23 @@ sub render_payload ( $, $input ) {
 
 # Cache options for a public page, or none: a page past the first (with a
 # cursor) is not cached, since any string is a cursor and each would mint an
-# entry. The key names the limit the page lists by: a thread list's page size
-# unless the page passes the one it uses.
-sub public_cache_options ( $self, $name, $tags, $limit = undef ) {
+# entry. The key names the limit the page lists by, a thread list's page size
+# unless the page passes the one it uses, and the path the route writes for
+# the request unless the page passes the one that names it (a thread under
+# any slug is one page). It named the path as typed: the router reads
+# /c/ID/ and /c/ID with a letter written as an escape as /c/ID, and each
+# spelling minted an entry of its own.
+sub public_cache_options ( $self, $name, $tags, $options = {} ) {
     my $undefined;
     return $undefined if length( $self->param('after') // q{} );
 
-    my $path = $self->req->url->path;
+    my $path = $options->{path} // $self->url_for->path->to_string;
     return $self->forum_access->public_cache_options(
         {
-            limit  => $limit // $self->list_page_limit,
+            limit  => $options->{limit} // $self->list_page_limit,
             locale => $self->ui_locale,
             name   => $name,
-            path   => $path->to_string,
+            path   => "$path",
             tags   => $tags,
             theme  => $self->ui_theme,
         }

@@ -89,12 +89,21 @@ sub invalidate ( $self, $key ) {
     return $removed;
 }
 
+# L1 and the bus are purged whatever L2 does; nothing is returned when L2 was
+# not reached (SharedCache::invalidate_tag), so a caller that reports the
+# purge can say its entries there stay current until their TTL. The count
+# alone read the same whether L2 had been purged or skipped.
 sub invalidate_tag ( $self, $tag ) {
     $self->_require_layers;
     my $removed = $self->l1->invalidate_tag($tag);
-    $self->l2->invalidate_tag($tag);
+    my $shared  = $self->l2->invalidate_tag($tag);
     $self->stats->{invalidations} += $removed;
     $self->_publish( { tags => [$tag] } );
+    if ( !defined $shared ) {
+        my $undefined;
+        return $undefined;
+    }
+
     return $removed;
 }
 
@@ -169,8 +178,14 @@ sub snapshot ($self) {
     };
 }
 
+# A layer without ping lives in the process (LocalCache as L2) and has no
+# server to lose; asking it died, which took the readiness probe down with it.
 sub ping ($self) {
     $self->_require_layers;
+    if ( !$self->l2->can('ping') ) {
+        return 1;
+    }
+
     return $self->l2->ping;
 }
 
@@ -274,9 +289,9 @@ retires it instead of being missed.
 L1 is used through C<get>, C<put>, C<invalidate>, C<invalidate_tag>,
 C<purge_expired>, C<clear>, C<snapshot> and C<clock>; L2 through C<lookup>,
 C<put>, C<invalidate>, C<invalidate_tag>, C<purge_expired>, C<clear>,
-C<snapshot>, C<ping> and, when it has one, C<ticket>. A LocalCache can serve
-as L2: its entries report no expiry, so a copy into L1 takes L1's default
-TTL.
+C<snapshot> and, when it has them, C<ping> and C<ticket>. A LocalCache can
+serve as L2: its entries report no expiry, so a copy into L1 takes L1's
+default TTL, and it has no C<ping>, so L</ping> answers 1 for it.
 
 =head1 SUBROUTINES/METHODS
 
@@ -334,7 +349,11 @@ C<invalidations>.
 
 Takes a tag. Invalidates it in L1 and L2 and publishes
 C<< { tags => [$tag] } >> on the bus. Returns the number of L1 entries
-removed, which is added to C<invalidations>.
+removed, which is added to C<invalidations>, or C<undef> when L2's
+C<invalidate_tag> returned C<undef>: SharedCache does when it was not
+reached (paused or failed), and the tag's entries there stay current until
+their TTL. L1 and the bus are purged either way, and the count is still
+added to C<invalidations>.
 
 =head2 absorb_remote_invalidations
 
@@ -366,7 +385,8 @@ C<undef> without a bus) and a copy of C<stats>.
 =head2 ping
 
 Returns L2's C<ping>. With SharedCache that is 1 when GlifiStore answers,
-and 0 when it does not or is being skipped after a failed call.
+and 0 when it does not or is being skipped after a failed call. An L2
+without C<ping>, such as a LocalCache, is in the process and returns 1.
 
 =head1 DIAGNOSTICS
 
@@ -374,11 +394,10 @@ Every method except L</absorb_remote_invalidations> croaks with
 C<tiered cache requires l1 and l2 layers> when either layer is missing.
 Errors raised by a layer propagate: LocalCache croaks with
 C<cache key is required> for an undefined or empty key in C<get> and C<put>,
-and SharedCache does in C<invalidate>. L</ping> dies when L2 has no C<ping>
-method, which LocalCache lacks. An error from the code reference given to
-L</get_or_set> propagates and nothing is stored. A GlifiStore failure does
-not throw: SharedCache turns it into a miss, a write not made or an
-invalidation skipped.
+and SharedCache does in C<invalidate>. An error from the code reference
+given to L</get_or_set> propagates and nothing is stored. A GlifiStore
+failure does not throw: SharedCache turns it into a miss, a write not made
+or an invalidation skipped, which L</invalidate_tag> reports with C<undef>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

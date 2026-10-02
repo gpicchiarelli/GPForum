@@ -10,6 +10,11 @@ use lib 'lib';
 use lib 't/lib';
 
 use Const::Fast;
+use GPForum::Service::Forum::CategoryReader;
+use GPForum::Service::Forum::PageWindow;
+use GPForum::Service::Operations::LocalCache;
+use GPForum::Test::ForumReadResultSet;
+use GPForum::Test::ForumReadSchema;
 use GPForum::Web::ForumAccess;
 use Test::More;
 
@@ -33,6 +38,12 @@ const my $AUTOCOMPLETE_DEFAULT   => 10;
 const my $AUTOCOMPLETE_REQUESTED => 5;
 const my $LIST_DEFAULT           => 25;
 const my $LIST_REQUESTED         => 10;
+const my $LIST_LEADING_ZERO      => 7;
+const my $LIST_MAX               => 100;
+const my $LIST_OVER_MAX          => 100_000;
+const my $CATEGORY_DEFAULT       => 100;
+const my $CATEGORY_REQUESTED     => 50;
+const my $CATEGORY_MAX           => 200;
 
 my $access = GPForum::Web::ForumAccess->new;
 
@@ -237,6 +248,47 @@ is( $access->list_page_limit(0),
 is( $access->list_page_limit($LIST_REQUESTED),
     $LIST_REQUESTED, 'list_page_limit keeps an explicit size' );
 
+# The public cache key names the page size, and it named the size as asked:
+# ?limit=abc, ?limit=007 and ?limit=100000 each minted an entry for a page of
+# 25, 7 or 100 that another spelling already had.
+is( $access->list_page_limit('abc'),
+    $LIST_DEFAULT, 'list_page_limit defaults a size that is no number' );
+is( $access->list_page_limit('00'),
+    $LIST_DEFAULT, 'list_page_limit defaults a zero spelled with two digits' );
+is( $access->list_page_limit('007'),
+    $LIST_LEADING_ZERO, 'list_page_limit reads leading zeros as the number' );
+is( $access->list_page_limit($LIST_OVER_MAX),
+    $LIST_MAX, 'list_page_limit caps an oversized size' );
+is( $access->category_list_limit(undef),
+    $CATEGORY_DEFAULT, 'category_list_limit defaults a missing size' );
+is( $access->category_list_limit('abc'),
+    $CATEGORY_DEFAULT,
+    'category_list_limit defaults a size that is no number' );
+is( $access->category_list_limit('0050'),
+    $CATEGORY_REQUESTED, 'category_list_limit keeps an explicit size' );
+is( $access->category_list_limit($LIST_OVER_MAX),
+    $CATEGORY_MAX, 'category_list_limit caps an oversized size' );
+
+# And what the key names is what the readers list: the controller hands them
+# the bounded size, which they leave as it is.
+my @requested = (
+    undef, q{},  'abc', '-3',  '0',   '00',  '1',   '007',
+    '25',  '99', '100', '101', '199', '200', '201', '100000',
+);
+for my $requested (@requested) {
+    my $shown = $requested // 'undef';
+    my $page  = $access->list_page_limit($requested);
+    is(
+        GPForum::Service::Forum::PageWindow->new->plan( { limit => $page } )
+          ->{limit},
+        $page,
+        "a list asked for $shown is read with the size its key names"
+    );
+    my $index = $access->category_list_limit($requested);
+    is( _listed_category_limit($index),
+        $index, "an index asked for $shown lists the size its key names" );
+}
+
 is( $access->post_target,   'post',   'post_target keeps the report target' );
 is( $access->thread_target, 'thread', 'thread_target keeps the report target' );
 is( $access->user_target,   'user',   'user_target keeps the report target' );
@@ -362,5 +414,26 @@ ok(
 );
 
 done_testing();
+
+# The limit CategoryReader lists an anonymous index with, read from the key
+# it caches the list under.
+sub _listed_category_limit {
+    my ($limit) = @_;
+
+    my $cache  = GPForum::Service::Operations::LocalCache->new;
+    my $reader = GPForum::Service::Forum::CategoryReader->new(
+        cache  => $cache,
+        schema => GPForum::Test::ForumReadSchema->new(
+            resultsets => {
+                Category =>
+                  GPForum::Test::ForumReadResultSet->new( rows => [] ),
+            },
+        ),
+    );
+    $reader->list_categories( { limit => $limit } );
+    my ($key) = keys %{ $cache->entries };
+
+    return ( $key // q{} ) =~ /:([[:digit:]]+)\z/msx ? $1 : undef;
+}
 
 1;

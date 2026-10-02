@@ -81,23 +81,43 @@ sub request_search_rebuild ( $self, $input ) {
 # Drops every cached public page, in every web process (the cache's
 # invalidation bus carries it), and audits who did. Nothing is lost: each
 # page is rendered again on its next request.
+#
+# A tag the cache could not purge in GlifiStore (its invalidate_tag returns
+# nothing: the shared layer is paused after a failure, or failed now) leaves
+# the pages there current until their TTL, while every process's own copy is
+# gone. The purge said "purged" all the same, and an operator who purged to
+# take a page down believed it was down. It is now "purged_locally", in the
+# answer and in the audit row, with the tags concerned.
 sub purge_public_cache ( $self, $input ) {
+    my @unreached;
     for my $tag (@PURGED_TAGS) {
-        $self->cache->invalidate_tag($tag);
+        if ( !defined $self->cache->invalidate_tag($tag) ) {
+            push @unreached, $tag;
+        }
     }
+    my $status         = @unreached ? 'purged_locally' : 'purged';
     my $correlation_id = $self->id_service->uuid;
     $self->_audit(
         {
             action         => 'admin.cache_purged',
             actor_user_id  => $input->{actor_user_id},
             correlation_id => $correlation_id,
-            metadata       => { tags => [@PURGED_TAGS], via => 'web' },
-            target_id      => $correlation_id,
-            target_type    => 'cache',
+            metadata       => {
+                status         => $status,
+                tags           => [@PURGED_TAGS],
+                unreached_tags => [@unreached],
+                via            => 'web',
+            },
+            target_id   => $correlation_id,
+            target_type => 'cache',
         }
     );
 
-    return { status => 'purged', tags => [@PURGED_TAGS] };
+    return {
+        status         => $status,
+        tags           => [@PURGED_TAGS],
+        unreached_tags => [@unreached],
+    };
 }
 
 sub _audit ( $self, $input ) {
@@ -155,7 +175,16 @@ Starts a rebuild; returns its run id.
 
 =head2 purge_public_cache
 
-Invalidates every cached public page; returns the tags purged.
+Takes a hash reference with C<actor_user_id>. Invalidates every cached
+public page (the tags C<forum:public-html>, C<categories> and
+C<forum-index>) in this process, in the others through the cache's bus, and
+in the shared cache, and records an C<admin.cache_purged> audit row.
+Returns C<< { status, tags, unreached_tags } >>: C<status> is C<purged>, or
+C<purged_locally> when the shared cache was not reached for one of the tags
+(its C<invalidate_tag> returned C<undef>), which C<unreached_tags> lists;
+the pages under those tags stay in the shared cache until their TTL. The
+audit row's metadata holds the same C<status>, C<tags> and
+C<unreached_tags>, and C<via> (C<web>).
 
 =head1 DIAGNOSTICS
 
@@ -176,7 +205,9 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-None known.
+A purge that did not reach the shared cache is not retried: the pages it
+left there expire within their TTL, and purging again once GlifiStore
+answers clears them sooner.
 
 =head1 AUTHOR
 
