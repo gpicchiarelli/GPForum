@@ -754,6 +754,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A refused byte range (416) or a proxy error page is no longer cached for
+  a year** under a fingerprinted asset URL: the app sends a lifetime only on
+  200, 206 and 304, nginx no longer adds it to its own error pages, and Caddy
+  serves only existing files from `/assets/`.
+
 - **Search time filters keep their meaning**: a time with no offset is read
   in the database session's zone, as a day is, not as UTC; fractional seconds
   are kept to the microsecond instead of rounding into the next second.

@@ -102,13 +102,16 @@ route-specific styling unless a component cannot express the UI.
 ## Static assets
 
 The application serves `assets/css` and `assets/img` at the site root
-(`/gpforum-ssr.css`, `/gpforum-mark.svg`), searched in that order. A template
-never writes such a URL by hand: `ui_asset_url('gpforum-ssr.css')` renders
-`/gpforum-ssr.css?v=<digest>`, where the digest is the first twelve hex digits
-of the SHA-256 of the file's bytes. `GPForum::Web::AssetManifest` digests every
-file under those roots once, while the application starts, so no request reads
-a file to name it; a misspelt name fails the render instead of sending a URL
-nothing would ever invalidate.
+(`/gpforum-ssr.css`, `/gpforum-mark.svg`), searched in that order. Templates
+name such a URL through `ui_asset_url`, never by hand:
+`ui_asset_url('gpforum-ssr.css')` renders `/gpforum-ssr.css?v=<digest>`, where
+the digest is the first twelve hex digits of the SHA-256 of the file's bytes.
+One template still breaks the rule: `components/site_header` links the
+header's mark as a bare `/gpforum-mark.svg`, which therefore gets the short
+lifetime below (`t/233-asset-fingerprints.t` marks that check TODO).
+`GPForum::Web::AssetManifest` digests every file under those roots once, while
+the application starts, so no request reads a file to name it; a misspelt name
+fails the render instead of sending a URL nothing would ever invalidate.
 
 The digest makes the URL name one version of the file, so the static file
 server answers it with `Cache-Control: public, max-age=31536000, immutable`:
@@ -124,14 +127,20 @@ who has seen a form (its CSRF token lives in the session cookie) gets that
 cookie on the stylesheet's response too, and no shared cache may store it for
 the next visitor. In the `development` mode every static response is
 `no-cache`, because a stylesheet is edited under a running server and the
-digest is only taken at startup.
+digest is only taken at startup. Only a response that carries the file or
+confirms the browser's copy (200, 206, 304) gets a lifetime: a 416, which
+refuses a range the file does not have, gets none.
 
 The shipped `deploy/nginx/gpforum.conf` and `deploy/caddy/Caddyfile` serve the
 same roots from disk with the same two values, chosen by whether the request
 has a `v`; a proxy cannot compare it with the digest (the module's BUGS AND
-LIMITATIONS says when that shows). The browser headers, CSP included, are
-unchanged on the application's responses; a file the proxy serves itself
-carries `X-Content-Type-Options: nosniff` and none of the others.
+LIMITATIONS says when that shows, and why a fleet upgraded one host at a time
+should let the application answer these URLs instead). Neither puts a
+lifetime on its own error page: nginx adds `Cache-Control` without `always`,
+and Caddy handles only files that exist and passes a miss to the application.
+The browser headers, CSP included, are unchanged on the application's
+responses; a file the proxy serves itself carries
+`X-Content-Type-Options: nosniff` and none of the others.
 
 There is still no minification or bundling: the files in `assets/` are what
 is served.
@@ -166,5 +175,6 @@ is served.
 - `t/233-asset-fingerprints.t` verifies that every asset URL the layout renders
   carries the digest of the file it names, that a changed file changes its URL,
   the `Cache-Control` the static file server sends for each case (a response
-  that sets a cookie, a shadowed or renamed-over file included), and that the
-  nginx and Caddy configurations send the same values.
+  that sets a cookie, a range, a refused range, a shadowed, renamed-over or
+  rewritten file included), and that the nginx and Caddy configurations send
+  the same values and none on their own error pages.

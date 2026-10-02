@@ -34,6 +34,12 @@ const my $DEVELOPMENT => 'no-cache';
 const my $PUBLIC  => 'public';
 const my $PRIVATE => 'private';
 
+# A lifetime belongs on a response that carries the file (200, 206) or
+# confirms the browser's copy of it (304). A 416 only refuses the range it
+# was asked for: with a year on it, a cache could keep that refusal under
+# the file's URL. (Read with exists: a const hash dies on a missing key.)
+const my %CARRIES_THE_FILE => map { $_ => 1 } qw(200 206 304);
+
 has roots => sub { return []; };
 has files => sub ($self) { return $self->_scan_roots; };
 
@@ -66,7 +72,9 @@ sub cache_control ( $self, %input ) {
 sub apply ( $self, $controller ) {
     my $url      = $controller->req->url;
     my $response = $controller->res;
-    my $path     = $url->path->clone;
+    return if !exists $CARRIES_THE_FILE{ $response->code // 0 };
+
+    my $path = $url->path->clone;
     $path->canonicalize;
     my $name = join q{/}, @{ $path->parts };
 
@@ -205,7 +213,8 @@ The digests are taken once, when the manifest's C<files> is first read: the
 application reads it while it starts, so Hypnotoad's workers share the table
 and no request reads a file to name it.
 
-L</apply> sets C<Cache-Control> on a response from the static file server:
+L</apply> sets C<Cache-Control> on a response from the static file server
+that carries the file or confirms the browser's copy (a 200, 206 or 304):
 C<public, max-age=31536000, immutable> when the request's C<v> is the
 current digest of the file it names, C<public, max-age=3600> otherwise, and
 C<no-cache> in the C<development> mode. A request with an old C<v> (a page
@@ -257,11 +266,12 @@ those it had then.
 =head2 apply
 
 Takes the controller of a response the static file server has just produced
-(a 200, 206, 304 or 416) and sets its C<Cache-Control> from
+and, for a 200, 206 or 304, sets its C<Cache-Control> from
 L</cache_control>: the request path canonicalized as the static file server
 canonicalizes it, the file the static file server answers that path from,
 and whether the response already carries C<Set-Cookie>, as it does once the
-session has been stored. Returns nothing.
+session has been stored. A 416, which refuses the range asked for and
+carries none of the file, is left without one. Returns nothing.
 
 =head1 DIAGNOSTICS
 
@@ -293,10 +303,17 @@ the same second as the original is not seen to have changed; a file renamed
 over it is.
 
 A reverse proxy that serves these files itself cannot compare C<v> with the
-digest. The shipped nginx and Caddy configurations call any C<v> immutable,
-so after a deploy a page cached from before it, which still names an old
-digest, makes browsers keep the new bytes under the old URL; that only shows
-if the deploy is rolled back while those copies live.
+digest. The shipped nginx and Caddy configurations call any C<v> immutable.
+On a single host that shows only after a rollback: a page cached from before
+the deploy names the old digest, browsers keep the new bytes under it, and
+the rolled-back pages name it again. Behind a load balancer whose hosts are
+upgraded one at a time it shows at once: a page from an upgraded host names
+the new digest, a host not yet upgraded answers it from disk with the old
+bytes, and browsers keep those for a year. There, let the proxy pass these
+URLs to the application, which compares the digest.
+
+The header's mark (F<templates/components/site_header.html.ep>) is still
+linked without a digest, so it gets the short lifetime.
 
 =head1 AUTHOR
 

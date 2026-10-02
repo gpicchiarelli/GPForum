@@ -36,8 +36,17 @@ forum.example.com {
     # The repository's assets/ tree, for the standalone index.html; the
     # application does not serve this prefix. handle keeps the /assets/
     # prefix, so /assets/css/site.css maps to
-    # /opt/gpforum/assets/css/site.css.
-    handle /assets/* {
+    # /opt/gpforum/assets/css/site.css. Only a file that exists is handled
+    # here: Caddy would put these lifetimes on its own 404 as well, and keep
+    # a missing versioned URL missing for a year. A miss goes on to the
+    # application, which answers it without them.
+    @assets_file {
+        path /assets/*
+        file {
+            root /opt/gpforum
+        }
+    }
+    handle @assets_file {
         root * /opt/gpforum
         header @versioned Cache-Control "public, max-age=31536000, immutable"
         header @unversioned Cache-Control "public, max-age=3600"

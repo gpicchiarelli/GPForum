@@ -32,7 +32,10 @@ our $TODO;
 # browser whenever its heuristic freshness ran out.
 
 const my $HTTP_OK           => 200;
+const my $HTTP_PARTIAL      => 206;
 const my $HTTP_NOT_MODIFIED => 304;
+const my $HTTP_BAD_RANGE    => 416;
+const my $AN_HOUR_AGO       => 3600;
 const my $DIGEST_LENGTH     => 12;
 const my $IMMUTABLE         => 'public, max-age=31536000, immutable';
 const my $SHORT             => 'public, max-age=3600';
@@ -49,6 +52,7 @@ const my $NOT_YET_VERSIONED => 'img.brand__mark';
 
 _manifest_digests_the_bytes();
 _a_changed_file_changes_its_url();
+_a_file_rewritten_in_place_is_not_immutable();
 _cache_policy();
 _rendered_pages_name_the_digest();
 _static_responses_carry_the_policy();
@@ -133,6 +137,37 @@ sub _a_changed_file_changes_its_url {
         $EVAL_ERROR,
         qr/unknown [ ] asset: [ ] sitee[.]css/msx,
         'and names the asset'
+    );
+
+    return;
+}
+
+# Rewritten in place to bytes of the same length, a file keeps its device,
+# inode and size: only its modification time says it is not the file that
+# was digested.
+sub _a_file_rewritten_in_place_is_not_immutable {
+    my $root    = path( tempdir( CLEANUP => 1 ) );
+    my $file    = $root->child('site.css')->spew('body { color: black; }');
+    my $earlier = time - $AN_HOUR_AGO;
+    utime $earlier, $earlier, "$file";
+
+    my $manifest = GPForum::Web::AssetManifest->new( roots => ["$root"] );
+    $manifest->files;
+    my $before = $file->stat;
+
+    $file->spew('body { color: white; }');
+    my $after = $file->stat;
+    ok(
+        $after->ino == $before->ino && $after->size == $before->size,
+        'the file is rewritten in place to bytes of the same length'
+    );
+    is(
+        $manifest->cache_control(
+            name    => 'site.css',
+            version => _short_digest('body { color: black; }'),
+        ),
+        $SHORT,
+        'a newer modification time is enough to stop calling it immutable'
     );
 
     return;
@@ -249,6 +284,22 @@ sub _static_responses_carry_the_policy {
     $test->header_is(
         'Cache-Control' => $IMMUTABLE,
         'a revalidation answers with the same lifetime'
+    );
+
+    $test->get_ok( $css => { Range => 'bytes=0-9' } );
+    $test->status_is($HTTP_PARTIAL);
+    $test->header_is(
+        'Cache-Control' => $IMMUTABLE,
+        'a part of the file is as immutable as the whole'
+    );
+
+    # A 416 refuses the range it was asked for; it is not the file. Given a
+    # year, a cache could keep that refusal under the stylesheet's URL.
+    $test->get_ok( $css => { Range => 'bytes=999999999-' } );
+    $test->status_is($HTTP_BAD_RANGE);
+    $test->header_is(
+        'Cache-Control' => undef,
+        'a refused range is given no lifetime'
     );
 
     $test->get_ok($icon);
@@ -424,6 +475,11 @@ sub _proxies_send_the_same_policy {
         'and sends that lifetime'
     );
 
+    # With "always" nginx adds the header to its own 404 and 403 pages too,
+    # and a versioned URL that is missing would be kept missing for a year.
+    ok( $nginx !~ qr/add_header [ ] Cache-Control [^;\n]* [ ] always/msx,
+        'nginx gives no lifetime to an error page' );
+
     my $caddy = path('deploy/caddy/Caddyfile')->slurp;
     like(
         $caddy,
@@ -445,6 +501,24 @@ sub _proxies_send_the_same_policy {
         qr{try_files [ ] /css[{]path[}] [ ] /img[{]path[}]}msx,
         'Caddy searches the static roots in the application order'
     );
+
+    # Caddy's header directive also writes onto the 404 its file server
+    # answers for a missing file; each handle that sends a lifetime must
+    # match only files that exist.
+    my @handles = $caddy =~ /^ [ ]* handle [ ]+ (\S+) [ ]+ [{]/gmsx;
+    ok( scalar @handles, 'Caddy has handle blocks' );
+    for my $handle (@handles) {
+        my ($matcher) = $handle =~ /\A [@] (\w+) \z/msx;
+        my ($definition) =
+          defined $matcher
+          ? $caddy =~ /^ [ ]* [@] \Q$matcher\E [ ]+ [{] (.*?) ^ [ ]{4} [}]/msx
+          : ();
+        like(
+            $definition // q{},
+            qr/^ [ ]* file [ ]+ [{]/msx,
+            "Caddy's handle $handle matches only a file that exists"
+        );
+    }
 
     return;
 }
