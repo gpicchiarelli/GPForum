@@ -140,6 +140,12 @@ script/dead-letter-check --dry-run --json
 # Archive: script/dead-letter-check --json > /tmp/dead-letter-check.json
 ```
 
+Exit `0` when the rehearsal passes, `1` when it fails, `2` on misuse. An
+error the check raises instead of reporting exits `1` as well: the reason on
+standard error, an inline `password=` shown as `[redacted]`, and the JSON
+`{"check":"dead_letter_check","mode":...,"status":"fail","error":...}` with
+the EvidenceMeta markers, so a failed run archives like a passing one.
+
 Manual confirmation on staging still required:
 
 1. Force a handler failure classified `permanent` (or exhaust retries).

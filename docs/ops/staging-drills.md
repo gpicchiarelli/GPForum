@@ -169,6 +169,13 @@ Attachments/deploy drill JSON includes at least:
 - `residual_gaps` for live systemd install / nginx reload / Hypnotoad and
   private-beta
 
+Misuse of either drill exits `2` with the usage on standard error. An error
+a drill raises instead of reporting exits `1`: the reason on standard error,
+an inline `password=` shown as `[redacted]`, and JSON evidence carrying only
+the drill's name -- `check` `staging_drill`, or `check` and `drill`
+`staging_ops_extensions` for the attachments drill -- `status` `fail`, the
+reason in `error` and the EvidenceMeta markers.
+
 ## Recording a run
 
 1. Run `script/staging-drill --json` against a staging-like PostgreSQL major version.

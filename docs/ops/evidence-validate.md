@@ -36,7 +36,14 @@ Re-stamp with:
 script/evidence-meta --write path/to/archive.json
 ```
 
-Exit `0` for `pass` or `degraded`. `fail` is non-zero.
+Exit `0` for `pass` or `degraded`. `fail` is non-zero (`1`); misuse is `2`.
+
+Every harness above, and this validator, reports an error it raises instead
+of evidence the same way: exit `1`, the reason on standard error with an
+inline `password=` shown as `[redacted]`, and on standard output (JSON, the
+default) evidence carrying the harness's `check` (`stress-load`: `mode`),
+`status` `fail`, the reason in `error` and the markers above -- so that
+document passes `--strict` and can be archived beside the passing runs.
 
 ## Related
 

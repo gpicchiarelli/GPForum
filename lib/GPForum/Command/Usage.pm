@@ -14,6 +14,7 @@ use JSON::MaybeXS ();
 use Mojo::Base -base, -signatures;
 
 use GPForum::Service::Admin::Settings;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
@@ -122,6 +123,20 @@ sub failure ( $class, $error, $output = undef, $document = undef ) {
     return $EXIT_FAILURE;
 }
 
+# The failure above for an evidence command: one whose check stopped with an
+# exception instead of evidence. Under --json -- their default -- the document
+# is evidence in its own right: the identity the check's evidence carries (its
+# "check", or stress-load's "mode"), status "fail", the reason, and the
+# markers evidence-validate --strict asks an archived file for, so a failed
+# run can be archived beside the passing ones. The evidence commands rethrew
+# such an error with die, which exits 255 or with whatever $! held -- 2,
+# misuse, after a failed file lookup.
+sub evidence_failure ( $class, $error, $format, $identity ) {
+    return $class->failure($error) if ( $format // q{} ) ne 'json';
+
+    return $class->failure( $error, \*STDOUT, evidence_finalize($identity) );
+}
+
 sub wants_help ( $, @arguments ) {
     return scalar grep { $_ eq '--help' || $_ eq '-h' } @arguments;
 }
@@ -214,6 +229,16 @@ document with C<status> C<fail> and the C<error> as JSON; returns
 C<$EXIT_FAILURE>. An inline password in the reason, such as a DSN's
 C<password=>, is redacted in both.
 
+=head2 evidence_failure
+
+The L</failure> of an evidence command, given the error, the output format
+and the identity its evidence carries (C<< { check => 'staging_drill' } >>).
+With the C<json> format it prints, on standard output, that identity
+finalized as evidence by L<GPForum::Service::Operations::EvidenceMeta> --
+C<secrets_redacted>, C<private_beta_claimed>, C<residual_gaps> -- with
+C<status> C<fail> and the redacted C<error>; with any other, only the reason
+on standard error. Returns C<$EXIT_FAILURE>.
+
 =head2 wants_help
 
 True when the argument list asks for help.
@@ -241,8 +266,9 @@ No environment variables are read.
 
 =head1 DEPENDENCIES
 
-Uses L<Const::Fast>, L<JSON::MaybeXS>, L<Mojo::Base> and, for its
-redaction, L<GPForum::Service::Admin::Settings>.
+Uses L<Const::Fast>, L<JSON::MaybeXS>, L<Mojo::Base>, for its redaction
+L<GPForum::Service::Admin::Settings>, and for an evidence command's failure
+L<GPForum::Service::Operations::EvidenceMeta>.
 
 =head1 INCOMPATIBILITIES
 

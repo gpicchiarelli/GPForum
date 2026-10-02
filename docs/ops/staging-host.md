@@ -85,7 +85,11 @@ alongside the health probe. An `http://` base URL leaves TLS as a residual gap.
 contract (`GPForum::Service::Operations::DeployContract`); they do **not**
 install, enable, or reload services.
 
-Exit `0` for `pass` or `degraded`. `fail` means a probed phase failed.
+Exit `0` for `pass` or `degraded`. `fail` means a probed phase failed (`1`);
+misuse is `2`. An error the verify raises instead of reporting exits `1` too,
+with the reason on standard error (an inline `password=` shown as
+`[redacted]`) and JSON evidence of `check` `staging_host_verify`, `status`
+`fail` and the reason in `error`.
 
 ## Evidence archive (private-beta blockers)
 

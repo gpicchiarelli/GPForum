@@ -118,6 +118,12 @@ With `--check`, exit status is non-zero when `error_rate_pct` exceeds
 `--max-error-rate` (default 1%) or `p95_ms` exceeds `--p95-limit-ms`
 (default 2000).
 
+A live run with neither `--base-url` nor `GPFORUM_STRESS_BASE_URL` is misuse:
+exit `2`, the usage on standard error. An error the harness raises instead of
+reporting exits `1`, with the reason on standard error (an inline `password=`
+shown as `[redacted]`) and JSON evidence of `mode` `stress-load`, `status`
+`fail` and the reason in `error`.
+
 ## Recording a run
 
 1. Run the intended profile on staging-like hardware with a seeded DB and live

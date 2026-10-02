@@ -16,7 +16,6 @@ use GPForum::Service::Operations::EvidenceValidate;
 
 our $VERSION = '0.001';
 
-const my $EXIT_USAGE => 2;
 const my %FLAG_OPTIONS => (
     '--help'   => 'help',
     '--json'   => 'format_json',
@@ -26,30 +25,29 @@ const my %FLAG_OPTIONS => (
 
 has validate => undef;
 
-# A usage croak becomes the documented usage exit instead of an uncaught
-# exception: same text, on stderr, status 2, without croak's " at FILE line N".
-# Anything else is rethrown, so a real failure is not relabelled as misuse.
+# Misuse -- an option this command does not know, all its parser croaks for --
+# is the documented usage exit: the usage on stderr, status 2, without the
+# " at bin/... line N." croak used to leave on it. A check that stops with an
+# exception instead of evidence is a failure: 1 with its reason, redacted, on
+# stderr and, as JSON, evidence saying fail (Command::Usage). It used to be
+# rethrown with die, and an uncaught exception exits 255, or with whatever $!
+# held: 2, misuse, after a failed file lookup.
 sub run ( $self, @arguments ) {
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
-
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( !GPForum::Command::Usage->is_usage($error) ) {
-        die "$error\n";
-    }
-
-    return GPForum::Command::Usage->error( undef, $error );
-}
-
-sub _run ( $self, @arguments ) {
     my $options = eval { return _options(@arguments) };
     if ( !$options ) {
-        print {*STDERR} _trim($EVAL_ERROR)
-          or croak 'failed to write evidence-validate usage error';
-        return $EXIT_USAGE;
+        return GPForum::Command::Usage->error( undef,
+            GPForum::Command::Usage->trimmed($EVAL_ERROR) );
     }
     return _print_usage() if $options->{help};
 
+    my $status = eval { return $self->_run($options) };
+    return $status if defined $status;
+
+    return GPForum::Command::Usage->evidence_failure( $EVAL_ERROR,
+        $options->{format}, { check => 'evidence_validate' } );
+}
+
+sub _run ( $self, $options ) {
     my $service  = $self->_service;
     my $evidence = $service->run($options);
     print $service->format_evidence( $evidence, $options->{format} )
@@ -128,13 +126,6 @@ residual_gaps markers. Does not claim private-beta readiness.
 USAGE
 }
 
-sub _trim ($error) {
-    $error = "$error";
-    $error =~ s/\s+\z//msx;
-
-    return "$error\n";
-}
-
 1;
 
 __END__
@@ -154,6 +145,13 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Operator CLI for non-destructive evidence archive validation.
+
+=head1 DIAGNOSTICS
+
+Misuse exits 2 with the usage on standard error. An error the validator raises
+instead of reporting exits 1 with its reason, redacted, on standard error
+and, with C<--json> (the default), evidence on standard output with
+C<status> C<fail> and the reason in C<error>.
 
 =head1 AUTHOR
 

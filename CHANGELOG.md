@@ -777,6 +777,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **The evidence commands exit 1, not 2 or 255, when their check raises an
+  error**, with a redacted reason and a JSON `status: fail` document;
+  `partition-maintenance` against an unreachable database says why;
+  `stress-load` without a base URL is misuse (exit 2).
+
 - **A malformed id in a moderation or privacy URL answers 404**, word for
   word the unknown-id answer, without a query (it was a 500, or 503 for a
   suspension revoke); filters with a malformed id show an empty page. A

@@ -24,8 +24,8 @@ Usage: bin/gpforum-partition-maintenance [--plan|--apply] [--lookahead N] [--jso
   --help       show this help
 ```
 
-Exit status is 0 on success, 1 when a partition cannot be created, 2 for a
-usage error.
+Exit status is 0 on success, 1 when a partition cannot be created or the
+database cannot be reached, 2 for a usage error.
 
 `--json` prints the same result as one object, for a script or an alert:
 
@@ -41,7 +41,10 @@ partition with `table_name`, `partition_name`, `range_start`, `range_end` and
 `conflicting_rows`, `message` and `remediation` (a list of statements) for a
 conflict, and `error` for an error. When the run itself fails -- the database
 cannot be reached -- the object has empty lists, `status` `fail` and the
-reason in `error`. For example, to alert on conflicts:
+reason in `error`, which standard error repeats: for a database that refuses
+the connection, `partition lifecycle: cannot connect to the database:` and
+what DBI said, a `password=` in the DSN shown as `[redacted]`. For example,
+to alert on conflicts:
 
 ```sh
 bin/gpforum-partition-maintenance --plan --json | jq -e '.conflicts == []'

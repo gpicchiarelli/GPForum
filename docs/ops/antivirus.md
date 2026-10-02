@@ -102,7 +102,11 @@ It scans the EICAR test file, which every antivirus must detect, an ordinary
 file, which must pass, and a file as large as the upload limit, which must
 pass too — a `StreamMaxLength` below 26M fails here. Readiness only asks whether clamd answers;
 this proves it scans. Exit status: `0` ok, degraded or disabled, `1` failed (including a
-misconfiguration), `2` misuse. `--json` gives the same evidence as JSON.
+misconfiguration), `2` misuse. `--json` gives the same evidence as JSON. An
+error the check raises instead of reporting exits `1` too, with its reason on
+standard error (an inline `password=` shown as `[redacted]`); with `--json`
+the evidence still comes, `status` `fail`, the reason in `error`, `problems`
+empty.
 
 ### From the console
 

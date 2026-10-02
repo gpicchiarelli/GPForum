@@ -41,7 +41,12 @@ make mail-check
 | `smtp` | TCP connect to `smtp_host:smtp_port` only | Real SMTP delivery of a verification probe |
 | `sendmail` | Confirm a `sendmail` binary is present | Real sendmail delivery |
 
-Exit status is non-zero on misconfiguration or probe failure.
+Exit status is non-zero on misconfiguration or probe failure: `1`, and `2`
+for misuse. An error the check raises instead of reporting exits `1` as well,
+with the reason on standard error (an inline `password=` shown as
+`[redacted]`) and, as JSON, evidence of `check` `mail_delivery` and its
+`mode`, `status` `fail` and the reason in `error`, with the EvidenceMeta
+markers. `mail-lifecycle-check` (below) does the same, with its own `check`.
 
 Evidence JSON always sets `secrets_redacted=true` and
 `private_beta_claimed=false`, lists `residual_gaps`, and scrubs SMTP

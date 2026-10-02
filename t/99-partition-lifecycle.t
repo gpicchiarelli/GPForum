@@ -7,12 +7,15 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English     qw(-no_match_vars);
 use Time::Local qw(timegm);
 use Time::Piece ();
 
 use lib 'lib';
+use lib 't/lib';
 
 use GPForum::Service::Operations::PartitionLifecycle;
+use GPForum::Test::RefusedSchema;
 use Test::More;
 
 our $VERSION = '0.001';
@@ -150,6 +153,40 @@ is(
     'degraded',
     'a partitioned table with no partition at all degrades'
 );
+
+# A schema whose database refuses the connection. The refusal was swallowed,
+# so partition-maintenance against a database it could not reach said only
+# that it needed a handle: the operator learnt nothing about the port or the
+# password. The reason comes through, on one line, without the code locations
+# DBI and DBIx::Class put on it. It still quotes the DSN's password=: the
+# command printing it redacts that (t/284-evidence-command-failures.t).
+const my $REFUSED => 'partition lifecycle: cannot connect to the database: '
+  . 'DBIx::Class::Storage::DBI::catch {...} (): DBI Connection failed: '
+  . q{DBI connect('dbname=gpforum;host=127.0.0.1;port=1;password=hunter2',}
+  . q{'gpforum',...) failed: connection to server at "127.0.0.1", port 1}
+  . ' failed: Connection refused Is the server running on that host and'
+  . ' accepting TCP/IP connections?';
+const my $NO_HANDLE => 'partition lifecycle: a database handle is required';
+
+my $refused = eval {
+    GPForum::Service::Operations::PartitionLifecycle->new(
+        schema => GPForum::Test::RefusedSchema->new )->ensure_partitions( {} );
+    1;
+} ? q{} : "$EVAL_ERROR";
+( my $refused_reason = $refused ) =~
+  s/[ ] at [ ] \S+ [ ] line [ ] \d+ [.] \n \z//msx;
+is( $refused_reason, $REFUSED,
+    'an unreachable database fails with the reason it is unreachable' );
+is( ( $refused =~ tr/\n// ), 1, 'on one line' );
+
+my $no_reason = eval {
+    GPForum::Service::Operations::PartitionLifecycle->new(
+        schema => GPForum::Test::RefusedSchema->new( error => q{} ) )
+      ->ensure_partitions( {} );
+    1;
+} ? q{} : "$EVAL_ERROR";
+like( $no_reason, qr/\A\Q$NO_HANDLE\E/msx,
+    'a storage with no handle and no reason still asks for one' );
 
 done_testing();
 

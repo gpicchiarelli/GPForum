@@ -23,28 +23,14 @@ const my %FORMAT_FOR => (
 
 has check => undef;
 
-# A usage croak becomes the documented usage exit instead of an uncaught
-# exception: same text, on stderr, status 2, without croak's " at FILE line N".
-# Anything else is rethrown, so a real failure is not relabelled as misuse.
+# Misuse -- an option this command does not know -- is the documented usage
+# exit: the usage on stderr, status 2. The check reports as evidence what it
+# anticipates, a misconfiguration and a scanner that does not answer included;
+# an error it raises instead is a failure: 1 with its redacted reason on
+# stderr and, under --json, the evidence's shape saying fail. It used to be
+# rethrown with die, and an uncaught exception exits 255, or with whatever $!
+# held: 2, misuse, after a failed file lookup.
 sub run ( $self, @arguments ) {
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
-
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( !GPForum::Command::Usage->is_usage($error) ) {
-        die "$error\n";
-    }
-
-    return GPForum::Command::Usage->error( undef, $error );
-}
-
-# Public so the Mojolicious command adapter in GPForum::CLI can show the same
-# text `--help` prints, instead of a second copy that drifts.
-sub usage_text ($class) {
-    return _usage();
-}
-
-sub _run ( $self, @arguments ) {
     my $format = 'human';
     for my $argument (@arguments) {
         return GPForum::Command::Usage->help( \*STDOUT, _usage() )
@@ -56,6 +42,22 @@ sub _run ( $self, @arguments ) {
         $format = $FORMAT_FOR{$argument};
     }
 
+    my $status = eval { return $self->_run($format); };
+    return $status if defined $status;
+
+    return GPForum::Command::Usage->failure( $EVAL_ERROR,
+        $format eq 'json'
+        ? ( \*STDOUT, { engine => 'unknown', problems => [] } )
+        : () );
+}
+
+# Public so the Mojolicious command adapter in GPForum::CLI can show the same
+# text `--help` prints, instead of a second copy that drifts.
+sub usage_text ($class) {
+    return _usage();
+}
+
+sub _run ( $self, $format ) {
     my $check =
       $self->check || GPForum::Service::Operations::AntivirusCheck->new;
     my $evidence = $check->run;
@@ -113,7 +115,10 @@ The text C<--help> prints.
 
 =head1 DIAGNOSTICS
 
-An unknown option exits 2 with the usage on stderr.
+An unknown option exits 2 with the usage on stderr. An error the check raises
+instead of reporting exits 1 with its reason, redacted, on stderr; with
+C<--json> the evidence also comes on stdout, C<status> C<fail>, the reason in
+C<error> and no C<problems>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

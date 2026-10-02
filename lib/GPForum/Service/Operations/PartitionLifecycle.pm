@@ -456,14 +456,26 @@ sub _require_dbh ( $self, $input ) {
     return $handle;
 }
 
+# The schema's connection, or why there is none. The connection error was
+# swallowed here, so partition-maintenance against a database it could not
+# reach said only "a database handle is required" -- true, and no help to an
+# operator looking for a refused port or a rejected password. The reason is
+# kept, on one line and without the code locations DBI and DBIx::Class append
+# to it. It can quote the DSN, password= and all: the command printing it
+# redacts it (GPForum::Command::Usage->failure).
 sub _schema_dbh ($self) {
     my $schema = $self->schema;
-    if ( !$schema ) {
-        my $undefined;
-        return $undefined;
-    }
+    my $undefined;
+    return $undefined if !$schema;
 
-    return eval { return $schema->storage->dbh; };
+    my $handle = eval { return $schema->storage->dbh; };
+    return $handle if $handle;
+
+    my $reason = _reason($EVAL_ERROR);
+    croak "partition lifecycle: cannot connect to the database: $reason"
+      if length $reason;
+
+    return $undefined;
 }
 
 sub _lookahead ( $self, $input ) {
@@ -645,6 +657,16 @@ sub _trim ($message) {
     my $text = defined $message ? "$message" : q{};
     $text =~ s/\s+/ /gmsx;
     $text =~ s/\A\s+|\s+\z//gmsx;
+
+    return $text;
+}
+
+# A rethrown error carries one " at FILE line N." per throw -- DBI's, then
+# DBIx::Class's -- and every trailing one goes.
+sub _reason ($error) {
+    my $text = _trim($error);
+    while ( $text =~ s/\s+ at \s+ \S+ \s+ line \s+ [[:digit:]]+ [.]? \z//msx ) {
+    }
 
     return $text;
 }
@@ -922,6 +944,13 @@ A range bound is not a C<YYYY-MM-DD HH:MM:SS+00> literal.
 
 C<ensure_partitions> was called without C<dbh>, C<< $self->dbh >>, or a schema.
 
+=item C<partition lifecycle: cannot connect to the database: ...>
+
+There is a schema but no connection to be had from it; the rest is the
+connection error, on one line and without its code locations. It can quote
+the DSN, an inline C<password=> included, so a caller that prints it redacts
+it, as L<GPForum::Command::Usage/failure> does.
+
 =item C<partition lifecycle: lookahead_months must be a positive integer>
 
 The lookahead given to C<ensure_partitions> is not a whole number from 1 to
@@ -940,8 +969,8 @@ The overlap probe could not be run; the partition is left untouched.
 Everything C<ensure_partitions> raises per partition, including that probe
 failure, is caught and returned in C<conflicts> or C<errors>, so one bad table
 does not stop the maintenance run. Only the whole-run problems above
-(missing handle, lookahead, lock timeout) propagate, as do the validation
-errors raised by the public methods called directly.
+(missing handle, unreachable database, lookahead, lock timeout) propagate,
+as do the validation errors raised by the public methods called directly.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

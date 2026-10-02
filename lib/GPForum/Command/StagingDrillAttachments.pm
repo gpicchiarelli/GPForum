@@ -18,7 +18,6 @@ use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 
 our $VERSION = '0.001';
 
-const my $EXIT_USAGE => 2;
 const my %FLAG_OPTIONS => (
     '--help'             => 'help',
     '--json'             => 'format_json',
@@ -32,30 +31,35 @@ const my %FLAG_OPTIONS => (
 has attachment_drill => undef;
 has deploy_drill     => undef;
 
-# A usage croak becomes the documented usage exit instead of an uncaught
-# exception: same text, on stderr, status 2, without croak's " at FILE line N".
-# Anything else is rethrown, so a real failure is not relabelled as misuse.
+# Misuse -- an option this command does not know, all its parser croaks for --
+# is the documented usage exit: the usage on stderr, status 2, without the
+# " at bin/... line N." croak used to leave on it. A check that stops with an
+# exception instead of evidence is a failure: 1 with its reason, redacted, on
+# stderr and, as JSON, evidence saying fail (Command::Usage). It used to be
+# rethrown with die, and an uncaught exception exits 255, or with whatever $!
+# held: 2, misuse, after a failed file lookup.
 sub run ( $self, @arguments ) {
-    my $status = eval { return $self->_run(@arguments); };
-    return $status if defined $status;
-
-    my $error = GPForum::Command::Usage->trimmed($EVAL_ERROR);
-    if ( !GPForum::Command::Usage->is_usage($error) ) {
-        die "$error\n";
-    }
-
-    return GPForum::Command::Usage->error( undef, $error );
-}
-
-sub _run ( $self, @arguments ) {
     my $options = eval { return _options(@arguments) };
     if ( !$options ) {
-        print {*STDERR} _trim($EVAL_ERROR)
-          or croak 'failed to write staging drill attachments usage error';
-        return $EXIT_USAGE;
+        return GPForum::Command::Usage->error( undef,
+            GPForum::Command::Usage->trimmed($EVAL_ERROR) );
     }
     return _print_usage() if $options->{help};
 
+    my $status = eval { return $self->_run($options) };
+    return $status if defined $status;
+
+    return GPForum::Command::Usage->evidence_failure(
+        $EVAL_ERROR,
+        $options->{format},
+        {
+            check => 'staging_ops_extensions',
+            drill => 'staging_ops_extensions',
+        }
+    );
+}
+
+sub _run ( $self, $options ) {
     my $evidence = $self->_run_phases($options);
     print $self->_format( $evidence, $options->{format} )
       or croak 'failed to write staging drill attachments evidence';
@@ -306,13 +310,6 @@ sub _has_text ($value) {
     return defined $value && length $value;
 }
 
-sub _trim ($error) {
-    $error = "$error";
-    $error =~ s/\s+\z//msx;
-
-    return "$error\n";
-}
-
 1;
 
 __END__
@@ -334,6 +331,13 @@ Version 0.001.
 Operator CLI for populated C<var/attachments> filesystem backup/restore and
 nginx/systemd template validation (static plus optional host
 C<systemd-analyze verify> / C<nginx -t>).
+
+=head1 DIAGNOSTICS
+
+Misuse exits 2 with the usage on standard error. An error the drill raises
+instead of reporting exits 1 with its reason, redacted, on standard error
+and, with C<--json> (the default), evidence on standard output with
+C<status> C<fail> and the reason in C<error>.
 
 =head1 AUTHOR
 
