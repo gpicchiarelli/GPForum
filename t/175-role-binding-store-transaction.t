@@ -73,8 +73,9 @@ sub create {
 }
 
 sub find {
-    my ( $self, $id ) = @_;
+    my ( $self, $id, $attrs ) = @_;
 
+    push @{ $self->schema->find_attrs }, $attrs;
     my $column = $ID_COLUMN{ $self->name };
     my $undefined;
     return $undefined if !$column;
@@ -127,8 +128,9 @@ package Local::PlainSchema;
 
 use Mojo::Base -base;
 
-has created => sub { return {}; };
-has rows    => sub { return {}; };
+has created    => sub { return {}; };
+has find_attrs => sub { return []; };
+has rows       => sub { return {}; };
 
 sub resultset {
     my ( $self, $name ) = @_;
@@ -236,6 +238,19 @@ is( $schema->transactions, 2,
     'revoke_binding wraps the update and audit writes in one transaction' );
 is( scalar @{ $recorder->audits },
     2, 'the revocation audit is recorded inside the same transaction' );
+
+# Two revocations of one binding both passed the already-revoked check when
+# the binding was read without a lock; FOR UPDATE makes the second wait for
+# the first and read its revoked_at (t/integration/postgres-role-admin.t).
+is_deeply(
+    $schema->find_attrs->[-1],
+    { for => 'update' },
+    'revoke_binding reads the binding FOR UPDATE'
+);
+my $again = $store->revoke_binding( $binding_id, 'actor-3' );
+ok( $again->{idempotent}, 'a second revocation is reported, not repeated' );
+is( scalar @{ $recorder->audits }, 2,
+    'and records no second revocation audit' );
 
 my $plain_store = GPForum::Service::Admin::RoleBindingStore->new(
     recorder => Local::Recorder->new,

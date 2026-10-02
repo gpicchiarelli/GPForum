@@ -178,11 +178,12 @@ sub revoke_binding ( $self, $binding_id, $actor_user_id ) {
 }
 
 sub _revoke_binding_once ( $self, $binding_id, $actor_user_id ) {
-    my $revoked_at = $self->clock->now_iso8601;
-    my $binding    = $self->schema->resultset('RoleBinding')->find($binding_id);
+    my $binding = $self->_locked_binding($binding_id);
     my $undefined;
     return $undefined if !$binding;
 
+    # Checked under the row lock, so a revocation that committed while this
+    # one waited is reported here rather than stamped and audited again.
     return {
         binding_id => $binding_id,
         idempotent => 1,
@@ -190,6 +191,7 @@ sub _revoke_binding_once ( $self, $binding_id, $actor_user_id ) {
       }
       if defined $binding->get_column('revoked_at');
 
+    my $revoked_at = $self->clock->now_iso8601;
     $binding->update( { revoked_at => $revoked_at } );
     $self->_record_audit(
         {
@@ -211,6 +213,15 @@ sub _revoke_binding_once ( $self, $binding_id, $actor_user_id ) {
         binding_id => $binding_id,
         revoked_at => $revoked_at,
     };
+}
+
+# SELECT ... FOR UPDATE: a second revocation of the same binding waits here
+# until the first commits, then reads the revoked_at it wrote. Read without
+# the lock, both saw the binding active; the later one overwrote revoked_at
+# and recorded a second audit row.
+sub _locked_binding ( $self, $binding_id ) {
+    return $self->schema->resultset('RoleBinding')
+      ->find( $binding_id, { for => 'update' } );
 }
 
 sub _active_binding ( $self, $input ) {
@@ -347,7 +358,8 @@ active binding get that binding back. The database's unique index on active
 bindings decides a race between two grants, and the loser returns the
 winner's row rather than an error. A binding found without its audit row --
 one written before a crash, or by older code -- has the row written when it
-is next granted. Revoking stamps C<revoked_at>; the row is kept.
+is next granted. Revoking stamps C<revoked_at> under the binding's row lock;
+the row is kept.
 
 =head1 SUBROUTINES/METHODS
 
@@ -376,6 +388,12 @@ earlier time when it was already revoked, and
 C<< { binding_id, revoked_at } >> when this call revoked it and wrote the
 audit row.
 
+Runs inside C<< $schema->txn_do >> when the schema has one, and reads the
+binding with C<SELECT ... FOR UPDATE>. Two revocations of one binding are
+therefore serialised: the second waits for the first to commit, then finds
+C<revoked_at> set and returns the idempotent answer, so the binding keeps
+the first revocation's time and has one C<role_binding.revoked> audit row.
+
 =head1 DIAGNOSTICS
 
 Rethrows any insert error that is not a unique conflict on
@@ -403,10 +421,17 @@ None known.
 =head1 BUGS AND LIMITATIONS
 
 No input is validated here; L<GPForum::Service::Admin::Workflow> checks the
-required fields first. C<revoke_binding> reads the binding without locking
-it, so two revocations racing on one binding can both pass the
-already-revoked check: the later one then overwrites C<revoked_at> and
-records a second audit row.
+required fields first.
+
+The row lock that serialises revocations lasts as long as the transaction
+around it. L<GPForum::Schema> always has C<txn_do>; through a schema
+without one, as some in-memory test doubles are, each statement would
+commit on its own and the lock would be released as soon as it was taken.
+
+Completing a lost C<role_binding.created> row is not serialised: the active
+binding is read without a lock and its audit row looked for before one is
+written, so two grants that find the same binding without its row at the
+same moment can both write it.
 
 =head1 AUTHOR
 

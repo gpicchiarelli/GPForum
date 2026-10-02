@@ -729,6 +729,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **Two administrators revoking the same role binding at once no longer both
+  succeed**: the second waits on the row lock and reports the binding as
+  already revoked, with one revocation time and one audit entry. Re-attaching
+  a permission whose audit entry was lost writes it even when another
+  permission of the role was audited, and an id spelled in upper case, in
+  braces or without hyphens no longer writes a duplicate entry.
+
 - **A post edit, delete or restore, or a thread title edit, no longer lands
   after a moderator locked the thread or hid the post** (or its author
   deleted it) between the check and the write. Under the row locks the store

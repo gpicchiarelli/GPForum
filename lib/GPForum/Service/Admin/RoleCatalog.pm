@@ -8,6 +8,7 @@ use warnings;
 
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use Scalar::Util qw(blessed);
 
 use GPForum::Infrastructure::Row;
 use GPForum::Infrastructure::EventRecorder;
@@ -23,6 +24,8 @@ const my $ROLE_NAME_CONSTRAINT         => 'roles_name_key';
 const my $PERMISSION_ID_CONSTRAINT     => 'permissions_pkey';
 const my $PERMISSION_NAME_CONSTRAINT   => 'permissions_name_key';
 const my $PERMISSION_ACTION_CONSTRAINT => 'permissions_resource_action_key';
+const my $ATTACHED_ACTION              => 'role_permission.attached';
+const my $UUID_DIGITS                  => 32;
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub {
@@ -340,7 +343,7 @@ sub _attach_permission_row ( $self, $input ) {
     $self->schema->resultset('RolePermission')->create($role_permission);
     $self->_record_admin_audit(
         {
-            action        => 'role_permission.attached',
+            action        => $ATTACHED_ACTION,
             actor_user_id => $input->{actor_user_id},
             target_type   => 'role',
             target_id     => $role_permission->{role_id},
@@ -434,7 +437,7 @@ sub _finish_leftover_permission ( $self, $existing, $input ) {
 sub _finish_leftover_attachment ( $self, $existing, $input ) {
     $self->_ensure_catalog_audit(
         {
-            action        => 'role_permission.attached',
+            action        => $ATTACHED_ACTION,
             actor_user_id => $input->{actor_user_id},
             created_at    => _column( $existing, 'created_at' ),
             metadata      => {
@@ -468,6 +471,10 @@ sub _ensure_catalog_audit ( $self, $job ) {
 }
 
 sub _catalog_audit_exists ( $self, $job ) {
+    if ( $job->{action} eq $ATTACHED_ACTION ) {
+        return $self->_attachment_audit_exists($job);
+    }
+
     return $self->_single_row(
         'AuditLog',
         {
@@ -475,6 +482,71 @@ sub _catalog_audit_exists ( $self, $job ) {
             target_id => $job->{target_id},
         }
     );
+}
+
+# An attachment's entry targets the role, as the entry of every other
+# permission attached to that role does; only its metadata names the
+# permission. Matched on the role alone, an attachment whose entry was lost
+# passed for audited as soon as any other permission of the role had been.
+# So the role's attachment entries are read -- one per permission attached
+# to it, and only on this leftover path -- and the pair is matched here.
+sub _attachment_audit_exists ( $self, $job ) {
+    my $search = $self->schema->resultset('AuditLog')->search_rs(
+        {
+            action      => $job->{action},
+            target_id   => $job->{target_id},
+            target_type => $job->{target_type},
+        },
+        { columns => [qw(metadata)] },
+    );
+
+    for my $audit ( _rows($search) ) {
+        return 1
+          if _same_attachment( _audit_metadata($audit), $job->{metadata} );
+    }
+
+    return 0;
+}
+
+sub _same_attachment ( $recorded, $wanted ) {
+    for my $key (qw(role_id permission_id)) {
+        return 0 if !_same_id( $recorded->{$key}, $wanted->{$key} );
+    }
+
+    return 1;
+}
+
+# Ids are UUIDs, and the metadata keeps one as the command spelled it.
+# PostgreSQL also reads a uuid in upper case, in braces or with its hyphens
+# moved or left out, and hands back the canonical form; lower-casing alone
+# missed the other spellings and wrote a second entry on every repeat.
+sub _same_id ( $recorded, $wanted ) {
+    return 0 if !defined $recorded || !defined $wanted;
+
+    return _id_key($recorded) eq _id_key($wanted) ? 1 : 0;
+}
+
+# The bare lower-case digits of a uuid. Anything else -- the test doubles'
+# ids -- is compared lower-cased as it is.
+sub _id_key ($id) {
+    my $digits = ( lc $id ) =~ tr/{}-//dr;
+
+    return
+      length $digits == $UUID_DIGITS && $digits !~ m/[^[:xdigit:]]/msx
+      ? $digits
+      : lc $id;
+}
+
+# get_column answers a jsonb column with its JSON text; the decoded hash is
+# the inflated column. The in-memory doubles keep the hash itself.
+sub _audit_metadata ($audit) {
+    my $metadata =
+      blessed($audit)
+      && $audit->can('get_inflated_column')
+      ? $audit->get_inflated_column('metadata')
+      : _column( $audit, 'metadata' );
+
+    return ref $metadata eq 'HASH' ? $metadata : {};
 }
 
 sub _single_row ( $self, $resultset_name, $query ) {
@@ -619,6 +691,13 @@ C<actor_user_id> to audit. Returns a hash reference with C<role_id>,
 C<permission_id> and C<created_at>; for a pair already attached, the
 existing row's values with C<< idempotent => 1 >>.
 
+An attachment's audit entry targets the role and names the permission in
+its metadata, so the check for a missing entry reads the role's
+C<role_permission.attached> entries and matches the role and permission
+pair; an entry for another permission of the same role does not count.
+The metadata keeps each id as the command spelled it, so ids are compared
+as PostgreSQL reads a uuid: whatever the case, braces or hyphens.
+
 =head2 list_roles
 
 Takes a hash reference (or undef) with an optional C<limit>; without one
@@ -643,7 +722,8 @@ None.
 
 =head1 DEPENDENCIES
 
-L<Const::Fast>, L<Mojo::Base>, L<GPForum::Infrastructure::EventRecorder>,
+L<Const::Fast>, L<Mojo::Base>, L<Scalar::Util>,
+L<GPForum::Infrastructure::EventRecorder>,
 L<GPForum::Infrastructure::Id>, L<GPForum::Infrastructure::Row>,
 L<GPForum::Infrastructure::UniqueConflict>,
 L<GPForum::Service::Admin::Event>, L<GPForum::Service::Clock>.
@@ -657,10 +737,15 @@ None known.
 Repeating C<create_role> with a different description returns the
 existing role unchanged; nothing is updated.
 
-The missing-audit check for an existing attachment looks for any
-C<role_permission.attached> entry on the role, not on the pair, so an
-attachment whose audit was lost is not completed when another attachment
-of the same role was audited.
+The check for a lost attachment entry reads every
+C<role_permission.attached> entry of the role, one per permission attached
+to it, because only the metadata names the permission. It runs only when
+the pair is already attached, never on a first attachment.
+
+Completing a lost entry is not serialised. The existing role, permission or
+attachment is read without a row lock and its entry looked for before
+anything is written, so two commands that find the same row without its
+entry at the same moment can both write one.
 
 =head1 AUTHOR
 
