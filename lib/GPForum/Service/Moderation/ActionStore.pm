@@ -51,14 +51,14 @@ sub hide_post ( $self, $input ) {
     return $self->_apply_action(
         {
             %{$input},
-            action_type    => 'post.hidden',
-            created_at     => $timestamp,
-            expected_state => $STATE_HIDDEN,
-            lock_kind      => $TARGET_POST,
-            resultset      => 'Post',
-            target_id      => $input->{post_id},
-            target_type    => $TARGET_POST,
-            updates        => {
+            action_type => 'post.hidden',
+            applied     => \&_is_hidden,
+            created_at  => $timestamp,
+            lock_kind   => $TARGET_POST,
+            resultset   => 'Post',
+            target_id   => $input->{post_id},
+            target_type => $TARGET_POST,
+            updates     => {
                 hidden_at        => $timestamp,
                 moderation_state => $STATE_HIDDEN,
             },
@@ -70,14 +70,14 @@ sub restore_post ( $self, $input ) {
     return $self->_apply_action(
         {
             %{$input},
-            action_type    => 'post.restored',
-            created_at     => $self->clock->now_iso8601,
-            expected_state => $STATE_VISIBLE,
-            lock_kind      => $TARGET_POST,
-            resultset      => 'Post',
-            target_id      => $input->{post_id},
-            target_type    => $TARGET_POST,
-            updates        => {
+            action_type => 'post.restored',
+            applied     => \&_is_visible,
+            created_at  => $self->clock->now_iso8601,
+            lock_kind   => $TARGET_POST,
+            resultset   => 'Post',
+            target_id   => $input->{post_id},
+            target_type => $TARGET_POST,
+            updates     => {
                 hidden_at        => undef,
                 moderation_state => $STATE_VISIBLE,
             },
@@ -85,22 +85,31 @@ sub restore_post ( $self, $input ) {
     );
 }
 
+# A thread keeps two facts in one moderation_state: hidden, and locked. The
+# lock has its own column, locked_at, which is what refuses replies; hidden
+# has none on a thread, so the state is all there is of it. Hiding wins the
+# shared column: locking or unlocking a hidden thread leaves it hidden (each
+# used to overwrite the state and so publish it), and showing it again puts
+# back whichever of locked and visible locked_at says.
 sub lock_thread ( $self, $input ) {
     my $timestamp = $self->clock->now_iso8601;
 
     return $self->_apply_action(
         {
             %{$input},
-            action_type    => 'thread.locked',
-            created_at     => $timestamp,
-            expected_state => $STATE_LOCKED,
-            lock_kind      => $TARGET_THREAD,
-            resultset      => 'Thread',
-            target_id      => $input->{thread_id},
-            target_type    => $TARGET_THREAD,
-            updates        => {
-                locked_at        => $timestamp,
-                moderation_state => $STATE_LOCKED,
+            action_type => 'thread.locked',
+            applied     => \&_is_locked,
+            created_at  => $timestamp,
+            lock_kind   => $TARGET_THREAD,
+            resultset   => 'Thread',
+            target_id   => $input->{thread_id},
+            target_type => $TARGET_THREAD,
+            updates     => sub ($thread) {
+                return {
+                    locked_at        => $timestamp,
+                    moderation_state =>
+                      _unless_hidden( $thread, $STATE_LOCKED ),
+                };
             },
         }
     );
@@ -110,38 +119,39 @@ sub unlock_thread ( $self, $input ) {
     return $self->_apply_action(
         {
             %{$input},
-            action_type    => 'thread.unlocked',
-            created_at     => $self->clock->now_iso8601,
-            expected_state => $STATE_VISIBLE,
-            lock_kind      => $TARGET_THREAD,
-            resultset      => 'Thread',
-            target_id      => $input->{thread_id},
-            target_type    => $TARGET_THREAD,
-            updates        => {
-                locked_at        => undef,
-                moderation_state => $STATE_VISIBLE,
+            action_type => 'thread.unlocked',
+            applied     => \&_is_unlocked,
+            created_at  => $self->clock->now_iso8601,
+            lock_kind   => $TARGET_THREAD,
+            resultset   => 'Thread',
+            target_id   => $input->{thread_id},
+            target_type => $TARGET_THREAD,
+            updates     => sub ($thread) {
+                return {
+                    locked_at        => undef,
+                    moderation_state =>
+                      _unless_hidden( $thread, $STATE_VISIBLE ),
+                };
             },
         }
     );
 }
 
+# Threads have no hidden_at, unlike posts: writing one died on PostgreSQL
+# ("No such column"), so no thread could be hidden or shown again. When it
+# was hidden is the created_at of the action row recorded with it.
 sub hide_thread ( $self, $input ) {
-    my $timestamp = $self->clock->now_iso8601;
-
     return $self->_apply_action(
         {
             %{$input},
-            action_type    => 'thread.hidden',
-            created_at     => $timestamp,
-            expected_state => $STATE_HIDDEN,
-            lock_kind      => $TARGET_THREAD,
-            resultset      => 'Thread',
-            target_id      => $input->{thread_id},
-            target_type    => $TARGET_THREAD,
-            updates        => {
-                hidden_at        => $timestamp,
-                moderation_state => $STATE_HIDDEN,
-            },
+            action_type => 'thread.hidden',
+            applied     => \&_is_hidden,
+            created_at  => $self->clock->now_iso8601,
+            lock_kind   => $TARGET_THREAD,
+            resultset   => 'Thread',
+            target_id   => $input->{thread_id},
+            target_type => $TARGET_THREAD,
+            updates     => { moderation_state => $STATE_HIDDEN },
         }
     );
 }
@@ -150,16 +160,15 @@ sub restore_thread ( $self, $input ) {
     return $self->_apply_action(
         {
             %{$input},
-            action_type    => 'thread.restored',
-            created_at     => $self->clock->now_iso8601,
-            expected_state => $STATE_VISIBLE,
-            lock_kind      => $TARGET_THREAD,
-            resultset      => 'Thread',
-            target_id      => $input->{thread_id},
-            target_type    => $TARGET_THREAD,
-            updates        => {
-                hidden_at        => undef,
-                moderation_state => $STATE_VISIBLE,
+            action_type => 'thread.restored',
+            applied     => \&_is_not_hidden,
+            created_at  => $self->clock->now_iso8601,
+            lock_kind   => $TARGET_THREAD,
+            resultset   => 'Thread',
+            target_id   => $input->{thread_id},
+            target_type => $TARGET_THREAD,
+            updates     => sub ($thread) {
+                return { moderation_state => _shown_state($thread) };
             },
         }
     );
@@ -249,16 +258,14 @@ sub _applied_target_change ( $self, $target, $input ) {
 }
 
 sub _already_applied ( $target, $input ) {
-    my $previous = _column( $target, 'moderation_state' ) || q{};
-
-    return $previous eq $input->{expected_state} ? 1 : 0;
+    return $input->{applied}->($target) ? 1 : 0;
 }
 
 sub _persist_target_change ( $self, $target, $input ) {
     my $previous_state = _column( $target, 'moderation_state' );
     my $idempotent     = _already_applied( $target, $input );
     if ( !$idempotent ) {
-        $target->update( $input->{updates} );
+        $target->update( _target_updates( $target, $input->{updates} ) );
     }
 
     return $self->_record_action(
@@ -278,6 +285,50 @@ sub _persist_target_change ( $self, $target, $input ) {
             target_type => $input->{target_type},
         }
     );
+}
+
+sub _target_updates ( $target, $updates ) {
+    return ref $updates eq 'CODE' ? $updates->($target) : $updates;
+}
+
+sub _state ($target) {
+    return _column( $target, 'moderation_state' ) || q{};
+}
+
+sub _is_hidden ($target) {
+    return _state($target) eq $STATE_HIDDEN ? 1 : 0;
+}
+
+sub _is_not_hidden ($target) {
+    return _is_hidden($target) ? 0 : 1;
+}
+
+sub _is_visible ($target) {
+    return _state($target) eq $STATE_VISIBLE ? 1 : 0;
+}
+
+# locked_at is the lock: it is what refuses a reply and what the page shows,
+# and hidden, the state no longer says locked at all. A state saying locked
+# without it used to count as locked, so locking that thread was a repeat
+# and replies stayed open.
+sub _is_locked ($thread) {
+    return defined _column( $thread, 'locked_at' ) ? 1 : 0;
+}
+
+# Unlocked once neither says locked, so unlocking such a thread still puts
+# its state right.
+sub _is_unlocked ($thread) {
+    return 0 if _is_locked($thread);
+
+    return _state($thread) eq $STATE_LOCKED ? 0 : 1;
+}
+
+sub _unless_hidden ( $thread, $state ) {
+    return _is_hidden($thread) ? $STATE_HIDDEN : $state;
+}
+
+sub _shown_state ($thread) {
+    return _is_locked($thread) ? $STATE_LOCKED : $STATE_VISIBLE;
 }
 
 sub _replayed_target_action ( $self, $input ) {
@@ -616,13 +667,19 @@ Version 0.001.
 =head1 DESCRIPTION
 
 The write side of moderation for L<GPForum::Service::Moderation::Workflow>.
-Each action changes the target's C<moderation_state> (and C<hidden_at> or
-C<locked_at>), inserts a C<moderation_actions> row and records the matching
-event and audit entry through L<GPForum::Infrastructure::EventRecorder>, with
-shapes from L<GPForum::Service::Moderation::Event>; all of it in one
-transaction, after the target row has been locked with
-C<SELECT ... FOR UPDATE> so two moderators acting on the same post or thread
-take turns.
+Each action changes the target's C<moderation_state> (and a post's
+C<hidden_at> or a thread's C<locked_at>), inserts a C<moderation_actions> row
+and records the matching event, its outbox message and the audit entry
+through L<GPForum::Infrastructure::EventRecorder>, with shapes from
+L<GPForum::Service::Moderation::Event>; all of it in one transaction, after
+the target row has been locked with C<SELECT ... FOR UPDATE> so two
+moderators acting on the same post or thread take turns.
+
+A thread has no C<hidden_at>: hidden is its C<moderation_state> alone, and
+when it was hidden is the action row's C<created_at>. The same column also
+says C<locked>, so hidden takes precedence there: locking or unlocking a
+hidden thread changes C<locked_at> and leaves it C<hidden>, and showing it
+again sets C<locked> or C<visible> by C<locked_at>.
 
 Every action is safe to repeat:
 
@@ -633,10 +690,13 @@ changes, the stored action comes back with C<< replayed => 1 >>, and the
 action's event and audit are written first if an earlier attempt left the
 row without them.
 
-=item * A target already in the requested state is not updated. When an
-unreversed action of the same type exists for it, that action comes back
-with C<< skipped => 1 >> and C<< idempotent => 1 >>; otherwise a new action
-is recorded with C<< idempotent => 1 >> in its metadata.
+=item * A target where the action is already done is not updated: a post
+or thread already hidden, a post already visible, a thread already not
+hidden, locked (C<locked_at> set, whatever the state says) or unlocked (no
+C<locked_at> and a state other than C<locked>). When an unreversed action
+of the same type exists for it, that action comes back with
+C<< skipped => 1 >> and C<< idempotent => 1 >>; otherwise a new action is
+recorded with C<< idempotent => 1 >> in its metadata.
 
 =item * A unique conflict on the command id (a concurrent request with the
 same command) replays the row that won; a conflict on the generated action
@@ -672,22 +732,26 @@ C<hidden_at> and recording C<post.restored>.
 =head2 hide_thread
 
 As L</hide_post> for a thread, keyed by C<thread_id>: state C<hidden>,
-C<hidden_at> stamped, action C<thread.hidden>.
+action C<thread.hidden>. Nothing else on the thread changes; a locked
+thread keeps its C<locked_at>.
 
 =head2 restore_thread
 
-As L</hide_thread>, setting the state to C<visible>, clearing C<hidden_at>
-and recording C<thread.restored>.
+As L</hide_thread>, setting the state back to C<locked> when C<locked_at>
+is set and to C<visible> otherwise, and recording C<thread.restored>. A
+thread that is not hidden is left as it is.
 
 =head2 lock_thread
 
-As L</hide_thread>, setting the state to C<locked>, stamping C<locked_at>
-and recording C<thread.locked>.
+As L</hide_thread>, stamping C<locked_at>, setting the state to C<locked>
+unless the thread is hidden, which it stays, and recording
+C<thread.locked>.
 
 =head2 unlock_thread
 
-As L</hide_thread>, setting the state to C<visible>, clearing C<locked_at>
-and recording C<thread.unlocked>.
+As L</hide_thread>, clearing C<locked_at>, setting the state to C<visible>
+unless the thread is hidden, which it stays, and recording
+C<thread.unlocked>.
 
 =head2 reverse_action
 

@@ -754,6 +754,15 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A moderator can hide and unhide a thread on PostgreSQL**: the action
+  wrote a `hidden_at` column the threads table does not have and died, so
+  the hide-thread route never worked. Locking now means `locked_at`, so a
+  thread whose state said locked without a lock time is really locked.
+- **An author's thread delete, restore or move no longer goes through after
+  a moderator locked or hid the thread** between the check and the write:
+  under the row lock it is refused (403 or 404), recorded against the
+  command id.
+
 - **Readiness no longer reports a shared cache that is not there**: with an
   in-process L2 the tiered cache's ping answers 0, so readiness says
   `local-fallback`. A realtime listener's dying snapshot no longer overwrites

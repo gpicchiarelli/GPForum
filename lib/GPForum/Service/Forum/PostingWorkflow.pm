@@ -760,9 +760,9 @@ sub _thread_store_answer ($stored) {
 
 # A store checks again, under its row locks, what the workflow checked before
 # the transaction, because a moderator may have locked or hidden the thread or
-# the post since, or the author deleted one. Its refusal is an answer, not a
-# failure: the status the first check gives, recorded with the command and
-# replayed with it.
+# the post since, or the author deleted or restored one. Its refusal is an
+# answer, not a failure: the status the first check gives, recorded with the
+# command and replayed with it.
 sub _store_answer ( $stored, $fallback_error ) {
     my $refusal = _stored_refusal($stored);
 
@@ -1287,8 +1287,8 @@ category or thread it goes in, which the composer gets as its floor.
 
 The store checks again, under its row locks, what the workflow checked
 before the transaction, because a moderator may have locked or hidden the
-thread or the post since, or the author deleted one in another tab. Its
-refusal is an answer, not a failure: C<thread not found> and
+thread or the post since, or the author deleted or restored one in another
+tab. Its refusal is an answer, not a failure: C<thread not found> and
 C<post not found> become C<not_found>, and C<thread is locked> and
 C<post is hidden> become C<forbidden>, the status the workflow's own check
 gives for the same words.
@@ -1403,8 +1403,9 @@ state is C<hidden> (C<thread is hidden>) or it is locked
 L<GPForum::Service::Forum::ThreadComposer/prepare_title> rejects the title.
 Otherwise stores the new title and slug with
 L<GPForum::Service::Forum::ThreadStore/edit_thread> and returns C<ok> with
-C<prepared> and C<stored> (C<thread>, and C<skipped> when nothing changed).
-Command type C<thread.edit>; a replay's C<stored> is
+C<prepared> and C<stored> (C<thread>, and C<skipped> when nothing changed);
+a refusal of the thread store is answered as described above. Command type
+C<thread.edit>; a replay's C<stored> is
 C<< { ok => 1, thread => { thread_id, title, slug } } >>.
 
 =head2 move_thread
@@ -1417,7 +1418,8 @@ L<GPForum::Service::Forum::ThreadComposer/prepare_move> rejects the input
 (an empty target among the reasons). Otherwise moves the thread with
 L<GPForum::Service::Forum::ThreadStore/move_thread> and returns C<ok> with
 C<prepared> and C<stored> (C<thread>, and C<skipped> when it was already
-there). Command type C<thread.move>; a replay's C<stored> is
+there); a refusal of the thread store is answered as described above.
+Command type C<thread.move>; a replay's C<stored> is
 C<< { ok => 1, thread => { thread_id, category_id } } >>.
 
 =head2 delete_thread
@@ -1426,7 +1428,8 @@ Takes C<thread_id>. Gives the C<not_found> and C<forbidden> answers of
 L</edit_thread>; there is nothing to validate, so no composer runs and
 C<prepared> is undefined. Otherwise soft-deletes the thread with
 L<GPForum::Service::Forum::ThreadStore/delete_thread>, the requester as
-C<deleted_by>, and returns C<ok> with C<stored> (C<thread>). Command type
+C<deleted_by>, and returns C<ok> with C<stored> (C<thread>); a refusal of
+the thread store is answered as described above. Command type
 C<thread.delete>; a replay's C<stored> is
 C<< { ok => 1, thread => { thread_id } } >>.
 
@@ -1437,7 +1440,8 @@ viewer can read the thread and it is deleted (the thread detail reader shows
 a deleted thread to its author only), then the C<forbidden> answers of
 L</edit_thread>. Otherwise restores the thread with
 L<GPForum::Service::Forum::ThreadStore/restore_thread>, the requester as
-C<restored_by>, and returns C<ok> with C<stored> (C<thread>). Command type
+C<restored_by>, and returns C<ok> with C<stored> (C<thread>); a refusal of
+the thread store is answered as described above. Command type
 C<thread.restore>; replayed as L</delete_thread> is.
 
 =head2 edit_post

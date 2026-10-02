@@ -80,8 +80,8 @@ reply to a thread locked, or deleted by its author, while it waited.
 
 ### TX-002: author edits checked outside the row locks
 
-Severity: closed for post edit, delete and restore and for thread title edit,
-historical risk `high`; open, `medium`, for thread delete, restore and move.
+Severity: closed for post edit, delete and restore and for thread title
+edit, delete, restore and move, historical risk `high`.
 
 Files involved:
 
@@ -95,24 +95,29 @@ inside the command's transaction but before any row lock. `PostStore` then
 takes the thread row with `FOR KEY SHARE` and the post row with `FOR UPDATE`
 -- no write takes a post row before its thread's -- and repeats those checks
 on the rows as the locks return them; `ThreadStore` does the same for a title
-edit under the thread's `FOR UPDATE`. A lock, hide or delete committed while
-the write waited refuses it with the workflow's status (`thread is locked` and
-`post is hidden` 403, `post not found` and `thread not found` 404), writes
-nothing, and the refusal is recorded and replayed against the command id.
-Before, the edit landed in a thread a moderator had just locked, or on a post
-just hidden or deleted.
+edit, a delete, a restore and a move under the thread's `FOR UPDATE`, reading
+back `deleted_at`, `locked_at` and `moderation_state` (a restore needs the
+thread deleted, the others live). A lock, hide, delete or restore committed
+while the write waited refuses it with the workflow's status
+(`thread is locked` and `post is hidden` 403, `post not found` and
+`thread not found` 404), writes nothing, and the refusal is recorded and
+replayed against the command id. Before, the edit landed in a thread a
+moderator had just locked, or on a post just hidden or deleted, and an
+author's thread delete, restore or move went through a lock or hide
+committed after the workflow's check.
 
-Residual risk: an author's thread delete, restore and move re-check under
-their `FOR UPDATE` only that the thread exists and its deletion state; a
-moderator's lock or hide committed after the workflow's check does not stop
-them.
+Residual risk: low. The store does not re-read authorship, which nothing
+changes, nor the readability of the thread's category and space or, for a
+move, of the target category; those stay checked in the workflow only.
 
 Evidence: `t/integration/postgres-concurrency.t` (`_edit_rechecks_thread_lock`,
 `_edit_rechecks_post_hide`, `_edit_rechecks_post_delete`,
 `_title_edit_rechecks_lock`, `_delete_rechecks_thread_lock`,
-`_restore_rechecks_post_hide`) holds the moderator's or author's write
-uncommitted, sees the author's write queue on the row, commits, and checks the
-refusal and the unchanged row; `t/11-forum-thread.t`, `t/12-forum-post.t` and
+`_restore_rechecks_post_hide`, `_thread_delete_rechecks_moderation`,
+`_thread_move_rechecks_moderation`, `_thread_restore_rechecks_moderation`)
+holds the moderator's or author's write uncommitted, sees the author's write
+queue on the row, commits, and checks the refusal and the unchanged row;
+`t/11-forum-thread.t`, `t/12-forum-post.t` and
 `t/72-forum-bootstrap-workflow.t` cover the re-check and the recorded answer.
 
 ### ID-001: concurrent race on `command_log`

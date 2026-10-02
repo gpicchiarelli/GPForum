@@ -26,12 +26,21 @@ has filter_search   => 0;
 has schema          => undef;
 has skip_search     => 0;
 
+# The real result class, when a test names one: its rows then refuse a column
+# the class lacks, as DBIx::Class does. Rows that took any column let
+# ActionStore write a hidden_at no thread has, which only PostgreSQL refused.
+has result_class => undef;
+
 sub create {
     my ( $self, $row ) = @_;
 
     $self->_assert_usable;
+    my $object = GPForum::Test::ModerationRow->new(
+        data         => $row,
+        result_class => $self->result_class,
+    );
+    $object->assert_columns( keys %{$row} );
     $self->_assert_unique_row($row);
-    my $object = GPForum::Test::ModerationRow->new( data => $row );
     push @{ $self->created },         $row;
     push @{ $self->created_objects }, $object;
     $self->_store_row( $row, $object );

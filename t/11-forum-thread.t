@@ -22,9 +22,15 @@ use GPForum::Test::Schema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 153;
+const my $EXPECTED_TESTS   => 198;
 const my $RESTORED_VERSION => 3;
 const my $RESTORE_LOCKS    => 3;
+const my %WRITE_VERB => (
+    delete_thread  => 'delete',
+    edit_thread    => 'retitle',
+    move_thread    => 'move',
+    restore_thread => 'restore',
+);
 
 plan tests => $EXPECTED_TESTS;
 
@@ -747,6 +753,21 @@ my @delete_locks =
 is( scalar @delete_locks, 1, 'thread delete locks the thread row' );
 is( $delete_locks[0]{bind}[0],
     'thread-1', 'thread row lock targets the deleted thread' );
+like(
+    $delete_locks[0]{sql},
+    qr/deleted_at .* locked_at .* moderation_state .* FOR [ ] UPDATE/msx,
+    'thread delete lock reads back what the workflow checked'
+);
+
+# From here the lock reads the thread as the delete left it, as PostgreSQL
+# would.
+$delete_dbh->thread_row(
+    {
+        deleted_at       => '2026-05-23T12:00:00Z',
+        locked_at        => undef,
+        moderation_state => 'visible',
+    }
+);
 is(
     $delete_store->delete_thread(
         {
@@ -790,6 +811,18 @@ my @restore_locks =
   grep { $_->{sql} =~ m/FOR [ ] UPDATE/msx } @{ $delete_dbh->calls };
 is( scalar @restore_locks,
     $RESTORE_LOCKS, 'thread restore locks the thread row' );
+like(
+    $restore_locks[-1]{sql},
+    qr/deleted_at .* locked_at .* moderation_state .* FOR [ ] UPDATE/msx,
+    'thread restore lock reads back what the workflow checked'
+);
+$delete_dbh->thread_row(
+    {
+        deleted_at       => undef,
+        locked_at        => undef,
+        moderation_state => 'visible',
+    }
+);
 is(
     $delete_store->restore_thread(
         {
@@ -865,6 +898,11 @@ my @move_locks =
 is( scalar @move_locks, 1, 'thread move locks the thread row' );
 is( $move_locks[0]{bind}[0],
     'thread-1', 'thread row lock targets the moved thread' );
+like(
+    $move_locks[0]{sql},
+    qr/deleted_at .* locked_at .* moderation_state .* FOR [ ] UPDATE/msx,
+    'thread move lock reads back what the workflow checked'
+);
 my $move_events = scalar @{ $move_schema->created_for('EventLog') };
 my $move_audits = scalar @{ $move_schema->created_for('AuditLog') };
 my $same_move   = $move_store->move_thread( $move_prepared->{command} );
@@ -888,49 +926,220 @@ is(
     'missing threads cannot be moved'
 );
 
+# An author's delete, restore and move race a moderator's lock or hide as a
+# title edit does (ADR 0061), and the workflow checks them the same way
+# before the row lock. The store asks again under the lock: the thread must
+# be there, visible or locked by state, live (deleted, for a restore) and not
+# locked. The row the double finds is the one the workflow saw; only the
+# lock reads the thread as committed since.
+my @thread_writes = (
+    [
+        'delete_thread',
+        {
+            idempotency_key => 'thread-delete-command-3',
+            thread          => {
+                category_id => 'category-1',
+                deleted_by  => 'user-1',
+                thread_id   => 'thread-1',
+            },
+        },
+    ],
+    [ 'move_thread', $move_prepared->{command} ],
+    [
+        'restore_thread',
+        {
+            idempotency_key => 'thread-restore-command-3',
+            thread          => {
+                restored_by => 'user-1',
+                thread_id   => 'thread-1',
+            },
+        },
+    ],
+);
+for my $write (@thread_writes) {
+    _assert_raced_write_refused( @{$write} );
+    _assert_handleless_write_refused( @{$write} );
+}
+
+sub _assert_raced_write_refused {
+    my ( $write, $command ) = @_;
+
+    # The deletion the write needs, and what the author's other tab leaves
+    # instead: a restore needs the thread deleted, the others need it live.
+    my $restore = $write eq 'restore_thread';
+    my $stamp   = '2026-05-22T12:00:00Z';
+    my ( $needed, $undone ) = $restore ? ( $stamp, undef ) : ( undef, $stamp );
+    my $undo_word = $restore ? 'restored' : 'deleted';
+    my %case = ( command => $command, thread => { deleted_at => $needed } );
+
+    for my $raced (
+        [
+            'thread is locked',
+            'a thread locked since the workflow looked',
+            {
+                deleted_at       => $needed,
+                locked_at        => '2026-05-23T12:00:00Z',
+                moderation_state => 'locked',
+            },
+        ],
+        [
+            'thread not found',
+            'a thread hidden since the workflow looked',
+            {
+                deleted_at       => $needed,
+                locked_at        => undef,
+                moderation_state => 'hidden',
+            },
+        ],
+
+        # The reader does not show a hidden thread at all, so the workflow
+        # answers not found before it looks at the lock; so does the store.
+        [
+            'thread not found',
+            'a locked thread hidden since the workflow looked',
+            {
+                deleted_at       => $needed,
+                locked_at        => '2026-05-23T12:00:00Z',
+                moderation_state => 'hidden',
+            },
+        ],
+        [
+            'thread not found',
+            "a thread its author $undo_word since the workflow looked",
+            {
+                deleted_at       => $undone,
+                locked_at        => undef,
+                moderation_state => 'visible',
+            },
+        ],
+        [ 'thread not found', 'a thread that is not there', undef ],
+      )
+    {
+        _assert_thread_write_refused(
+            {
+                %case,
+                error => $raced->[0],
+                label => $raced->[1],
+                row   => $raced->[2],
+                write => $write,
+            }
+        );
+    }
+
+    return;
+}
+
+# A schema whose storage gives no handle has no lock to read back, so a
+# delete, a move or a restore checks only the row it finds: there, and live
+# (deleted, for a restore).
+sub _assert_handleless_write_refused {
+    my ( $write, $command ) = @_;
+
+    my $restore = $write eq 'restore_thread';
+    my $stamp   = '2026-05-22T12:00:00Z';
+    my ( $needed, $undone ) = $restore ? ( $stamp, undef ) : ( undef, $stamp );
+    my $wrong_state = $restore ? 'live' : 'deleted';
+
+    for my $found (
+        [ "a $wrong_state thread with no handle", { deleted_at => $undone } ],
+        [
+            'a thread that is not there with no handle',
+            { deleted_at => $needed, thread_id => 'thread-2' },
+        ],
+      )
+    {
+        _assert_thread_write_refused(
+            {
+                command   => $command,
+                error     => 'thread not found',
+                label     => $found->[0],
+                no_handle => 1,
+                thread    => $found->[1],
+                write     => $write,
+            }
+        );
+    }
+
+    return;
+}
+
 sub _assert_title_refused {
     my ($case) = @_;
 
-    my $refusing_schema = GPForum::Test::PostStoreLockSchema->new(
-        lock_dbh =>
-          GPForum::Test::PostStoreLockDbh->new( thread_row => $case->{row} ),
-        threads => [
-            {
-                author_user_id => 'user-1',
-                slug           => 'welcome-to-gp-forum',
-                thread_id      => 'thread-1',
-                title          => 'Welcome to GP Forum',
-                version        => 1,
-            },
-        ],
+    return _assert_thread_write_refused( { %{$case}, write => 'edit_thread' } );
+}
+
+sub _assert_thread_write_refused {
+    my ($case) = @_;
+
+    my $refusing_schema = _refusing_schema(
+        $case,
+        {
+            author_user_id => 'user-1',
+            category_id    => 'category-1',
+            deleted_at     => undef,
+            deleted_by     => undef,
+            slug           => 'welcome-to-gp-forum',
+            thread_id      => 'thread-1',
+            title          => 'Welcome to GP Forum',
+            version        => 1,
+            %{ $case->{thread} || {} },
+        }
     );
     my $refusing_store = GPForum::Service::Forum::ThreadStore->new(
+        clock      => GPForum::Test::FixedClock->new,
         id_service => GPForum::Test::Id->new,
         schema     => $refusing_schema,
     );
+    my $before = _written_columns( $refusing_schema->threads->[0] );
+    my $write  = $case->{write};
+    my $verb   = $WRITE_VERB{$write};
 
     is_deeply(
-        $refusing_store->edit_thread( $case->{command} ),
+        $refusing_store->$write( $case->{command} ),
         { error => $case->{error}, ok => 0 },
-        "the store refuses to retitle $case->{label}"
+        "the store refuses to $verb $case->{label}"
     );
     is_deeply(
         {
-            thread =>
-              [ @{ $refusing_schema->threads->[0] }{qw(slug title version)} ],
+            thread  => _written_columns( $refusing_schema->threads->[0] ),
             written => [
                 grep { scalar @{ $refusing_schema->created_for($_) } }
                   qw(AuditLog EventLog OutboxMessage)
             ],
         },
-        {
-            thread  => [ 'welcome-to-gp-forum', 'Welcome to GP Forum', 1 ],
-            written => [],
-        },
-        "refusing to retitle $case->{label} writes nothing"
+        { thread => $before, written => [] },
+        "refusing to $verb $case->{label} writes nothing"
     );
 
     return;
+}
+
+# The thread row the store finds, behind a lock that reads back the case's
+# row, or, for a case with no_handle, behind a storage with no handle at all.
+sub _refusing_schema {
+    my ( $case, $thread ) = @_;
+
+    if ( $case->{no_handle} ) {
+        return GPForum::Test::Schema->new(
+            storage => undef,
+            threads => [$thread],
+        );
+    }
+
+    return GPForum::Test::PostStoreLockSchema->new(
+        lock_dbh =>
+          GPForum::Test::PostStoreLockDbh->new( thread_row => $case->{row} ),
+        threads => [$thread],
+    );
+}
+
+# Every column a title edit, a move, a delete or a restore writes.
+sub _written_columns {
+    my ($thread) = @_;
+
+    return { map { $_ => $thread->{$_} }
+          qw(category_id deleted_at deleted_by slug title version) };
 }
 
 1;

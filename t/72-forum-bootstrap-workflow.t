@@ -970,22 +970,29 @@ is(
     'posting workflow normalizes thread edit store failures'
 );
 
-# The stores check an author's edit, delete or restore again under their row
-# locks, because a moderator can lock the thread or hide the post after the
-# workflow's check, and the author can delete either. Their refusal is the
-# answer the workflow's own check gives, recorded with the command and
-# replayed with it, not a failure that leaves the command id open.
+# The stores check an author's edit, delete, restore or move again under
+# their row locks, because a moderator can lock or hide the thread or hide
+# the post after the workflow's check, and the author can delete or restore
+# either. Their refusal is the answer the workflow's own check gives,
+# recorded with the command and replayed with it, not a failure that leaves
+# the command id open.
 for my $refusal (
-    [ 'edit_post',    'thread is locked', 'forbidden' ],
-    [ 'edit_post',    'post is hidden',   'forbidden' ],
-    [ 'edit_post',    'thread not found', 'not_found' ],
-    [ 'edit_post',    'post not found',   'not_found' ],
-    [ 'delete_post',  'thread is locked', 'forbidden' ],
-    [ 'delete_post',  'post is hidden',   'forbidden' ],
-    [ 'restore_post', 'thread is locked', 'forbidden' ],
-    [ 'restore_post', 'post is hidden',   'forbidden' ],
-    [ 'edit_thread',  'thread is locked', 'forbidden' ],
-    [ 'edit_thread',  'thread not found', 'not_found' ],
+    [ 'edit_post',      'thread is locked', 'forbidden' ],
+    [ 'edit_post',      'post is hidden',   'forbidden' ],
+    [ 'edit_post',      'thread not found', 'not_found' ],
+    [ 'edit_post',      'post not found',   'not_found' ],
+    [ 'delete_post',    'thread is locked', 'forbidden' ],
+    [ 'delete_post',    'post is hidden',   'forbidden' ],
+    [ 'restore_post',   'thread is locked', 'forbidden' ],
+    [ 'restore_post',   'post is hidden',   'forbidden' ],
+    [ 'edit_thread',    'thread is locked', 'forbidden' ],
+    [ 'edit_thread',    'thread not found', 'not_found' ],
+    [ 'delete_thread',  'thread is locked', 'forbidden' ],
+    [ 'delete_thread',  'thread not found', 'not_found' ],
+    [ 'restore_thread', 'thread is locked', 'forbidden' ],
+    [ 'restore_thread', 'thread not found', 'not_found' ],
+    [ 'move_thread',    'thread is locked', 'forbidden' ],
+    [ 'move_thread',    'thread not found', 'not_found' ],
   )
 {
     _assert_author_store_refusal( @{$refusal} );
@@ -1563,18 +1570,26 @@ sub _author_write_case {
         command_id     => $command_id,
         post_id        => 'post-1',
     );
+    my %thread_input = (
+        author_user_id => 'user-1',
+        command_id     => $command_id,
+        thread_id      => 'thread-1',
+    );
+    my %thread_store = (
+        store       => 'thread_store',
+        store_class => 'GPForum::Test::ThreadStore',
+    );
     my %cases = (
-        delete_post => { input => \%post_input },
-        edit_post   => { input => { %post_input, body_source => 'edited' } },
-        edit_thread => {
-            input => {
-                author_user_id => 'user-1',
-                command_id     => $command_id,
-                thread_id      => 'thread-1',
-                title          => 'Edited',
-            },
-            store       => 'thread_store',
-            store_class => 'GPForum::Test::ThreadStore',
+        delete_post   => { input => \%post_input },
+        delete_thread => { input => \%thread_input, %thread_store },
+        edit_post     => { input => { %post_input, body_source => 'edited' } },
+        edit_thread   => {
+            input => { %thread_input, title => 'Edited' },
+            %thread_store,
+        },
+        move_thread => {
+            input => { %thread_input, category_id => 'category-2' },
+            %thread_store,
         },
         restore_post => {
             input    => \%post_input,
@@ -1582,6 +1597,15 @@ sub _author_write_case {
                 post_reader =>
                   GPForum::Test::PostReader->new( post => _deleted_post() ),
             },
+        },
+        restore_thread => {
+            input    => \%thread_input,
+            override => {
+                thread_detail_reader => GPForum::Test::ThreadDetailReader->new(
+                    thread => _deleted_thread()
+                ),
+            },
+            %thread_store,
         },
     );
 
@@ -1768,6 +1792,7 @@ sub delete_thread {
     if ( $self->{fail} ) {
         die "thread store failed\n";
     }
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
 
     return {
         ok     => 1,
@@ -1785,6 +1810,7 @@ sub restore_thread {
     if ( $self->{fail} ) {
         die "thread store failed\n";
     }
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
 
     return {
         ok     => 1,
@@ -1802,6 +1828,7 @@ sub move_thread {
     if ( $self->{fail} ) {
         die "thread store failed\n";
     }
+    return { ok => 0, error => $self->{refuse} } if $self->{refuse};
 
     return {
         ok     => 1,

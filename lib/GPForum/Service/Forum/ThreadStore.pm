@@ -24,13 +24,18 @@ const my $POST_ID_CONSTRAINT     => 'posts_pkey';
 const my $BODY_ID_CONSTRAINT     => 'post_bodies_pkey';
 const my $REVISION_ID_CONSTRAINT => 'post_revisions_pkey';
 const my $COUNTER_ID_CONSTRAINT  => 'thread_counters_pkey';
-const my $TITLE_LOCK_SQL => join q{ },
+const my $THREAD_LOCK_SQL => join q{ },
   'SELECT deleted_at, locked_at, moderation_state',
   'FROM threads WHERE thread_id = ? FOR UPDATE';
 
 # ThreadDetailReader shows a thread only in these states, so the workflow
-# lets an edit through only in these. Any other reads as not found.
+# lets an author's write through only in these. Any other reads as not found.
 const my %EDITABLE_STATE => ( locked => 1, visible => 1 );
+
+# What each write needs of the thread's deletion: a restore a deleted thread,
+# a title edit, a move and a delete a live one.
+const my $NEEDS_LIVE    => 0;
+const my $NEEDS_DELETED => 1;
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has schema     => undef;
@@ -589,13 +594,9 @@ sub _find_post ( $self, $post_id ) {
     return $self->schema->resultset('Post')->find( { post_id => $post_id } );
 }
 
-# The workflow checked the thread before this row lock; a moderator may
-# have locked or hidden it since, or its author deleted it in another tab.
-# The row lock orders the edit against those writes, which take FOR UPDATE
-# too, and returns the thread as they committed it, to be checked again.
 sub _update_thread ( $self, $command ) {
     my $thread_id = $command->{thread}{thread_id};
-    my $refused   = $self->_title_refusal($thread_id);
+    my $refused   = $self->_thread_refusal( $thread_id, $NEEDS_LIVE );
     return $refused if $refused;
 
     my $existing = $self->_find_thread($thread_id);
@@ -614,25 +615,32 @@ sub _update_thread ( $self, $command ) {
     return { ok => 1, thread => $thread };
 }
 
-# The in-memory doubles have no handle, so nothing to lock or re-check.
-sub _title_refusal ( $self, $thread_id ) {
+# The workflow checked the thread before this row lock; a moderator may have
+# locked or hidden it since, or its author deleted or restored it in another
+# tab. The row lock orders the write against those writes, which take
+# FOR UPDATE too, and returns the thread as they committed it, to be checked
+# again. A schema whose storage gives no handle has nothing to lock or
+# re-check: a move, a delete and a restore still check the row they find.
+sub _thread_refusal ( $self, $thread_id, $needs_deleted ) {
     my $dbh = _schema_dbh( $self->schema );
     if ( !$dbh ) {
         my $undefined;
         return $undefined;
     }
 
-    return _title_store_block(
-        $dbh->selectrow_hashref( $TITLE_LOCK_SQL, undef, $thread_id ) );
+    return _thread_store_block(
+        $dbh->selectrow_hashref( $THREAD_LOCK_SQL, undef, $thread_id ),
+        $needs_deleted );
 }
 
 # What the workflow's check said, in its words. A hidden or missing thread is
-# not found, and so is a deleted one, even to its author, who must restore it
-# before editing it; a locked thread is locked. Authorship is not read again:
+# not found, and so is one deleted for a title edit, a move or a delete, even
+# to its author, who must restore it first, or one live for a restore. A
+# locked thread is locked, for a restore too. Authorship is not read again:
 # nothing ever changes it.
-sub _title_store_block ($thread) {
+sub _thread_store_block ( $thread, $needs_deleted ) {
     if (   !$thread
-        || defined $thread->{deleted_at}
+        || _deleted_flag($thread) != $needs_deleted
         || !exists $EDITABLE_STATE{ $thread->{moderation_state} // q{} } )
     {
         return { ok => 0, error => 'thread not found' };
@@ -645,9 +653,14 @@ sub _title_store_block ($thread) {
     return $undefined;
 }
 
+sub _deleted_flag ($thread) {
+    return defined $thread->{deleted_at} ? $NEEDS_DELETED : $NEEDS_LIVE;
+}
+
 sub _move_thread ( $self, $command ) {
     my $thread_id = $command->{thread}{thread_id};
-    $self->_lock_thread($thread_id);
+    my $refused   = $self->_thread_refusal( $thread_id, $NEEDS_LIVE );
+    return $refused if $refused;
 
     my $existing = $self->_find_thread($thread_id);
     my $blocked  = _delete_store_block($existing);
@@ -675,7 +688,8 @@ sub _find_thread ( $self, $thread_id ) {
 
 sub _soft_delete_thread ( $self, $command ) {
     my $thread_id = $command->{thread}{thread_id};
-    $self->_lock_thread($thread_id);
+    my $refused   = $self->_thread_refusal( $thread_id, $NEEDS_LIVE );
+    return $refused if $refused;
 
     my $existing = $self->_find_thread($thread_id);
     my $blocked  = _delete_store_block($existing);
@@ -693,7 +707,8 @@ sub _soft_delete_thread ( $self, $command ) {
 
 sub _undelete_thread ( $self, $command ) {
     my $thread_id = $command->{thread}{thread_id};
-    $self->_lock_thread($thread_id);
+    my $refused   = $self->_thread_refusal( $thread_id, $NEEDS_DELETED );
+    return $refused if $refused;
 
     my $existing = $self->_find_thread($thread_id);
     my $blocked  = _restore_store_block($existing);
@@ -709,6 +724,8 @@ sub _undelete_thread ( $self, $command ) {
     return { ok => 1, thread => $thread };
 }
 
+# The row found once the lock is held. With a handle the lock's re-check has
+# already answered; a schema without one has only this.
 sub _delete_store_block ($existing) {
     if ( !$existing ) {
         return { ok => 0, error => 'thread not found' };
@@ -826,19 +843,6 @@ sub _update_row ( $row, $changes ) {
     $row->update($changes);
 
     return $row;
-}
-
-sub _lock_thread ( $self, $thread_id ) {
-    my $dbh = _schema_dbh( $self->schema );
-    if ( !$dbh ) {
-        return;
-    }
-
-    $dbh->selectrow_array(
-        'SELECT thread_id FROM threads WHERE thread_id = ? FOR UPDATE',
-        undef, $thread_id );
-
-    return;
 }
 
 sub _schema_dbh ($schema) {
@@ -1162,12 +1166,15 @@ when this call inserted the thread row.
 A title edit, a move, a delete and a restore first lock the thread's row
 (C<SELECT ... FOR UPDATE>). The workflow checked the thread before the
 transaction; a moderator may have locked or hidden it since, or its author
-deleted it in another tab. The lock orders the write against those writes,
-which lock the row too, and the store checks the thread again as they left
-it. A title edit checks again what the workflow checked, except authorship,
-which nothing changes; a move and a delete check that the thread exists and
-is not deleted, and a restore that it exists and is deleted. A refusal is
-returned, not thrown. Each change increments the thread's C<version>.
+deleted or restored it in another tab. The lock orders the write against
+those writes, which lock the row too, and the store checks the thread again
+as they left it: what the workflow checked, in its order and words, except
+authorship, which nothing changes. A thread that is missing, hidden (in a
+moderation state other than C<visible> and C<locked>) or in the wrong
+deletion state -- deleted, for a title edit, a move or a delete, even to its
+author; live, for a restore -- is C<thread not found>, and a locked one
+C<thread is locked>. A refusal is returned, not thrown, and nothing is
+written. Each change increments the thread's C<version>.
 
 Every event's idempotency key is C<command:KEY:TYPE> when the command has an
 C<idempotency_key>, and C<TYPE:AGGREGATE_ID> otherwise.
@@ -1217,8 +1224,10 @@ returns C<< { ok => 1, thread => $thread } >> with the updated row.
 Takes C<idempotency_key> and
 C<< thread => { thread_id, deleted_by, category_id } >>. In one transaction,
 under the thread's row lock, it returns
-C<< { ok => 0, error => 'thread not found' } >> when the thread is missing
-or already deleted. Otherwise it sets C<deleted_at> to the clock's now and
+C<< { ok => 0, error => 'thread not found' } >> when the thread is missing,
+already deleted, or in a moderation state other than C<visible> and
+C<locked>, and C<< { ok => 0, error => 'thread is locked' } >> when it is
+locked. Otherwise it sets C<deleted_at> to the clock's now and
 C<deleted_by>, records the C<thread.deleted> event and audit row (with the
 thread's category, from the row or else from the command), and returns
 C<< { ok => 1, thread => $thread } >>.
@@ -1228,8 +1237,10 @@ C<< { ok => 1, thread => $thread } >>.
 Takes C<idempotency_key> and
 C<< thread => { thread_id, restored_by, author_user_id, category_id } >>.
 In one transaction, under the thread's row lock, it returns
-C<< { ok => 0, error => 'thread not found' } >> when the thread is missing
-or not deleted. Otherwise it clears C<deleted_at> and C<deleted_by>, records
+C<< { ok => 0, error => 'thread not found' } >> when the thread is missing,
+not deleted, or in a moderation state other than C<visible> and C<locked>,
+and C<< { ok => 0, error => 'thread is locked' } >> when it is locked.
+Otherwise it clears C<deleted_at> and C<deleted_by>, records
 the C<thread.undeleted> event and audit row, and returns
 C<< { ok => 1, thread => $thread } >>.
 
@@ -1238,12 +1249,11 @@ C<< { ok => 1, thread => $thread } >>.
 Takes the command L<GPForum::Service::Forum::ThreadComposer/prepare_move>
 builds: C<idempotency_key> and
 C<< thread => { thread_id, category_id, editor_user_id } >>. In one
-transaction, under the thread's row lock, it returns
-C<< { ok => 0, error => 'thread not found' } >> when the thread is missing
-or deleted, and C<< { ok => 1, skipped => 1, thread => $thread } >>, writing
-nothing, when it is already in that category. Otherwise it adds the current
-category to the command as C<previous_category_id> in its C<thread> record
-(the command is changed in place), sets the new category, records the
+transaction, under the thread's row lock, it returns the refusals of
+L</delete_thread>, and C<< { ok => 1, skipped => 1, thread => $thread } >>,
+writing nothing, when it is already in that category. Otherwise it adds the
+current category to the command as C<previous_category_id> in its C<thread>
+record (the command is changed in place), sets the new category, records the
 C<thread.moved> event and audit row with both categories, and returns
 C<< { ok => 1, thread => $thread } >>. Whether the target category exists
 and the mover may read it is checked by the workflow, not here.
@@ -1278,9 +1288,11 @@ None known.
 Conflicts are told apart by the constraint name in the error text
 (C<threads_pkey>, C<posts_pkey>, C<post_bodies_pkey>,
 C<post_revisions_pkey>, C<thread_counters_pkey>), so a driver must report it
-the way PostgreSQL does. A schema without a DBI handle (the in-memory
-doubles) takes no row lock, and a title edit through it is not checked
-again.
+the way PostgreSQL does. A schema whose storage gives no DBI handle takes no
+row lock: a title edit through it is not checked again, and a move, a delete
+and a restore check only that the row they find is there and is live
+(deleted, for a restore). A handle that is given must answer
+C<selectrow_hashref> as DBI does; the thread's row lock is read through it.
 
 =head1 AUTHOR
 

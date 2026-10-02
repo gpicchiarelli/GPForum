@@ -17,6 +17,7 @@ use lib 'lib';
 use lib 't/lib';
 
 use GPForum::Infrastructure::EventRecorder;
+use GPForum::Infrastructure::Id;
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Community::BookmarkStore;
 use GPForum::Service::Forum::PostComposer;
@@ -90,10 +91,20 @@ const my $EDITABLE_POST_SQL => join q{ },
   q{AND t.moderation_state = 'visible'},
   'ORDER BY p.post_id LIMIT 1';
 const my $EDITABLE_THREAD_SQL => join q{ },
-  'SELECT thread_id, author_user_id FROM threads',
+  'SELECT thread_id, author_user_id, category_id FROM threads',
   'WHERE deleted_at IS NULL AND locked_at IS NULL',
   q{AND moderation_state = 'visible'},
   'ORDER BY thread_id LIMIT 1';
+const my $OTHER_CATEGORY_SQL => join q{ },
+  'SELECT category_id FROM categories',
+  'WHERE category_id <> ? AND deleted_at IS NULL',
+  'ORDER BY category_id LIMIT 1';
+
+# A moderator's write an author's thread delete, move or restore can queue
+# behind (ActionStore's lock_thread or hide_thread), and the refusal it must
+# then get: the workflow's own words.
+const my @THREAD_MODERATION =>
+  ( [ 'lock', 'thread is locked' ], [ 'hide', 'thread not found' ], );
 
 # What an edit writes, and only that: the holder's own write may bump the
 # row's version.
@@ -104,6 +115,9 @@ const my $THREAD_TITLE_SQL =>
   'SELECT title, slug FROM threads WHERE thread_id = ?';
 const my $POST_DELETION_SQL =>
   'SELECT deleted_at, deleted_by FROM posts WHERE post_id = ?';
+const my $THREAD_WRITE_SQL => join q{ },
+  'SELECT category_id, deleted_at, deleted_by FROM threads',
+  'WHERE thread_id = ?';
 const my $REPLY_COUNT_SQL => join q{ },
   'SELECT COALESCE(sum(reply_count_delta), 0) FROM thread_counter_shards',
   'WHERE thread_id = ?';
@@ -195,6 +209,9 @@ _edit_rechecks_post_delete($case);
 _title_edit_rechecks_lock($case);
 _delete_rechecks_thread_lock($case);
 _restore_rechecks_post_hide($case);
+_thread_delete_rechecks_moderation($case);
+_thread_move_rechecks_moderation($case);
+_thread_restore_rechecks_moderation($case);
 _privacy_approval_race($case);
 _identity_token_consume_race($case);
 _event_idempotency_race($case);
@@ -1210,6 +1227,209 @@ sub _restore_rechecks_post_hide {
     );
 
     return;
+}
+
+# The workflow refuses its author's delete of a thread that is locked, or
+# that it cannot see because a moderator hid it, as it refuses a title edit
+# (ADR 0061). It checks before the store's row lock, so a lock or hide that
+# committed in between used to let the delete land; the store now reads the
+# thread back under its lock and asks again.
+sub _thread_delete_rechecks_moderation {
+    my ($ctx) = @_;
+
+    _thread_write_races(
+        $ctx,
+        {
+            name  => 'delete',
+            write => sub {
+                my ( $store, $thread ) = @_;
+                return $store->delete_thread(
+                    {
+                        idempotency_key => _fresh_id(),
+                        thread          => {
+                            deleted_by => $thread->{author_user_id},
+                            thread_id  => $thread->{thread_id},
+                        },
+                    }
+                );
+            },
+        }
+    );
+
+    return;
+}
+
+# A move is checked as a delete is, and must not carry a thread a moderator
+# has just locked or hidden into another category.
+sub _thread_move_rechecks_moderation {
+    my ($ctx) = @_;
+
+    _thread_write_races(
+        $ctx,
+        {
+            name  => 'move',
+            write => sub {
+                my ( $store, $thread ) = @_;
+                my $move =
+                  GPForum::Service::Forum::ThreadComposer->new->prepare_move(
+                    {
+                        category_id     => $thread->{other_category_id},
+                        editor_user_id  => $thread->{author_user_id},
+                        idempotency_key => _fresh_id(),
+                        thread_id       => $thread->{thread_id},
+                    }
+                  );
+                croak 'move command did not prepare' if !$move->{ok};
+
+                return $store->move_thread( $move->{command} );
+            },
+        }
+    );
+
+    return;
+}
+
+# The author restores a thread they deleted while a moderator locks or hides
+# it: the workflow refuses to restore either, and so must the store once the
+# moderator has committed.
+sub _thread_restore_rechecks_moderation {
+    my ($ctx) = @_;
+
+    _thread_write_races(
+        $ctx,
+        {
+            name    => 'restore',
+            prepare => sub {
+                my ($thread) = @_;
+                my $deleted =
+                  GPForum::Service::Forum::ThreadStore->new(
+                    schema => GPForum::Test::PostgresHarness::connect_schema() )
+                  ->delete_thread(
+                    {
+                        idempotency_key => _fresh_id(),
+                        thread          => {
+                            deleted_by => $thread->{author_user_id},
+                            thread_id  => $thread->{thread_id},
+                        },
+                    }
+                  );
+                ok( $deleted->{ok},
+                    'the author has deleted the thread to restore' );
+
+                return;
+            },
+            write => sub {
+                my ( $store, $thread ) = @_;
+                return $store->restore_thread(
+                    {
+                        idempotency_key => _fresh_id(),
+                        thread          => {
+                            author_user_id => $thread->{author_user_id},
+                            category_id    => $thread->{category_id},
+                            restored_by    => $thread->{author_user_id},
+                            thread_id      => $thread->{thread_id},
+                        },
+                    }
+                );
+            },
+        }
+    );
+
+    return;
+}
+
+# One race per moderator write, each on a thread no earlier race has
+# touched: the lock or hide is held uncommitted, the author's write is forked
+# through ThreadStore and must queue on the thread row, then be refused.
+sub _thread_write_races {
+    my ( $ctx, $race ) = @_;
+
+    for my $moderation (@THREAD_MODERATION) {
+        my ( $noun, $error ) = @{$moderation};
+        my $thread = _open_thread($ctx);
+        if ( $race->{prepare} ) {
+            $race->{prepare}->($thread);
+        }
+
+        _assert_refused_after_wait(
+            $ctx,
+            {
+                error => $error,
+                hold  => sub {
+                    my ($holder) = @_;
+                    return _moderate_thread( $holder, $ctx, $noun, $thread );
+                },
+                label => "a thread $race->{name} racing a thread $noun",
+                state => sub { return _thread_write_state( $ctx, $thread ) },
+                write => sub {
+                    my $schema =
+                      GPForum::Test::PostgresHarness::connect_schema();
+                    my $store = GPForum::Service::Forum::ThreadStore->new(
+                        schema => $schema );
+                    return _store_answer( $race->{write}->( $store, $thread ) );
+                },
+            }
+        );
+    }
+
+    return;
+}
+
+# A moderator's lock or hide of the thread, through ActionStore as the
+# moderation routes make it, left uncommitted in $holder.
+sub _moderate_thread {
+    my ( $holder, $ctx, $noun, $thread ) = @_;
+
+    my $moderate = "${noun}_thread";
+
+    return GPForum::Service::Moderation::ActionStore->new( schema => $holder )
+      ->$moderate(
+        {
+            actor_user_id => $ctx->{actor_user_id},
+            command_id    => _fresh_id(),
+            reason        => "concurrency thread write $noun",
+            thread_id     => $thread->{thread_id},
+        }
+      );
+}
+
+# The first thread still open, and a category to move it to.
+sub _open_thread {
+    my ($ctx) = @_;
+
+    my $thread = $ctx->{dbh}->selectrow_hashref( $EDITABLE_THREAD_SQL, undef );
+    ok( $thread, 'seed provides another open thread' );
+    return $thread if !$thread;
+
+    ( $thread->{other_category_id} ) =
+      $ctx->{dbh}
+      ->selectrow_array( $OTHER_CATEGORY_SQL, undef, $thread->{category_id} );
+
+    return $thread;
+}
+
+# What a thread delete, move or restore writes: the deletion markers, the
+# category and the event. The holder's own write may bump the version.
+sub _thread_write_state {
+    my ( $ctx, $thread ) = @_;
+
+    return {
+        events => {
+            map {
+                $_ => GPForum::Test::PostgresHarness::count_rows(
+                    $ctx->{dbh},
+                    'event_log',
+                    { aggregate_id => $thread->{thread_id}, event_type => $_ }
+                )
+            } qw(thread.deleted thread.moved thread.undeleted)
+        },
+        row => $ctx->{dbh}
+          ->selectrow_hashref( $THREAD_WRITE_SQL, undef, $thread->{thread_id} ),
+    };
+}
+
+sub _fresh_id {
+    return GPForum::Infrastructure::Id->new->uuid;
 }
 
 sub _post_delete_command {
