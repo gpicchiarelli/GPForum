@@ -11,6 +11,7 @@ use Const::Fast;
 use Digest::SHA;
 use English qw(-no_match_vars);
 use File::Spec;
+use POSIX qw(strftime);
 
 use GPForum::Command::Migrate;
 use GPForum::Config;
@@ -114,8 +115,12 @@ sub DESTROY {
 sub _template {
     my ( $class, $admin, $admin_dsn, $seed ) = @_;
 
-    my $name = sprintf 'gpforum_tpl_%s_%s', ( $seed ? 'seed' : 'bare' ),
-      substr _migration_digest(), 0, $NAME_DIGITS;
+    # And once per UTC month: migrating creates the partitions of the month
+    # it runs in and drops the empty past ones (ADR 0113), so a template
+    # built last month is not the schema a migration would give today.
+    my $name = sprintf 'gpforum_tpl_%s_%s_%s', ( $seed ? 'seed' : 'bare' ),
+      substr( _migration_digest(), 0, $NAME_DIGITS ),
+      strftime( '%Y%m', gmtime );
 
     # A session lock: CREATE DATABASE cannot run in a transaction.
     $admin->do( 'SELECT pg_advisory_lock(?)', undef, $TEMPLATE_LOCK );
@@ -232,8 +237,9 @@ Version 0.001.
 
 Clones a database from a template holding the migrated schema (and the small
 seed, with C<< seed => 1 >>). The template is built once per set of
-migrations and shared by every test and C<prove -j> worker; the clone is
-dropped when the object goes out of scope.
+migrations and UTC month -- migrating creates the month's partitions -- and
+shared by every test and C<prove -j> worker; the clone is dropped when the
+object goes out of scope.
 
 =head1 SUBROUTINES/METHODS
 
@@ -283,7 +289,7 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Templates of earlier migration sets are left behind; drop
+Templates of earlier migration sets and months are left behind; drop
 C<gpforum_tpl_*> databases to reclaim them.
 
 =head1 AUTHOR

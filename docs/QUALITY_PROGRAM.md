@@ -815,7 +815,7 @@ when the horizon approaches.
 must stay a deliberate, windowed operation: `CREATE TABLE ... PARTITION OF`
 takes `ACCESS EXCLUSIVE` on `audit_log`, which every audited write waits on,
 so it was not moved into the hourly job. What was missing was the warning.
-`/readyz` now has a `partition_horizon` check: one catalog query for each
+`/health/ready` now has a `partition_horizon` check: one catalog query for each
 table's last range bound and one `EXISTS` per DEFAULT partition, degraded
 when less than 45 days remain (a missed monthly run at the default lookahead)
 or when rows have already spilled into DEFAULT. Degraded, not failed -- writes
@@ -823,6 +823,16 @@ still land. `t/integration/postgres-partition-horizon.t` reads the real
 catalog: 97 days today, a warning on 1 December, and a row dated past the
 horizon caught in `audit_log_default`. On this repository's own schedule the
 check first warns around 17 November 2026.
+
+Extending is no longer manual (2026-10-03, ADR 0113). A month is now created
+with `CREATE TABLE ... (LIKE ...)` and `ATTACH PARTITION`, which holds the
+parent in `SHARE UPDATE EXCLUSIVE`, so plain writes go on; DEFAULT's `ACCESS
+EXCLUSIVE` still stops unpruned reads, and the event and audit writes that
+begin with one, for at most a half-second lock wait plus the DEFAULT scan;
+`bin/gpforum-migrate --apply` ensures the window after every deploy's
+migrations and a daily timer runs `--apply` between deploys, under an
+advisory lock. Migration 049 drops the empty past months migration 038
+named. Detaching and dropping old months stays the owner's decision.
 
 **3.8 Document and test a restore. — DONE, and the finding was half wrong.**
 `script/staging-drill` **is** a restore drill: it dumps a migrated database,

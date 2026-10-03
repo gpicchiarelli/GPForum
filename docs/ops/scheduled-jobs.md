@@ -13,8 +13,10 @@ uploads the antivirus could not decide
 (`attachment_scans`), puts files served on a format check alone through the
 antivirus (`attachment_backfill`; both ADR 0108, see
 `docs/ops/antivirus.md`), and
-`PartitionLifecycle` plan/retention/restore evidence only. It never executes `CREATE TABLE ... PARTITION OF` and never
-writes `partition_registry`.
+`PartitionLifecycle` plan/retention/restore evidence only. It executes no
+partition DDL and never writes `partition_registry`;
+`bin/gpforum-partition-maintenance --apply` (daily timer) and
+`bin/gpforum-migrate --apply` do (ADR 0113).
 
 `purge_dead_letters` deletes aged `dead_letters` rows. See
 `docs/ops/dead-letters.md` before treating purge as a drain of the live
@@ -104,9 +106,10 @@ dispatcher remains the only looping worker command.
 
 - **FreeBSD** (and any host without systemd/launchd): install an hourly
   crontab for the `gpforum` user. No rc.d periodic sample is shipped.
-- **Partition DDL**: apply `CREATE TABLE ... PARTITION OF` (and later
-  detach/archive/drop) from the printed planned windows. The app versions
-  policy and evidence only.
+- **Partition DDL**: not this runner's. Enable
+  `gpforum-partition-maintenance.timer` (or its launchd/crontab counterpart,
+  `docs/ops/partition-maintenance.md`); detaching, archiving and dropping old
+  months stays manual.
 - **PostgreSQL maintenance** outside autovacuum (`VACUUM`, `ANALYZE`,
   restore drills) stays on the operator runbook.
 

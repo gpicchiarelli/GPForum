@@ -15,6 +15,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Operator action required
 
+- Enable the new daily `gpforum-partition-maintenance` timer on every node
+  (systemd `gpforum-partition-maintenance.timer`, launchd
+  `com.gpforum.partition-maintenance.plist`, or the FreeBSD crontab line in
+  `docs/ops/partition-maintenance.md`). It must run as the role that owns the
+  partitioned tables.
+
 - **macOS hosts use Homebrew, not MacPorts.** Install `brew install perl
   cpanminus postgresql@18`, install Carton for that perl, and rebuild the
   locked tree (`script/bootstrap-deps --postgres --rebuild-local`): its XS
@@ -572,6 +578,23 @@ CI, evidence and internal refactors with no change in behaviour.
   foundations.
 
 ### Changed
+
+- Monthly partitions of `audit_log`, `event_log` and `notifications` roll
+  forward with the date (ADR 0113, amending ADR 0012). `bin/gpforum-migrate
+  --apply` creates the current UTC month and the next two after its
+  migrations, under the configured `statement_timeout`; `--no-partitions`
+  skips it, and a conflict or error exits 1 with the migrations applied. A
+  daily timer runs `bin/gpforum-partition-maintenance --apply` between
+  deploys; runs are serialised by advisory lock 4021970002, and one that does
+  not get it reports `skipped=1` and exits 0 (migrate waits up to a minute
+  first). Months are created with `CREATE TABLE ... (LIKE ...)` and `ATTACH
+  PARTITION`, which holds the parent only in SHARE UPDATE EXCLUSIVE: no
+  maintenance window. DEFAULT is still locked during each attach, so unpruned
+  reads, and the event and audit writes that start with one, wait at most a
+  0.5 s lock wait (retried five times) plus the scan of DEFAULT. Migration 049
+  drops the past, empty partitions migration 038 named, one table at a time,
+  keeping any that holds rows. The staging drill creates the window too.
+  Detaching and dropping old months stays manual.
 
 - ADR 0115 records that the translation catalogs are the gettext PO files,
   read at startup and looked up by key (`msgctxt`); it amends ADR 0021. The

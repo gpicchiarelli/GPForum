@@ -8,24 +8,37 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
-use English qw(-no_match_vars);
-use POSIX   qw(strftime);
+use English     qw(-no_match_vars);
+use POSIX       qw(strftime);
+use Time::HiRes ();
 use Mojo::Base -base, -signatures;
 
 our $VERSION = '0.001';
 
-const my $EPOCH_YEAR_OFFSET    => 1900;
-const my $MONTHS_PER_YEAR      => 12;
-const my $POLICY_VERSION       => 1;
-const my $SECONDS_PER_DAY      => 86_400;
-const my $DEFAULT_LOOKAHEAD    => 3;
-const my $DEFAULT_LOCK_TIMEOUT => 5_000;
-const my $DEFAULT_SUFFIX       => '_default';
-const my $PARTITION_KEY        => 'created_at';
+const my $EPOCH_YEAR_OFFSET => 1900;
+const my $MONTHS_PER_YEAR   => 12;
+const my $POLICY_VERSION    => 1;
+const my $SECONDS_PER_DAY   => 86_400;
+const my $DEFAULT_LOOKAHEAD => 3;
+const my $MILLISECONDS      => 1_000;
 
-# Monthly maintenance keeps three months ahead, so a horizon under 45 days
-# means at least one monthly run was missed. Degraded, not failed: writes
-# still land, in the DEFAULT partition, and the fix is an operator's.
+# Every lock a month's transaction waits for stalls the traffic queued behind
+# it: an unpruned read of the parent -- EventRecorder's lookup by event_id,
+# the audit chain tip -- opens the DEFAULT partition, and waits while the
+# ATTACH waits for, or holds, its ACCESS EXCLUSIVE. So each wait is short and
+# a month gets a few attempts with a pause between them, in which the queue
+# drains, rather than one long wait.
+const my $DEFAULT_LOCK_TIMEOUT  => 500;
+const my $DEFAULT_LOCK_ATTEMPTS => 5;
+const my $DEFAULT_RETRY_PAUSE   => 1_000;
+const my $LOCK_TIMEOUT_STATE    => '55P03';
+const my $LOCK_TIMEOUT_PATTERN  => qr/ lock [ ] timeout /msx;
+const my $DEFAULT_SUFFIX        => '_default';
+const my $PARTITION_KEY         => 'created_at';
+
+# The daily timer and every migrate keep three months ahead, so a horizon
+# under 45 days means the runs have stopped for weeks. Degraded, not failed:
+# writes still land, in the DEFAULT partition, and the fix is an operator's.
 const my $HORIZON_WARNING_DAYS => 45;
 const my $HORIZON_SQL => join q{ },
   'SELECT parent.relname AS table_name,',
@@ -57,9 +70,46 @@ qr/\A [0-9]{4} - [0-9]{2} - [0-9]{2} [ ] [0-9]{2} : [0-9]{2} : [0-9]{2} [+] 00 \
 const my $POSITIVE_INTEGER_PATTERN => qr/\A [1-9] [0-9]{0,2} \z/msx;
 const my $DEFAULT_CONFLICT_PATTERN =>
   qr/ default [ ] partition | violated [ ] by [ ] some [ ] row /msx;
+
+# A month is created as a table of its own and then attached, in one
+# transaction. CREATE TABLE ... PARTITION OF takes ACCESS EXCLUSIVE on the
+# parent, so it queued behind every open transaction on notifications,
+# event_log or audit_log and stopped every read and write queued behind it.
+# ATTACH PARTITION takes SHARE UPDATE EXCLUSIVE on the parent, which neither
+# reads nor writes conflict with; ACCESS EXCLUSIVE falls on the new table and
+# on the DEFAULT partition it scans. That last one still stops every read the
+# planner cannot prune to a month, since such a read opens DEFAULT too, and
+# with it the application's event and audit writes, which begin with one;
+# only a write routed straight to its month, or a read pruned at plan time,
+# goes past. Hence the short lock_timeout above. Measured on PostgreSQL 18 in
+# t/integration/postgres-partition-maintenance.t. INDEXES are left out on
+# purpose: ATTACH builds each of the parent's partitioned indexes on the new
+# table and attaches it, named as PARTITION OF names them, so LIKE copying
+# them too would only give it a second set to reconcile.
 const my $CREATE_TEMPLATE => join q{ },
+  'CREATE TABLE %s (LIKE %s',
+  'INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING STORAGE',
+  'INCLUDING COMMENTS INCLUDING COMPRESSION INCLUDING GENERATED)';
+const my $ATTACH_TEMPLATE => join q{ },
+  'ALTER TABLE %s ATTACH PARTITION %s',
+  'FOR VALUES FROM (%s) TO (%s)';
+
+# The remediation runs with the DEFAULT partition detached, inside a window
+# that already holds ACCESS EXCLUSIVE, so the one-statement form is the
+# clearer one to hand an operator.
+const my $PARTITION_OF_TEMPLATE => join q{ },
   'CREATE TABLE IF NOT EXISTS %s', 'PARTITION OF %s',
   'FOR VALUES FROM (%s) TO (%s)';
+
+# One fixed key for every maintenance run, beside the migration runner's
+# 4_021_970_001. Session-level, because a run is one transaction per
+# partition. Two nodes' timers and a deploy's migrate can overlap; the run
+# that does not get the lock reports itself skipped and does nothing, since
+# the run holding it is doing the same work.
+const my $MAINTENANCE_LOCK_KEY => 4_021_970_002;
+const my $TRY_LOCK_SQL         => 'SELECT pg_try_advisory_lock(?)';
+const my $WAIT_LOCK_SQL        => 'SELECT pg_advisory_lock(?)';
+const my $UNLOCK_SQL           => 'SELECT pg_advisory_unlock(?)';
 const my $REGISTRY_UPSERT => join q{ },
   'INSERT INTO partition_registry',
   '(table_name, partition_name, range_start, range_end, state)',
@@ -73,10 +123,14 @@ const my $COUNT_TEMPLATE => join q{ },
   'WHERE %s >= CAST(? AS timestamptz)',
   'AND %s < CAST(? AS timestamptz)';
 
-has dbh              => undef;
-has lock_timeout_ms  => sub { return $DEFAULT_LOCK_TIMEOUT; };
-has lookahead_months => sub { return $DEFAULT_LOOKAHEAD; };
-has schema           => undef;
+has dbh                  => undef;
+has lock_attempts        => sub { return $DEFAULT_LOCK_ATTEMPTS; };
+has lock_timeout_ms      => sub { return $DEFAULT_LOCK_TIMEOUT; };
+has lock_wait_ms         => 0;
+has lookahead_months     => sub { return $DEFAULT_LOOKAHEAD; };
+has retry_pause_ms       => sub { return $DEFAULT_RETRY_PAUSE; };
+has schema               => undef;
+has statement_timeout_ms => undef;
 
 sub partitioned_tables {
     return [@PARTITIONED_TABLES];
@@ -131,14 +185,27 @@ sub plan_window ( $self, $input ) {
     return \@plans;
 }
 
-sub create_statement ( $self, $plan ) {
+sub maintenance_lock_key {
+    return $MAINTENANCE_LOCK_KEY;
+}
+
+sub create_statements ( $self, $plan ) {
     my $table = $self->validate_table_name( $plan->{table_name} );
     my $partition =
       $self->validate_partition_name( $table, $plan->{partition_name} );
 
-    return sprintf $CREATE_TEMPLATE, $partition, $table,
-      _bound_literal( $plan->{range_start_sql} ),
-      _bound_literal( $plan->{range_end_sql} );
+    return [
+        sprintf( $CREATE_TEMPLATE, $partition, $table ),
+        sprintf( $ATTACH_TEMPLATE,
+            $table,
+            $partition,
+            _bound_literal( $plan->{range_start_sql} ),
+            _bound_literal( $plan->{range_end_sql} ) ),
+    ];
+}
+
+sub create_statement ( $self, $plan ) {
+    return join q{; }, @{ $self->create_statements($plan) };
 }
 
 sub remediation_steps ( $self, $plan ) {
@@ -149,7 +216,7 @@ sub remediation_steps ( $self, $plan ) {
     return [
         'BEGIN;',
         sprintf( 'ALTER TABLE %s DETACH PARTITION %s;', $table, $default ),
-        $self->create_statement($plan) . q{;},
+        $self->_partition_of_statement($plan) . q{;},
         sprintf(
             'INSERT INTO %s SELECT * FROM %s WHERE %s;',
             $table, $default, $range
@@ -190,13 +257,77 @@ sub ensure_partitions ( $self, $input ) {
         }
     );
     $self->_apply_lock_timeout( $handle, $result );
-    for my $plan ( @{$plans} ) {
-        $self->_ensure_partition( $handle, $plan, $result );
+    $self->_apply_statement_timeout( $handle, $result );
+    if ( !$self->_take_lock( $handle, $result ) ) {
+        $result->{skipped} = 1;
+        return $result;
     }
+    my $done = eval {
+        for my $plan ( @{$plans} ) {
+            $self->_ensure_partition( $handle, $plan, $result );
+        }
+        return 1;
+    };
+    my $failure = $EVAL_ERROR;
+    _release_lock( $handle, $result );
+    croak $failure if !$done;
     $result->{ok} =
       ( @{ $result->{conflicts} } || @{ $result->{errors} } ) ? 0 : 1;
 
     return $result;
+}
+
+# Plan mode writes nothing and takes no lock. A query that cannot even ask for
+# the lock is a whole-run problem and propagates.
+sub _take_lock ( $self, $handle, $result ) {
+    return 1                                         if !$result->{applied};
+    return $self->_wait_for_lock( $handle, $result ) if $self->lock_wait_ms;
+
+    my ($taken) =
+      $handle->selectrow_array( $TRY_LOCK_SQL, undef, $MAINTENANCE_LOCK_KEY );
+    $result->{locked} = $taken ? 1 : 0;
+
+    return $result->{locked};
+}
+
+# migrate waits a while for a run already at work instead of skipping at
+# once: on a fresh install racing a timer, the deploy would otherwise start
+# the application before that run has created the current month. The wait
+# is bounded by its own lock_timeout; past it, the run is skipped as a try
+# would be. The month transactions' timeout is set again afterwards.
+sub _wait_for_lock ( $self, $handle, $result ) {
+    _execute(
+        $handle,
+        sprintf 'SET lock_timeout = %d',
+        _milliseconds( $self->lock_wait_ms, 'lock_wait_ms' )
+    );
+    my $taken = eval {
+        $handle->selectrow_array( $WAIT_LOCK_SQL, undef,
+            $MAINTENANCE_LOCK_KEY );
+        return 1;
+    };
+    my $failure = $EVAL_ERROR;
+    $self->_apply_lock_timeout( $handle, $result );
+    croak $failure if !$taken && $failure !~ $LOCK_TIMEOUT_PATTERN;
+    $result->{locked} = $taken ? 1 : 0;
+
+    return $result->{locked};
+}
+
+# Released on every path, or the connection would keep it: Migrate reuses
+# its handle after the run.
+sub _release_lock ( $handle, $result ) {
+    return if !$result->{locked};
+
+    my $released = eval {
+        $handle->selectrow_array( $UNLOCK_SQL, undef, $MAINTENANCE_LOCK_KEY );
+        return 1;
+    };
+    if ($released) {
+        delete $result->{locked};
+    }
+
+    return;
 }
 
 # How far ahead each partitioned table has partitions, and whether rows have
@@ -268,7 +399,7 @@ sub _horizon_problems ( $self, $state ) {
     if ( $state->{default_rows} ) {
         push @problems,
             $self->default_partition_name($table)
-          . ' holds rows, so a monthly run was missed;'
+          . ' holds rows, so the partition window fell behind;'
           . ' see docs/ops/partition-maintenance.md';
     }
 
@@ -325,7 +456,7 @@ sub _ensure_partition ( $self, $handle, $plan, $result ) {
     my $done = eval { return $self->_ensure_one( $handle, $plan, $result ); };
     if ( !$done ) {
         push @{ $result->{errors} },
-          { %{ $self->_evidence($plan) }, error => _trim($EVAL_ERROR) };
+          { %{ $self->_evidence($plan) }, error => _reason($EVAL_ERROR) };
     }
 
     my $undefined;
@@ -358,13 +489,81 @@ sub _create_partition ( $self, $handle, $plan, $result ) {
         my $undefined;
         return $undefined;
     }
-    my $failure = _execute( $handle, $statement );
+    my $failure = $self->_create_with_retries( $handle, $plan );
     if ( defined $failure ) {
         return $self->_record_failure( $plan, $failure, $result );
     }
     push @{ $result->{created} }, $self->_evidence( $plan, $statement );
 
-    return $self->_sync_registry( $handle, $plan, $result );
+    return;
+}
+
+# A lock timeout is retried after a pause, up to lock_attempts times in all;
+# anything else, a DEFAULT overlap above all, is final at once. Returns the
+# last failure, or undef once the month is in.
+sub _create_with_retries ( $self, $handle, $plan ) {
+    my $attempts = $self->lock_attempts;
+    croak 'partition lifecycle: lock_attempts must be a positive integer'
+      if !defined $attempts || $attempts !~ $POSITIVE_INTEGER_PATTERN;
+    my @statements = (
+        ( map { [$_] } @{ $self->create_statements($plan) } ),
+        [ $REGISTRY_UPSERT, $self->_registry_values($plan) ]
+    );
+    my $pause =
+      _milliseconds( $self->retry_pause_ms, 'retry_pause_ms' ) / $MILLISECONDS;
+    my ( $failure, $state ) = _transaction( $handle, @statements );
+    my $attempt = 1;
+    while ( defined $failure
+        && $attempt < $attempts
+        && _is_lock_timeout( $failure, $state ) )
+    {
+        if ($pause) {
+            Time::HiRes::sleep($pause);
+        }
+        ( $failure, $state ) = _transaction( $handle, @statements );
+        $attempt += 1;
+    }
+
+    return $failure;
+}
+
+sub _is_lock_timeout ( $failure, $state ) {
+    return 1 if ( $state // q{} ) eq $LOCK_TIMEOUT_STATE;
+
+    return $failure =~ $LOCK_TIMEOUT_PATTERN ? 1 : 0;
+}
+
+# The new table, its attachment and its registry row commit together or not
+# at all: a lock timeout or a DEFAULT overlap on the ATTACH leaves no
+# unattached table behind to be mistaken next run for an existing partition.
+# Only a transaction begun here is rolled back; one that could not begin --
+# the handle already inside a caller's -- is the caller's to end. Returns
+# undef, or the failure and its SQLSTATE, read before the rollback clears it.
+sub _transaction ( $handle, @statements ) {
+    my $begun = 0;
+    my $done  = eval {
+        $handle->begin_work;
+        $begun = 1;
+        for my $statement (@statements) {
+            my ( $sql, @bind ) = @{$statement};
+            _dispatch( $handle, $sql, \@bind );
+        }
+        $handle->commit;
+        return 1;
+    };
+    my $undefined;
+    return $undefined if $done;
+
+    my $failure = _reason($EVAL_ERROR);
+    my $state   = $handle->can('state') ? $handle->state : undef;
+    if ($begun) {
+        my $rolled_back = eval { $handle->rollback; return 1; };
+        if ( !$rolled_back ) {
+            $failure .= '; rollback failed: ' . _reason($EVAL_ERROR);
+        }
+    }
+
+    return ( $failure, $state );
 }
 
 sub _record_failure ( $self, $plan, $failure, $result ) {
@@ -406,7 +605,7 @@ sub _default_rows ( $self, $handle, $default, $plan ) {
     };
     croak 'partition lifecycle: default partition probe failed for '
       . $default . q{: }
-      . _trim($EVAL_ERROR)
+      . _reason($EVAL_ERROR)
       if !defined $rows;
 
     return $rows;
@@ -416,17 +615,8 @@ sub _sync_registry ( $self, $handle, $plan, $result ) {
     if ( !$result->{applied} ) {
         return;
     }
-    my $failure = _execute(
-        $handle,
-        $REGISTRY_UPSERT,
-        $self->validate_table_name( $plan->{table_name} ),
-        $self->validate_partition_name(
-            $plan->{table_name}, $plan->{partition_name}
-        ),
-        _bound_value( $plan->{range_start_sql} ),
-        _bound_value( $plan->{range_end_sql} ),
-        'created'
-    );
+    my $failure =
+      _execute( $handle, $REGISTRY_UPSERT, $self->_registry_values($plan) );
     if ( defined $failure ) {
         push @{ $result->{errors} },
           { %{ $self->_evidence($plan) }, error => $failure };
@@ -435,17 +625,53 @@ sub _sync_registry ( $self, $handle, $plan, $result ) {
     return;
 }
 
+sub _registry_values ( $self, $plan ) {
+    return (
+        $self->validate_table_name( $plan->{table_name} ),
+        $self->validate_partition_name(
+            $plan->{table_name}, $plan->{partition_name}
+        ),
+        _bound_value( $plan->{range_start_sql} ),
+        _bound_value( $plan->{range_end_sql} ),
+        'created'
+    );
+}
+
 sub _apply_lock_timeout ( $self, $handle, $result ) {
     if ( !$result->{applied} ) {
         return;
     }
-    my $milliseconds = $self->lock_timeout_ms;
-    croak 'partition lifecycle: lock_timeout_ms must be a positive integer'
-      if !defined $milliseconds
-      || $milliseconds !~ /\A [0-9]+ \z/msx;
-    _execute( $handle, sprintf 'SET lock_timeout = %d', $milliseconds );
+    _execute(
+        $handle,
+        sprintf 'SET lock_timeout = %d',
+        _milliseconds( $self->lock_timeout_ms, 'lock_timeout_ms' )
+    );
 
     return;
+}
+
+# Unset, the session's own statement_timeout stands: the configured one on
+# the timer's connection. migrate sets it, since it lifted the timeout for its
+# migrations, and an ATTACH scans the whole DEFAULT partition while it holds
+# that partition's ACCESS EXCLUSIVE.
+sub _apply_statement_timeout ( $self, $handle, $result ) {
+    my $milliseconds = $self->statement_timeout_ms;
+    return if !$result->{applied} || !defined $milliseconds;
+
+    _execute(
+        $handle,
+        sprintf 'SET statement_timeout = %d',
+        _milliseconds( $milliseconds, 'statement_timeout_ms' )
+    );
+
+    return;
+}
+
+sub _milliseconds ( $value, $name ) {
+    croak "partition lifecycle: $name must be a positive integer"
+      if !defined $value || $value !~ /\A [[:digit:]]+ \z/msx;
+
+    return $value;
 }
 
 sub _require_dbh ( $self, $input ) {
@@ -488,6 +714,16 @@ sub _lookahead ( $self, $input ) {
       || $months !~ $POSITIVE_INTEGER_PATTERN;
 
     return int $months;
+}
+
+sub _partition_of_statement ( $self, $plan ) {
+    my $table = $self->validate_table_name( $plan->{table_name} );
+    my $partition =
+      $self->validate_partition_name( $table, $plan->{partition_name} );
+
+    return sprintf $PARTITION_OF_TEMPLATE, $partition, $table,
+      _bound_literal( $plan->{range_start_sql} ),
+      _bound_literal( $plan->{range_end_sql} );
 }
 
 sub _range_predicate ( $self, $plan ) {
@@ -601,6 +837,7 @@ sub _empty_result ( $lookahead, $apply ) {
         ok               => 1,
         planned          => [],
         policy_version   => $POLICY_VERSION,
+        skipped          => 0,
     };
 }
 
@@ -621,7 +858,7 @@ sub _execute ( $handle, $statement, @bind ) {
         return $undefined;
     }
 
-    return _trim($EVAL_ERROR);
+    return _reason($EVAL_ERROR);
 }
 
 sub _dispatch ( $handle, $statement, $bind ) {
@@ -752,22 +989,68 @@ depend on the session C<TimeZone>.
 
 =head2 Identifier safety
 
-PostgreSQL cannot bind identifiers, so C<CREATE TABLE ... PARTITION OF> has to
-interpolate table and partition names. Every identifier is therefore built from
-the module's own table allowlist plus a derived C<YYYY_MM> suffix, and is
-validated twice before it reaches SQL: once against
+PostgreSQL cannot bind identifiers, so C<CREATE TABLE> and C<ATTACH PARTITION>
+have to interpolate table and partition names. Every identifier is therefore
+built from the module's own table allowlist plus a derived C<YYYY_MM> suffix,
+and is validated twice before it reaches SQL: once against
 C<qr/\A[a-z][a-z0-9_]{2,61}\z/> and once against the allowlist or the
 C<< <table>_<year>_<month> >> shape. Range bounds are validated against a
 fixed C<YYYY-MM-DD HH:MM:SS+00> pattern. Anything else croaks. Values that can
 be bound (registry columns, default-partition probes) are always bound.
 
+=head2 Creating a month without a maintenance window
+
+Each missing month is created in its own transaction, under a short
+C<lock_timeout> (C<lock_timeout_ms>, half a second; see L</Attributes>):
+
+    BEGIN;
+    CREATE TABLE notifications_2026_11 (LIKE notifications
+        INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING STORAGE
+        INCLUDING COMMENTS INCLUDING COMPRESSION INCLUDING GENERATED);
+    ALTER TABLE notifications ATTACH PARTITION notifications_2026_11
+        FOR VALUES FROM (TIMESTAMPTZ '2026-11-01 00:00:00+00')
+        TO (TIMESTAMPTZ '2026-12-01 00:00:00+00');
+    INSERT INTO partition_registry ... ON CONFLICT ... DO UPDATE ...;
+    COMMIT;
+
+C<ATTACH PARTITION> takes SHARE UPDATE EXCLUSIVE on the parent, which no read
+or write conflicts with, where C<CREATE TABLE ... PARTITION OF> took ACCESS
+EXCLUSIVE and so waited behind, and blocked, every transaction on the table.
+ACCESS EXCLUSIVE falls on the new table and on the DEFAULT partition, and
+SHARE ROW EXCLUSIVE on C<users> while C<notifications>' foreign key is
+cloned, all until the commit. The attach builds the parent's partitioned
+indexes on the new table and attaches them, with the names C<PARTITION OF>
+gives them, and clones the primary key and foreign keys; the partition ends
+up as C<PARTITION OF> would have made it.
+
+What still waits is everything that opens the DEFAULT partition: any read the
+planner cannot prune to one month -- a lookup by C<event_id> or
+C<idempotency_key>, the audit chain tip, a filter on C<now()> -- and so the
+application's event and audit writes, which start with such a read, and
+writes to C<users> during a C<notifications> attach. A plain C<INSERT>
+routed to its month, and a read pruned at plan time, go past. They wait while
+the ATTACH waits for DEFAULT, behind any open transaction that read it, and
+while the ATTACH holds it, which is as long as the scan of DEFAULT takes. So
+the wait is cut short (half a second), and a month whose lock is not granted
+in time is tried again, after a pause in which the queue drains, up to
+C<lock_attempts> times; each stall is then at most C<lock_timeout_ms> plus
+that scan. F<t/integration/postgres-partition-maintenance.t> holds all of
+this to PostgreSQL.
+
+A run first takes the session-level advisory lock L</maintenance_lock_key>
+with C<pg_try_advisory_lock>, or, when C<lock_wait_ms> is set, waits that
+long for it with C<pg_advisory_lock>. A run that does not get it -- another
+node's timer, or a deploy's migrate, is already at it -- writes nothing and
+returns with C<skipped> set and C<ok> true.
+
 =head2 The DEFAULT partition trap
 
 A DEFAULT partition holds every row that no range partition accepts. Attaching
-a new range partition makes PostgreSQL take an ACCESS EXCLUSIVE lock and scan
-the default partition; if a single row in the default partition falls inside
-the new range, PostgreSQL aborts with C<updated partition constraint for
-default partition ... would be violated by some row>.
+a new range partition makes PostgreSQL take an ACCESS EXCLUSIVE lock on the
+default partition and scan it; if a single row in the default partition falls
+inside the new range, PostgreSQL aborts with C<updated partition constraint
+for default partition ... would be violated by some row>, and the
+transaction takes the new table with it.
 
 C<ensure_partitions> probes the default partition for overlapping rows
 B<before> issuing DDL and reports an actionable C<default_partition_overlap>
@@ -799,6 +1082,16 @@ window and not in the scheduled run. Keeping the lookahead ahead of traffic is
 what stops this from ever being needed.
 
 =head1 SUBROUTINES/METHODS
+
+=head2 Attributes
+
+C<dbh> and C<schema> give the connection (C<dbh> first). C<lookahead_months>
+(3) is the default window. C<lock_timeout_ms> (500) bounds each lock wait of
+a month's transaction, and a month timed out on a lock is tried
+C<lock_attempts> (5) times in all, C<retry_pause_ms> (1000) apart.
+C<lock_wait_ms> (0) is how long to wait for the maintenance lock, 0 to only
+try it. C<statement_timeout_ms>, when set, is applied to the session before
+an applying run; unset, the session's own stands.
 
 =head2 partitioned_tables
 
@@ -837,10 +1130,22 @@ month. Each plan row carries C<table_name>, C<partition_name>, C<state>
 C<range_end>) and SQL literal (C<range_start_sql>, C<range_end_sql>) form, plus
 the C<create_sql> that would be executed.
 
+=head2 maintenance_lock_key
+
+The key of the session-level advisory lock a maintenance run holds,
+4021970002, next to the migration runner's 4021970001. Exposed so a test or
+an operator's C<pg_locks> query can name it.
+
+=head2 create_statements
+
+Returns, for a plan row, the two statements run in one transaction: the
+C<CREATE TABLE ... (LIKE ...)> and the C<ALTER TABLE ... ATTACH PARTITION ...
+FOR VALUES FROM ... TO ...>.
+
 =head2 create_statement
 
-Returns the idempotent C<CREATE TABLE IF NOT EXISTS ... PARTITION OF ... FOR
-VALUES FROM ... TO ...> statement for a plan row.
+Returns L</create_statements> joined by C<; >, the C<create_sql> a plan row
+and the evidence carry.
 
 =head2 remediation_steps
 
@@ -868,9 +1173,14 @@ C<horizon_months> is accepted in place of C<lookahead_months>, and both
 default to the C<lookahead_months> attribute; C<now_epoch> defaults to the
 current time. A partition that already exists is listed under C<existing>
 and its registry row upserted too. The result also carries C<applied>,
-C<lookahead_months> and C<policy_version>; C<ok> is 0 when there is any
-conflict or error. Before writing, the session's C<lock_timeout> is set to
-C<lock_timeout_ms>.
+C<lookahead_months>, C<policy_version> and C<skipped>; C<ok> is 0 when there
+is any conflict or error. Before writing, the session's C<lock_timeout> is
+set to C<lock_timeout_ms>, its C<statement_timeout> to C<statement_timeout_ms>
+when that is set, and the advisory lock is taken as L</Attributes> says;
+without it the result has C<skipped> 1, C<ok> 1 and empty lists. Each created
+partition, its attachment and its registry row commit together, or roll back
+together; a lock timeout is retried, and what is left is reported under
+C<conflicts> or C<errors>, without the code locations DBI appends.
 
 =head2 horizon_report
 
@@ -958,7 +1268,18 @@ The lookahead given to C<ensure_partitions> is not a whole number from 1 to
 
 =item C<partition lifecycle: lock_timeout_ms must be a positive integer>
 
-C<lock_timeout_ms> is not made of digits; checked only when applying.
+=item C<partition lifecycle: lock_wait_ms must be a positive integer>
+
+=item C<partition lifecycle: statement_timeout_ms must be a positive integer>
+
+=item C<partition lifecycle: retry_pause_ms must be a positive integer>
+
+The attribute is not made of digits; checked only when applying.
+
+=item C<partition lifecycle: lock_attempts must be a positive integer>
+
+C<lock_attempts> is not a whole number from 1 to 999; checked when a month
+is created.
 
 =item C<partition lifecycle: default partition probe failed for ...>
 
@@ -969,20 +1290,26 @@ The overlap probe could not be run; the partition is left untouched.
 Everything C<ensure_partitions> raises per partition, including that probe
 failure, is caught and returned in C<conflicts> or C<errors>, so one bad table
 does not stop the maintenance run. Only the whole-run problems above
-(missing handle, unreachable database, lookahead, lock timeout) propagate,
-as do the validation errors raised by the public methods called directly.
+(missing handle, unreachable database, lookahead, lock timeout, and a
+failure to ask for the advisory lock) propagate, as do the validation errors
+raised by the public methods called directly. The advisory lock is released
+before anything propagates.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
 Horizon months and retention days are arguments; the scheduled jobs take them
 from L<GPForum::Service::Operations::Profile>. C<lookahead_months> defaults to
-three months and C<lock_timeout_ms> to five seconds, so a scheduled run gives
-up instead of queueing behind live traffic while holding an ACCESS EXCLUSIVE
-lock request.
+three months and C<lock_timeout_ms> to half a second, so a run gives up
+instead of queueing behind live traffic: the parent's SHARE UPDATE EXCLUSIVE
+waits for no read or write, but the DEFAULT partition's ACCESS EXCLUSIVE
+waits for any transaction that read it, and every unpruned read, event and
+audit writes with them, queues behind that request until it is granted or
+times out. A month is then tried again, C<lock_attempts> times in all.
 
 =head1 DEPENDENCIES
 
-Uses L<Carp>, L<Const::Fast>, L<English>, L<POSIX>, and L<Mojo::Base>.
+Uses L<Carp>, L<Const::Fast>, L<English>, L<POSIX>, L<Time::HiRes>, and
+L<Mojo::Base>.
 
 =head1 INCOMPATIBILITIES
 
@@ -990,11 +1317,15 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Detach, archive, and drop stay operator-owned: this boundary creates
-partitions and records state, and only recommends the retention transitions.
+Detach, archive, and drop stay operator-owned (ADR 0113): this boundary
+creates partitions and records state, and only recommends the retention
+transitions.
 Clearing a default-partition overlap is also manual, because it needs an
-ACCESS EXCLUSIVE maintenance window. A failure to set C<lock_timeout> is not
-reported; the run goes on with the session's own timeout.
+ACCESS EXCLUSIVE maintenance window. A failure to set C<lock_timeout> or
+C<statement_timeout> is not reported; the run goes on with the session's own.
+Each attach scans the whole DEFAULT partition under its ACCESS EXCLUSIVE, so
+a DEFAULT holding history makes every attach as slow as that scan; moving
+the history into range partitions (L</remediation_steps>) keeps it empty.
 
 =head1 AUTHOR
 

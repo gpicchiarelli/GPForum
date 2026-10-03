@@ -383,7 +383,7 @@ sub _assert_partition_maintenance {
     ok( scalar @{ $plan->{planned} }, 'listing the partitions it would make' );
     like(
         $plan->{planned}[0]{create_sql},
-        qr/PARTITION [ ] OF/msx,
+        qr/ATTACH [ ] PARTITION/msx,
         'with their DDL'
     );
     is_deeply( $plan->{conflicts}, [], 'and no conflict' );

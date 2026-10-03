@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gpforum.partition-maintenance</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/gpforum</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GPFORUM_ENV</key>
+    <string>production</string>
+    <key>MOJO_MODE</key>
+    <string>production</string>
+    <key>GPFORUM_LOG_PATH</key>
+    <string>/usr/local/var/log/gpforum/partition-maintenance.log</string>
+  </dict>
+  <!-- Daily: ADR 0113's window of the current month and two ahead. A run
+       that finds another holding the maintenance lock does nothing. -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/gpforum/script/gpforum-carton</string>
+    <string>exec</string>
+    <string>/opt/gpforum/bin/gpforum-partition-maintenance</string>
+    <string>--apply</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>86400</integer>
+  <key>StandardOutPath</key>
+  <string>/usr/local/var/log/gpforum/partition-maintenance.out</string>
+  <key>StandardErrorPath</key>
+  <string>/usr/local/var/log/gpforum/partition-maintenance.err</string>
+  <key>Nice</key>
+  <integer>10</integer>
+</dict>
+</plist>

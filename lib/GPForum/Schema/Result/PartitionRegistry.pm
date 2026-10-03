@@ -101,9 +101,11 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-The result class maps rows only. C<CREATE TABLE ... PARTITION OF> is issued by
+The result class maps rows only. The C<CREATE TABLE ... (LIKE ...)> and
+C<ATTACH PARTITION> that make a month are issued by
 L<GPForum::Service::Operations::PartitionLifecycle> over the same connection,
-because partition DDL cannot be expressed through DBIx::Class. Detach,
+in the transaction that writes the month's row, because partition DDL cannot
+be expressed through DBIx::Class. Detach,
 archive, and drop transitions stay operator-owned, so states beyond C<created>
 are recommendations until an operator records them.
 

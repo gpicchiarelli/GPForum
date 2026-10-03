@@ -23,6 +23,7 @@ use GPForum::Migration::Plan;
 use GPForum::Migration::Runner;
 use GPForum::Schema;
 use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
+use GPForum::Service::Operations::PartitionLifecycle;
 
 our $VERSION = '0.001';
 
@@ -215,13 +216,26 @@ sub _dump_pass ( $source, $target, $after ) {
 }
 
 # What migrate --apply does: every pending migration, in order, with the
-# statement timeout lifted for long DDL. The runner croaks on a failure.
+# statement timeout lifted for long DDL, then the partition window from the
+# current month (ADR 0113), so the seeded database writes into month
+# partitions and not into DEFAULT. The runner croaks on a failure, and so
+# does an incomplete window.
 sub _apply_migrations {
-    my $schema =
-      GPForum::Schema->connect_from_config( GPForum::Config->from_environment );
+    my $config = GPForum::Config->from_environment;
+    my $schema = GPForum::Schema->connect_from_config($config);
     _clear_statement_timeout($schema);
     GPForum::Migration::Runner->new( schema => $schema )->apply_pending;
+    my $window = GPForum::Service::Operations::PartitionLifecycle->new(
+        schema               => $schema,
+        statement_timeout_ms => $config->database_statement_timeout_ms,
+    )->ensure_partitions( { apply => 1 } );
     $schema->storage->disconnect;
+    croak 'partition window incomplete after migrate: '
+      . scalar( @{ $window->{conflicts} } )
+      . ' conflict(s), '
+      . scalar( @{ $window->{errors} } )
+      . ' error(s)'
+      if !$window->{ok};
 
     return;
 }

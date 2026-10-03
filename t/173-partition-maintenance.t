@@ -29,12 +29,14 @@ const my $TWO_MONTHS       => 2;
 const my $TABLE_COUNT      => 3;
 const my $SIX_PLANS        => 6;
 const my $CONFLICT_ROWS    => 4;
-const my $LOCK_TIMEOUT_SQL => 5_000;
+const my $LOCK_TIMEOUT_SQL => 500;
 const my $EXIT_USAGE       => 2;
 const my $EXIT_FAILURE     => 1;
 const my $SEPTEMBER_DDL => join q{ },
-  'CREATE TABLE IF NOT EXISTS audit_log_2026_09',
-  'PARTITION OF audit_log',
+  'CREATE TABLE audit_log_2026_09 (LIKE audit_log',
+  'INCLUDING DEFAULTS INCLUDING CONSTRAINTS INCLUDING STORAGE',
+  'INCLUDING COMMENTS INCLUDING COMPRESSION INCLUDING GENERATED);',
+  'ALTER TABLE audit_log ATTACH PARTITION audit_log_2026_09',
   "FOR VALUES FROM (TIMESTAMPTZ '2026-09-01 00:00:00+00')",
   "TO (TIMESTAMPTZ '2026-10-01 00:00:00+00')";
 const my $PG_DEFAULT_ERROR => join q{ },
@@ -77,7 +79,7 @@ sub _assert_plan_computation {
     is( $plans->[0]{range_start},
         '2026-09-01T00:00:00Z', 'iso bound stays available for evidence' );
     is( $plans->[0]{create_sql},
-        $SEPTEMBER_DDL, 'plan carries the idempotent partition DDL' );
+        $SEPTEMBER_DDL, 'plan carries the create-and-attach DDL' );
     is( $lifecycle->create_statement( $plans->[0] ),
         $SEPTEMBER_DDL, 'create_statement reproduces the plan DDL' );
     is( $lifecycle->default_partition_name('event_log'),
@@ -410,7 +412,7 @@ sub _assert_command {
     );
     like(
         $plan->{output},
-        qr/PARTITION [ ] OF [ ] audit_log/msx,
+        qr/ALTER [ ] TABLE [ ] audit_log [ ] ATTACH [ ] PARTITION/msx,
         'plan mode prints the DDL'
     );
 

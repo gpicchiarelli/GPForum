@@ -91,8 +91,17 @@ sub _lifecycle ($self) {
 sub _json_document ( $result, $options ) {
     return {
         %{ _json_head($options) },
+        %{ __PACKAGE__->result_document($result) },
+    };
+}
+
+# Public so bin/gpforum-migrate, which ensures the window after migrating,
+# reports it in the same shape as this command's --json.
+sub result_document ( $class, $result ) {
+    return {
         lookahead_months => $result->{lookahead_months},
-        status           => $result->{ok} ? 'ok' : 'fail',
+        skipped          => $result->{skipped} ? 1    : 0,
+        status           => $result->{ok}      ? 'ok' : 'fail',
         map {
             $_ => [ map { _json_row($_) } @{ $result->{$_} || [] } ]
         } @COUNT_KEYS,
@@ -126,7 +135,8 @@ sub _summary_line ( $result, $options ) {
       'mode=' . ( $options->{apply} ? 'apply' : 'plan' ),
       'ok=' .   ( $result->{ok}     ? 1       : 0 ),
       'lookahead=' . $result->{lookahead_months},
-      map { $_ . q{=} . scalar @{ $result->{$_} || [] } } @COUNT_KEYS;
+      ( map { $_ . q{=} . scalar @{ $result->{$_} || [] } } @COUNT_KEYS ),
+      'skipped=' . ( $result->{skipped} ? 1 : 0 );
 }
 
 sub _print_rows ( $output, $key, $rows ) {
@@ -243,14 +253,16 @@ Creates the monthly range partitions of event_log, audit_log and
 notifications ahead of time and records them in partition_registry.
 
   --plan       report the DDL without executing it (default)
-  --apply      execute CREATE TABLE ... PARTITION OF and upsert the registry
+  --apply      create each missing month and ATTACH it, and upsert the registry
   --lookahead  months to keep ahead, including the current month (default 3)
   --json       one JSON object on stdout instead of lines
   --help       show this help
 
-Exit status is 1 when a partition cannot be created, including when rows in
-the DEFAULT partition overlap the new range. The printed remediation steps
-take ACCESS EXCLUSIVE locks and belong in a maintenance window.
+A run that finds another holding the maintenance lock does nothing and
+says skipped=1. Exit status is 1 when a partition cannot be created,
+including when rows in the DEFAULT partition overlap the new range. The
+printed remediation steps take ACCESS EXCLUSIVE locks and belong in a
+maintenance window.
 USAGE
 }
 
@@ -280,13 +292,15 @@ Version 0.001.
 =head1 DESCRIPTION
 
 Oneshot maintenance entrypoint for
-L<GPForum::Service::Operations::PartitionLifecycle>. A systemd timer, launchd
-interval, or operator crontab invokes C<bin/gpforum-partition-maintenance
---apply> often enough that the lookahead window never runs out; it is not a
-long-running daemon and it ships no scheduler unit of its own.
+L<GPForum::Service::Operations::PartitionLifecycle>. The daily
+F<deploy/systemd/gpforum-partition-maintenance.timer>, its launchd and
+FreeBSD counterparts, and C<bin/gpforum-migrate --apply> at every deploy
+invoke C<bin/gpforum-partition-maintenance --apply> or its lifecycle, so the
+lookahead window never runs out (ADR 0113). It is not a long-running daemon.
 
-C<--plan> prints the C<CREATE TABLE ... PARTITION OF> statements without
-executing anything, so the DDL can be reviewed or applied by hand.
+C<--plan> prints the C<CREATE TABLE ... (LIKE ...)> and C<ATTACH PARTITION>
+statements without executing anything, so the DDL can be reviewed or applied
+by hand.
 
 =head1 SUBROUTINES/METHODS
 
@@ -294,12 +308,21 @@ executing anything, so the DDL can be reviewed or applied by hand.
 
 Parses CLI options, runs one maintenance pass, prints the result -- as lines,
 or with C<--json> as one JSON object -- and returns the exit status: 0 when
-every partition is in place, 1 when a partition is missing because of a
-conflict or error, 2 for usage errors.
+every partition is in place, or when another run holds the maintenance lock
+and this one is skipped, 1 when a partition is missing because of a conflict
+or error, 2 for usage errors.
 
 =head2 ensure
 
 Runs one pass through L<GPForum::Service::Operations::PartitionLifecycle>.
+
+=head2 result_document
+
+Takes a lifecycle result and returns what C<--json> prints of it, less
+C<command> and C<mode>: C<status>, C<skipped>, C<lookahead_months> and the
+lists C<created>, C<existing>, C<planned>, C<conflicts> and C<errors>, each
+row cut down to the fields the lines print. L<GPForum::Command::Migrate>
+reports its partition step with it.
 
 =head1 DIAGNOSTICS
 

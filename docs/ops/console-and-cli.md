@@ -35,7 +35,7 @@ the command, or says `none`.
 | `bin/gpforum-migrate` | none | Runs at deploy, before the new code serves. A web request must not change the schema of the database it is reading. |
 | `bin/gpforum-os-preflight` | none | Inspects the host (limits, file descriptors, CPU) before the service starts. `/admin/status` shows the running service's own mode and health. |
 | `bin/gpforum-outbox-dispatch` | none | The worker processes dispatch the outbox continuously; a web request is not a worker. `/admin/jobs` shows the outbox and its dead letters. |
-| `bin/gpforum-partition-maintenance` | none | DDL on the partitioned tables, run by a timer or crontab. It needs locks and time a web request does not have. |
+| `bin/gpforum-partition-maintenance` | none | DDL on the partitioned tables, run by its daily timer or crontab and, through its lifecycle, by `gpforum-migrate --apply` (ADR 0113). It needs locks and time a web request does not have. |
 | `bin/gpforum-platform-check` | none | Checks the host's Perl, modules and database prerequisites. Developer and operator tooling. |
 | `bin/gpforum-query-budget` | `admin_status` | `/admin/status` shows the query budgets and their drift (`--print`, `--check`). `--sync` rewrites the catalog from observed plans and stays on the shell. |
 | `bin/gpforum-query-plan-evidence` | none | Evidence tooling: EXPLAIN on a seeded database. Developer tooling. |
@@ -86,8 +86,8 @@ by default and their lines with `--human`.
 | --- | --- |
 | `gpforum-migrate --plan --json` | `migrations`: every file in `migrations/`, each `{version, description, file}`. Needs no database. |
 | `gpforum-migrate --check --json` | `pending`: the migrations the database has not recorded, as above; `status` `fail` when any are, or (`error`) when an applied file changed since. |
-| `gpforum-migrate --apply --json` | `applied`: each `{version, description, checksum, execution_time_ms}`; left out when a migration failed (above). |
-| `gpforum-partition-maintenance --json` | `lookahead_months` and the lists `created`, `existing`, `planned`, `conflicts`, `errors` (`partition-maintenance.md`). |
+| `gpforum-migrate --apply --json` | `applied`: each `{version, description, checksum, execution_time_ms}`; left out when a migration failed (above). `partitions`: the window step after the migrations, shaped as `gpforum-partition-maintenance --json` less `command` and `mode`; left out with `--no-partitions`. A conflict or error there makes `status` `fail` with `applied` still listed. |
+| `gpforum-partition-maintenance --json` | `lookahead_months`, `skipped` (1 when another run held the maintenance lock) and the lists `created`, `existing`, `planned`, `conflicts`, `errors` (`partition-maintenance.md`). |
 | `gpforum-platform-check --json` | `mode`, `strict`, `checks`: each `{name, status, report}`, `report` being the check's own (`os-preflight --json` for `os_preflight`). `status` is the worst check's, `fail` when the exit code is 1. |
 | `gpforum-query-budget --print --json` | `endpoints`: the catalog, keyed by endpoint name. |
 | `gpforum-query-budget --check --json` | `missing`, `extra`, `mismatched`: endpoint names. |

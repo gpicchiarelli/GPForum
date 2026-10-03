@@ -41,7 +41,7 @@ starting work on any of the areas below.
 | [ops/scheduled-jobs.md](ops/scheduled-jobs.md) | Hourly retention/orphan cleanup command |
 | [ops/dead-letters.md](ops/dead-letters.md) | Inspect, keep, or purge exhausted outbox messages |
 | [ops/search-rebuild.md](ops/search-rebuild.md) | Rebuild the search index; tell a lagging indexer from a stalled one |
-| [ops/partition-maintenance.md](ops/partition-maintenance.md) | Create next month's log partitions before rows reach DEFAULT |
+| [ops/partition-maintenance.md](ops/partition-maintenance.md) | Rolling monthly log partitions: the daily timer, migrate's window step, conflicts |
 | [ops/reload-and-restart.md](ops/reload-and-restart.md) | Why reload is unsupported, and how to restart or resize workers |
 | [ops/backup-and-restore.md](ops/backup-and-restore.md) | WAL archiving, point-in-time recovery, and the drill that rehearses it |
 | [ops/mail-check.md](ops/mail-check.md) | Identity mail transport dry-run / SMTP probe |

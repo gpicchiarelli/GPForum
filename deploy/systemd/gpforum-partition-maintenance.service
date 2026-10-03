@@ -1,0 +1,32 @@
+[Unit]
+Description=GPForum monthly partition window (ADR 0113)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=gpforum
+Group=gpforum
+WorkingDirectory=/opt/gpforum
+Environment=MOJO_MODE=production
+Environment=GPFORUM_ENV=production
+EnvironmentFile=/etc/gpforum/gpforum.env
+# The command prints its result on stdout, which the journal keeps; the log
+# path is for anything the application itself logs.
+Environment=GPFORUM_LOG_PATH=/var/log/gpforum/partition-maintenance.log
+# Creates the current month and the lookahead that are missing, by CREATE
+# TABLE ... (LIKE ...) and ATTACH PARTITION, which leave reads and writes of
+# the parent alone. A run that finds another holding the maintenance lock
+# (a second node, a deploy's migrate) does nothing and exits 0. Exit 1 means
+# a partition could not be made: see docs/ops/partition-maintenance.md.
+# ATTACH needs the role that owns the partitioned tables, the one migrations
+# run as: if gpforum.env names another, add an EnvironmentFile with its DSN.
+# carton install --deployment does not create local/bin/carton.
+ExecStart=/opt/gpforum/script/gpforum-carton exec /opt/gpforum/bin/gpforum-partition-maintenance --apply
+Nice=10
+LimitNOFILE=65536
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/gpforum

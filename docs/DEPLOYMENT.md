@@ -227,6 +227,29 @@ batches, then calls attachment orphan cleanup and partition
 policy/evidence. It does not loop and does not execute partition DDL.
 See `docs/ops/scheduled-jobs.md`.
 
+The monthly partitions of `audit_log`, `event_log` and `notifications` are
+kept ahead by a daily timer of their own (ADR 0113):
+
+```text
+deploy/systemd/gpforum-partition-maintenance.timer
+deploy/systemd/gpforum-partition-maintenance.service
+```
+
+```sh
+systemctl enable --now gpforum-partition-maintenance.timer
+```
+
+It runs `bin/gpforum-partition-maintenance --apply`, which creates the
+current month and the two after it where they are missing. The parent
+tables stay open to writes; reads that open the DEFAULT partition, and the
+event and audit writes that start with one, wait for each attach, half a
+second at most plus the scan of DEFAULT. Enable it on every node: the runs take an
+advisory lock, and the ones that do not get it do nothing. It needs the role
+that owns those tables -- the one the migrations run as; if the application's
+role is not the owner, give the unit an `EnvironmentFile` with the migration
+role's DSN. `bin/gpforum-migrate --apply` does the same after every deploy's
+migrations. See `docs/ops/partition-maintenance.md`.
+
 ## FreeBSD With rc.d
 
 Example:
@@ -255,7 +278,10 @@ Recommended operator actions:
 - use nginx, Caddy, or another local reverse proxy for TLS/static transfer;
 - consider jails for process isolation;
 - install an hourly crontab for `bin/gpforum-scheduled-jobs --once` (no
-  rc.d periodic sample is shipped; see `docs/ops/scheduled-jobs.md`).
+  rc.d periodic sample is shipped; see `docs/ops/scheduled-jobs.md`);
+- install a daily crontab for `bin/gpforum-partition-maintenance --apply`,
+  the systemd timer's counterpart (`docs/ops/partition-maintenance.md` gives
+  the line).
 
 ## macOS With launchd
 
@@ -264,10 +290,13 @@ Example:
 ```text
 deploy/launchd/com.gpforum.app.plist
 deploy/launchd/com.gpforum.scheduled-jobs.plist
+deploy/launchd/com.gpforum.partition-maintenance.plist
 ```
 
 `com.gpforum.scheduled-jobs` is a 3600s interval sample for the same oneshot
-command. It is not KeepAlive.
+command. It is not KeepAlive. `com.gpforum.partition-maintenance` runs
+`bin/gpforum-partition-maintenance --apply` every 86400s, as the systemd
+timer does daily.
 
 macOS remains primarily a development and profiling platform. It is supported
 for local persistent runs, but production throughput tuning should be measured

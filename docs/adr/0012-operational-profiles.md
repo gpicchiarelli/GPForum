@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted.
+Accepted. Amended by ADR 0113: partition DDL runs from operator processes --
+`bin/gpforum-migrate --apply` and a daily maintenance timer -- though still
+never from a web request or worker.
 
 ## Context
 
