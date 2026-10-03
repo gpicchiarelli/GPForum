@@ -3,30 +3,26 @@
 
 package GPForum::ViewModel::Base;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Scalar::Util qw(blessed);
 
 our $VERSION = '0.001';
 
 sub column ( $self, $row, $name ) {
-    my $undefined;
-    return $undefined              if !$row;
+    return undef                   if !$row;
     return $row->{$name}           if ref $row eq 'HASH';
     return $row->get_column($name) if $row->can('get_column');
 
-    return $undefined;
+    return undef;
 }
 
 # A column only some readers select, such as a join's title: undef from a row
 # that did not load it, where get_column would die.
 sub loaded_column ( $self, $row, $name ) {
-    my $undefined;
-    return $undefined    if !$row;
+    return undef         if !$row;
     return $row->{$name} if ref $row eq 'HASH';
-    return $undefined
+    return undef
       if $row->can('has_column_loaded') && !$row->has_column_loaded($name);
 
     return $self->column( $row, $name );
@@ -48,8 +44,7 @@ sub unwrap ( $self, $result, $key ) {
 }
 
 sub profile_label ( $self, $username ) {
-    my $undefined;
-    return $undefined if !defined $username || !length $username;
+    return undef if !defined $username || !length $username;
 
     return q{@} . $username;
 }
@@ -63,8 +58,7 @@ sub initial ( $self, $name ) {
 }
 
 sub related ( $self, $row, $method ) {
-    my $undefined;
-    return $undefined if !$row || ref $row eq 'HASH' || !$row->can($method);
+    return undef if !$row || ref $row eq 'HASH' || !$row->can($method);
 
     return $row->$method;
 }

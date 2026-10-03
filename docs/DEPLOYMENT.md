@@ -103,10 +103,10 @@ counts through benchmark-only headers, and stops the server gracefully. See
 
 GPForum runs on the **OS system Perl** only (`/usr/bin/perl` on
 Debian/Ubuntu with `Config{prefix}=/usr`, FreeBSD ports/pkg perl under
-`/usr/local`, or Homebrew's perl keg on macOS). Perl 5.38+ is required
-(Ubuntu 24.04 provides 5.38.x). Version managers and custom PREFIX builds are
-unsupported. `script/gpforum-system-perl` and `script/bootstrap-deps` refuse
-them (including perlbrew / plenv / asdf).
+`/usr/local`, or Homebrew's perl keg on macOS). Perl 5.40+ is required
+(Debian 13 and Ubuntu 26.04 provide 5.40.x). Version managers and custom
+PREFIX builds are unsupported. `script/gpforum-system-perl` and
+`script/bootstrap-deps` refuse them (including perlbrew / plenv / asdf).
 Confirm the host with:
 
 ```sh

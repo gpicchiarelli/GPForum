@@ -18,7 +18,7 @@
   <a href="https://github.com/gpicchiarelli/GPForum/actions/workflows/ci.yml"><img src="https://github.com/gpicchiarelli/GPForum/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml"><img src="https://github.com/gpicchiarelli/GPForum/actions/workflows/project-hygiene.yml/badge.svg" alt="Project Hygiene"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-BSD--3--Clause-63735f.svg" alt="License: BSD-3-Clause"></a>
-  <a href="cpanfile"><img src="https://img.shields.io/badge/perl-5.38%2B-214237.svg" alt="Perl 5.38+"></a>
+  <a href="cpanfile"><img src="https://img.shields.io/badge/perl-5.40%2B-214237.svg" alt="Perl 5.40+"></a>
   <a href="prompt/42.txt"><img src="https://img.shields.io/badge/database-PostgreSQL-3f5f72.svg" alt="PostgreSQL"></a>
 </p>
 
@@ -149,7 +149,7 @@ engine requires an ADR and stays an optional, derived accelerator.
 
 | Concern | Decision |
 | --- | --- |
-| Language | Modern Perl 5.38+ |
+| Language | Modern Perl 5.40+ |
 | Web | Mojolicious, server-rendered first |
 | Persistence | PostgreSQL as the authoritative system of record |
 | Schema | Canonical tables separated from rebuildable projections |
@@ -165,7 +165,7 @@ engine requires an ADR and stays an optional, derived accelerator.
 
 GPForum runs on the **OS system Perl** only (`/usr/bin/perl` on
 Debian/Ubuntu, distro `perl5` on FreeBSD, or Homebrew's `perl` on macOS).
-Version managers and custom PREFIX builds are unsupported. You need Perl 5.38+ (Ubuntu 24.04 ships 5.38.x), Carton for
+Version managers and custom PREFIX builds are unsupported. You need Perl 5.40+ (Debian 13 and Ubuntu 26.04 ship 5.40.x), Carton for
 that interpreter, and PostgreSQL client development files.
 
 ```sh

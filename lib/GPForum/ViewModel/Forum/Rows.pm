@@ -3,11 +3,9 @@
 
 package GPForum::ViewModel::Forum::Rows;
 
-use strict;
-use warnings;
-
 use GPForum::Service::Forum::BodyRenderer;
 use Mojo::Base 'GPForum::ViewModel::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 
@@ -212,8 +210,7 @@ sub _body_source ( $self, $row ) {
 sub _related_source ( $self, $row ) {
     my $body = $self->related( $row, 'current_body' );
     if ( !$body ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->column( $body, 'body_source' );
@@ -231,8 +228,7 @@ sub _stored_safe_body ( $self, $row ) {
 sub _related_body ( $self, $row ) {
     my $body = $self->related( $row, 'current_body' );
     if ( !$body ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->column( $body, 'body_rendered_safe' );

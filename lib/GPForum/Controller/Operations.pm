@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Operations;
 
-use strict;
-use warnings;
-
 use GPForum::Web::OperationsAccess;
 use GPForum::Web::OperationsPayload;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,15 +3,13 @@
 
 package GPForum::Service::Operations::StagingHostVerify;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
 use IPC::Open3    qw(open3);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File qw(path);
 use Mojo::UserAgent;
 use Symbol qw(gensym);
@@ -629,8 +627,7 @@ sub _which ($name) {
         return $candidate if -x $candidate;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _detect_repo_root {
@@ -643,8 +640,7 @@ sub _detect_repo_root {
         $cursor = $cursor->dirname;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _trim_error ($error) {

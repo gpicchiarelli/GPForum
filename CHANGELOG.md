@@ -1586,8 +1586,8 @@ CI, evidence and internal refactors with no change in behaviour.
 
 - Every Perl file declares `use v5.40;` in place of `use strict;` and `use
   warnings;`, on the line after each `use Mojo::Base` (ADR 0117).
-  `t/321-preamble.t` holds every file to it and names the files still to be
-  converted. The profile no longer applies `ProhibitVersionStrings`.
+  `t/321-preamble.t` holds every file to it, with no exceptions left. The
+  profile no longer applies `ProhibitVersionStrings`.
 
 - The six modules that used Try::Tiny use native `try`/`catch`, and `cpanfile`
   no longer declares Try::Tiny (DBIx::Class, DateTime and Email::Sender still

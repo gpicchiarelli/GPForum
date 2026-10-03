@@ -3,10 +3,8 @@
 
 package GPForum::Service::Forum::PostReader;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::Keyset;
 use GPForum::Service::Forum::Viewer;
@@ -83,8 +81,7 @@ sub _post_visibility ($request) {
 # A post, if it and its thread are visible and the viewer can read them: its
 # space, category, thread and the post itself (ADR 0102).
 sub find_visible_post ( $self, $post_id, $viewer = undef ) {
-    my $undefined;
-    return $undefined if !defined $post_id || !length $post_id;
+    return undef if !defined $post_id || !length $post_id;
 
     my $posts = $self->schema->resultset('Post');
     my $row   = $posts->search_rs(
@@ -109,7 +106,7 @@ sub find_visible_post ( $self, $post_id, $viewer = undef ) {
             rows => 1,
         }
     )->single;
-    return $undefined if !$row;
+    return undef if !$row;
 
     return GPForum::Service::Forum::Visibility->readable(
         GPForum::Service::Forum::Viewer->from($viewer),
@@ -122,7 +119,7 @@ sub find_visible_post ( $self, $post_id, $viewer = undef ) {
             post_author     => $row->get_column('author_user_id'),
             post_visibility => $row->get_column('visibility'),
         }
-    ) ? $row : $undefined;
+    ) ? $row : undef;
 }
 
 sub _apply_deleted_filter ( $query, $request ) {
@@ -165,8 +162,7 @@ sub _apply_cursor ( $query, $after ) {
 
 sub find_post ( $self, $post_id ) {
     if ( !defined $post_id || !length $post_id ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('Post')->find( { post_id => $post_id } );

@@ -3,10 +3,8 @@
 
 package GPForum::Test::ForumWebServices;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 use Const::Fast;
 

@@ -27,29 +27,12 @@ our $VERSION = '0.001';
 #   and can no longer be found as a method.
 # - `finally` is still experimental in 5.40: it is never used.
 
-# TODO (WP8): files that were being edited by other sessions when the preamble sweep ran
-# (WP1, 2026-10-03). They are converted once their owners have committed, and
-# leave this list then; a listed file that already passes fails the test, so
-# the list cannot outlive its reason.
-const my @UNCONVERTED => qw(
-  lib/GPForum/Controller/Health.pm
-  lib/GPForum/Controller/Operations.pm
-  lib/GPForum/Service/Forum/PostReader.pm
-  lib/GPForum/Service/Operations/StagingHostVerify.pm
-  lib/GPForum/ViewModel/Base.pm
-  lib/GPForum/ViewModel/Forum/Rows.pm
-  lib/GPForum/Web/HealthPayload.pm
-  lib/GPForum/Web/OperationsAccess.pm
-  t/138-web-operations-access.t
-  t/188-theme-contrast.t
-  t/300-health-report-access.t
-  t/320-thread-page-reading-first.t
-  t/67-ui-system.t
-  t/77-web-technical-payloads.t
-  t/integration/postgres-health-access.t
-  t/lib/GPForum/Test/DegradedReadiness.pm
-  t/lib/GPForum/Test/ForumWebServices.pm
-);
+# TODO (WP8): files that were being edited by other sessions when the preamble
+# sweep ran (WP1, 2026-10-03) were listed here until they were converted. The
+# list is empty now; WP8 removes it and the branch that reads it. A listed
+# file that already passes fails the test, so the list cannot outlive its
+# reason.
+const my @UNCONVERTED => ();
 
 const my $MINIMUM_FILES => 900;
 

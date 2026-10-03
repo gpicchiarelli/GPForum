@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Health;
 
-use strict;
-use warnings;
-
 use GPForum::Web::HealthPayload;
 use GPForum::Web::OperationsAccess;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 
