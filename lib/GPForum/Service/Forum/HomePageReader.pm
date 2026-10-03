@@ -89,6 +89,7 @@ sub _thread ($row) {
         last_activity_at => _column( $row, 'last_activity_at' ),
         moderation_state => _column( $row, 'moderation_state' ),
         pinned           => _column( $row, 'pinned' ),
+        reply_count      => _column( $row, 'reply_count' ),
         safe_excerpt     => scalar _optional_column( $row, 'safe_excerpt' ),
         slug             => _column( $row, 'slug' ),
         thread_id        => _column( $row, 'thread_id' ),
@@ -179,8 +180,9 @@ C<position>, C<slug>, C<title> and C<visibility>.
 
 A hash reference with C<items>, an array reference of hashes with
 C<author_user_id>, C<category_id>, C<created_at>, C<deleted_at>,
-C<last_activity_at>, C<moderation_state>, C<pinned>, C<safe_excerpt>,
-C<slug>, C<thread_id>, C<title> and C<visibility>, and C<next_cursor>, the
+C<last_activity_at>, C<moderation_state>, C<pinned>, C<reply_count>,
+C<safe_excerpt>, C<slug>, C<thread_id>, C<title> and C<visibility>, and
+C<next_cursor>, the
 cursor of the next page or undef. C<safe_excerpt> is undef when the row's
 source has no such column.
 

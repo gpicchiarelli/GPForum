@@ -1535,6 +1535,13 @@ msgctxt "forum.reply_body"
 msgid "Reply body"
 msgstr "Corpo risposta"
 
+#, python-brace-format
+msgctxt "forum.reply_count"
+msgid "{count} reply"
+msgid_plural "{count} replies"
+msgstr[0] "{count} risposta"
+msgstr[1] "{count} risposte"
+
 msgctxt "forum.reply_posted"
 msgid "Reply posted"
 msgstr "Risposta pubblicata"

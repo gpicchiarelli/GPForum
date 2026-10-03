@@ -55,14 +55,17 @@
             % if ($thread->{safe_excerpt}) {
               <p><%= $thread->{safe_excerpt} %></p>
             % }
-            % if ($thread->{last_activity_at}) {
-              <p class="ui-meta">
+            <p class="ui-meta">
+              % if (defined $thread->{reply_count}) {
+                <span class="ui-count"><%= tc('forum.reply_count', $thread->{reply_count}) %></span>
+              % }
+              % if ($thread->{last_activity_at}) {
                 <span>
                   <%= t('forum.last_activity') %>
                   <%= include 'components/timestamp', at => $thread->{last_activity_at} %>
                 </span>
-              </p>
-            % }
+              % }
+            </p>
           </article>
         </li>
       % }

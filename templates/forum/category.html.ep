@@ -33,6 +33,9 @@
                 <a href="<%= url_for('profile', username => $thread->{author_username}) %>"><%= $thread->{author_display_name} || $thread->{author_profile_label} %></a>
               </span>
             % }
+            % if (defined $thread->{reply_count}) {
+              <span class="ui-count"><%= tc('forum.reply_count', $thread->{reply_count}) %></span>
+            % }
             <span>
               <%= t('forum.last_activity') %>
               <%= include 'components/timestamp', at => $thread->{last_activity_at}, missing => t('state.unknown') %>

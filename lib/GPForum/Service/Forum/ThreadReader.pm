@@ -24,6 +24,22 @@ const my $LEGACY_CURSOR_PARTS => 2;
 const my $PINNED_TOP          => 1;
 const my %UNPINNED_TOKEN      => ( q{} => 1, '0' => 1, 'f' => 1, 'false' => 1 );
 
+# How many replies a listed thread has: its counter's total and the deltas
+# written since, which nothing folds into it yet. Two lookups by primary key
+# for each row of the page, inside the page's own statement.
+#
+# It counts the replies that are not deleted, whoever may read them: one a
+# moderator hid, or one more private than its thread, is counted and not
+# shown.
+const my $REPLY_COUNT => <<'SQL';
+COALESCE((SELECT counter.reply_count
+            FROM thread_counters counter
+           WHERE counter.thread_id = me.thread_id), 0)
++ COALESCE((SELECT SUM(shard.reply_count_delta)
+              FROM thread_counter_shards shard
+             WHERE shard.thread_id = me.thread_id), 0)
+SQL
+
 has page_window => sub { return GPForum::Service::Forum::PageWindow->new; };
 has schema      => undef;
 
@@ -59,10 +75,11 @@ sub category_threads_resultset ( $self, $request, $plan = undef ) {
                 )
             ],
             join      => 'author',
-            '+select' => [ 'author.username', 'author.display_name' ],
-            '+as'     => [qw(author_username author_display_name)],
-            order_by  => _category_order(),
-            rows      => $plan->{fetch_rows},
+            '+select' =>
+              [ 'author.username', 'author.display_name', \$REPLY_COUNT ],
+            '+as'    => [qw(author_username author_display_name reply_count)],
+            order_by => _category_order(),
+            rows     => $plan->{fetch_rows},
         }
     );
 }
@@ -120,10 +137,11 @@ sub latest_threads_resultset ( $self, $request, $plan = undef ) {
                   deleted_at
                 )
             ],
-            join      => [ 'author',          { category => 'space' } ],
-            '+select' => [ 'author.username', 'author.display_name' ],
-            '+as'     => [qw(author_username author_display_name)],
-            order_by  => [
+            join      => [ 'author', { category => 'space' } ],
+            '+select' =>
+              [ 'author.username', 'author.display_name', \$REPLY_COUNT ],
+            '+as'    => [qw(author_username author_display_name reply_count)],
+            order_by => [
                 { -desc => 'me.last_activity_at' },
                 { -desc => 'me.thread_id' },
             ],
@@ -379,7 +397,10 @@ the home page's latest threads and, with an anonymous viewer, the sitemap
 and the Atom feed.
 
 Rows carry the author's C<username> and C<display_name> as
-C<author_username> and C<author_display_name>.
+C<author_username> and C<author_display_name>, and C<reply_count>: the
+thread's counter and the deltas not yet folded into it. It counts the
+replies that are not deleted, whoever may read them, so a reply a moderator
+hid, or one more private than its thread, is counted and not shown.
 
 =head1 SUBROUTINES/METHODS
 

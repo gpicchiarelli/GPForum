@@ -17,7 +17,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 17;
+const my $EXPECTED_TESTS => 18;
 const my $HTTP_OK        => 200;
 const my $ROOT_PATH      => q{/};
 
@@ -37,6 +37,7 @@ $test->element_exists(q{nav[aria-label="Forum actions"] a[href="/categories"]});
 $test->element_exists(q{section[aria-labelledby="home-categories-heading"]});
 $test->element_exists(q{a[href="/c/category-1"]});
 $test->element_exists(q{a[href="/t/thread-1"]});
+$test->text_is( 'ol li .ui-count' => '1 reply' );
 $test->element_exists(q{nav[aria-label="Latest discussion pagination"]});
 $test->content_like(qr/Web [ ] processes/msx);
 $test->element_exists('footer a[href="/legal/terms"]');

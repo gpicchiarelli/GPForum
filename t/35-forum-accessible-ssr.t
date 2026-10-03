@@ -18,7 +18,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 255;
+const my $EXPECTED_TESTS   => 258;
 const my $FORM_SNIPPET     => 800;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FOUND       => 302;
@@ -98,6 +98,11 @@ $test->element_exists('ol');
 $test->element_exists('a[href="/t/thread-1"]');
 $test->element_exists('a[href="/u/giacomo_forum"]');
 $test->element_exists('nav[aria-label="Thread pagination"]');
+
+# A row says how many replies its thread has, in the reader's plural forms.
+$test->text_is( 'ol li .ui-count' => '2 replies' );
+$test->get_ok( '/c/category-1' => { 'Accept-Language' => 'it' } );
+$test->text_is( 'ol li .ui-count' => '2 risposte' );
 
 $test->get_ok('/t/thread-1');
 $test->status_is($HTTP_OK);

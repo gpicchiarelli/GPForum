@@ -48,6 +48,7 @@ sub thread ( $self, $row ) {
         locked_at        => $locked_at,
         moderation_state => $self->column( $row, 'moderation_state' ),
         pinned           => $self->column( $row, 'pinned' ),
+        reply_count      => $self->loaded_column( $row, 'reply_count' ),
         slug             => $self->column( $row, 'slug' ),
         thread_id        => $thread_id,
         title            => $self->column( $row, 'title' ),
