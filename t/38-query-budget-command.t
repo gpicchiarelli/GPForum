@@ -22,7 +22,7 @@ our $VERSION = '0.001';
 
 const my $EXIT_USAGE => 2;
 
-const my $EXPECTED_TESTS           => 12;
+const my $EXPECTED_TESTS           => 19;
 const my $THREAD_VIEW_QUERY_BUDGET => 8;
 
 plan tests => $EXPECTED_TESTS;
@@ -62,7 +62,7 @@ my $sync_output  = _capture_stdout(
 
 like(
     $sync_output,
-    qr/\A synced [ ] 24 [ ] endpoint/msx,
+    qr/\A synced [ ] 25 [ ] endpoint/msx,
     'query budget sync reports synced endpoint count'
 );
 is( $resultset->rows->{thread_view}->get_column('max_queries'),
@@ -90,6 +90,43 @@ like( $drift_status->{output},
     qr/mismatched=thread_view/msx,
     'query budget check reports mismatched endpoint' );
 
+# A row for an endpoint the catalog dropped: --check names it extra, and
+# --sync deletes it, so the check passes after the sync it recommends.
+$resultset->update_or_create(
+    {
+        endpoint_name    => 'dropped_endpoint',
+        max_queries      => 3,
+        max_transactions => 1,
+        notes            => 'an endpoint an older release had',
+    }
+);
+like(
+    _capture_stdout( sub { return $sync_command->run('--check'); } ),
+    qr/extra=dropped_endpoint/msx,
+    'query budget check reports a dropped endpoint as extra'
+);
+my $prune_output = _capture_stdout(
+    sub {
+        return $sync_command->run('--sync');
+    }
+);
+is(
+    _removed_line($prune_output),
+    'removed 1 dropped endpoint query budgets: dropped_endpoint',
+    'query budget sync says which dropped endpoint it deleted'
+);
+ok(
+    !exists $resultset->rows->{dropped_endpoint},
+    'query budget sync deletes the dropped endpoint row'
+);
+is( $resultset->rows->{thread_view}->get_column('max_queries'),
+    $THREAD_VIEW_QUERY_BUDGET, 'and restores the drifted budget' );
+like(
+    _capture_stdout( sub { return $sync_command->run('--check'); } ),
+    qr/\A ok [ ] endpoint [ ] query [ ] budgets/msx,
+    'query budget check passes after that sync'
+);
+
 is(
     _usage_status(
         sub {
@@ -98,6 +135,21 @@ is(
     ),
     $EXIT_USAGE,
     'unknown query budget command fails with usage'
+);
+
+# The usage text used to describe another tool: --sync "write the observed
+# plans back into the catalog", --check "fail if an observed plan is outside
+# its budget". Both work on the endpoint_query_budgets table.
+my $usage = GPForum::Command::QueryBudget->usage_text;
+like(
+    $usage,
+qr/delete [ ] rows [ ] for [ ] endpoints [ ] the [ ] catalog [ ] dropped/msx,
+    'the usage says --sync deletes the rows of dropped endpoints'
+);
+unlike(
+    $usage,
+    qr/observed [ ] plan/msx,
+    'and no longer describes observed query plans'
 );
 
 my $script_output = _capture_command( 'script/query-budget', '--print' );
@@ -116,6 +168,14 @@ sub _capture_stdout {
     my ($code) = @_;
 
     return _capture_stdout_status($code)->{output};
+}
+
+sub _removed_line {
+    my ($output) = @_;
+
+    my ($line) = grep { /\A removed [ ]/msx } split /\n/msx, $output;
+
+    return $line;
 }
 
 sub _capture_stdout_status {

@@ -112,6 +112,10 @@ const my %DEFAULT_BUDGETS => (
         max_queries => 4,
         notes       => 'bounded inbox read plus unread counter',
     },
+    metrics => {
+        max_queries => 5,
+        notes => 'rate limit buckets, budget drift, outbox and dead letters',
+    },
 );
 
 has budgets => sub { return _default_budgets(); };
@@ -193,12 +197,28 @@ sub sync_schema ( $self, $schema = undef ) {
         );
     }
 
+    my @removed = _remove_dropped( $resultset, $self->catalog, \%stored );
+
     return {
         endpoints => \@endpoints,
+        removed   => \@removed,
         skipped   => scalar(@endpoints) - $written,
         synced    => scalar @endpoints,
         written   => $written,
     };
+}
+
+# A row for an endpoint the catalog no longer has is deleted: the table is a
+# copy of the catalog, and drift_report fails on it as 'extra'. Sync used to
+# leave it, so the check failed after every sync until someone deleted it by
+# hand.
+sub _remove_dropped ( $resultset, $catalog, $stored ) {
+    my @dropped = _extra_endpoints( $catalog, $stored );
+    return if !@dropped;
+
+    $resultset->search_rs( { endpoint_name => { -in => \@dropped } } )->delete;
+
+    return @dropped;
 }
 
 sub _sync_endpoint ( $self, $job ) {
@@ -456,7 +476,7 @@ L<GPForum::Bootstrap::Operations> observes every request that carries an
 endpoint name against it, and the benchmark reads its budgets.
 
 The C<endpoint_query_budgets> table holds a copy of the catalog:
-C<sync_schema> writes it (C<bin/gpforum-query-budget --sync>) and
+C<sync_schema> makes it match (C<bin/gpforum-query-budget --sync>) and
 C<drift_report> compares it, for the platform check, readiness, the metrics
 snapshot and the admin console.
 
@@ -497,10 +517,12 @@ every budget.
 Takes an optional schema; the object's is used without one. Writes the
 catalog to C<endpoint_query_budgets>: rows whose C<max_queries>,
 C<max_transactions> and C<notes> already match are left alone, the others
-updated or inserted. An insert that loses a race to another writer re-reads
-the row and updates it if it still differs. Returns
-C<< { endpoints, synced, written, skipped } >>: the endpoint names, their
-number, the rows written and the rows left as they were.
+updated or inserted, and rows for endpoints the catalog no longer has are
+deleted. An insert that loses a race to another writer re-reads the row and
+updates it if it still differs. Returns
+C<< { endpoints, removed, synced, written, skipped } >>: the endpoint names,
+the names whose rows were deleted, the number of endpoints, the rows written
+and the rows left as they were.
 
 =head2 drift_report
 

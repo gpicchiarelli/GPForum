@@ -240,19 +240,34 @@ sub _outbox ($self) {
     return {} if !$self->schema;
 
     my $snapshot = eval {
-        my $outbox = $self->schema->resultset('OutboxMessage');
+        my $by_status = $self->_outbox_status_counts;
         return {
-            pending => $outbox->search_rs( { status => 'pending' } )->count,
-            failed  => $outbox->search_rs( { status => 'failed' } )->count,
+            pending       => $by_status->{pending} // 0,
+            failed        => $by_status->{failed}  // 0,
             retry_backlog => $self->retry_backlog_resultset->count,
-            dead_letters  =>
-              $self->schema->resultset('DeadLetter')->search_rs( {} )->count,
+            dead_letters  => $self->schema->resultset('DeadLetter')->count,
         };
     };
 
     return {} if !$snapshot;
 
     return $snapshot;
+}
+
+# Pending and failed in one grouped statement. Two counts that differed only
+# in their bind value were the same statement sent twice on every scrape:
+# the duplicate the query budget forbids.
+sub _outbox_status_counts ($self) {
+    my $grouped = $self->schema->resultset('OutboxMessage')->search_rs(
+        { status => { -in => [ 'pending', 'failed' ] } },
+        {
+            select   => [ 'status', { count => q{*} } ],
+            as       => [ 'status', 'messages' ],
+            group_by => ['status'],
+        }
+    );
+
+    return { map { $_->[0] => $_->[1] } $grouped->cursor->all };
 }
 
 # ADR 0058: replication lag is monitored. Read on every scrape -- three

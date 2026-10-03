@@ -573,6 +573,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- `GPFORUM_OS_WORKER_PRIORITY=on` reports the action `supervisor-nice` and
+  the policy `declared-for-the-supervisor`: nothing in GPForum calls
+  setpriority, the supervisor applies the nice value.
+
 - Translations are gettext PO files, `locale/en.po` and `locale/it.po`, which
   Poedit, Weblate and gettext's tools can open; `docs/i18n.md` describes the
   translator workflow. The catalogs are read once at startup, and a malformed
@@ -822,6 +826,15 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- Every server profile ignores `GPFORUM_QUERY_BUDGET_ENFORCE=1` (production,
+  production-small, production-medium, staging); before, only
+  `GPFORUM_ENV=production` did, and elsewhere a breached budget left the
+  response unsent. `/metrics` counts pending and failed outbox messages in one
+  grouped statement instead of the same statement twice, and has its own
+  budget, `metrics` (5 statements): run `script/query-budget --sync` after
+  deploying. `--sync` deletes the rows of endpoints the catalog no longer has
+  and names them (`removed` in `--json`).
 
 - The privacy dashboard no longer fails for a member with an export request,
   and the export download returns the bundle as a JSON object instead of one

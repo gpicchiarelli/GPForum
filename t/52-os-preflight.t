@@ -57,8 +57,13 @@ ok(
     'preflight reports tcp_nodelay policy'
 );
 is( $report->{processes}{classes}{mail_worker}{action},
-    'setpriority-if-permitted',
-    'preflight reports enabled worker priority plan' );
+    'supervisor-nice', 'preflight reports enabled worker priority plan' );
+
+# Nothing in GPForum calls setpriority: the report names the supervisor as
+# the one that applies the plan, not the application.
+is( $report->{processes}{policy},
+    'declared-for-the-supervisor',
+    'preflight says the supervisor applies the priority plan' );
 
 my $darwin = GPForum::OS::Darwin->new( resource_probe => $resource );
 is(

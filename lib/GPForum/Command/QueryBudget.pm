@@ -70,11 +70,13 @@ sub _json_document ( $self, $method ) {
     my $budget = GPForum::Service::Operations::QueryBudget->new(
         schema => $self->_schema );
     if ( $method eq 'sync_catalog' ) {
+        my $result = $budget->sync_schema;
         return {
             %document,
-            mode   => 'sync',
-            status => 'ok',
-            synced => $budget->sync_schema->{synced},
+            mode    => 'sync',
+            removed => $result->{removed},
+            status  => 'ok',
+            synced  => $result->{synced},
         };
     }
     my $report = $budget->drift_report;
@@ -105,6 +107,14 @@ sub sync_catalog ($self) {
 
     print "synced $result->{synced} endpoint query budgets\n"
       or croak 'failed to write query budget sync result';
+    my @removed = @{ $result->{removed} };
+    if (@removed) {
+        print 'removed '
+          . scalar(@removed)
+          . ' dropped endpoint query budgets: '
+          . join( q{,}, @removed ) . "\n"
+          or croak 'failed to write query budget sync result';
+    }
 
     return 0;
 }
@@ -163,15 +173,18 @@ sub _usage {
     return <<'USAGE';
 Usage: bin/gpforum-query-budget [--print|--sync|--check] [--json]
 
-Reads the query-plan budget catalog and compares it against the database.
+Reads the endpoint query budget catalog in the code and compares it with
+the copy in the endpoint_query_budgets table.
 
-  --print  print the catalog as it stands
-  --sync   write the observed plans back into the catalog
-  --check  fail if an observed plan is outside its budget
+  --print  print the catalog (the default)
+  --sync   make the table match the catalog: insert missing rows, update
+           rows that differ, delete rows for endpoints the catalog dropped
+  --check  fail while the table and the catalog differ, naming each
+           missing, extra or mismatched endpoint
   --json   one JSON object on stdout instead of lines
   --help   show this help
 
-Exit status: 0 success, 1 a budget was exceeded, 2 usage error.
+Exit status: 0 success, 1 drift or a failure, 2 usage error.
 USAGE
 }
 
@@ -185,3 +198,90 @@ sub _drift_line ($report) {
 }
 
 1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Command::QueryBudget - Prints, syncs and checks the endpoint query budget table.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    exit GPForum::Command::QueryBudget->new->run(@ARGV);
+
+=head1 DESCRIPTION
+
+The CLI behind C<bin/gpforum-query-budget> and C<script/query-budget>, over
+L<GPForum::Service::Operations::QueryBudget>. C<--print> shows the catalog
+in the code. C<--sync> makes the C<endpoint_query_budgets> table match it:
+missing rows are inserted, rows with other limits or notes updated, and rows
+for endpoints the catalog no longer has deleted, so C<--check> passes after
+it. C<--check> exits 1 while the table differs, naming the missing, extra and
+mismatched endpoints. C<--json> answers with one object; C<--sync --json>
+carries C<synced> (the catalog size) and C<removed> (the endpoints whose rows
+were deleted).
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Parses the arguments, runs one mode and returns the exit status.
+
+=head2 print_catalog
+
+Prints one line per catalog endpoint. Returns 0.
+
+=head2 sync_catalog
+
+Makes the table match the catalog, prints the number of endpoints and, when
+it deleted any, the dropped endpoints it removed. Returns 0.
+
+=head2 check_catalog
+
+Prints C<ok> or the drift line. Returns 0 without drift, 1 with it.
+
+=head2 usage_text
+
+The text C<--help> prints, for the command adapter in
+L<GPForum::CLI::query_budget>.
+
+=head1 DIAGNOSTICS
+
+Misuse exits 2 with the usage on standard error. Drift exits 1. A database
+error exits 1 with its reason on standard error and, with C<--json>, a
+document with C<status> C<fail> on standard output.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Without a C<schema> attribute it connects with the C<GPFORUM_DATABASE_*>
+settings read by L<GPForum::Config>.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Operations::QueryBudget>, L<GPForum::Schema>,
+L<GPForum::Config> and L<GPForum::Command::Usage>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+C<--sync> deletes the row of any endpoint the catalog does not name: run it
+with the release whose catalog is meant to be the source of truth, not with
+an older checkout against a newer database.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

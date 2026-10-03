@@ -263,8 +263,8 @@ and failed-only ones the claim no longer used.
 `GPForum::Service::Operations::QueryBudget` is the catalog of how much
 database work each named endpoint may do: `max_queries` (2 for search and
 autocomplete, 3 for the category index, 4 for notifications, 5 or 6 for the
-lists, writes and staff pages, 8 for the thread view and the admin status
-page), at most one transaction and no duplicate statement, at the
+lists, writes, staff pages and `/metrics`, 8 for the thread view and the
+admin status page), at most one transaction and no duplicate statement, at the
 `release-gate` level. The request hook in `GPForum::Bootstrap::Operations`
 observes every request that carries an endpoint name: statements,
 transactions, duplicate normalized SQL fingerprints (the N+1 signal), the
@@ -276,11 +276,12 @@ Observation is always on. Failing is opt-in, for tests and benchmarks:
 GPFORUM_QUERY_BUDGET_ENFORCE=1 script/gpforum-carton exec prove -lr t
 ```
 
-throws after dispatch when a request breaks its budget. `GPFORUM_ENV=production`
-ignores the flag: there a breach shows in metrics and the release gates
-instead of failing a response. Only that name does: the `production-small`
-and `production-medium` profiles and `staging` honour it, so leave it unset
-on a server.
+throws after dispatch when a request breaks its budget; the response it
+breaks is never sent, so the client waits out its timeout. Every server
+profile ignores the flag -- `production`, `production-small`,
+`production-medium` and `staging` -- and a breach there shows in metrics and
+the release gates instead of failing a response. Only `development`, `test`
+and names outside the profiles honour it.
 
 `t/integration/postgres-query-budget.t` holds the measured budgets: 15
 pages, anonymous and signed in, against the seeded forum, from 1 statement
@@ -295,19 +296,24 @@ extra, or stored with other limits, usually after a deploy that changed the
 catalog. The check fails until the table matches:
 
 ```sh
-script/query-budget --sync     # bin/gpforum-query-budget --sync; writes missing rows and rows that differ
+script/query-budget --sync     # bin/gpforum-query-budget --sync; makes the table match the catalog
 script/query-budget --check    # exits non-zero while drift remains, naming each endpoint
 ```
 
-`--sync` never deletes a row, so an endpoint the catalog no longer has stays
-`extra` after it. Delete that row by hand, then check again:
-
-```sql
-DELETE FROM endpoint_query_budgets WHERE endpoint_name = 'the_extra_endpoint';
-```
+`--sync` inserts missing rows, updates rows that differ and deletes the rows
+of endpoints the catalog no longer has, naming them (`removed` with
+`--json`), so `--check` passes after it.
 
 `--print` shows the catalog, and `--json` answers in JSON. The platform
 check, `/metrics` and the admin console report the same drift.
+
+`/metrics` has a budget of its own, `metrics`: 5 statements (rate limit
+buckets, the budget drift read, the outbox by status, the retry backlog and
+dead letters), no duplicate. The replication and `SELECT 1` reads go through
+the raw handle and are not counted. It used to count pending and failed
+outbox messages with two statements that differed only in their bind value,
+one statement sent twice on every scrape; they are one grouped statement
+now.
 
 With `GPFORUM_BENCHMARK_QUERY_HEADERS=1` every response carries
 `X-GPForum-DB-Queries`, `-Transactions`, `-Duplicate-Queries`, `-Budget`,
@@ -519,7 +525,7 @@ actual reactor is in [ops/reactor-backend.md](ops/reactor-backend.md).
 | `GPFORUM_OS_REUSEPORT` | `auto`, `on`, `off` | `SO_REUSEPORT` on the listen URL where supported |
 | `GPFORUM_OS_SENDFILE` | `auto`, `on`, `off` | sendfile, delegated to the reverse proxy |
 | `GPFORUM_OS_STATIC_XSENDFILE` | `auto`, `on`, `off` | static transfer through the proxy |
-| `GPFORUM_OS_WORKER_PRIORITY` | `auto`, `on`, `off` | report the nice plan below as to be applied (`setpriority-if-permitted`) rather than observed |
+| `GPFORUM_OS_WORKER_PRIORITY` | `auto`, `on`, `off` | report the nice plan below as one the supervisor applies (`supervisor-nice`) rather than observed (`observe`) |
 | `GPFORUM_OS_AFFINITY` | `off`, `manual` | a declaration; never applied by the application |
 | `GPFORUM_OS_MIN_RECOMMENDED_WORKERS` | integer | floor for the worker recommendation |
 | `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS` | integer | the descriptor floor, 65,536 by default |
@@ -539,8 +545,13 @@ pipes all draw on it.
 | `maintenance_worker` | 10 |
 
 The plan is a declaration, whatever the setting: nothing in GPForum calls
-`setpriority`. The supervisor sets the nice value; the shipped scheduled-jobs
-units (systemd and launchd) set 10.
+`setpriority`, and the report says so: policy `declared-for-the-supervisor`,
+action `supervisor-nice` when enabled (it used to read
+`setpriority-if-permitted`, a call nothing made). No GPForum process starts
+knowing its class -- the web workers run under Hypnotoad, the outbox
+dispatcher and the scheduled jobs under their own units -- so there is no
+start hook that could pick a delta. The supervisor sets the nice value;
+the shipped scheduled-jobs units (systemd and launchd) set 10.
 
 What the application does apply, through `GPForum::OS::RuntimePolicy`:
 Hypnotoad's workers, backlog, keep-alive, graceful shutdown and, where
@@ -692,7 +703,7 @@ database:
   | `/search?q=performance` | 21.9 to 27.4 | 1 | in a transaction, for its timeout |
   | `/search/autocomplete?q=per` | 6.7 to 7.1 | 1 | the same |
   | `/health/ready` | 6.4 to 10.1 | 5 | no budget |
-  | `/metrics` | 7.6 to 9.9 | 6 | no budget; one statement sent twice |
+  | `/metrics` | 7.6 to 9.9 | 6 | no budget then; one statement sent twice (since fixed: 5 statements, budget `metrics`) |
 
 - **Fixture HTTP:** p95 from about 1 ms (`/metrics`) to under 10 ms (search)
   per route; `/health/ready` 503 as described above.

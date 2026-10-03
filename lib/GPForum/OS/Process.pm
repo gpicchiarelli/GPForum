@@ -28,10 +28,15 @@ sub snapshot ( $self, $features ) {
 
     return {
         classes => \%classes,
-        policy  => 'descriptive-unless-explicitly-enabled',
+        policy  => 'declared-for-the-supervisor',
     };
 }
 
+# A plan, never applied here: nothing in GPForum calls setpriority. The
+# supervisor sets the nice value (the shipped scheduled-jobs units set 10).
+# GPFORUM_OS_WORKER_PRIORITY=on says the supervisor is expected to apply the
+# delta; the action used to read 'setpriority-if-permitted', which claimed a
+# call the code never made.
 sub priority_plan ( $self, $class, $features ) {
     my $known   = exists $PROCESS_CLASSES{$class} ? 1 : 0;
     my $delta   = $known ? $PROCESS_CLASSES{$class}   : $DEFAULT_NICE_DELTA;
@@ -42,7 +47,7 @@ sub priority_plan ( $self, $class, $features ) {
         known      => $known,
         nice_delta => $delta,
         enabled    => $enabled,
-        action     => $enabled ? 'setpriority-if-permitted' : 'observe',
+        action     => $enabled ? 'supervisor-nice' : 'observe',
     };
 }
 

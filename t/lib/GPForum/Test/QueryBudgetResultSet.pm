@@ -17,6 +17,7 @@ our $VERSION = '0.001';
 has rows              => sub { return {}; };
 has skip_search_count => 0;
 has updated           => sub { return []; };
+has deleted           => sub { return []; };
 
 sub create {
     my ( $self, $row ) = @_;
@@ -55,7 +56,23 @@ sub search {
     }
 
     return GPForum::Test::CommunitySearch->new(
-        rows => [ values %{ $self->rows } ], );
+        query     => $query,
+        resultset => $self,
+        rows      => [ values %{ $self->rows } ],
+    );
+}
+
+# The one delete lib/ sends: endpoint_name IN (...), for the rows a sync
+# finds the catalog no longer has.
+sub delete_matching {
+    my ( $self, $query ) = @_;
+
+    my $names = $query->{endpoint_name}{-in} || [];
+    my @gone  = grep { exists $self->rows->{$_} } @{$names};
+    delete @{ $self->rows }{@gone};
+    push @{ $self->deleted }, @gone;
+
+    return scalar @gone;
 }
 
 sub _assert_budget_unique {

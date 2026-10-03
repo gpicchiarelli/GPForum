@@ -19,6 +19,7 @@ use GPForum::Service::Operations::CommandIdempotency;
 use GPForum::Service::Operations::CacheFactory;
 use GPForum::Service::Operations::CacheInvalidationBus;
 use GPForum::Service::Operations::MetricsSnapshot;
+use GPForum::Service::Operations::Profile;
 use GPForum::Service::Operations::QueryBudget;
 use GPForum::Service::Operations::RateLimiter;
 use GPForum::Service::Operations::RateLimiter::DegradationPolicy;
@@ -407,6 +408,7 @@ sub _query_budget_endpoint ($controller) {
         admin_status                 => 'admin_status',
         notifications                => 'notifications',
         notification_read            => 'notifications',
+        metrics                      => 'metrics',
         privacy_review               => 'admin_dashboard',
         privacy_deletion_approve     => 'admin_role_update',
         privacy_deletion_hold        => 'admin_role_update',
@@ -473,9 +475,13 @@ sub _add_benchmark_query_headers ( $controller, $request_stats, $observation ) {
     return;
 }
 
+# Every server profile ignores the flag -- production, production-small,
+# production-medium and staging -- so a breach there shows in metrics and the
+# release gates instead of failing a response. Only the name 'production' used
+# to: the sized profiles and staging honoured it.
 sub _enforce_query_budget ( $config, $request_stats, $observation ) {
     return if ( $ENV{GPFORUM_QUERY_BUDGET_ENFORCE} || q{} ) ne '1';
-    return if $config->environment eq 'production';
+    return if _server_profile( $config->environment );
     return if !$request_stats || !$observation;
     return if ( $observation->{status} || q{} ) ne 'fail';
 
@@ -483,6 +489,13 @@ sub _enforce_query_budget ( $config, $request_stats, $observation ) {
       'query budget exceeded',
       $request_stats->{endpoint_name} || 'unknown',
       join q{,}, @{ $observation->{violations} || [] };
+}
+
+sub _server_profile ($environment) {
+    my $profile =
+      GPForum::Service::Operations::Profile->name_for_environment($environment);
+
+    return defined $profile && $profile ne 'development';
 }
 
 1;

@@ -197,8 +197,8 @@ is( $process_plan->{nice_delta},
     $MAINTENANCE_NICE_DELTA,
     'maintenance worker receives lower scheduling priority plan' );
 is( $process_plan->{action},
-    'setpriority-if-permitted',
-    'enabled worker priority plans setpriority action' );
+    'supervisor-nice',
+    'enabled worker priority asks the supervisor for the nice delta' );
 my $unknown_process_plan = $process_policy->priority_plan( 'custom_worker',
     { worker_priority => { enabled => 0 } } );
 ok( !$unknown_process_plan->{known},
