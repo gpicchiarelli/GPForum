@@ -5,7 +5,9 @@
   <%= include 'components/page_header',
     heading_id => $heading_id,
     component_title => t($title_key) %>
-  % for my $section_key (@{ $section_keys }) {
-    <p><%= t($section_key) %></p>
-  % }
+  <div class="prose">
+    % for my $section_key (@{ $section_keys }) {
+      <p><%= t($section_key) %></p>
+    % }
+  </div>
 </section>

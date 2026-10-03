@@ -132,8 +132,8 @@ is_deeply( _italian_ascii_accent_violations($i18n),
     $test->element_exists('body.app-shell.typography-latin');
     $test->text_is(
         'nav[aria-label="Principale"] a[href="/categories"]' => 'Categorie' );
-    $test->text_is( 'nav[aria-label="Principale"] a[href="/new-thread"]' =>
-          'Avvia una discussione' );
+    $test->text_is(
+        'nav[aria-label="Principale"] a[href="/search"]' => 'Cerca' );
     $test->text_is( 'nav[aria-label="Identità"] a[href="/login"]' => 'Accedi' );
 }
 

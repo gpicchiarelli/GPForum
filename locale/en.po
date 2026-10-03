@@ -2127,6 +2127,10 @@ msgctxt "nav.start_thread"
 msgid "Start a thread"
 msgstr "Start a thread"
 
+msgctxt "nav.your_data"
+msgid "Your data"
+msgstr "Your data"
+
 msgctxt "notifications.body.follow"
 msgid "A followed thread has new activity."
 msgstr "A followed thread has new activity."
@@ -2698,6 +2702,14 @@ msgstr "Dates and times across the forum are shown in this zone."
 msgctxt "settings.title"
 msgid "Settings"
 msgstr "Settings"
+
+msgctxt "settings.your_data_description"
+msgid "Export a copy of what you have written, or ask for your account to be deleted."
+msgstr "Export a copy of what you have written, or ask for your account to be deleted."
+
+msgctxt "settings.your_data_open"
+msgid "Manage your data"
+msgstr "Manage your data"
 
 msgctxt "state.active"
 msgid "Active"

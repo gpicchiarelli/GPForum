@@ -9,6 +9,9 @@
     <a href="<%= url_for('legal_terms') %>"><%= t('layout.footer_terms') %></a>
     <a href="<%= url_for('legal_privacy') %>"><%= t('layout.footer_privacy') %></a>
     <a href="<%= url_for('legal_cookies') %>"><%= t('layout.footer_cookies') %></a>
+    % if (session('user_id')) {
+      <a href="<%= url_for('privacy_dashboard') %>"><%= t('nav.your_data') %></a>
+    % }
     <span><%= t('layout.footer_license') %></span>
   </nav>
   <div class="site-footer__preferences" role="group" aria-label="<%= t('layout.preferences') %>">

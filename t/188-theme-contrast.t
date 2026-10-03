@@ -145,11 +145,24 @@ is_deeply(
     'the automatic theme in the dark is the dark theme, token for token'
 );
 
+# Text has two tones: the foreground and one quieter, --color-subtle. A third,
+# --color-muted, set as much text as the second and could not be told from it.
+unlike(
+    $css,
+    qr/^ \s+ color: \s* var[(]--color-muted[)]/msx,
+    'no text is set in a third tone'
+);
+
 # The type scale is its tokens. A rule that states a size of its own adds a
 # step the scale does not know about: 15px had crept into six rules that way.
 # Code is the exception, sized in em against the text around it.
 my @off_scale = $css =~ /^ \s+ font-size: \s* ( [\d.]+ (?:rem|px) ) ;/gmsx;
 is_deeply( \@off_scale, [], 'every font size is a token of the scale' );
+like(
+    $css,
+    qr/font-size: \s* max[(]0[.]875em, \s* var[(]--font-size-xs[)][)]/msx,
+    'and code, sized against its text, never falls below the smallest'
+);
 
 done_testing();
 

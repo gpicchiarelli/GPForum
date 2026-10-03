@@ -34,8 +34,11 @@ _install_forum_fakes($test);
 $test->get_ok(q{/});
 $test->status_is($HTTP_OK);
 $test->element_exists('nav[aria-label="Primary"] a[href="/categories"]');
-$test->element_exists('nav[aria-label="Primary"] a[href="/new-thread"]');
 $test->element_exists('nav[aria-label="Primary"] a[href="/search"]');
+
+# Starting a thread is an action of the page, not a place in the navigation.
+$test->element_exists_not('nav[aria-label="Primary"] a[href="/new-thread"]');
+$test->element_exists('nav[aria-label="Forum actions"] a[href="/new-thread"]');
 $test->element_exists('nav[aria-label="Identity"] a[href="/register"]');
 $test->element_exists('nav[aria-label="Identity"] a[href="/login"]');
 

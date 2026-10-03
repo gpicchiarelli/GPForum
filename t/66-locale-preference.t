@@ -31,7 +31,9 @@ subtest 'guest locale selector persists in a cookie' => sub {
     $test->text_is( 'h1' => 'Login' );
     $test->element_exists('form.locale-form[action="/locale"]');
     $test->element_exists_not('form.locale-form input[name="command_id"]');
-    $test->element_exists('select[name="locale"] option[value="it"]');
+    $test->element_exists('button[name="locale"][value="it"][lang="it"]');
+    $test->element_exists(
+        'button[name="locale"][value="en"][aria-pressed="true"]');
 
     my $csrf_token = _csrf_token($test);
     $test->post_ok(
@@ -50,7 +52,10 @@ subtest 'guest locale selector persists in a cookie' => sub {
     $test->header_is( 'Content-Language' => 'it' );
     $test->text_is( 'h1'                              => 'Accesso' );
     $test->text_is( 'p.flash--success[role="status"]' => 'Lingua aggiornata' );
-    $test->element_exists('select[name="locale"] option[value="it"][selected]');
+    $test->element_exists(
+        'button[name="locale"][value="it"][aria-pressed="true"]');
+    $test->element_exists(
+        'button[name="locale"][value="en"][aria-pressed="false"]');
 };
 
 subtest 'unsupported locale inputs fall back safely' => sub {

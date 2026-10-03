@@ -84,6 +84,12 @@
     </form>
   </section>
 
+  <section class="settings-group" aria-labelledby="settings-data-heading">
+    <h2 id="settings-data-heading"><%= t('nav.your_data') %></h2>
+    <p><%= t('settings.your_data_description') %></p>
+    <p><a href="<%= url_for('privacy_dashboard') %>"><%= t('settings.your_data_open') %></a></p>
+  </section>
+
   <section class="settings-group" aria-labelledby="<%= $ui->{email_heading_id} %>">
     <h2 id="<%= $ui->{email_heading_id} %>"><%= t('settings.email') %></h2>
     <form method="post" action="<%= url_for('settings_email_update') %>">

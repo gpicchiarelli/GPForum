@@ -73,11 +73,23 @@ logical (`inline`, `block`), and a size comes from the scale.
 - **Weights.** `--weight-regular` to `--weight-bold`. Hierarchy comes from
   size and colour before weight: body text is regular, metadata is
   `--color-subtle`.
-- **Code.** Monospace at 0.875em, without ligatures, so every character shows
-  as typed. A fenced block scrolls sideways rather than wrapping.
-- **Column.** A page is one column of `--content-max` (44rem), which keeps a
-  post near 70 characters a line. A console asks for the wide column with
-  `% layout 'default', shell => 'wide';`.
+- **Tones.** Text has two: `--color-foreground` and the quieter
+  `--color-subtle`. `--color-muted` stays a registry token and sets no text
+  (`t/188-theme-contrast.t`): used beside `subtle` it could not be told from
+  it.
+- **Code.** Monospace at 0.875em and never below `--font-size-xs`, without
+  ligatures, so every character shows as typed. A fenced block scrolls
+  sideways rather than wrapping.
+- **Column.** A page is one column of `--content-max` (40rem). Beside its
+  avatar a post's text is 592px wide, which at 17px measured 71 to 75
+  characters a line in the system face on macOS; at 44rem it had measured 80.
+  Text set outside a post (`.prose`) is held to `--measure-readable`. A
+  console asks for the wide column with `% layout 'default', shell => 'wide';`.
+- **Navigation.** The header holds places, not actions: starting a thread is
+  a button on the pages that list threads. The link to the page being read
+  carries `aria-current` and the header's one stroke of the accent.
+- **Choices among a few.** Language and theme in the footer are `.segmented`
+  groups of buttons, one press each, the one in use marked `aria-pressed`.
 - **Lists.** Rows between hairlines (`.ui-card-list`), not boxes. A row with
   one destination is one target (`.ui-row`, `.ui-row__title`).
 - **Sheets.** An action that needs a field or a second thought opens over the

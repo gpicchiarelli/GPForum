@@ -29,9 +29,10 @@ subtest 'guest theme selector persists in a cookie' => sub {
     $test->status_is($HTTP_OK);
     $test->element_exists('form.theme-form[action="/theme"]');
     $test->element_exists_not('form.theme-form input[name="command_id"]');
-    $test->element_exists('select[name="theme"] option[value="dark"]');
     $test->element_exists(
-        'select[name="theme"] option[value="auto"][selected]');
+        'button[name="theme"][value="dark"][aria-pressed="false"]');
+    $test->element_exists(
+        'button[name="theme"][value="auto"][aria-pressed="true"]');
 
     my $csrf_token = _csrf_token($test);
     $test->post_ok(
@@ -50,7 +51,7 @@ subtest 'guest theme selector persists in a cookie' => sub {
     $test->element_exists('html[data-theme="dark"][data-color-scheme="dark"]');
     $test->text_is( 'p.flash--success[role="status"]' => 'Theme updated' );
     $test->element_exists(
-        'select[name="theme"] option[value="dark"][selected]');
+        'button[name="theme"][value="dark"][aria-pressed="true"]');
 };
 
 subtest 'unsupported theme inputs fall back safely' => sub {
@@ -73,7 +74,7 @@ subtest 'unsupported theme inputs fall back safely' => sub {
     $test->element_exists(
         'html[data-theme="auto"][data-color-scheme="light dark"]');
     $test->element_exists(
-        'select[name="theme"] option[value="auto"][selected]');
+        'button[name="theme"][value="auto"][aria-pressed="true"]');
 };
 
 subtest 'authenticated theme persists on profile and survives logout' => sub {

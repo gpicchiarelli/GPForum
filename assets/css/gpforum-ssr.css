@@ -66,7 +66,7 @@
   --font-size-md: 1rem;
   --font-size-body: 1.0625rem;
   --font-size-lg: 1.25rem;
-  --font-size-xl: clamp(1.75rem, 1.35rem + 1.8vw, 2.375rem);
+  --font-size-xl: clamp(1.625rem, 1.3rem + 1.4vw, 2rem);
 
   --weight-regular: 400;
   --weight-medium: 500;
@@ -99,10 +99,11 @@
   --shadow-soft: 0 16px 42px rgb(17 20 18 / 0.11);
   --shadow-sheet: 0 28px 64px rgb(17 20 18 / 0.2), 0 2px 8px rgb(17 20 18 / 0.08);
 
-  /* A page is one column, set for reading. Consoles ask for the wide one. */
-  --content-max: 44rem;
+  /* A page is one column, set for reading: beside its avatar a post's text
+     runs about seventy characters a line. Consoles ask for the wide one. */
+  --content-max: 40rem;
   --content-wide: 68rem;
-  --measure-readable: 68ch;
+  --measure-readable: 34em;
   --gutter: clamp(1rem, 4vw, 1.5rem);
   --control-height: 2.5rem;
   --avatar-size: 2.25rem;
@@ -398,19 +399,30 @@ mark {
   font-size: var(--font-size-sm);
 }
 
-/* Text a member wrote: set to be read, at the reading size and measure. */
-.forum-post-body {
-  max-inline-size: var(--measure-readable);
+/* Text set to be read at length, a member's post or the forum's own terms,
+   at the reading size. The column gives a post its measure; anywhere wider,
+   the measure is stated. */
+.forum-post-body,
+.prose {
   font-size: var(--font-size-body);
   line-height: var(--line-height-reading);
   overflow-wrap: break-word;
 }
 
-.forum-post-body > * {
+.prose {
+  max-inline-size: var(--measure-readable);
+}
+
+/* In a post the column is the measure, for text and code alike. */
+.forum-post-body p {
+  max-inline-size: none;
+}
+
+:is(.forum-post-body, .prose) > * {
   margin-block: 0;
 }
 
-.forum-post-body > * + * {
+:is(.forum-post-body, .prose) > * + * {
   margin-block-start: 1em;
 }
 
@@ -418,7 +430,7 @@ mark {
   margin-inline: 0;
   border-inline-start: 3px solid var(--color-border);
   padding-inline-start: var(--space-4);
-  color: var(--color-muted);
+  color: var(--color-subtle);
 }
 
 .forum-post-body blockquote > * + * {
@@ -433,7 +445,7 @@ pre,
 kbd,
 samp {
   font-family: var(--font-mono);
-  font-size: 0.875em;
+  font-size: max(0.875em, var(--font-size-xs));
   font-variant-ligatures: none;
 }
 
@@ -531,7 +543,7 @@ pre code {
 .identity-nav a,
 .identity-form a,
 .identity-form button {
-  color: var(--color-muted);
+  color: var(--color-subtle);
   font-size: var(--font-size-sm);
   font-weight: var(--weight-medium);
   text-decoration: none;
@@ -544,6 +556,17 @@ pre code {
 .identity-form a:hover,
 .identity-form button:hover {
   color: var(--color-foreground);
+}
+
+/* The page being read is marked in the navigation: in ink, over the one
+   stroke of the accent the header has. */
+.site-nav a[aria-current],
+.identity-form a[aria-current] {
+  color: var(--color-foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.5em;
 }
 
 /* Signing out is a form, because it changes state; it reads as its
@@ -704,24 +727,38 @@ main.page-shell > section > section + section {
   margin: 0;
 }
 
-.locale-form label,
-.theme-form label {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
-  color: inherit;
-  font-size: inherit;
-  font-weight: var(--weight-regular);
+/* A choice among a few, each a button, the one in use raised: language and
+   theme take one press, not a menu and a second button. */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  padding: 2px;
 }
 
-.locale-form select,
-.theme-form select {
-  inline-size: auto;
-  min-block-size: 2rem;
-  padding-block: 0.25rem;
+.segmented button {
+  min-block-size: 1.75rem;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: none;
+  color: var(--color-subtle);
+  padding-inline: var(--space-3);
   font-size: var(--font-size-xs);
+  font-weight: var(--weight-medium);
 }
 
+.segmented button:hover {
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
+}
+
+.segmented button[aria-pressed="true"] {
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
 
 /* 5. Controls -------------------------------------------------------------- */
 
@@ -1137,7 +1174,7 @@ details[open] > summary {
   border: 1px solid var(--color-hairline);
   border-radius: var(--radius-pill);
   background: var(--color-surface-alt);
-  color: var(--color-muted);
+  color: var(--color-subtle);
   padding-inline: 0.6rem;
   font-size: var(--font-size-xs);
   font-weight: var(--weight-semibold);
@@ -1226,10 +1263,6 @@ details[open] > summary {
   color: var(--color-primary);
 }
 
-.ui-card-list p {
-  color: var(--color-muted);
-}
-
 /* A row with one destination is one target: its title's link covers it.
    Whatever else it holds, a profile link or a button, stays above. */
 .ui-row {
@@ -1307,7 +1340,6 @@ ul[aria-label]:not(.ui-card-list) {
 }
 
 .ui-empty-state h2 {
-  color: var(--color-muted);
   font-size: var(--font-size-body);
   font-weight: var(--weight-medium);
   letter-spacing: 0;
@@ -1411,6 +1443,13 @@ nav[aria-label$="pagination" i] a:hover,
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-2);
   align-items: center;
+  margin-inline-start: calc(-1 * var(--space-3));
+}
+
+/* A quiet action's label, not its padding, stands on the column's edge, on
+   whichever line it falls; what has an outline of its own is set back in. */
+.toolbar > :is(.button--secondary, .ui-meta):first-child {
+  margin-inline-start: var(--space-3);
 }
 
 /* A form or a group in the bar adds its controls to the line, not a box. */
@@ -1621,10 +1660,6 @@ button[popovertarget] {
   margin-inline-end: calc(-1 * var(--space-2));
   padding: 0;
   font-size: var(--font-size-lg);
-}
-
-.sheet__consequence {
-  color: var(--color-muted);
 }
 
 @supports selector(:popover-open) {

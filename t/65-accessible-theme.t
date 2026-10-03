@@ -177,7 +177,7 @@ $test->element_exists('footer.site-footer');
 $test->text_is( 'h1' => 'Accesso' );
 $test->content_like(qr/Nome [ ] utente [ ] o [ ] email/msx);
 $test->element_exists('form.theme-form[action="/theme"]');
-$test->element_exists('select[name="theme"] option[value="high_contrast"]');
+$test->element_exists('button[name="theme"][value="high_contrast"]');
 
 $test->get_ok( '/login' => { Cookie => 'gpforum_theme=dark' } );
 $test->status_is($HTTP_OK);
