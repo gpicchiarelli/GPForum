@@ -35,11 +35,14 @@ use GPForum::Test::ScriptedId;
 use GPForum::Worker::Handler::NotificationDispatch;
 
 our $VERSION = '0.001';
-our $TODO;
 
 const my $NOW     => '2026-05-23T12:00:00Z';
 const my $LATER   => '2026-05-23T13:00:00Z';
 const my $EARLIER => '2026-05-23T11:00:00Z';
+
+# Inside notifications_2026_10, one of the monthly partitions migration 038
+# creates; the times above fall in notifications_default.
+const my $IN_OCTOBER => '2026-10-15T12:00:00Z';
 
 const my $LIST_LIMIT          => 10;
 const my $LISTED              => 3;
@@ -894,51 +897,64 @@ sub _raced_delivery {
     return;
 }
 
-# The notification row is there and its inbox row is not. The dispatcher
-# accepts a conflict on the notification itself by its constraint's name,
-# notifications_pkey; PostgreSQL names the partition's index instead
-# (notifications_default_pkey, notifications_2026_10_pkey), so the conflict
-# is rethrown and the delivery dies where it should complete. The fake ORM
-# raised the name the dispatcher looks for.
+# The notification row is there and its inbox row is not: the delivery
+# completes, writing the inbox row. The dispatcher accepts a conflict on the
+# notification itself by its constraint, notifications_pkey; PostgreSQL
+# names the index of the partition the row is stored in instead
+# (notifications_default_pkey, notifications_2026_10_pkey), and matched on
+# that name alone the conflict was rethrown and the delivery died where it
+# should complete. The fake ORM raised the name the dispatcher looked for.
 sub _leftover_notification {
     my ($ctx) = @_;
+
+    _leftover_in( $ctx, $NOW,        'the default partition' );
+    _leftover_in( $ctx, $IN_OCTOBER, 'a monthly partition' );
+
+    return;
+}
+
+sub _leftover_in {
+    my ( $ctx, $time, $partition ) = @_;
 
     my $member = $ctx->{users}{orphan};
     my $id     = $ctx->{ids}->uuid;
     my $post   = _post( $ctx, $ctx->{thread_id} );
-    $ctx->{dbh}->do( $NOTIFICATION_SQL, undef, $id, $member, $post, $NOW );
+    my $inbox  = _value( $ctx, $INBOX_ROWS_SQL, $member );
+    $ctx->{dbh}->do( $NOTIFICATION_SQL, undef, $id, $member, $post, $time );
     my $orphan = eval {
-        return $ctx->{dispatcher}->create_notification(
-            {
-                notification_id   => $id,
-                notification_type => 'reply',
-                payload           => { thread_id => $ctx->{thread_id} },
-                recipient_user_id => $member,
-                source_id         => $post,
-                source_type       => 'post',
+        return _at(
+            $ctx, $time,
+            sub {
+                return $ctx->{dispatcher}->create_notification(
+                    {
+                        notification_id   => $id,
+                        notification_type => 'reply',
+                        payload           => { thread_id => $ctx->{thread_id} },
+                        recipient_user_id => $member,
+                        source_id         => $post,
+                        source_type       => 'post',
+                    }
+                );
             }
         );
     };
     my $error = $EVAL_ERROR;
 
-  TODO: {
-        local $TODO = 'Dispatcher matches notifications_pkey, PostgreSQL'
-          . ' reports the partition index (notifications_default_pkey)';
-        ok( $orphan && $orphan->{ok},
-            'leftover notification race completes delivery' )
-          or note $error;
-        ok(
-            $orphan && !$orphan->{duplicate},
-            'leftover notification race does not treat a missing inbox as'
-              . ' duplicate'
-        );
-        is( $orphan && $orphan->{notification}{notification_id},
-            $id, 'leftover notification race keeps this notification' );
-        is( _value( $ctx, $INBOX_ROWS_SQL, $member ),
-            1, 'leftover notification race inserts the missing inbox' );
-    }
+    ok( $orphan && $orphan->{ok},
+        "a leftover notification in $partition completes its delivery" )
+      or note $error;
+    ok(
+        $orphan && !$orphan->{duplicate},
+        "a leftover notification in $partition is not taken for a duplicate"
+          . ' delivery'
+    );
+    is( $orphan && $orphan->{notification}{notification_id},
+        $id, "a leftover notification in $partition keeps its id" );
+    is( _value( $ctx, $INBOX_ROWS_SQL, $member ),
+        $inbox + 1,
+        "a leftover notification in $partition gets its missing inbox row" );
     is( _value( $ctx, $NOTIFICATION_ID_ROWS_SQL, $id ),
-        1, 'leftover notification race does not insert a second notification' );
+        1, "a leftover notification in $partition is not inserted again" );
 
     return;
 }

@@ -119,10 +119,7 @@ sub _insert_event ( $self, $event ) {
 }
 
 sub _event_after_conflict ( $self, $event, $error ) {
-    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    }
-    if ( index( $error, $EVENT_ID_CONSTRAINT ) < 0 ) {
+    if ( !$self->_log_id_conflict( $error, $EVENT_ID_CONSTRAINT ) ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
@@ -377,14 +374,21 @@ sub _insert_audit ( $self, $input ) {
 }
 
 sub _audit_after_conflict ( $self, $input, $error ) {
-    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    }
-    if ( index( $error, $AUDIT_ID_CONSTRAINT ) < 0 ) {
+    if ( !$self->_log_id_conflict( $error, $AUDIT_ID_CONSTRAINT ) ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return $self->_retry_audit_id($input);
+}
+
+# event_log and audit_log are partitioned by created_at, and PostgreSQL names
+# the partition's index in the conflict (event_log_default_pkey,
+# audit_log_2026_10_pkey), never the table's constraint: matched on that name
+# alone, every collision on PostgreSQL was rethrown -- a raced event was not
+# reused and a colliding audit id was not minted again.
+sub _log_id_conflict ( $self, $error, $constraint ) {
+    return GPForum::Infrastructure::UniqueConflict->is_conflict_on(
+        $self->schema, $error, $constraint );
 }
 
 sub _retry_audit_id ( $self, $input ) {

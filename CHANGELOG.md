@@ -790,6 +790,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- A raced notification, event or audit id is reused or minted again on
+  PostgreSQL. Those tables are partitioned, and PostgreSQL names the
+  partition's index in a unique violation (`notifications_default_pkey`), not
+  the table's constraint, so every collision was rethrown as a 500.
+  `UniqueConflict->is_conflict_on` reads the partitions' indexes from
+  `pg_inherits`, matches whole identifiers, and looks only at the server's own
+  sentence, not the row data DBI appends.
+
 - **The evidence commands exit 1, not 2 or 255, when their check raises an
   error**, with a redacted reason and a JSON `status: fail` document;
   `partition-maintenance` against an unreachable database says why;

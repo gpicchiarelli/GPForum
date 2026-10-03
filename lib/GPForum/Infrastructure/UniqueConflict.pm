@@ -13,7 +13,26 @@ use Mojo::Base -base, -signatures;
 
 our $VERSION = '0.001';
 
-const my $PG_UNIQUE => '23505';
+const my $PG_UNIQUE     => '23505';
+const my $SQL_DBMS_NAME => 17;
+
+# The indexes a conflict on a unique constraint can be reported under: its
+# own and, when its table is partitioned, the index each partition attached
+# to it (pg_inherits, recursively, for partitions of partitions). A row is
+# stored in a partition, and PostgreSQL names the partition's index in the
+# conflict -- notifications_default_pkey, notifications_2026_10_pkey -- not
+# the parent's notifications_pkey. Partitions are added every month while the
+# application runs, so the family is read when a conflict asks for it rather
+# than remembered.
+const my $INDEX_FAMILY_SQL => join q{ },
+  'WITH RECURSIVE family (index_oid, index_name) AS (',
+  'SELECT root.oid, root.relname::text FROM pg_class AS root',
+  q{WHERE root.oid = to_regclass(?) AND root.relkind IN ('i', 'I')},
+  'UNION ALL',
+  'SELECT child.oid, child.relname::text FROM family',
+  'JOIN pg_inherits AS link ON link.inhparent = family.index_oid',
+  'JOIN pg_class AS child ON child.oid = link.inhrelid',
+  ') SELECT index_name FROM family';
 
 sub is_conflict ( $, $error ) {
     if ( !_has_text($error) ) {
@@ -21,6 +40,29 @@ sub is_conflict ( $, $error ) {
     }
 
     return _matches_unique($error);
+}
+
+# A unique violation of this constraint and no other. Stores accept a
+# conflict on the row they were writing and rethrow one on any other key, so
+# the name has to be matched; on a partitioned table PostgreSQL reports the
+# name of the partition's index, which is matched through the catalog. A test
+# double has no catalog, and its fake ORM raises the constraint's own name.
+sub is_conflict_on ( $class, $schema, $error, $constraint ) {
+    if ( !$class->is_conflict($error) || !_has_text($constraint) ) {
+        return 0;
+    }
+
+    my $message = _server_message($error);
+    if ( _names_index( $message, $constraint ) ) {
+        return 1;
+    }
+    for my $partition ( _partition_indexes( $schema, $constraint ) ) {
+        if ( _names_index( $message, $partition ) ) {
+            return 1;
+        }
+    }
+
+    return 0;
 }
 
 sub throw ( $, $constraint ) {
@@ -87,16 +129,61 @@ sub _quietly ( $storage, $method, $savepoint ) {
 sub _savepoint_storage ($schema) {
     my $undefined;
 
-    if ( !$schema || !$schema->can('storage') ) {
-        return $undefined;
-    }
-
-    my $storage = eval { return $schema->storage };
+    my $storage = _schema_storage($schema);
     if ( !$storage || !_storage_supports_savepoint($storage) ) {
         return $undefined;
     }
 
     return $storage;
+}
+
+sub _schema_storage ($schema) {
+    my $undefined;
+
+    if ( !$schema || !$schema->can('storage') ) {
+        return $undefined;
+    }
+
+    return eval { return $schema->storage };
+}
+
+# The partitions' index names, read from the catalog the conflict came from.
+# A schema without a PostgreSQL handle has none to give, and neither has a
+# lookup that failed: the conflict is then matched on the constraint's own
+# name alone and anything else is rethrown, which is where the callers stood
+# before partitions were asked about.
+sub _partition_indexes ( $schema, $constraint ) {
+    my $dbh = _catalog_dbh($schema);
+    if ( !$dbh ) {
+        return ();
+    }
+
+    my $names = eval {
+        return $dbh->selectcol_arrayref( $INDEX_FAMILY_SQL, undef,
+            $constraint );
+    };
+    if ( ref $names ne 'ARRAY' ) {
+        return ();
+    }
+
+    return grep { $_ ne $constraint } @{$names};
+}
+
+sub _catalog_dbh ($schema) {
+    my $undefined;
+
+    my $storage = _schema_storage($schema);
+    if ( !$storage || !$storage->can('dbh') ) {
+        return $undefined;
+    }
+
+    my $dbh  = eval { return $storage->dbh };
+    my $dbms = eval { return $dbh->get_info($SQL_DBMS_NAME) } // q{};
+    if ( $dbms ne 'PostgreSQL' ) {
+        return $undefined;
+    }
+
+    return $dbh;
 }
 
 sub _storage_supports_savepoint ($storage) {
@@ -135,6 +222,27 @@ sub _matches_unique ($error) {
     }
 
     return 0;
+}
+
+# The server's own sentence: the error's first line, without the statement
+# and parameter values DBI appends to it when no DETAIL line follows. The
+# DETAIL line and those values carry the row's data, where a member's text
+# could spell any constraint's name.
+sub _server_message ($error) {
+    my ($message) = split m/\n/msx, "$error";
+    $message //= q{};
+    $message =~ s/[ ] [[]for [ ] Statement [ ] .*//msx;
+
+    return $message;
+}
+
+# A whole identifier, however the message quotes it: posts_pkey is not a
+# conflict on thread_posts_pkey, nor notifications_pkey one on
+# notifications_pkey_old.
+sub _names_index ( $message, $name ) {
+    return $message =~ m/(?<![[:word:]\$]) \Q$name\E (?![[:word:]\$])/msx
+      ? 1
+      : 0;
 }
 
 sub _message ($constraint) {
@@ -183,6 +291,11 @@ Recognizes PostgreSQL C<23505> unique violations and the equivalent fake-store
 messages used in tests. Stores catch the conflict and reload the winning row
 instead of returning a 500.
 
+C<is_conflict_on> narrows that to one constraint. On a partitioned table
+PostgreSQL names the partition's index in the conflict, not the table's
+constraint, so the partitions' index names are read from the catalog
+(C<pg_inherits>) when the error does not name the constraint itself.
+
 C<attempt> wraps an insert attempt in a PostgreSQL savepoint when the schema is
 inside an open transaction, so a unique violation does not abort the outer
 C<txn_do>. Fake schemas without a live DBI handle keep the plain C<eval>
@@ -193,6 +306,16 @@ behavior.
 =head2 is_conflict
 
 True when the error text is a unique constraint violation.
+
+=head2 is_conflict_on
+
+Takes the schema, the error and a constraint name. True when the error is a
+unique violation of that constraint: named in the server's message (not in
+its DETAIL, the statement or its parameter values) as the constraint itself
+or, on PostgreSQL, as the index of one of its table's partitions. Call it
+after C<attempt>, whose savepoint leaves the transaction able to run the
+catalog lookup; a lookup that fails, or a schema with no PostgreSQL handle,
+leaves only the constraint's own name to match.
 
 =head2 attempt
 
@@ -227,6 +350,8 @@ None known.
 
 Detection is string-based so non-PostgreSQL drivers must raise a matching
 error text. Savepoints are used only when C<AutoCommit> is false.
+C<is_conflict_on> costs one catalog query when the error names an index other
+than the constraint itself.
 
 =head1 AUTHOR
 

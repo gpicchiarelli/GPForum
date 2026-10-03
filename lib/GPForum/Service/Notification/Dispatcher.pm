@@ -236,22 +236,21 @@ sub _create_notification_row ( $self, $ctx ) {
 }
 
 sub _notification_after_conflict ( $self, $ctx, $error ) {
-    if ( !GPForum::Infrastructure::UniqueConflict->is_conflict($error) ) {
-        GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    }
-    if ( !_notification_id_conflict($error) ) {
+    if ( !$self->_notification_id_conflict($error) ) {
         GPForum::Infrastructure::UniqueConflict->rethrow($error);
     }
 
     return $ctx;
 }
 
-sub _notification_id_conflict ($error) {
-    if ( !defined $error || !length $error ) {
-        return 0;
-    }
-
-    return index( $error, $NOTIFICATION_ID_CONSTRAINT ) >= 0 ? 1 : 0;
+# notifications is partitioned by created_at, and PostgreSQL names the
+# partition's index in the conflict (notifications_default_pkey,
+# notifications_2026_10_pkey), never notifications_pkey itself: matched on
+# that name alone, a leftover notification row was rethrown on PostgreSQL and
+# its delivery died where it should complete.
+sub _notification_id_conflict ( $self, $error ) {
+    return GPForum::Infrastructure::UniqueConflict->is_conflict_on(
+        $self->schema, $error, $NOTIFICATION_ID_CONSTRAINT );
 }
 
 sub _create_inbox ( $self, $ctx ) {
@@ -1023,7 +1022,8 @@ runs.
 C<create_notification> croaks with the database error when an insert fails
 for any reason other than a unique conflict, or when a conflict on the
 inbox leaves no row to reuse; a conflict on the C<notifications> row
-itself (C<notifications_pkey>) is accepted, the row being already there.
+itself (C<notifications_pkey>, or the index of the partition PostgreSQL
+stored the row in) is accepted, the row being already there.
 C<mark_read> and C<mark_all_read> croak likewise when a C<notification_reads>
 insert fails and no stored read can be reused. Nothing after the write is
 raised: a badge whose count or NOTIFY failed is counted in
