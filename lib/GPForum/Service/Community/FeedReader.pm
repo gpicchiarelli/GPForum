@@ -9,6 +9,7 @@ use v5.40;
 
 use GPForum::Infrastructure::Keyset;
 use GPForum::Service::Forum::PageWindow;
+use GPForum::Service::Forum::SourceThread;
 
 our $VERSION = '0.001';
 
@@ -66,6 +67,9 @@ sub feed_resultset ( $self, $user_id, $options ) {
                   visibility_version permission_version
                 )
             ],
+            GPForum::Service::Forum::SourceThread->attributes(
+                $self->readability, 'me.item_type', 'me.item_id'
+            ),
             order_by => [ { -desc => 'created_at' }, { -desc => 'item_id' } ],
             rows     => $options->{limit} || $DEFAULT_LIMIT,
         }
@@ -152,7 +156,11 @@ C<< { sort_value, id } >>, or undef), C<limit> (default 25) and C<viewer>.
 Returns the unexecuted C<UserFeedItem> resultset a page runs, selecting
 C<user_id>, C<item_type>, C<item_id>, C<created_at>, C<rank_score>,
 C<visibility_version> and C<permission_version>. Public so the query-plan
-evidence EXPLAINs what actually runs.
+evidence EXPLAINs what actually runs. When C<readability> is set, each row
+also carries the thread it is about, C<source_thread_id> and
+C<source_thread_title> (L<GPForum::Service::Forum::SourceThread>); without
+it neither is selected, since the list is then not cut to what the reader
+may read.
 
 =head1 DIAGNOSTICS
 

@@ -9,6 +9,7 @@ use v5.40;
 
 use GPForum::Infrastructure::Keyset;
 use GPForum::Service::Forum::PageWindow;
+use GPForum::Service::Forum::SourceThread;
 
 our $VERSION = '0.001';
 
@@ -69,7 +70,10 @@ sub mentions_resultset ( $self, $user_id, $options ) {
             join      => 'actor',
             '+select' => [ 'actor.username', 'actor.display_name' ],
             '+as'     => [qw(actor_username actor_display_name)],
-            order_by  =>
+            GPForum::Service::Forum::SourceThread->attributes(
+                $self->readability, 'me.source_type', 'me.source_id'
+            ),
+            order_by =>
               [ { -desc => 'me.created_at' }, { -desc => 'me.mention_id' } ],
             rows => $options->{limit} || $DEFAULT_LIMIT,
         }
@@ -157,6 +161,9 @@ Takes the user id and a hash reference with C<after> (an already decoded
 C<< { sort_value, id } >>, or undef), C<limit> (default 25) and C<viewer>.
 Returns the unexecuted C<Mention> resultset a page runs, joined to the
 actor. Public so tests and the query-plan evidence see the SQL that runs.
+When C<readability> is set, each row also carries the thread it is about,
+C<source_thread_id> and C<source_thread_title>
+(L<GPForum::Service::Forum::SourceThread>).
 
 =head1 DIAGNOSTICS
 

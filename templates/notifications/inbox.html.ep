@@ -4,13 +4,15 @@
 <section aria-labelledby="notifications-heading">
   <%= include 'components/page_header', heading_id => 'notifications-heading', component_title => t('nav.notifications') %>
   % my $unread = $unread_count || 0;
-  <p><%= $unread > 99 ? t('notifications.unread_many') : tc('notifications.unread_count', $unread) %></p>
-  % if ($unread_count) {
-    <form method="post" action="<%= url_for('notifications_read_all') %>">
-      <%= csrf_field %>
-      <button type="submit"><%= t('notifications.mark_all_read') %></button>
-    </form>
-  % }
+  <div class="toolbar">
+    <p class="ui-meta"><span class="ui-count"><%= $unread > 99 ? t('notifications.unread_many') : tc('notifications.unread_count', $unread) %></span></p>
+    % if ($unread_count) {
+      <form method="post" action="<%= url_for('notifications_read_all') %>">
+        <%= csrf_field %>
+        <button type="submit" class="button--secondary button--small"><%= t('notifications.mark_all_read') %></button>
+      </form>
+    % }
+  </div>
   % if (@{$notifications}) {
     <ol class="ui-card-list" aria-label="<%= t('notifications.inbox_label') %>">
       % for my $notification (@{$notifications}) {
@@ -23,13 +25,13 @@
             % $notification_href .= '#post-' . $payload->{post_id};
           % }
         % }
-        <li>
+        <li class="ui-card-list__item">
           <%= include 'components/notification_surface',
             heading_id => 'notification-' . $notification->{notification_id} . '-heading',
             component_title => $presentation->{title} || t('notifications.title.notification'),
+            thread_title => $notification->{thread_title},
             summary => $presentation->{summary} || q{},
             href => $notification_href,
-            action_label => $presentation->{action_label} || t('notifications.open_discussion'),
             created_at => $notification->{created_at},
             read => $notification->{read_at} ? 1 : 0,
             read_action => url_for('notification_read', notification_id => $notification->{notification_id})->to_string %>

@@ -1109,10 +1109,39 @@ legend {
   z-index: 1;
 }
 
-.ui-card,
-.ui-notification-surface {
+.ui-card {
   display: grid;
   gap: var(--space-3);
+}
+
+/* A notification already read steps back; one still unread keeps the list's
+   weight and is marked on its leading edge. */
+.ui-notification-surface {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ui-notification-surface h2 {
+  font-weight: var(--weight-regular);
+}
+
+.ui-notification-surface--unread h2 {
+  font-weight: var(--weight-semibold);
+}
+
+.ui-notification-surface--unread h2::before {
+  display: inline-block;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  margin-inline-end: var(--space-2);
+  border-radius: 50%;
+  background: var(--color-accent);
+  content: "";
+  vertical-align: 0.1em;
+}
+
+.ui-notification-surface form {
+  margin-inline-start: calc(-1 * var(--space-3));
 }
 
 .ui-card {

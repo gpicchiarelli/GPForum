@@ -7,27 +7,33 @@
     <ol class="ui-card-list" aria-label="<%= t('mentions.list_label') %>">
       % for my $mention (@{$mentions}) {
         % my $presentation = $mention->{presentation} || {};
-        <li>
+        % my $is_thread = ($mention->{source_type} || q{}) eq 'thread';
+        % my $thread_id = $is_thread ? $mention->{source_id} : $mention->{thread_id};
+        <li class="ui-card-list__item ui-row">
           <article aria-labelledby="mention-<%= $mention->{mention_id} %>-heading">
-            <h2 id="mention-<%= $mention->{mention_id} %>-heading">
-              <%= $presentation->{by_label} || t('mentions.by') %>
-              % if ($mention->{actor_username}) {
-                <a href="<%= url_for('profile', username => $mention->{actor_username}) %>"><%= $mention->{actor_profile_label} || $mention->{actor_display_name} %></a>
+            <h2 class="ui-row__title" id="mention-<%= $mention->{mention_id} %>-heading">
+              % if ($thread_id) {
+                <a href="<%= url_for('thread', thread_id => $thread_id) %><%= $is_thread ? q{} : '#post-' . $mention->{source_id} %>"><%= $mention->{thread_title} // $presentation->{action_label} || t('mentions.open_discussion') %></a>
               % } else {
-                <%= $mention->{actor_id} %>
+                <%= t('mentions.source') %> <%= $mention->{source_type} %> <%= $mention->{source_id} %>
               % }
             </h2>
-            % if ($presentation->{summary}) {
+            % if (!defined $mention->{thread_title} && $presentation->{summary}) {
               <p><%= $presentation->{summary} %></p>
             % }
-            % if (($mention->{source_type} || q{}) eq 'thread') {
-              <p><a href="<%= url_for('thread', thread_id => $mention->{source_id}) %>"><%= $presentation->{action_label} || t('mentions.open_discussion') %></a></p>
-            % } else {
-              <p><%= t('mentions.source') %> <%= $mention->{source_type} %> <%= $mention->{source_id} %></p>
-            % }
-            <p>
-              <%= t('mentions.mentioned_at') %>
-              <time datetime="<%= $mention->{created_at} %>"><%= dt($mention->{created_at}) %></time>
+            <p class="ui-meta">
+              <span>
+                <%= $presentation->{by_label} || t('mentions.by') %>
+                % if ($mention->{actor_username}) {
+                  <a href="<%= url_for('profile', username => $mention->{actor_username}) %>"><%= $mention->{actor_display_name} || $mention->{actor_profile_label} %></a>
+                % } else {
+                  <%= $mention->{actor_id} %>
+                % }
+              </span>
+              <span>
+                <%= t('mentions.mentioned_at') %>
+                <%= include 'components/timestamp', at => $mention->{created_at} %>
+              </span>
             </p>
           </article>
         </li>

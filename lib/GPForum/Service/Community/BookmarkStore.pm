@@ -12,6 +12,7 @@ use GPForum::Infrastructure::Row;
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Forum::PageWindow;
+use GPForum::Service::Forum::SourceThread;
 use GPForum::Infrastructure::Id;
 
 our $VERSION = '0.001';
@@ -306,6 +307,9 @@ sub bookmarks_resultset ( $self, $user_id, $options ) {
     return $self->schema->resultset('Bookmark')->search_rs(
         $query,
         {
+            GPForum::Service::Forum::SourceThread->attributes(
+                $self->readability, 'me.target_type', 'me.target_id'
+            ),
             order_by =>
               [ { -desc => 'created_at' }, { -desc => 'bookmark_id' } ],
             rows => $options->{limit} || $DEFAULT_LIMIT,
@@ -445,7 +449,10 @@ C<after> (an already decoded C<< { sort_value, id } >>), C<limit> (default
 user id). Returns the unexecuted C<Bookmark> resultset of the member's
 active bookmarks, ordered by C<created_at> and then C<bookmark_id>,
 descending. Public so tests and the query-plan evidence see the SQL that
-runs.
+runs. When C<readability> is set, each row also carries the thread it is
+about, C<source_thread_id> and C<source_thread_title>
+(L<GPForum::Service::Forum::SourceThread>); without it neither is selected,
+since the list is then not cut to what the reader may read.
 
 =head1 DIAGNOSTICS
 

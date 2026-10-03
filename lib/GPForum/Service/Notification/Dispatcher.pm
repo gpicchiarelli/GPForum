@@ -15,6 +15,7 @@ use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Admin::Settings;
 use GPForum::Service::Clock;
 use GPForum::Service::Forum::PageWindow;
+use GPForum::Service::Forum::SourceThread;
 use GPForum::Service::Realtime::EventEnvelope;
 use GPForum::Infrastructure::Id;
 
@@ -751,7 +752,11 @@ sub inbox_resultset ( $self, $user_id, $options ) {
                 { -desc => 'me.notification_id' },
             ],
             prefetch => 'notification',
-            rows     => $options->{limit} || $DEFAULT_LIMIT,
+            GPForum::Service::Forum::SourceThread->attributes(
+                $self->readability, 'notification.source_type',
+                'notification.source_id'
+            ),
+            rows => $options->{limit} || $DEFAULT_LIMIT,
         }
     );
 }
@@ -1046,7 +1051,9 @@ Returns the unexecuted C<NotificationInbox> resultset of an inbox page:
 the member's notifications with a readable source, ordered by
 C<created_at> and then C<notification_id>, descending, with the
 notification prefetched. Public so the query-plan evidence EXPLAINs what
-runs.
+runs. When C<readability> is set, each row also carries the thread it is
+about, C<source_thread_id> and C<source_thread_title>
+(L<GPForum::Service::Forum::SourceThread>).
 
 =head1 DIAGNOSTICS
 

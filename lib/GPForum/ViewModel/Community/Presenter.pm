@@ -56,18 +56,22 @@ sub mentions_page ( $self, %input ) {
 
 sub bookmark ( $self, $row ) {
     return {
-        bookmark_id => $self->column( $row, 'bookmark_id' ),
-        created_at  => $self->column( $row, 'created_at' ),
-        note        => $self->column( $row, 'note' ),
-        target_id   => $self->column( $row, 'target_id' ),
-        target_type => $self->column( $row, 'target_type' ),
+        bookmark_id  => $self->column( $row, 'bookmark_id' ),
+        created_at   => $self->column( $row, 'created_at' ),
+        note         => $self->column( $row, 'note' ),
+        target_id    => $self->column( $row, 'target_id' ),
+        thread_id    => $self->loaded_column( $row, 'source_thread_id' ),
+        thread_title => $self->loaded_column( $row, 'source_thread_title' ),
+        target_type  => $self->column( $row, 'target_type' ),
     };
 }
 
 sub feed_item ( $self, $row ) {
     return {
-        created_at         => $self->column( $row, 'created_at' ),
-        item_id            => $self->column( $row, 'item_id' ),
+        created_at   => $self->column( $row, 'created_at' ),
+        item_id      => $self->column( $row, 'item_id' ),
+        thread_id    => $self->loaded_column( $row, 'source_thread_id' ),
+        thread_title => $self->loaded_column( $row, 'source_thread_title' ),
         item_type          => $self->column( $row, 'item_type' ),
         permission_version => $self->column( $row, 'permission_version' ),
         rank_score         => $self->column( $row, 'rank_score' ),

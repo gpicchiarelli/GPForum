@@ -6,18 +6,22 @@
   % if (@{$feed_items}) {
     <ol class="ui-card-list" aria-label="<%= t('community.personal_feed') %>">
       % for my $item (@{$feed_items}) {
-        <li>
+        % my $is_thread = ($item->{item_type} || q{}) eq 'thread';
+        % my $thread_id = $is_thread ? $item->{item_id} : $item->{thread_id};
+        <li class="ui-card-list__item ui-row">
           <article aria-labelledby="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
-            <h2 id="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
-              % if (($item->{item_type} || q{}) eq 'thread') {
-                <a href="<%= url_for('thread', thread_id => $item->{item_id}) %>"><%= t('forum.thread') %> <%= $item->{item_id} %></a>
+            <h2 class="ui-row__title" id="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
+              % if ($thread_id) {
+                <a href="<%= url_for('thread', thread_id => $thread_id) %><%= $is_thread ? q{} : '#post-' . $item->{item_id} %>"><%= $item->{thread_title} // t('forum.thread') . q{ } . $thread_id %></a>
               % } else {
                 <%= ucfirst($item->{item_type} || t('community.item')) %> <%= $item->{item_id} %>
               % }
             </h2>
-            <p>
-              <%= t('community.added') %>:
-              <%= include 'components/timestamp', at => $item->{created_at} %>
+            <p class="ui-meta">
+              <span>
+                <%= t('community.added') %>:
+                <%= include 'components/timestamp', at => $item->{created_at} %>
+              </span>
             </p>
           </article>
         </li>

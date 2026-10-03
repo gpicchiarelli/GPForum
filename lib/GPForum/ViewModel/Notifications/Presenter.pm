@@ -72,7 +72,8 @@ sub notification ( $self, $row, %input ) {
         recipient_user_id => $self->column( $row, 'recipient_user_id' ),
         source_id         => $self->column( $notification, 'source_id' ),
         source_type       => $self->column( $notification, 'source_type' ),
-        ui                => {
+        thread_title => $self->loaded_column( $row, 'source_thread_title' ),
+        ui           => {
                 heading_id => 'notification-'
               . $self->string( $self->column( $row, 'notification_id' ) )
               . '-heading',
@@ -98,7 +99,9 @@ sub mention ( $self, $row, %input ) {
         mentioned_username  => $self->column( $row, 'mentioned_username' ),
         source_id           => $self->column( $row, 'source_id' ),
         source_type         => $self->column( $row, 'source_type' ),
-        ui                  => {
+        thread_id    => $self->loaded_column( $row, 'source_thread_id' ),
+        thread_title => $self->loaded_column( $row, 'source_thread_title' ),
+        ui           => {
                 heading_id => 'mention-'
               . $self->string( $self->column( $row, 'mention_id' ) )
               . '-heading',
