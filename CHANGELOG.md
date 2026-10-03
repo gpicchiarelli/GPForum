@@ -1572,6 +1572,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- `GPForum::Base` lets a class declare the attributes it cannot work without:
+  `__PACKAGE__->requires(qw(schema))` makes `new` throw a
+  `GPForum::X::Argument` ("Store requires schema") when one is missing or
+  undef, across the inheritance chain, and `required_attributes` lists them
+  (ADR 0118). No class extends it yet.
+
 - Exceptions have classes: `GPForum::X` and its `Argument`, `Config`, `Usage`,
   `Conflict`, `Unavailable` and `Check` subclasses (ADR 0118). An exception
   stringifies to its message, so every reader of the old strings keeps
