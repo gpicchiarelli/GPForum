@@ -2,6 +2,7 @@
  *
  * One file, no build step, no web font, no script. In order:
  *
+ *    0. Faces         the typeface the forum ships
  *    1. Tokens        colour, type, space, shape
  *    2. Document      box model, body, focus
  *    3. Type          headings, links, metadata, prose and code
@@ -17,6 +18,72 @@
  * A direction is logical (inline, block), so a right-to-left locale gets it.
  * A size comes from the scale, so the page keeps one rhythm.
  */
+
+/* 0. Faces ----------------------------------------------------------------- */
+
+/* Inter, the face of the logo, shipped with the forum so that a page is set
+   in the same letters on every platform (it had been declared and not
+   shipped, then not declared: quality program 7.4). One variable file holds
+   every weight; a browser fetches the Latin one, and the extended one or the
+   italics only for a page that uses them. Each URL carries the digest of its
+   file, so it is kept for a year (t/233 holds the digests to the bytes).
+   Licence: inter-LICENSE.txt, beside the files. */
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/inter-latin-wght-normal.woff2?v=3100e775e861") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/inter-latin-ext-wght-normal.woff2?v=34b9c504cab7") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/inter-latin-wght-italic.woff2?v=7291b5970da2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6,
+    U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122,
+    U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: Inter;
+  font-style: italic;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/inter-latin-ext-wght-italic.woff2?v=71254244ccb1") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7,
+    U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F,
+    U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F,
+    U+A720-A7FF;
+}
+
+/* What stands in until Inter arrives: Arial, scaled to Inter's proportions,
+   so that the text does not move when the face is swapped in. */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial");
+  size-adjust: 107.4%;
+  ascent-override: 90.2%;
+  descent-override: 22.48%;
+  line-gap-override: 0%;
+}
 
 /* 1. Tokens ---------------------------------------------------------------- */
 
@@ -51,10 +118,11 @@
   --color-text-on-warning: #111412;
   --color-scrim: rgb(17 20 18 / 0.36);
 
-  /* The platform's own faces: GPForum ships no web font, so it names none
-     it does not ship (7.4). Native text renders crisply and costs no request. */
-  --font-ui-latin: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
-    "Helvetica Neue", Arial, sans-serif;
+  /* Text is set in Inter, which the forum ships; the platform's own face
+     follows for a reader whose browser takes no web fonts. Code is set in the
+     platform's monospace: none is shipped, so none is named. */
+  --font-ui-latin: Inter, "Inter Fallback", system-ui, -apple-system,
+    "Segoe UI", Roboto, "Noto Sans", "Helvetica Neue", Arial, sans-serif;
   --font-ui: var(--font-ui-latin);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --typography-font-ui: var(--font-ui);
@@ -78,9 +146,11 @@
   --line-height-body: 1.5;
   --line-height-reading: 1.65;
 
-  /* Large type is set tighter, as its optical size asks. */
-  --tracking-display: -0.022em;
-  --tracking-heading: -0.012em;
+  /* Inter is drawn for small sizes and asks to be set closer as it grows:
+     these follow its designer's table for 32px, 20px and 16 to 17px. */
+  --tracking-display: -0.021em;
+  --tracking-heading: -0.017em;
+  --tracking-text: -0.011em;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -101,7 +171,7 @@
 
   /* A page is one column, set for reading: beside its avatar a post's text
      runs about seventy characters a line. Consoles ask for the wide one. */
-  --content-max: 40rem;
+  --content-max: 38rem;
   --content-wide: 68rem;
   --measure-readable: 34em;
   --gutter: clamp(1rem, 4vw, 1.5rem);
@@ -233,6 +303,7 @@ body {
   font-kerning: normal;
   font-optical-sizing: auto;
   line-height: var(--line-height-body);
+  letter-spacing: var(--tracking-text);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
@@ -388,6 +459,12 @@ mark {
   text-decoration: underline;
 }
 
+/* The one link in a line of facts that leads somewhere in the page. */
+.ui-meta .ui-meta__jump {
+  color: var(--color-primary);
+  font-weight: var(--weight-medium);
+}
+
 .ui-page-description {
   color: var(--color-subtle);
   font-size: var(--font-size-body);
@@ -447,6 +524,7 @@ samp {
   font-family: var(--font-mono);
   font-size: max(0.875em, var(--font-size-xs));
   font-variant-ligatures: none;
+  letter-spacing: 0;
 }
 
 code {

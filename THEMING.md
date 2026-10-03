@@ -63,8 +63,16 @@ rows, and `--color-mark` for search highlights.
 first. Three rules hold throughout: a colour is a token, a direction is
 logical (`inline`, `block`), and a size comes from the scale.
 
-- **Faces.** The platform's own: `--font-ui` and `--font-mono` name system
-  fonts only, and no web font is shipped.
+- **Faces.** Text is set in Inter, shipped with the forum as four variable
+  `woff2` files in `assets/css/` (Latin and Latin Extended, upright and
+  italic, 277 KB in all; a page in Italian or English fetches the 48 KB
+  Latin file, preloaded). Its licence, the SIL Open Font License, is
+  `assets/css/inter-LICENSE.txt`. The stylesheet names each file with the
+  digest of its bytes (`t/233-asset-fingerprints.t`), so replacing a file
+  means writing its new digest in the `@font-face` rule. Until Inter arrives
+  the text stands in Arial scaled to Inter's proportions ("Inter Fallback"),
+  so it does not move. Code is set in the platform's monospace: none is
+  shipped, so none is named.
 - **Sizes.** Six, `--font-size-xs` to `--font-size-xl`, and no literal size
   beside them. Controls and metadata are `sm` (14px); interface text is `md`
   (16px); text read at length, a post's body, is `body` (17px) at
@@ -80,9 +88,9 @@ logical (`inline`, `block`), and a size comes from the scale.
 - **Code.** Monospace at 0.875em and never below `--font-size-xs`, without
   ligatures, so every character shows as typed. A fenced block scrolls
   sideways rather than wrapping.
-- **Column.** A page is one column of `--content-max` (40rem). Beside its
-  avatar a post's text is 592px wide, which at 17px measured 71 to 75
-  characters a line in the system face on macOS; at 44rem it had measured 80.
+- **Column.** A page is one column of `--content-max` (38rem). Beside its
+  avatar a post's text is 564px wide, which at 17px in Inter measured 67 to
+  71 characters a full line; at 44rem in the system face it had measured 80.
   Text set outside a post (`.prose`) is held to `--measure-readable`. A
   console asks for the wide column with `% layout 'default', shell => 'wide';`.
 - **Navigation.** The header holds places, not actions: starting a thread is

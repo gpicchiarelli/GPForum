@@ -1620,9 +1620,14 @@ now look inside the error section. Still English: validation field messages,
 which come from the services, and the plain-text answers of the identity
 endpoints (`Web::IdentityAccess`).
 
-**7.4 Ship the typeface or stop declaring it. — DONE: stopped declaring it.** `--font-ui-latin: Inter, …` with
+**7.4 Ship the typeface or stop declaring it. — DONE: shipped (2026-10-03; first closed by not declaring it).** `--font-ui-latin: Inter, …` with
 no `@font-face` rule and no `assets/fonts/` directory: the product renders in
 whatever fallback the visitor happens to have.
+
+Inter is now shipped (owner's decision, 2026-10-03): four variable `woff2`
+files and their licence in `assets/css/`, declared by `@font-face`, each URL
+carrying the digest of its file (`t/233`). The paragraph below records the
+first resolution, which held until then.
 
 The UI now names the platform's own face -- `system-ui, -apple-system,
 "Segoe UI", Roboto, "Noto Sans", ...` -- rather than shipping Inter: native

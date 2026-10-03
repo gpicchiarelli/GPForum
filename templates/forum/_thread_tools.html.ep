@@ -1,7 +1,8 @@
 %# What a reader can do with a thread, on one quiet line under its title:
-%# reply, go to what is unread, follow, bookmark. What is rarer or needs a
-%# field waits in the "Thread tools" sheet: marking as read, reporting and,
-%# for the author, the title, the category and deletion.
+%# reply, follow, bookmark. What is rarer or needs a field waits in the
+%# "Thread tools" sheet: marking as read, muting, reporting and, for the
+%# author, the title, the category and deletion. Going to what is unread is
+%# a place in the page, so it is a link in the line above, not an action.
 %#
 %# Takes "can_reply"; reads the page's "thread", "reading" and "engagement".
 % my $thread_id = $thread->{thread_id};
@@ -14,9 +15,6 @@
   % if ($can_reply) {
     <a class="button button--secondary button--small" href="#reply-body"><%= t('forum.reply') %></a>
   % }
-  % if ($reads && $reading->{first_unread_anchor}) {
-    <a href="#<%= $reading->{first_unread_anchor} %>"><%= t('community.jump_to_first_unread') %></a>
-  % }
   % if ($signed_in) {
     <section aria-labelledby="engagement-heading">
       <h2 class="visually-hidden" id="engagement-heading"><%= t('forum.thread_tools') %></h2>
@@ -26,13 +24,6 @@
           <input type="hidden" name="command_id" value="<%= $engagement->{unsubscribe_command_id} || q{} %>">
           <button type="submit" class="button--quiet"><%= t('community.unfollow_thread') %></button>
         </form>
-        % if (!$subscription->{muted}) {
-          <form method="post" action="<%= url_for('thread_subscription_mute', thread_id => $thread_id) %>">
-            <%= csrf_field %>
-            <input type="hidden" name="command_id" value="<%= $engagement->{mute_command_id} || q{} %>">
-            <button type="submit" class="button--quiet"><%= t('community.mute_notifications') %></button>
-          </form>
-        % }
       % } else {
         <form method="post" action="<%= url_for('thread_subscribe', thread_id => $thread_id) %>">
           <%= csrf_field %>
@@ -75,6 +66,16 @@
             <input type="hidden" name="command_id" value="<%= $reading->{read_command_id} || q{} %>">
             <input type="hidden" name="last_read_position" value="<%= $reading->{last_visible_position} // 0 %>">
             <button type="submit" class="button--secondary"><%= t('forum.mark_visible_posts_read') %></button>
+          </form>
+        </section>
+      % }
+      % if ($subscription->{subscribed} && !$subscription->{muted}) {
+        <section class="sheet__part" aria-labelledby="thread-mute-heading">
+          <h3 id="thread-mute-heading"><%= t('nav.notifications') %></h3>
+          <form method="post" action="<%= url_for('thread_subscription_mute', thread_id => $thread_id) %>">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $engagement->{mute_command_id} || q{} %>">
+            <button type="submit" class="button--secondary"><%= t('community.mute_notifications') %></button>
           </form>
         </section>
       % }

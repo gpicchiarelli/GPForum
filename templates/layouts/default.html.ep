@@ -10,6 +10,7 @@
     % }
     <title><%= title %></title>
     <link rel="icon" href="<%= ui_asset_url('gpforum-mark.svg') %>" type="image/svg+xml">
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="<%= ui_asset_url('inter-latin-wght-normal.woff2') %>">
     <link rel="stylesheet" href="<%= ui_asset_url('gpforum-ssr.css') %>">
     % my $page_metadata = stash('page_metadata') || {};
     % if ($page_metadata->{description}) {

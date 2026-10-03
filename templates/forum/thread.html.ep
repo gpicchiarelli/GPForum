@@ -14,12 +14,18 @@
     <%= include 'components/page_header',
       heading_id => 'thread-heading',
       component_title => $thread->{title} %>
-    % if ($thread->{author_username}) {
+    % my $unread = $reading && $reading->{authenticated} && $reading->{first_unread_anchor};
+    % if ($thread->{author_username} || $unread) {
       <p class="ui-meta">
-        <span>
-          <%= t('forum.started_by') %>
-          <a href="<%= url_for('profile', username => $thread->{author_username}) %>"><%= $thread->{author_display_name} || $thread->{author_profile_label} %></a>
-        </span>
+        % if ($thread->{author_username}) {
+          <span>
+            <%= t('forum.started_by') %>
+            <a href="<%= url_for('profile', username => $thread->{author_username}) %>"><%= $thread->{author_display_name} || $thread->{author_profile_label} %></a>
+          </span>
+        % }
+        % if ($unread) {
+          <span><a class="ui-meta__jump" href="#<%= $unread %>"><%= t('community.jump_to_first_unread') %></a></span>
+        % }
       </p>
     % }
     <%= include 'forum/_thread_tools', can_reply => $can_reply %>

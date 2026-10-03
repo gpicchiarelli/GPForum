@@ -53,6 +53,7 @@ _a_changed_file_changes_its_url();
 _a_file_rewritten_in_place_is_not_immutable();
 _cache_policy();
 _rendered_pages_name_the_digest();
+_the_stylesheet_names_the_digest();
 _static_responses_carry_the_policy();
 _a_response_that_sets_a_cookie_is_private();
 _only_the_digested_file_is_immutable();
@@ -211,6 +212,40 @@ sub _cache_policy {
         ),
         $NO_CACHE,
         'development revalidates every response'
+    );
+
+    return;
+}
+
+# The stylesheet fetches files of its own, the typeface: a url() there is
+# written by hand, so nothing but this keeps its version the file's digest.
+# With another one the file would be asked for again every hour; with the
+# digest of an older file, kept for a year under the new one's name.
+sub _the_stylesheet_names_the_digest {
+    my $manifest = GPForum::Web::AssetManifest->new( roots => [@STATIC_ROOTS] );
+    my $css      = path('assets/css/gpforum-ssr.css')->slurp;
+    my %fetched = $css =~ m{url[(] "/ ([^"?]+) [?]v= ([[:xdigit:]]+) " [)]}gmsx;
+    my @bare    = $css =~ m{url[(] ( "? / [^)?]+ "? ) [)]}gmsx;
+
+    ok( scalar keys %fetched, 'the stylesheet fetches the typeface' );
+    is_deeply( \@bare, [], 'and no file without a version' );
+    for my $name ( sort keys %fetched ) {
+        is(
+            $fetched{$name},
+            $manifest->digest($name),
+            "$name is named with the digest of its bytes"
+        );
+    }
+
+    my $test = Test::Mojo->new('GPForum');
+    $test->get_ok('/login')->status_is($HTTP_OK);
+    my $page    = $test->tx->res->dom;
+    my $preload = $page->at('link[rel="preload"][as="font"][crossorigin]');
+    ok( $preload, 'a page preloads the face its text is set in' );
+    my $preloaded = $preload ? $preload->attr('href') : q{};
+    ok(
+        index( $css, qq{url("$preloaded")} ) >= 0,
+        'under the same URL the stylesheet asks for'
     );
 
     return;
