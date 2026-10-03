@@ -329,7 +329,7 @@ platform architecture.
   `script/coverage`, `script/test`, `script/profile`, `script/profile-nytprof`,
   `script/profile-route`, `script/architecture-check`.
 - `bin/gpforum-migrate`, `bin/gpforum-platform-check`, `migrations/`.
-- `docs/CPAN_LICENSE_REVIEW.md`, `docs/DEPLOYMENT.md`, `docs/PROFILING.md`,
+- `docs/CPAN_LICENSE_REVIEW.md`, `docs/DEPLOYMENT.md`, `docs/PERFORMANCE.md#profiling`,
   `docs/release/readiness-review.md`, `docs/UI_ACCESSIBILITY.md`.
 - `t/09-prompt-alignment.t`, `t/10-migrate-command.t`, `t/144-cpan-install.t`,
   `t/18-github-project.t`, `t/integration/postgres.t`.

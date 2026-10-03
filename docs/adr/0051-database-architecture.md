@@ -302,6 +302,6 @@ projection, and query in all bounded contexts.
   `t/47-query-plan-check.t`, `t/99-partition-lifecycle.t`,
   `t/116-infrastructure-audit-record.t`, `t/143-service-id.t`,
   `t/09-prompt-alignment.t`.
-- `docs/DB_PERFORMANCE.md`, `docs/QUERY_BUDGET_POLICY.md`,
+- `docs/PERFORMANCE.md#database`, `docs/PERFORMANCE.md#query-budgets`,
   `docs/architecture/partition-lifecycle.md`,
   `docs/audit/transactional-correctness.md`.

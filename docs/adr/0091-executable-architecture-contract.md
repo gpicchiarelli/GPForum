@@ -783,7 +783,7 @@ invariants. This contract is mandatory.
   `t/86-engineering-correctness.t`, `t/87-command-idempotency.t`,
   `t/integration/postgres.t`, `t/09-prompt-alignment.t`.
 - Docs: `ARCHITECTURE.md`, `EVENTS.md`, `GOVERNANCE.md`, `ROADMAP.md`,
-  `docs/OUTBOX_LIFECYCLE.md`, `docs/QUERY_BUDGET_POLICY.md`,
+  `docs/OUTBOX_LIFECYCLE.md`, `docs/PERFORMANCE.md#query-budgets`,
   `docs/audit/failure-modes.md`, `docs/architecture/partition-lifecycle.md`.
 - Scripts: `script/test`, `script/coverage`, `script/perlcritic`,
   `script/profile`, `bin/gpforum-migrate`.

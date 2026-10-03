@@ -298,5 +298,5 @@ and tooling.
   `script/architecture-check`, `script/cpan-license-check`.
 - `t/34-architecture-discipline.t`, `t/73-bootstrap-composition.t`,
   `t/75-architecture-foundation.t`, `t/86-engineering-correctness.t`.
-- `CONTRIBUTING.md`, `docs/PROFILING.md`, `docs/ENGINEERING_CORRECTNESS.md`,
+- `CONTRIBUTING.md`, `docs/PERFORMANCE.md#profiling`, `docs/ENGINEERING_CORRECTNESS.md`,
   `docs/CPAN_LICENSE_REVIEW.md`.

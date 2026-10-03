@@ -193,5 +193,5 @@ for persistence, search, edge routing and storage.
   `t/57-hypnotoad-benchmark.t`, `t/59-hypnotoad-scaling.t`,
   `t/82-realtime-supervisor.t`, `t/84-outbox-concurrent-dispatcher.t`,
   `t/85-realtime-outbox-multiprocess.t`.
-- Docs: `docs/OS_OPTIMIZATION.md`, `docs/OS_RUNTIME_ENFORCEMENT.md`,
+- Docs: `docs/PERFORMANCE.md#os-tuning`, `docs/OS_RUNTIME_ENFORCEMENT.md`,
   `docs/PERFORMANCE.md`, `docs/realtime.md`.

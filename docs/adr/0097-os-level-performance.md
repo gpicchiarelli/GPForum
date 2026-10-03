@@ -402,8 +402,8 @@ Forbidden:
 - `bin/gpforum-os-preflight`, `bin/gpforum-platform-check`,
   `script/system-preflight`, `script/profile-nytprof`, `script/profile`,
   `script/query-plan-check`
-- `docs/OS_OPTIMIZATION.md`, `docs/OS_RUNTIME_ENFORCEMENT.md`,
-  `docs/OS_RUNTIME_EVIDENCE.md`, `docs/PROFILING.md`, `docs/PERFORMANCE.md`
+- `docs/PERFORMANCE.md#os-tuning`, `docs/OS_RUNTIME_ENFORCEMENT.md`,
+  `docs/OS_RUNTIME_EVIDENCE.md`, `docs/PERFORMANCE.md#profiling`, `docs/PERFORMANCE.md`
 - `t/36-os-performance.t`, `t/37-os-filesystem.t`, `t/40-local-cache.t`,
   `t/52-os-preflight.t`, `t/53-os-runtime-policy.t`,
   `t/58-os-runtime-evidence.t`, `t/59-hypnotoad-scaling.t`

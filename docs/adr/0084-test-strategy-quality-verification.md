@@ -158,4 +158,4 @@ rebuild from event history.
   `t/35-forum-accessible-ssr.t`, `t/48-browser-security.t`,
   `t/50-security-hardening.t`, `t/86-engineering-correctness.t`,
   `t/144-cpan-install.t`.
-- Docs: `docs/ENGINEERING_CORRECTNESS.md`, `docs/PROFILING.md`.
+- Docs: `docs/ENGINEERING_CORRECTNESS.md`, `docs/PERFORMANCE.md#profiling`.

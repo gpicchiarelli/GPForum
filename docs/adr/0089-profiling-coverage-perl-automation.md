@@ -141,4 +141,4 @@ Profiling readiness is an operational requirement, not a luxury.
   `lib/GPForum/Service/Operations/DbQueryStats.pm`.
 - Tests: `t/42-profile-reader.t`, `t/56-db-query-stats.t`,
   `t/144-cpan-install.t`.
-- Docs: `docs/PROFILING.md`, `docs/DEPLOYMENT.md`.
+- Docs: `docs/PERFORMANCE.md#profiling`, `docs/DEPLOYMENT.md`.

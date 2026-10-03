@@ -320,7 +320,7 @@ If these answers do not exist, the implementation is incomplete.
   `migrations/014_hot_path_indexes.sql`
 - `bin/gpforum-query-budget`, `bin/gpforum-query-plan-evidence`,
   `script/query-plan-check`, `script/bench-hotpaths`
-- `docs/QUERY_BUDGET_POLICY.md`, `docs/DB_PERFORMANCE.md`,
+- `docs/PERFORMANCE.md#query-budgets`, `docs/PERFORMANCE.md#database`,
   `docs/OUTBOX_LIFECYCLE.md`, `docs/OBSERVABILITY.md`,
   `docs/architecture/partition-lifecycle.md`
 - `t/13-outbox-dispatcher.t`, `t/14-projection-offset.t`,

@@ -286,10 +286,9 @@ rendering and benchmarking across all bounded contexts.
   `script/query-plan-evidence`, `script/bench-hotpaths`, `script/bench-http`,
   `script/bench-hypnotoad`, `script/bench-hypnotoad-scaling`,
   `script/profile-nytprof`, `script/seed-benchmark`.
-- `docs/PERFORMANCE.md`, `docs/PERFORMANCE_BASELINE.md`,
-  `docs/PERFORMANCE_EVIDENCE.md`, `docs/PERFORMANCE_AUDIT.md`,
-  `docs/DB_PERFORMANCE.md`, `docs/QUERY_BUDGET_POLICY.md`,
-  `docs/PROFILING.md`, `docs/OS_OPTIMIZATION.md`,
+- `docs/PERFORMANCE.md`, `docs/PERFORMANCE.md#evidence-and-how-to-reproduce-it`,
+  `docs/PERFORMANCE.md#database`, `docs/PERFORMANCE.md#query-budgets`,
+  `docs/PERFORMANCE.md#profiling`, `docs/PERFORMANCE.md#os-tuning`,
   `docs/architecture/partition-lifecycle.md`.
 - `t/21-forum-pagination.t`, `t/36-os-performance.t`,
   `t/38-query-budget-command.t`, `t/47-query-plan-check.t`,

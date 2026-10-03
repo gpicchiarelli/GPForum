@@ -508,8 +508,8 @@ ADR approval SHOULD be required for:
   0020 (audit hashing), 0048 (GlifiStore L2 as ADR-approved mandatory
   infrastructure).
 - Docs: `docs/ENGINEERING_CORRECTNESS.md`, `docs/audit/failure-modes.md`,
-  `docs/audit/transactional-correctness.md`, `docs/QUERY_BUDGET_POLICY.md`,
-  `docs/PROFILING.md`, `docs/CPAN_LICENSE_REVIEW.md`,
+  `docs/audit/transactional-correctness.md`, `docs/PERFORMANCE.md#query-budgets`,
+  `docs/PERFORMANCE.md#profiling`, `docs/CPAN_LICENSE_REVIEW.md`,
   `docs/release/readiness-review.md`, `README.md`.
 - Tests: `t/34-architecture-discipline.t`, `t/75-architecture-foundation.t`,
   `t/86-engineering-correctness.t`, `t/14-projection-offset.t`,
