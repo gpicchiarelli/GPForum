@@ -54,6 +54,14 @@ sub profile_label ( $self, $username ) {
     return q{@} . $username;
 }
 
+# The first letter of a name, for the mark that stands where a picture would:
+# one grapheme, so a letter keeps its accent.
+sub initial ( $self, $name ) {
+    my ($first) = $self->string($name) =~ /(\X)/msx;
+
+    return uc $self->string($first);
+}
+
 sub related ( $self, $row, $method ) {
     my $undefined;
     return $undefined if !$row || ref $row eq 'HASH' || !$row->can($method);

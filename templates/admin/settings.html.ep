@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('admin.settings') . ' - ' . t('app.name');
 % my %section_title = (
 %   antivirus        => t('admin.settings_section_antivirus'),

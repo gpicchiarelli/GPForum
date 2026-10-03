@@ -124,12 +124,12 @@ like(
     'search degraded state uses shared status banner'
 );
 like(
-    path('templates/forum/thread.html.ep')->slurp,
+    path('templates/forum/_post.html.ep')->slurp,
     qr/ui_trusted_html[(]\$post->\{body\}, [ ] 'forum[.]post[.]body'/msx,
     'thread raw post body rendering goes through render policy helper'
 );
 like(
-    path('templates/forum/thread.html.ep')->slurp,
+    path('templates/forum/_post.html.ep')->slurp,
     qr/post_attachment_delete/msx,
     'thread exposes author attachment delete'
 );

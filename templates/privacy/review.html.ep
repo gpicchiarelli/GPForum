@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('privacy.review') . ' - ' . t('app.name');
 
 <section aria-labelledby="privacy-review-heading">

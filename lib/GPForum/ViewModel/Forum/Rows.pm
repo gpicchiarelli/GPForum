@@ -80,12 +80,16 @@ sub post ( $self, $row ) {
     my $post_id  = $self->column( $row, 'post_id' );
     my $username = $self->column( $row, 'author_username' );
 
+    my $display_name = $self->column( $row, 'author_display_name' );
+
     return {
-        author_display_name  => $self->column( $row, 'author_display_name' ),
+        author_display_name  => $display_name,
+        author_initial       => $self->initial( $display_name // $username ),
         author_profile_label => $self->profile_label($username),
         author_user_id       => $self->column( $row, 'author_user_id' ),
         author_username      => $username,
         body                 => $self->_post_body($row),
+        created_at           => $self->loaded_column( $row, 'created_at' ),
         moderation_state     => $self->column( $row, 'moderation_state' ),
         position             => $self->column( $row, 'position' ),
         post_id              => $post_id,
@@ -278,7 +282,8 @@ Returns a thread payload with lock and heading metadata.
 
 =head2 post
 
-Returns a post payload, including a safe rendered body when present.
+Returns a post payload: its safe rendered body when present, when it was
+written when the reader loaded that, and its author's initial.
 
 =head2 search_result
 

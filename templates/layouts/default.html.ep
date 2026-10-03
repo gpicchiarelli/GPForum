@@ -29,7 +29,7 @@
       % }
     % }
   </head>
-  <body class="app-shell <%= ui_typography_class %>">
+  <body class="app-shell <%= ui_typography_class %><%= (stash('shell') // q{}) eq 'wide' ? ' app-shell--wide' : q{} %>">
     <a class="skip-link" href="#content"><%= t('nav.skip_to_content') %></a>
     <%= include 'components/site_header' %>
     <%= include 'components/breadcrumbs' %>

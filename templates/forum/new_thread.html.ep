@@ -7,7 +7,7 @@
 % my $visibility_field = $field{visibility};
 % my $form_described_by = $ui->{described_by} || q{};
 
-<section aria-labelledby="new-thread-heading">
+<section class="composer" aria-labelledby="new-thread-heading">
   <p><a href="<%= url_for('categories') %>"><%= t('nav.categories') %></a></p>
   <h1 id="<%= $ui->{heading_id} %>"><%= t('forum.new_thread_title') %></h1>
   <%= include 'components/error_summary',

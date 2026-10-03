@@ -218,6 +218,7 @@ sub _visible_thread_post {
         visibility           => 'public',
         moderation_state     => 'visible',
         body                 => 'First post',
+        created_at           => '2026-05-23T12:00:00Z',
     };
 }
 

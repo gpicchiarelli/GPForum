@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('admin.admin') . ' - ' . t('app.name');
 
 <section aria-labelledby="admin-dashboard-heading">

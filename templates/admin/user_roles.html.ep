@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('admin.user_roles') . ' - ' . t('app.name');
 
 <section aria-labelledby="admin-user-roles-heading">

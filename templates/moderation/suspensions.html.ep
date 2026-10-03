@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('moderation.suspensions') . ' - ' . t('app.name');
 
 <section aria-labelledby="moderation-suspensions-heading">

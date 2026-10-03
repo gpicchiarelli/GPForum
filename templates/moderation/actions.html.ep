@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('moderation.actions') . ' - ' . t('app.name');
 
 <section aria-labelledby="moderation-actions-heading">

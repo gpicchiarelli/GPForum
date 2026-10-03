@@ -55,6 +55,16 @@ _contrast_ok( \%dark, 'color-border', 'color-surface-alt', $NON_TEXT_MINIMUM,
 
 _contrast_ok( \%light, 'color-foreground', 'color-surface', $TEXT_MINIMUM,
     'light: body text against the surface' );
+
+# Metadata is set quieter than the text it describes, never fainter than a
+# reader can read: on the page and on a surface, in both themes.
+for my $palette ( [ light => \%light ], [ dark => \%dark ] ) {
+    my ( $name, $tokens ) = @{$palette};
+    for my $ground (qw(color-background color-surface color-surface-alt)) {
+        _contrast_ok( $tokens, 'color-subtle', $ground, $TEXT_MINIMUM,
+            "$name: metadata against $ground" );
+    }
+}
 _contrast_ok( \%dark, 'color-foreground', 'color-surface', $TEXT_MINIMUM,
     'dark: body text against the surface' );
 

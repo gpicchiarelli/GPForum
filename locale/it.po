@@ -1276,9 +1276,17 @@ msgctxt "forum.delete_post"
 msgid "Delete post"
 msgstr "Elimina post"
 
+msgctxt "forum.delete_post_consequence"
+msgid "The post will be hidden from everyone else. You can restore it later."
+msgstr "Il post sarà nascosto a tutti gli altri. Potrai ripristinarlo in seguito."
+
 msgctxt "forum.delete_thread"
 msgid "Delete thread"
 msgstr "Elimina discussione"
+
+msgctxt "forum.delete_thread_consequence"
+msgid "The thread will be hidden from everyone else. You can restore it later."
+msgstr "La discussione sarà nascosta a tutti gli altri. Potrai ripristinarla in seguito."
 
 msgctxt "forum.edit_body"
 msgid "Post body"
@@ -1287,6 +1295,10 @@ msgstr "Corpo del post"
 msgctxt "forum.edit_post"
 msgid "Edit post"
 msgstr "Modifica post"
+
+msgctxt "forum.edit_title"
+msgid "Edit title"
+msgstr "Modifica titolo"
 
 msgctxt "forum.error_conflict_message"
 msgid ""

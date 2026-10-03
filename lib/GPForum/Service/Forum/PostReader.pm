@@ -48,7 +48,7 @@ sub thread_posts_resultset ( $self, $request, $plan = undef ) {
             columns => [
                 qw(
                   post_id thread_id author_user_id current_body_id position
-                  visibility moderation_state deleted_at
+                  visibility moderation_state created_at deleted_at
                 )
             ],
             join      => [ 'current_body', 'author' ],

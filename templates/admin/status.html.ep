@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('admin.health_runtime') . ' - ' . t('app.name');
 
 <section aria-labelledby="admin-status-heading">

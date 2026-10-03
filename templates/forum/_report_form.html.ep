@@ -1,0 +1,21 @@
+%# The form that reports a thread or a post to the moderators, as it stands in
+%# a sheet.
+%#
+%# Takes "post_to", where it posts; "command_id"; and "field_id", the prefix
+%# of its fields' ids.
+% my $field_id = stash('field_id');
+
+<form method="post" action="<%= stash('post_to') %>">
+  <%= csrf_field %>
+  <input type="hidden" name="command_id" value="<%= stash('command_id') || q{} %>">
+  <label for="<%= $field_id %>-reason"><%= t('common.reason') %></label>
+  <select id="<%= $field_id %>-reason" name="reason" required>
+    <option value="spam"><%= t('moderation.reason.spam') %></option>
+    <option value="abuse"><%= t('moderation.reason.abuse') %></option>
+    <option value="privacy"><%= t('moderation.reason.privacy') %></option>
+    <option value="other"><%= t('moderation.reason.other') %></option>
+  </select>
+  <label for="<%= $field_id %>-details"><%= t('common.details') %></label>
+  <textarea id="<%= $field_id %>-details" name="details" rows="3"></textarea>
+  <button type="submit"><%= t('moderation.submit_report') %></button>
+</form>

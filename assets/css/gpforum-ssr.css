@@ -1,45 +1,44 @@
+/* GPForum: the stylesheet of the server-rendered pages.
+ *
+ * One file, no build step, no web font, no script. In order:
+ *
+ *    1. Tokens        colour, type, space, shape
+ *    2. Document      box model, body, focus
+ *    3. Type          headings, links, metadata, prose and code
+ *    4. Shell         header, breadcrumbs, main, footer
+ *    5. Controls      buttons, fields, forms
+ *    6. Feedback      alerts, flashes, banners, badges
+ *    7. Collections   lists, cards, tables, pagination, empty states
+ *    8. Reading       thread rows, threads, posts, the composer
+ *    9. Sheets        actions that open over the page
+ *   10. Environment   narrow screens, touch, motion, print
+ *
+ * Three rules hold everywhere. A colour is a token, so every theme gets it.
+ * A direction is logical (inline, block), so a right-to-left locale gets it.
+ * A size comes from the scale, so the page keeps one rhythm.
+ */
+
+/* 1. Tokens ---------------------------------------------------------------- */
+
 :root {
   color-scheme: light;
+
+  /* The logo's paper, ink, forest, steel and clay. */
   --color-background: #f8f6ef;
   --color-foreground: #111412;
   --color-muted: #33423a;
+  --color-subtle: #5b655f;
   --color-surface: #ffffff;
   --color-surface-alt: #eef3f0;
   --color-primary: #214237;
   --color-secondary: #3f5f72;
   --color-accent: #a6532f;
   --color-border: #7a927d;
+  --color-hairline: #dcdbd3;
   --color-danger: #9d2424;
   --color-success: #236b45;
   --color-focus-ring: #a6532f;
   --color-mark: #f2d1b5;
-  --shadow-soft: 0 16px 42px rgba(17, 20, 18, 0.11);
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
-  --space-7: 3rem;
-  --content-max: 72rem;
-  --measure-readable: 72ch;
-  --font-size-xs: 0.8rem;
-  --font-size-sm: 0.9rem;
-  --font-size-md: 1rem;
-  --font-size-lg: 1.18rem;
-  --font-size-xl: 1.45rem;
-  --font-size-2xl: 2rem;
-  --line-height-tight: 1.18;
-  --line-height-body: 1.6;
-  /* The platform's own UI face: GPForum ships no web font, so it names none
-     it does not ship (7.4). Native text renders crisply and costs no request. */
-  --font-ui-latin: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
-    "Helvetica Neue", Arial, sans-serif;
-  --font-ui: var(--font-ui-latin);
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --typography-font-ui: var(--font-ui);
   --color-info: #3f5f72;
   --color-warning: #7b4c00;
   --color-surface-warning: #fff7df;
@@ -50,6 +49,64 @@
   --color-text-on-danger: #ffffff;
   --color-text-on-success: #ffffff;
   --color-text-on-warning: #111412;
+  --color-scrim: rgb(17 20 18 / 0.36);
+
+  /* The platform's own faces: GPForum ships no web font, so it names none
+     it does not ship (7.4). Native text renders crisply and costs no request. */
+  --font-ui-latin: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-ui: var(--font-ui-latin);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --typography-font-ui: var(--font-ui);
+
+  /* Seven sizes. Interface text is md; text read at length is body. */
+  --font-size-xs: 0.8125rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-body: 1.0625rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: clamp(1.75rem, 1.35rem + 1.8vw, 2.375rem);
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --line-height-tight: 1.12;
+  --line-height-snug: 1.35;
+  --line-height-body: 1.5;
+  --line-height-reading: 1.65;
+
+  /* Large type is set tighter, as its optical size asks. */
+  --tracking-display: -0.022em;
+  --tracking-heading: -0.012em;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4.5rem;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  --shadow-soft: 0 16px 42px rgb(17 20 18 / 0.11);
+  --shadow-sheet: 0 28px 64px rgb(17 20 18 / 0.2), 0 2px 8px rgb(17 20 18 / 0.08);
+
+  /* A page is one column, set for reading. Consoles ask for the wide one. */
+  --content-max: 44rem;
+  --content-wide: 68rem;
+  --measure-readable: 68ch;
+  --gutter: clamp(1rem, 4vw, 1.5rem);
+  --control-height: 2.5rem;
+  --avatar-size: 2.25rem;
+  --ease: 140ms cubic-bezier(0.2, 0, 0, 1);
 }
 
 html[data-theme="dark"] {
@@ -57,12 +114,14 @@ html[data-theme="dark"] {
   --color-background: #111412;
   --color-foreground: #f8f6ef;
   --color-muted: #d7d0c0;
+  --color-subtle: #a9b0a8;
   --color-surface: #17211d;
   --color-surface-alt: #1f3029;
   --color-primary: #c9835a;
   --color-secondary: #9bb6c8;
   --color-accent: #f0ad7d;
   --color-border: #607b6d;
+  --color-hairline: #2c3731;
   --color-danger: #ffb4a8;
   --color-success: #8fd6a3;
   --color-focus-ring: #f0ad7d;
@@ -77,6 +136,7 @@ html[data-theme="dark"] {
   --color-text-on-danger: #111412;
   --color-text-on-success: #111412;
   --color-text-on-warning: #111412;
+  --color-scrim: rgb(0 0 0 / 0.56);
 }
 
 html[data-theme="high_contrast"] {
@@ -84,12 +144,14 @@ html[data-theme="high_contrast"] {
   --color-background: #ffffff;
   --color-foreground: #000000;
   --color-muted: #101010;
+  --color-subtle: #101010;
   --color-surface: #ffffff;
   --color-surface-alt: #f2f2f2;
   --color-primary: #003f2d;
   --color-secondary: #00324d;
   --color-accent: #7a2a00;
   --color-border: #000000;
+  --color-hairline: #000000;
   --color-danger: #8b0000;
   --color-success: #005c2f;
   --color-focus-ring: #ffbf00;
@@ -105,12 +167,18 @@ html[data-theme="high_contrast"] {
   --color-text-on-warning: #000000;
 }
 
-* {
+/* 2. Document -------------------------------------------------------------- */
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
 html {
   background: var(--color-background);
+  text-size-adjust: 100%;
+  -webkit-text-size-adjust: 100%;
 }
 
 html[data-direction="rtl"] {
@@ -118,25 +186,27 @@ html[data-direction="rtl"] {
 }
 
 body {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100dvh;
   margin: 0;
   background: var(--color-background);
   color: var(--color-foreground);
   font-family: var(--typography-font-ui);
   font-size: var(--font-size-md);
+  font-kerning: normal;
+  font-optical-sizing: auto;
   line-height: var(--line-height-body);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
 }
 
 .typography-latin {
   --typography-font-ui: var(--font-ui-latin);
 }
 
-a {
-  color: var(--color-primary);
-  text-underline-offset: 0.22em;
-}
-
-a:hover {
-  color: var(--color-accent);
+.app-shell--wide {
+  --content-max: var(--content-wide);
 }
 
 :focus {
@@ -145,23 +215,21 @@ a:hover {
 
 :focus-visible {
   outline: 3px solid var(--color-focus-ring);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 .skip-link {
   position: absolute;
-  top: var(--space-4);
-  inset-inline-start: var(--space-4);
+  inset-block-start: var(--space-3);
+  inset-inline-start: var(--space-3);
   z-index: 20;
-  transform: translateY(-160%);
-  border: 2px solid var(--color-primary);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-foreground);
-  padding: var(--space-3) var(--space-4);
-  font-weight: 700;
+  transform: translateY(-200%);
+  border-radius: var(--radius-pill);
+  background: var(--color-foreground);
+  color: var(--color-background);
+  padding: var(--space-2) var(--space-4);
+  font-weight: var(--weight-semibold);
   text-decoration: none;
-  box-shadow: var(--shadow-soft);
 }
 
 .skip-link:focus,
@@ -169,219 +237,16 @@ a:hover {
   transform: translateY(0);
 }
 
-.page-shell,
-.site-header__inner,
-.site-footer {
-  width: min(var(--content-max), calc(100% - 2rem));
-  margin-inline: auto;
-}
-
-.site-header {
-  background: var(--color-primary);
-  color: var(--color-text-on-primary);
-  border-bottom: 1px solid rgba(248, 246, 239, 0.22);
-}
-
-.site-header__inner {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  grid-template-areas: "brand nav identity";
-  column-gap: var(--space-5);
-  row-gap: var(--space-2);
-  align-items: center;
-  min-height: 4.5rem;
-  padding-block: var(--space-3);
-}
-
-.site-header .brand {
-  grid-area: brand;
-}
-
-.site-header .site-nav {
-  grid-area: nav;
-  column-gap: var(--space-4);
-  row-gap: var(--space-1);
-}
-
-.site-header .identity-nav,
-.site-header .identity-form {
-  grid-area: identity;
-  justify-self: end;
-}
-
-.brand,
-.site-nav,
-.identity-nav,
-.identity-form,
-.site-footer nav,
-.breadcrumbs ol {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.brand {
-  color: var(--color-text-on-primary);
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.brand__mark {
-  display: block;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--radius-md);
-}
-
-.brand__name {
-  font-size: 1.1rem;
-}
-
-.site-nav,
-.identity-nav {
-  flex-wrap: wrap;
-}
-
-.site-nav a,
-.identity-form a,
-.identity-nav a,
-.site-footer a {
-  color: currentColor;
-  font-weight: 700;
-  text-decoration: none;
-}
-
-/* A link is one unit: "Start a thread" never breaks into three lines. */
-.site-nav a,
-.identity-nav a,
-.identity-form a {
+.visually-hidden {
+  position: absolute;
+  overflow: hidden;
+  inline-size: 1px;
+  block-size: 1px;
+  clip-path: inset(50%);
   white-space: nowrap;
 }
 
-.site-nav a:hover,
-.identity-form a:hover,
-.identity-nav a:hover,
-.site-footer a:hover {
-  text-decoration: underline;
-}
-
-.identity-form {
-  justify-content: flex-end;
-  margin: 0;
-}
-
-.locale-form,
-.theme-form {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  justify-content: flex-end;
-  margin: 0;
-  max-width: none;
-}
-
-.locale-form label,
-.theme-form label {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: currentColor;
-}
-
-.locale-form select,
-.theme-form select {
-  width: auto;
-  min-height: 2.5rem;
-}
-
-.identity-form span {
-  color: currentColor;
-}
-
-.checkbox-field {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--space-2);
-  align-items: start;
-}
-
-.checkbox-field input {
-  inline-size: auto;
-  min-height: auto;
-  margin-block-start: 0.35rem;
-}
-
-.checkbox-field label {
-  color: var(--color-foreground);
-}
-
-.breadcrumbs {
-  padding-block: var(--space-4) 0;
-}
-
-.breadcrumbs ol {
-  flex-wrap: wrap;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  color: var(--color-muted);
-  font-size: 0.95rem;
-}
-
-.breadcrumbs li + li::before {
-  content: "/";
-  margin-inline-end: var(--space-3);
-  color: var(--color-secondary);
-}
-
-main.page-shell {
-  padding-block: var(--space-6) var(--space-7);
-}
-
-main.page-shell > section,
-main.page-shell > main,
-main.page-shell > article {
-  display: grid;
-  gap: var(--space-5);
-}
-
-.ui-page-header,
-.ui-section-header {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.ui-page-header {
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  border-block-end: 1px solid var(--color-border);
-  padding-block-end: var(--space-4);
-}
-
-.ui-page-header__copy,
-.ui-section-header {
-  max-width: var(--measure-readable);
-}
-
-.ui-eyebrow,
-.ui-meta {
-  color: var(--color-muted);
-  font-size: var(--font-size-sm);
-  font-weight: 800;
-}
-
-.ui-page-description {
-  color: var(--color-muted);
-  font-size: var(--font-size-lg);
-}
-
-.ui-action-list,
-.ui-inline-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
-  align-items: center;
-}
+/* 3. Type ------------------------------------------------------------------ */
 
 h1,
 h2,
@@ -389,177 +254,513 @@ h3,
 p,
 dl,
 ol,
-ul,
-form {
-  margin-top: 0;
+ul {
+  margin-block: 0;
 }
 
 h1,
 h2,
 h3 {
-  line-height: var(--line-height-tight);
-  letter-spacing: 0;
+  font-weight: var(--weight-bold);
+  text-wrap: balance;
 }
 
 h1 {
-  font-size: clamp(2rem, 4vw, 3.25rem);
-  margin-bottom: var(--space-2);
+  font-size: var(--font-size-2xl);
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--tracking-display);
 }
 
 h2 {
-  font-size: clamp(1.35rem, 2.6vw, 2rem);
+  font-size: var(--font-size-lg);
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--tracking-heading);
 }
 
-p,
-dd,
-li {
-  max-width: var(--measure-readable);
+h3 {
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
+  line-height: var(--line-height-snug);
 }
 
-dl {
-  display: grid;
-  grid-template-columns: minmax(10rem, 0.35fr) minmax(0, 1fr);
-  gap: var(--space-2) var(--space-4);
+p {
+  max-inline-size: var(--measure-readable);
+  text-wrap: pretty;
 }
 
-dt {
-  color: var(--color-muted);
-  font-weight: 800;
+a {
+  color: var(--color-primary);
+  text-decoration-thickness: 0.06em;
+  text-underline-offset: 0.2em;
 }
 
-dd {
-  margin: 0;
+a:hover {
+  text-decoration-thickness: 0.12em;
 }
 
-form {
-  display: grid;
-  gap: var(--space-4);
-  max-width: 44rem;
+time,
+.ui-count {
+  font-variant-numeric: tabular-nums;
 }
 
-label {
-  display: grid;
-  gap: var(--space-2);
-  color: var(--color-muted);
-  font-weight: 800;
-}
-
-fieldset {
-  display: grid;
-  gap: var(--space-4);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin: 0;
-  padding: var(--space-4);
-}
-
-legend {
+mark {
+  border-radius: var(--radius-sm);
+  background: var(--color-mark);
   color: var(--color-foreground);
-  font-weight: 800;
-  padding-inline: var(--space-2);
+  padding-inline: 0.15em;
 }
 
-input,
-select,
-textarea,
-button {
-  font: inherit;
+.ui-eyebrow {
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-semibold);
 }
 
-input,
-select,
-textarea {
-  width: 100%;
-  min-height: 2.75rem;
-  border: 1px solid var(--color-border);
+/* A line of facts about what stands above it: who, when, where. Its parts
+   are separated by a middle dot the markup does not have to write. The dot
+   hangs in the gap before each part, so when the line wraps, the dot of the
+   part that starts the new line falls outside and is clipped: no line ever
+   begins with a separator. */
+.ui-meta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-4);
+  overflow-x: clip;
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+}
+
+.ui-meta > * {
+  position: relative;
+}
+
+.ui-meta > * + *::before {
+  position: absolute;
+  inset-inline-start: calc(-1 * var(--space-4));
+  inline-size: var(--space-4);
+  content: "·";
+  text-align: center;
+}
+
+.ui-meta a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.ui-meta a:hover {
+  color: var(--color-foreground);
+  text-decoration: underline;
+}
+
+.ui-page-description {
+  color: var(--color-subtle);
+  font-size: var(--font-size-body);
+}
+
+/* Text a member wrote: set to be read, at the reading size and measure. */
+.forum-post-body {
+  max-inline-size: var(--measure-readable);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-reading);
+  overflow-wrap: break-word;
+}
+
+.forum-post-body > * {
+  margin-block: 0;
+}
+
+.forum-post-body > * + * {
+  margin-block-start: 1em;
+}
+
+.forum-post-body blockquote {
+  margin-inline: 0;
+  border-inline-start: 3px solid var(--color-border);
+  padding-inline-start: var(--space-4);
+  color: var(--color-muted);
+}
+
+.forum-post-body blockquote > * + * {
+  margin-block-start: 0.75em;
+}
+
+/* Code keeps its own face, a size that matches the x-height of the text
+   around it, and every character as typed: no ligature turns != into a sign
+   the author did not write. */
+code,
+pre,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  font-variant-ligatures: none;
+}
+
+code {
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-alt);
+  padding: 0.12em 0.36em;
+}
+
+pre {
+  overflow-x: auto;
+  margin-block: 0;
+  border: 1px solid var(--color-hairline);
   border-radius: var(--radius-md);
   background: var(--color-surface);
+  padding: var(--space-4);
+  line-height: 1.6;
+  tab-size: 4;
+}
+
+pre code {
+  border-radius: 0;
+  background: none;
+  padding: 0;
+  font-size: inherit;
+}
+
+/* 4. Shell ----------------------------------------------------------------- */
+
+.page-shell {
+  inline-size: min(var(--content-max), 100% - 2 * var(--gutter));
+  margin-inline: auto;
+}
+
+.site-header {
+  border-block-end: 1px solid var(--color-hairline);
+}
+
+.site-header__inner,
+.site-footer {
+  inline-size: min(var(--content-wide), 100% - 2 * var(--gutter));
+  margin-inline: auto;
+}
+
+.site-header__inner {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "brand nav identity";
+  column-gap: var(--space-6);
+  align-items: center;
+  min-block-size: 3.5rem;
+}
+
+.brand {
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   color: var(--color-foreground);
-  padding: 0.65rem 0.75rem;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-heading);
+  text-decoration: none;
 }
 
-input[aria-invalid="true"],
-select[aria-invalid="true"],
-textarea[aria-invalid="true"] {
-  border-color: var(--color-danger);
-  border-width: 2px;
-  box-shadow: 0 0 0 2px rgba(157, 36, 36, 0.14);
+.brand__mark {
+  display: block;
+  inline-size: 1.75rem;
+  block-size: 1.75rem;
+  border-radius: var(--radius-sm);
 }
 
+.site-nav,
+.identity-nav,
+.identity-form {
+  display: flex;
+  align-items: center;
+  column-gap: var(--space-5);
+}
+
+.site-header .site-nav {
+  grid-area: nav;
+}
+
+.site-header .identity-nav,
+.site-header .identity-form {
+  grid-area: identity;
+  justify-self: end;
+  max-inline-size: none;
+  margin: 0;
+}
+
+/* A link is one unit: "Start a thread" never breaks into three lines. */
+.site-nav a,
+.identity-nav a,
+.identity-form a,
+.identity-form button {
+  color: var(--color-muted);
+  font-size: 0.9375rem;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color var(--ease);
+}
+
+.site-nav a:hover,
+.identity-nav a:hover,
+.identity-form a:hover,
+.identity-form button:hover {
+  color: var(--color-foreground);
+}
+
+/* Signing out is a form, because it changes state; it reads as its
+   neighbours do. */
+.identity-form button,
+.identity-form button:hover {
+  min-block-size: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  padding: 0;
+}
+
+.breadcrumbs {
+  padding-block-start: var(--space-5);
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--space-2);
+  padding: 0;
+  list-style: none;
+  color: var(--color-subtle);
+  font-size: var(--font-size-xs);
+}
+
+.breadcrumbs li + li::before {
+  content: "/";
+  margin-inline-end: var(--space-2);
+  color: var(--color-hairline);
+}
+
+.breadcrumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.breadcrumbs a:hover {
+  color: var(--color-foreground);
+}
+
+/* The last crumb names the page, and the heading below says it in full. */
+.breadcrumbs [aria-current] {
+  display: inline-block;
+  overflow: hidden;
+  max-inline-size: 28ch;
+  vertical-align: bottom;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+main.page-shell {
+  flex: 1;
+  padding-block: var(--space-5) var(--space-8);
+}
+
+main.page-shell > * + * {
+  margin-block-start: var(--space-7);
+}
+
+/* A page is sections, and a section is its heading and what it holds:
+   close inside one, with room between two. */
+main :where(section, article) {
+  display: grid;
+  gap: var(--space-4);
+}
+
+main.page-shell > :is(section, article) {
+  gap: var(--space-5);
+}
+
+main.page-shell > section > section + section {
+  margin-block-start: var(--space-5);
+}
+
+/* The title and what can be done here. With few actions they share a line;
+   with many, the actions take the line below and the title keeps its own. */
+.ui-page-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-5);
+  align-items: end;
+  justify-content: space-between;
+}
+
+.ui-page-header__copy {
+  display: grid;
+  flex: 1 1 18rem;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.ui-section-header {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.ui-section-header p {
+  color: var(--color-subtle);
+}
+
+.ui-action-list,
+.ui-inline-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-6);
+  align-items: center;
+  justify-content: space-between;
+  border-block-start: 1px solid var(--color-hairline);
+  padding-block: var(--space-5);
+  color: var(--color-subtle);
+  font-size: var(--font-size-xs);
+}
+
+.site-footer > div:first-child {
+  display: grid;
+}
+
+.site-footer strong {
+  color: var(--color-foreground);
+  font-weight: var(--weight-semibold);
+}
+
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--color-foreground);
+}
+
+/* Language and theme: preferences, not navigation, so they sit with the
+   footer's other settings-like links instead of crowding the header. */
+.site-footer__preferences,
+.locale-form,
+.theme-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: center;
+  max-inline-size: none;
+  margin: 0;
+}
+
+.locale-form label,
+.theme-form label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  color: inherit;
+  font-size: inherit;
+  font-weight: var(--weight-regular);
+}
+
+.locale-form select,
+.theme-form select {
+  inline-size: auto;
+  min-block-size: 2rem;
+  padding-block: 0.25rem;
+  font-size: var(--font-size-xs);
+}
+
+
+/* 5. Controls -------------------------------------------------------------- */
+
+button,
+input,
+select,
 textarea {
-  min-height: 9rem;
-  resize: vertical;
+  font: inherit;
 }
 
 button,
 .button {
   display: inline-flex;
+  gap: var(--space-2);
   align-items: center;
   justify-content: center;
-  width: fit-content;
-  min-height: 2.75rem;
+  inline-size: fit-content;
+  min-block-size: var(--control-height);
   border: 1px solid var(--color-primary);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   background: var(--color-primary);
   color: var(--color-text-on-primary);
-  padding: 0.6rem 0.95rem;
-  font-weight: 800;
+  padding: 0 1.1rem;
+  font-size: 0.9375rem;
+  font-weight: var(--weight-semibold);
+  line-height: 1;
   text-decoration: none;
+  white-space: nowrap;
   cursor: pointer;
+  transition:
+    background-color var(--ease),
+    border-color var(--ease),
+    color var(--ease),
+    transform var(--ease);
+}
+
+/* On hover a button moves toward the colour of the text, in every theme. */
+button:hover,
+.button:hover {
+  border-color: color-mix(in srgb, var(--color-primary) 84%, var(--color-foreground));
+  background: color-mix(in srgb, var(--color-primary) 84%, var(--color-foreground));
+}
+
+button:active,
+.button:active {
+  transform: scale(0.98);
 }
 
 .button--secondary {
   border-color: var(--color-border);
   background: var(--color-surface);
-  color: var(--color-primary);
+  color: var(--color-foreground);
 }
 
 .button--secondary:hover {
+  border-color: var(--color-muted);
   background: var(--color-surface-alt);
-  color: var(--color-primary);
 }
 
-button:hover,
-.button:hover {
-  background: var(--color-accent);
-  color: var(--color-text-on-accent);
-}
-
-/* Destructive staff actions (ADR 0079): never the same button as "Filter".
-   The consequence is stated, and a checkbox the server requires stands
-   between the operator and the button. */
-.danger-zone {
-  display: grid;
-  gap: var(--space-2);
-  border-inline-start: 0.35rem solid var(--color-danger);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-danger);
-  padding: var(--space-3) var(--space-4);
-}
-
-.danger-zone__consequence {
-  margin: 0;
-  color: var(--color-danger);
-  font-weight: 700;
-}
-
-/* The specific reason behind an error page's localized message, when there
-   is one: secondary to the message, and often an identifier to copy. */
-.error-detail {
-  color: var(--color-muted);
+/* An action that should not compete with what the page is about. */
+.button--quiet {
+  min-block-size: 2rem;
+  border-color: transparent;
+  background: none;
+  color: var(--color-subtle);
+  padding-inline: var(--space-3);
   font-size: var(--font-size-sm);
-  overflow-wrap: anywhere;
+  font-weight: var(--weight-medium);
 }
 
-.danger-zone__confirm {
-  display: flex;
-  gap: var(--space-2);
-  align-items: center;
+.button--quiet:hover {
+  border-color: transparent;
+  background: var(--color-surface-alt);
+  color: var(--color-foreground);
 }
 
-.danger-zone__confirm input {
-  width: auto;
-  min-height: auto;
+.button--small {
+  min-block-size: 2rem;
+  padding-inline: var(--space-3);
+  font-size: var(--font-size-xs);
 }
 
 button.button--danger,
@@ -571,71 +772,198 @@ button.button--danger,
 
 button.button--danger:hover,
 .button--danger:hover {
+  border-color: var(--color-danger);
   background: var(--color-surface-danger);
   color: var(--color-danger);
+}
+
+form {
+  display: grid;
+  gap: var(--space-4);
+  max-inline-size: 30rem;
+  margin: 0;
+}
+
+label {
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-semibold);
+}
+
+/* A label and its field are one thing: they sit closer to each other than
+   to the next field. */
+:is(form, fieldset) > label:not(.visually-hidden) + :is(input, select, textarea) {
+  margin-block-start: calc(var(--space-2) - var(--space-4));
+}
+
+input,
+select,
+textarea {
+  inline-size: 100%;
+  min-block-size: 2.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  padding: 0.625rem 0.75rem;
+  line-height: var(--line-height-snug);
+  transition: border-color var(--ease);
+}
+
+input:hover,
+select:hover,
+textarea:hover {
+  border-color: var(--color-muted);
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  inline-size: auto;
+  min-block-size: 0;
+  accent-color: var(--color-primary);
+}
+
+input[type="file"] {
+  border-style: dashed;
+  font-size: var(--font-size-sm);
+}
+
+textarea {
+  min-block-size: 8rem;
+  line-height: var(--line-height-body);
+  resize: vertical;
+}
+
+input[aria-invalid="true"],
+select[aria-invalid="true"],
+textarea[aria-invalid="true"] {
+  border-color: var(--color-danger);
+  box-shadow: 0 0 0 1px var(--color-danger);
+}
+
+fieldset {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+}
+
+legend {
+  padding-inline: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.checkbox-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+}
+
+.checkbox-field input {
+  margin-block-start: 0.3rem;
+}
+
+/* Destructive staff actions (ADR 0079): never the same button as "Filter".
+   The consequence is stated, and a checkbox the server requires stands
+   between the operator and the button. */
+.danger-zone {
+  display: grid;
+  gap: var(--space-2);
+  border-inline-start: 3px solid var(--color-danger);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-danger);
+  padding: var(--space-3) var(--space-4);
+}
+
+.danger-zone__consequence {
+  color: var(--color-danger);
+  font-weight: var(--weight-semibold);
+}
+
+.danger-zone__confirm {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* 6. Feedback -------------------------------------------------------------- */
+
+/* One shape for everything the page says back: a tinted band with a rule in
+   the colour of its tone on the leading edge. */
+[role="alert"],
+[role="status"],
+.flash,
+.ui-alert,
+.form-error-summary,
+.field-error {
+  max-inline-size: none;
+  border-inline-start: 3px solid var(--color-success);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-success);
+  color: var(--color-foreground);
+  padding: var(--space-3) var(--space-4);
+  font-size: 0.9375rem;
+  font-weight: var(--weight-medium);
 }
 
 [role="alert"],
-.flash--error {
-  border-inline-start: 0.35rem solid var(--color-danger);
-  background: var(--color-surface-danger);
-  color: var(--color-danger);
-}
-
+.flash--error,
 .form-error-summary,
 .field-error {
-  border-inline-start: 0.35rem solid var(--color-danger);
-  border-radius: var(--radius-md);
+  border-inline-start-color: var(--color-danger);
   background: var(--color-surface-danger);
   color: var(--color-danger);
-  padding: var(--space-3) var(--space-4);
-  font-weight: 700;
+}
+
+/* After the rules above, which match the same flash by its role: a warning
+   (a purge that reached only this process, a failed mail test) must not look
+   like a success. */
+.flash--warning,
+.ui-alert--warning {
+  border-inline-start-color: var(--color-warning);
+  background: var(--color-surface-warning);
+  color: var(--color-warning);
 }
 
 .field-error {
-  margin-block: calc(-1 * var(--space-2)) 0;
+  margin-block-start: calc(var(--space-2) - var(--space-4));
+  padding-block: var(--space-2);
+  font-size: var(--font-size-sm);
 }
 
 .form-error-summary ul {
-  margin-bottom: 0;
+  margin-block: var(--space-2) 0;
+  padding-inline-start: 1.2rem;
 }
 
-[role="status"],
-.flash--success,
-.flash--notice {
-  border-inline-start: 0.35rem solid var(--color-success);
-  background: var(--color-surface-success);
-  color: var(--color-primary);
+.form-error-summary a {
+  color: inherit;
 }
 
-/* After the rule above, which matches the same flash by its role: a warning
-   (a purge that reached only this process, a failed mail test) must not look
-   like a success. */
-.flash--warning {
-  border-inline-start: 0.35rem solid var(--color-warning);
-  background: var(--color-surface-warning);
-  color: var(--color-warning);
+.flash-stack {
+  display: grid;
+  gap: var(--space-2);
+  padding-block-start: var(--space-4);
 }
 
-.ui-alert {
-  margin: 0;
-  border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  font-weight: 700;
-}
-
-.ui-alert--warning {
-  border-inline-start: 0.35rem solid var(--color-warning);
-  background: var(--color-surface-warning);
-  color: var(--color-warning);
+/* The specific reason behind an error page's localized message, when there
+   is one: secondary to the message, and often an identifier to copy. */
+.error-detail {
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  overflow-wrap: anywhere;
 }
 
 .ui-status-banner,
 .ui-confirmation {
   display: grid;
   gap: var(--space-2);
-  border: 1px solid var(--color-border);
-  border-inline-start-width: 0.35rem;
+  border-inline-start: 3px solid var(--color-border);
   border-radius: var(--radius-md);
   background: var(--color-surface);
   padding: var(--space-4);
@@ -643,13 +971,9 @@ button.button--danger:hover,
 
 .ui-status-banner h2,
 .ui-confirmation h2 {
-  margin-bottom: 0;
-  font-size: var(--font-size-lg);
-}
-
-.ui-status-banner p,
-.ui-confirmation p {
-  margin-bottom: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0;
 }
 
 .ui-status-banner--notice {
@@ -667,42 +991,122 @@ button.button--danger:hover,
   background: var(--color-surface-danger);
 }
 
-.flash-stack {
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  inline-size: fit-content;
+  min-block-size: 1.5rem;
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-alt);
+  color: var(--color-muted);
+  padding-inline: 0.6rem;
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+}
+
+.ui-badge--success {
+  border-color: transparent;
+  background: var(--color-surface-success);
+  color: var(--color-success);
+}
+
+.ui-badge--danger {
+  border-color: transparent;
+  background: var(--color-surface-danger);
+  color: var(--color-danger);
+}
+
+.ui-badge--warning {
+  border-color: transparent;
+  background: var(--color-surface-warning);
+  color: var(--color-warning);
+}
+
+.ui-moderation-indicator {
+  display: inline-flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.ui-loading {
   display: grid;
-  gap: var(--space-3);
-  padding-top: var(--space-4);
-}
-
-.flash {
-  margin: 0;
+  gap: var(--space-2);
   border-radius: var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  font-weight: 700;
-}
-
-ol[aria-label],
-ul[aria-label] {
-  display: grid;
-  gap: var(--space-4);
-  padding-inline-start: 1.3rem;
-}
-
-ol[aria-label] > li,
-ul[aria-label] > li,
-article,
-.card {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
+  background: var(--color-surface-alt);
   padding: var(--space-4);
 }
 
-.ui-card,
+.ui-dialog[hidden],
+.ui-loading[hidden] {
+  display: none;
+}
+
+.ui-skeleton {
+  min-block-size: 1rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-hairline);
+}
+
+/* 7. Collections ----------------------------------------------------------- */
+
+/* A list is rows between hairlines, not boxes: the eye follows the titles
+   down one edge, and nothing is framed twice. */
+.ui-card-list {
+  padding: 0;
+  border-block-start: 1px solid var(--color-hairline);
+  list-style: none;
+}
+
 .ui-card-list > li {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  border-block-end: 1px solid var(--color-hairline);
+  padding-block: var(--space-4);
+}
+
+.ui-card-list > li > article {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.ui-card-list :is(h2, h3) {
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-semibold);
+  line-height: var(--line-height-snug);
+  letter-spacing: 0;
+  text-wrap: pretty;
+}
+
+.ui-card-list :is(h2, h3) a {
+  color: var(--color-foreground);
+  text-decoration: none;
+}
+
+.ui-card-list :is(h2, h3) a:hover {
+  color: var(--color-primary);
+}
+
+.ui-card-list p {
+  color: var(--color-muted);
+}
+
+/* A row with one destination is one target: its title's link covers it.
+   Whatever else it holds, a profile link or a button, stays above. */
+.ui-row {
+  position: relative;
+}
+
+.ui-row__title a::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.ui-row :is(a, button, form):not(.ui-row__title a) {
+  position: relative;
+  z-index: 1;
 }
 
 .ui-card,
@@ -711,211 +1115,87 @@ article,
   gap: var(--space-3);
 }
 
-.ui-card > :last-child,
-.ui-notification-surface > :last-child {
-  margin-bottom: 0;
-}
-
-.ui-card-list {
-  display: grid;
-  gap: var(--space-4);
-  padding-inline-start: 0;
-  list-style: none;
-}
-
-.ui-card-list__item {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.forum-post-body {
-  display: grid;
-  gap: var(--space-3);
-  max-inline-size: var(--measure-readable);
-}
-
-.forum-post-body > :first-child {
-  margin-block-start: 0;
-}
-
-.forum-post-body > :last-child {
-  margin-block-end: 0;
-}
-
-.forum-post-body blockquote {
-  margin: 0;
-  padding-inline-start: var(--space-4);
-  border-inline-start: 4px solid var(--color-border);
-  color: var(--color-muted);
-}
-
-.forum-post-body pre {
-  margin: 0;
-  overflow-x: auto;
-  padding: var(--space-3);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface-alt);
-}
-
-.forum-post-body code {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-sm);
-}
-
-.forum-post-edit {
-  display: grid;
-  gap: var(--space-3);
-  max-inline-size: var(--measure-readable);
-}
-
-.forum-post-delete {
-  margin-block-start: var(--space-3);
-}
-
-.forum-thread-edit {
-  display: grid;
-  gap: var(--space-3);
-  margin-block-end: var(--space-4);
-  max-inline-size: var(--measure-readable);
-}
-
-.forum-thread-delete {
-  margin-block-end: var(--space-4);
-}
-
-.forum-thread-move {
-  display: grid;
-  gap: var(--space-3);
-  margin-block-end: var(--space-4);
-  max-inline-size: var(--measure-readable);
-}
-
-.ui-empty-state {
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-alt);
+.ui-card {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
   padding: var(--space-5);
 }
 
-.ui-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.75rem;
-  border: 1px solid var(--color-border);
-  border-radius: 999px;
-  background: var(--color-surface-alt);
-  color: var(--color-foreground);
-  padding: 0.1rem 0.65rem;
-  font-size: var(--font-size-sm);
-  font-weight: 800;
-}
-
-.ui-badge--success {
-  border-color: var(--color-success);
-  background: var(--color-surface-success);
-  color: var(--color-primary);
-}
-
-.ui-badge--danger {
-  border-color: var(--color-danger);
-  background: var(--color-surface-danger);
-  color: var(--color-danger);
-}
-
-.ui-badge--warning {
-  border-color: var(--color-warning);
-  background: var(--color-surface-warning);
-  color: var(--color-warning);
-}
-
-.ui-moderation-indicator {
-  display: inline-flex;
-  align-items: center;
+ol[aria-label]:not(.ui-card-list),
+ul[aria-label]:not(.ui-card-list) {
+  display: grid;
   gap: var(--space-2);
+  padding-inline-start: 1.2rem;
 }
 
-.visually-hidden {
-  position: absolute;
-  overflow: hidden;
-  inline-size: 1px;
-  block-size: 1px;
-  clip-path: inset(50%);
-  white-space: nowrap;
+.ui-empty-state {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  border-block: 1px solid var(--color-hairline);
+  padding-block: var(--space-7);
+  color: var(--color-subtle);
+  text-align: center;
+}
+
+.ui-empty-state h2 {
+  color: var(--color-muted);
+  font-size: var(--font-size-body);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+}
+
+dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-5);
+}
+
+dt {
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+}
+
+dd {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .ui-table-wrap {
   overflow-x: auto;
 }
 
+table,
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: 0.9375rem;
+}
+
 .ui-admin-table {
   min-inline-size: 36rem;
 }
 
-.ui-admin-table th {
-  background: var(--color-surface-alt);
-  color: var(--color-foreground);
-}
-
-.ui-dialog {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  display: grid;
-  place-items: center;
-  background: rgba(17, 20, 18, 0.54);
-  padding: var(--space-5);
-}
-
-.ui-dialog[hidden],
-.ui-loading[hidden] {
-  display: none;
-}
-
-.ui-dialog__panel {
-  width: min(36rem, 100%);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  padding: var(--space-5);
-  box-shadow: var(--shadow-soft);
-}
-
-.ui-loading {
-  display: grid;
-  gap: var(--space-2);
-  border: 1px dashed var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface-alt);
-  padding: var(--space-4);
-}
-
-.ui-skeleton {
-  min-block-size: 1rem;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(
-    90deg,
-    var(--color-surface-alt),
-    var(--color-border),
-    var(--color-surface-alt)
-  );
-}
-
-table,
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--color-surface);
+th,
+td {
+  border-block-end: 1px solid var(--color-hairline);
+  padding: var(--space-3);
+  text-align: start;
+  vertical-align: top;
 }
 
 th,
-td {
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--space-3);
-  text-align: start;
+.ui-admin-table th {
+  border-block-end-color: var(--color-border);
+  color: var(--color-subtle);
+  font-size: var(--font-size-xs);
+  font-weight: var(--weight-semibold);
 }
 
-th {
-  color: var(--color-muted);
+th:first-child,
+td:first-child {
+  padding-inline-start: 0;
 }
 
 nav[aria-label$="pagination" i],
@@ -925,61 +1205,312 @@ nav[aria-label$="pagination" i],
   flex-wrap: wrap;
   gap: var(--space-3);
   align-items: center;
+  justify-content: center;
 }
 
 nav[aria-label$="pagination" i] a,
 .pagination a,
 .ui-pagination a {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: var(--control-height);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-pill);
   background: var(--color-surface);
-  padding: var(--space-2) var(--space-3);
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.site-footer {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-5);
-  border-top: 1px solid var(--color-border);
-  padding-block: var(--space-5);
-  color: var(--color-muted);
-}
-
-.site-footer div {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.site-footer strong {
   color: var(--color-foreground);
+  padding-inline: 1.1rem;
+  font-size: 0.9375rem;
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  transition: background-color var(--ease);
 }
 
-.site-footer {
-  flex-wrap: wrap;
+nav[aria-label$="pagination" i] a:hover,
+.pagination a:hover,
+.ui-pagination a:hover {
+  background: var(--color-surface-alt);
 }
 
-/* Language and theme: preferences, not navigation, so they sit with the
-   footer's other settings-like links instead of crowding the header. */
-.site-footer__preferences {
+/* 8. Reading --------------------------------------------------------------- */
+
+.thread__header {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/* What a reader can do with the thread, on one quiet line under its title. */
+.toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4);
+  gap: var(--space-1) var(--space-2);
   align-items: center;
 }
 
-.site-footer__preferences .locale-form,
-.site-footer__preferences .theme-form {
-  justify-content: flex-start;
+/* A form or a group in the bar adds its controls to the line, not a box. */
+.toolbar > section,
+.toolbar > form,
+.toolbar > section > form {
+  display: contents;
 }
 
-mark {
-  border-radius: var(--radius-sm);
-  background: var(--color-mark);
-  color: var(--color-foreground);
-  padding-inline: 0.15em;
+.toolbar > a:not(.button) {
+  padding-inline: var(--space-3);
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
 }
+
+.toolbar > a:not(.button):hover {
+  color: var(--color-foreground);
+}
+
+/* A post: who and when on one line, then what they wrote. The avatar hangs
+   in its own column, so every line of the conversation starts on one edge. */
+.post {
+  display: grid;
+  grid-template-columns: var(--avatar-size) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-3);
+  scroll-margin-block-start: var(--space-5);
+}
+
+.post > * {
+  grid-column: 2;
+}
+
+.post__avatar {
+  display: grid;
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  place-items: center;
+  align-self: start;
+  inline-size: var(--avatar-size);
+  block-size: var(--avatar-size);
+  border-radius: 50%;
+  background: var(--color-surface-alt);
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  user-select: none;
+}
+
+.post__header {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: var(--avatar-size);
+}
+
+.post__byline {
+  align-items: baseline;
+  max-inline-size: none;
+}
+
+.post__author {
+  color: var(--color-foreground);
+  font-size: 0.9375rem;
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.post__author:hover {
+  text-decoration: underline;
+}
+
+.post__permalink {
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+}
+
+.post__permalink:hover {
+  color: var(--color-foreground);
+}
+
+/* The post a link pointed at: marked on its leading edge until the reader
+   moves on. */
+.post:target .post__avatar {
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+}
+
+.post__attachments {
+  display: grid;
+  gap: var(--space-1);
+  padding: 0;
+  list-style: none;
+  font-size: var(--font-size-sm);
+}
+
+.post__attachments li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.post__attachments span {
+  color: var(--color-subtle);
+}
+
+.post__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-inline-start: calc(-1 * var(--space-3));
+}
+
+.post__actions > form {
+  display: contents;
+}
+
+/* Where a reply is written: the field takes the whole column and reads like
+   the posts above it. */
+.composer {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.composer form {
+  max-inline-size: none;
+}
+
+.composer textarea {
+  min-block-size: 10rem;
+  padding: var(--space-4);
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-reading);
+}
+
+.composer button {
+  justify-self: end;
+}
+
+/* 9. Sheets ---------------------------------------------------------------- */
+
+/* An action that needs a field or a second thought opens over the page: a
+   popover the browser shows, dismisses on Escape or a click outside, and
+   returns focus from. Where popovers are not supported, the sheet stays in
+   the page as a plain panel and every action still works. */
+.sheet {
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-foreground);
+  padding: var(--space-5);
+}
+
+.sheet__header {
+  display: flex;
+  gap: var(--space-4);
+  align-items: start;
+  justify-content: space-between;
+  margin-block-end: var(--space-4);
+}
+
+.sheet h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semibold);
+}
+
+/* A sheet's form ends with what it does, on the side the hand expects. */
+.sheet form > button[type="submit"]:last-child {
+  justify-self: end;
+}
+
+.sheet form {
+  max-inline-size: none;
+}
+
+/* A sheet that holds more than one action sets them apart with a hairline. */
+.sheet form + form,
+.sheet__part + .sheet__part {
+  margin-block-start: var(--space-5);
+  border-block-start: 1px solid var(--color-hairline);
+  padding-block-start: var(--space-5);
+}
+
+.sheet__part {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.sheet__part h3 {
+  font-size: var(--font-size-md);
+}
+
+.sheet__dismiss {
+  display: none;
+  inline-size: 2rem;
+  margin-block-start: calc(-1 * var(--space-1));
+  margin-inline-end: calc(-1 * var(--space-2));
+  padding: 0;
+  font-size: var(--font-size-lg);
+}
+
+.sheet__consequence {
+  color: var(--color-muted);
+}
+
+@supports selector(:popover-open) {
+  .sheet {
+    inline-size: min(34rem, 100vw - 2 * var(--gutter));
+    max-block-size: calc(100dvh - 2 * var(--gutter));
+    overflow: auto;
+    box-shadow: var(--shadow-sheet);
+    opacity: 0;
+    transform: translateY(0.5rem) scale(0.98);
+    transition:
+      opacity var(--ease),
+      transform var(--ease),
+      overlay var(--ease) allow-discrete,
+      display var(--ease) allow-discrete;
+  }
+
+  .sheet:popover-open {
+    opacity: 1;
+    transform: none;
+  }
+
+  @starting-style {
+    .sheet:popover-open {
+      opacity: 0;
+      transform: translateY(0.5rem) scale(0.98);
+    }
+  }
+
+  .sheet::backdrop {
+    background: var(--color-scrim);
+  }
+
+  /* Only where the browser can close a sheet is there a button to do it. */
+  .sheet__dismiss {
+    display: inline-flex;
+  }
+}
+
+.ui-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: var(--color-scrim);
+  padding: var(--space-5);
+}
+
+.ui-dialog__panel {
+  inline-size: min(34rem, 100%);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sheet);
+}
+
+/* 10. Environment ---------------------------------------------------------- */
 
 /* Below the width where brand, a signed-in member's seven links and the
    identity links fit on one line, the header is two rows: the brand with the
@@ -989,42 +1520,62 @@ mark {
   .site-header__inner {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas: "brand identity" "nav nav";
-    column-gap: var(--space-3);
-    min-height: 0;
+    column-gap: var(--space-4);
+    padding-block-start: var(--space-3);
   }
 
   .site-header .site-nav {
-    flex-wrap: nowrap;
     overflow-x: auto;
-    padding-block: var(--space-1) var(--space-2);
-    scrollbar-width: thin;
+    padding-block: var(--space-3);
+    scrollbar-width: none;
   }
 
   .site-header .identity-nav,
   .site-header .identity-form {
-    gap: var(--space-2);
+    column-gap: var(--space-4);
   }
 }
 
-@media (max-width: 760px) {
-  .site-footer {
-    display: grid;
-    grid-template-columns: 1fr;
-    align-items: start;
-  }
-
-  .site-footer nav,
-  .site-footer__preferences {
-    flex-wrap: wrap;
-  }
-
+@media (max-width: 640px) {
   dl {
     grid-template-columns: 1fr;
+    row-gap: 0;
   }
 
-  .ui-page-header {
-    grid-template-columns: 1fr;
-    align-items: start;
+  dd + dt {
+    margin-block-start: var(--space-3);
+  }
+
+  /* On a phone the text takes the full column: the avatar sits on the
+     byline's line instead of holding a column of its own. */
+  .post {
+    --avatar-size: 1.75rem;
+  }
+
+  .post > :not(.post__avatar, .post__header) {
+    grid-column: 1 / -1;
+  }
+
+  /* The thread's actions stay one line, and scroll sideways as the
+     navigation does. */
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .toolbar > * {
+    flex: none;
+  }
+}
+
+/* A finger needs more room than a pointer. */
+@media (pointer: coarse) {
+  button,
+  .button,
+  .button--quiet,
+  nav[aria-label$="pagination" i] a {
+    min-block-size: 2.75rem;
   }
 }
 
@@ -1046,7 +1597,9 @@ mark {
     --color-surface-alt: #ffffff;
     --color-foreground: #000000;
     --color-muted: #222222;
+    --color-subtle: #444444;
     --color-border: #777777;
+    --color-hairline: #bbbbbb;
   }
 
   body {
@@ -1057,10 +1610,9 @@ mark {
   .site-footer,
   .breadcrumbs,
   .flash-stack,
-  .locale-form,
-  .theme-form,
-  .identity-form,
-  .identity-nav,
+  .toolbar,
+  .post__actions,
+  .sheet,
   form,
   .ui-action-list,
   .ui-pagination {
@@ -1069,14 +1621,11 @@ mark {
 
   .page-shell {
     inline-size: 100%;
-    padding-inline: 0;
   }
 
+  .post,
   .ui-card,
-  .ui-card-list > li,
-  article,
-  .card {
+  .ui-card-list > li {
     break-inside: avoid;
-    box-shadow: none;
   }
 }

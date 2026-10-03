@@ -12,5 +12,5 @@
       % }
     </select>
   </label>
-  <button type="submit"><%= t('theme.apply') %></button>
+  <button type="submit" class="button--secondary button--small"><%= t('theme.apply') %></button>
 </form>

@@ -1,4 +1,4 @@
-% layout 'default';
+% layout 'default', shell => 'wide';
 % title t('admin.users') . ' - ' . t('app.name');
 
 <section aria-labelledby="admin-users-heading">

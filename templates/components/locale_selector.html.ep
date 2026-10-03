@@ -12,5 +12,5 @@
       % }
     </select>
   </label>
-  <button type="submit"><%= t('locale.apply') %></button>
+  <button type="submit" class="button--secondary button--small"><%= t('locale.apply') %></button>
 </form>
