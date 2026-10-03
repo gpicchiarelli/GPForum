@@ -69,10 +69,12 @@ through this workflow. `identity_http` rate-limit hashes live on
 
 Coverage lives in `t/103-identity-workflow.t`,
 `t/110-identity-account-store.t`, `t/111-identity-auth-store.t`,
-`t/112-identity-registration-store.t`, `t/114-web-cookie-session.t`,
+`t/114-web-cookie-session.t`,
 `t/124-web-identity-access.t`, `t/129-identity-event.t`,
 `t/141-identity-store-id.t`, `t/146-identity-mailer.t`, and
-`t/147-identity-email-verification.t`. HTTP route
+`t/147-identity-email-verification.t`; the identity stores, the
+registration store among them, run on PostgreSQL in
+`t/integration/postgres-identity-stores.t`. HTTP route
 ownership is covered by `t/92-identity-controllers.t`.
 `Password` and `SessionToken` load `Crypt::URandom` when hashing or issuing
 tokens; `Identity::Store` loads `Service::Id` only for the default

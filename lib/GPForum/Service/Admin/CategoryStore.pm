@@ -9,8 +9,9 @@ use warnings;
 use Const::Fast;
 use Mojo::Base -base, -signatures;
 
-use GPForum::Infrastructure::Row;
 use GPForum::Infrastructure::EventRecorder;
+use GPForum::Infrastructure::Id;
+use GPForum::Infrastructure::Row;
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Admin::Event;
 use GPForum::Service::Clock;
@@ -25,13 +26,11 @@ const my $CATEGORY_ID_CONSTRAINT   => 'categories_pkey';
 const my $CATEGORY_SLUG_CONSTRAINT => 'categories_space_slug_key';
 const my $SPACE_ID_CONSTRAINT      => 'spaces_pkey';
 const my $SPACE_SLUG_CONSTRAINT    => 'spaces_slug_key';
+const my $SLUG_TAKEN               => 'slug is taken';
 
 has clock      => sub { return GPForum::Service::Clock->new; };
-has id_service => sub {
-    require GPForum::Infrastructure::Id;
-    return GPForum::Infrastructure::Id->new;
-};
-has recorder => sub {
+has id_service => sub { return GPForum::Infrastructure::Id->new; };
+has recorder   => sub {
     my ($self) = @_;
 
     return GPForum::Infrastructure::EventRecorder->new(
@@ -120,8 +119,8 @@ sub _category_after_unique ( $self, $input, $error ) {
     if ( _category_id_conflict($error) ) {
         return $self->_category_after_id_conflict($input);
     }
-    if ( _category_slug_conflict($error) ) {
-        return $self->_reuse_category_row( $input, $error );
+    if ( $self->_category_slug_conflict($error) ) {
+        return $self->_reuse_category_row($input);
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
@@ -152,13 +151,21 @@ sub _retry_category_id ( $self, $input ) {
     return $undefined;
 }
 
-sub _reuse_category_row ( $self, $input, $error ) {
+# The slug key holds every row, soft-deleted ones too, while the store looks
+# only for a live category. A slug conflict with no live row behind it is a
+# soft-deleted category's slug: the slug is taken, as a validation error, not
+# a database failure. The INSERT ran in a savepoint, so nothing was written.
+sub _reuse_category_row ( $self, $input ) {
     my $existing = $self->_existing_category($input);
     if ( !$existing ) {
-        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+        return _slug_taken();
     }
 
     return $self->_finish_leftover_category( $existing, $input );
+}
+
+sub _slug_taken {
+    return { errors => { slug => $SLUG_TAKEN } };
 }
 
 sub _category_id_conflict ($error) {
@@ -169,12 +176,14 @@ sub _category_id_conflict ($error) {
     return index( $error, $CATEGORY_ID_CONSTRAINT ) >= 0 ? 1 : 0;
 }
 
-sub _category_slug_conflict ($error) {
-    if ( !defined $error || !length $error ) {
-        return 0;
-    }
-
-    return index( $error, $CATEGORY_SLUG_CONSTRAINT ) >= 0 ? 1 : 0;
+# A unique violation of the space and slug key, read from the server's own
+# sentence. The constraint's name anywhere in the text is not enough: the
+# statement's parameters follow it, and an over-long slug that only spells
+# "duplicate key" fails the index (index row size exceeds the maximum for
+# categories_space_slug_key), which was answered as a slug taken.
+sub _category_slug_conflict ( $self, $error ) {
+    return GPForum::Infrastructure::UniqueConflict->is_conflict_on(
+        $self->schema, $error, $CATEGORY_SLUG_CONSTRAINT );
 }
 
 sub _create_category_row ( $self, $input ) {
@@ -203,7 +212,11 @@ sub _update_once ( $self, $input ) {
         return _skipped_category($row);
     }
 
-    $row->update($updates);
+    my $taken = $self->_write_update( $row, $updates );
+    if ($taken) {
+        return $taken;
+    }
+
     my $category = { %{ _row_hash( $row, _category_columns() ) }, %{$updates} };
     $self->_record_write(
         {
@@ -214,6 +227,27 @@ sub _update_once ( $self, $input ) {
     );
 
     return $category;
+}
+
+# A slug moved onto another category's, live or soft-deleted, meets the space
+# and slug key: the slug is taken. The UPDATE ran in a savepoint, so the
+# transaction goes on.
+sub _write_update ( $self, $row, $updates ) {
+    my ( undef, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $row->update($updates); },
+      );
+    if ( !$error ) {
+        my $undefined;
+        return $undefined;
+    }
+    if ( $self->_category_slug_conflict($error) ) {
+        return _slug_taken();
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    my $undefined;
+    return $undefined;
 }
 
 sub _unchanged_category ( $row, $updates ) {
@@ -266,7 +300,14 @@ sub _ensure_space ( $self, $input ) {
     return $self->_default_space;
 }
 
+# An id from the request that is not a uuid names no row. PostgreSQL refuses
+# it as a uuid parameter, which would answer 503 for what is a 404.
 sub _space_by_id ( $self, $space_id ) {
+    if ( !GPForum::Infrastructure::Id->is_uuid($space_id) ) {
+        my $undefined;
+        return $undefined;
+    }
+
     return _row_hash( $self->schema->resultset('Space')->find($space_id),
         _space_columns() );
 }
@@ -417,6 +458,9 @@ sub _existing_category ( $self, $input ) {
 
 sub _visible_category ( $self, $category_id ) {
     my $undefined;
+    if ( !GPForum::Infrastructure::Id->is_uuid($category_id) ) {
+        return $undefined;
+    }
 
     my $row = $self->schema->resultset('Category')->find($category_id);
     if ( !$row ) {
@@ -667,11 +711,17 @@ using L<GPForum::Service::Admin::Event> hashes.
 
 Creates a category, or returns the existing space/slug row idempotently.
 A unique race on the default C<general> space slug reuses the existing
-space instead of inserting a second row.
+space instead of inserting a second row. Returns undef when a C<space_id>
+is given that is not a uuid or names no space, and
+C<< { errors => { slug => 'slug is taken' } } >> when the slug belongs to a
+soft-deleted category of the space (the space and slug key is not partial).
 
 =head2 update_category
 
-Updates a visible category. Returns undef when the category is missing.
+Updates a visible category. Returns undef when the category id is not a
+uuid or names no visible category, and
+C<< { errors => { slug => 'slug is taken' } } >> when the new slug belongs to
+another category of the space, live or soft-deleted.
 A second write of the same title, slug, description, visibility, and
 position returns C<skipped> and does not bump version, restamp
 C<updated_at>, or emit another event, audit, or outbox row.
@@ -682,8 +732,10 @@ Returns visible categories ordered by position and title.
 
 =head1 DIAGNOSTICS
 
-Returns undef when a requested space or category cannot be resolved. Unexpected
-database errors propagate to L<GPForum::Service::Admin::Workflow>.
+Returns undef when a requested space or category cannot be resolved, an id
+that is not a uuid included: it is checked before any statement is sent.
+Returns an C<errors> hash when the slug is taken. Unexpected database errors
+propagate to L<GPForum::Service::Admin::Workflow>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -692,6 +744,7 @@ Uses the schema, clock, and id service supplied by the composition root.
 =head1 DEPENDENCIES
 
 Uses L<Const::Fast>, L<Mojo::Base>, L<GPForum::Infrastructure::EventRecorder>,
+L<GPForum::Infrastructure::Id>,
 L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Admin::Event>,
 and L<GPForum::Service::Clock>.
 

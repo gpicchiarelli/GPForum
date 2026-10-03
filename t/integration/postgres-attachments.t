@@ -1043,7 +1043,8 @@ sub _post_listing {
 # up to the limit, soft-deleted with an event in their owner's name, or in the
 # name and for the reason the run gives. A linked intent, a served file and an
 # intent younger than a day -- an upload that may still be in flight -- stay.
-# The upload pipeline's purge is the same purge.
+# An upload that crashed after writing its file leaves an orphan whose
+# stored object goes with it.
 sub _orphans {
     my ($ctx) = @_;
 
@@ -1111,12 +1112,9 @@ sub _orphans {
 
     my $crashed = _stored_intent( $ctx, $storage, $TWO_DAYS_AGO );
     my $key     = _attachment_row( $ctx, $crashed )->{object_key};
-    GPForum::Service::Attachment::UploadPipeline->new(
-        storage => $storage,
-        store   => $store,
-    )->cleanup_orphans( { limit => $PURGE_LIMIT } );
+    $store->cleanup_orphans( { limit => $PURGE_LIMIT } );
     is( _attachment_row( $ctx, $crashed )->{state},
-        'deleted', 'the upload pipeline purges an orphan too' );
+        'deleted', 'the purge takes a crashed upload\'s orphan' );
     ok( !$storage->exists_object($key), 'and removes its stored object' );
 
     return;

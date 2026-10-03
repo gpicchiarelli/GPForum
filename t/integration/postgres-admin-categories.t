@@ -7,6 +7,8 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use Digest::SHA qw(sha256_hex);
+use English     qw(-no_match_vars);
 use JSON::MaybeXS;
 use Test::More;
 
@@ -22,15 +24,15 @@ use GPForum::Test::ScriptedId;
 use GPForum::Worker::Handler::CacheInvalidation;
 
 our $VERSION = '0.001';
-our $TODO;
 
-const my $NOW         => '2026-05-23T12:00:00Z';
-const my $LATER       => '2026-05-23T13:00:00Z';
-const my $LIST_LIMIT  => 10;
-const my $TOP         => -1;
-const my $PUBLIC_HTML => 'forum:public-html';
-const my $CREATED     => 'category.created';
-const my $UPDATED     => 'category.updated';
+const my $NOW           => '2026-05-23T12:00:00Z';
+const my $LATER         => '2026-05-23T13:00:00Z';
+const my $LIST_LIMIT    => 10;
+const my $OVERLONG_SLUG => 6_000;
+const my $TOP           => -1;
+const my $PUBLIC_HTML   => 'forum:public-html';
+const my $CREATED       => 'category.created';
+const my $UPDATED       => 'category.updated';
 const my @TABLES => qw(spaces categories event_log outbox_messages
   audit_log);
 
@@ -59,11 +61,7 @@ const my $SPACE_POSITION_SQL =>
   'UPDATE spaces SET position = ? WHERE space_id = ?';
 const my $SPACE_DELETE_SQL =>
   'UPDATE spaces SET deleted_at = now() WHERE space_id = ?';
-
-# The defect this test found in code outside its reach, pinned where it shows
-# (quality program 5.1).
-const my $MALFORMED_TODO =>
-'CategoryStore hands an id that is not a uuid to PostgreSQL, which refuses it';
+const my $SLUG_TAKEN => { errors => { slug => 'slug is taken' } };
 
 if ( !GPForum::Test::PgDatabase->admin_dsn ) {
     plan skip_all => 'set GPFORUM_DATABASE_DSN to run the admin category test';
@@ -87,6 +85,7 @@ _unchanged_edit( $install, $first );
 _default_space_reused( $install, $first );
 _listing($install);
 _missing_rows($install);
+_taken_slugs($install);
 
 # The id collisions need a database the default space is not in yet.
 my $spaces      = _context( GPForum::Test::PgDatabase->fresh );
@@ -391,13 +390,12 @@ sub _missing_rows {
     # t/145 pinned these with ids that were not uuids, which the fake ORM
     # matched as text and did not find. PostgreSQL refuses the statement,
     # and the admin category routes pass the id on as it came, so the store
-    # dies and the route answers 503 for what is a 404. These pass once the
-    # store answers undef for such an id, as for a uuid naming no row: the
-    # workflow already turns that undef into "space not found" or "category
-    # not found". Refusing the id in the controller instead
-    # (GPForum::Web::UrlId) would cover the category id in the path, not a
-    # space_id in the body, and leave these to be dropped rather than pass.
-    local $TODO = $MALFORMED_TODO;
+    # died and the route answered 503 for what is a 404. The store answers
+    # undef for such an id, as for a uuid naming no row, and the workflow
+    # turns that undef into "space not found" or "category not found"
+    # (t/integration/postgres-admin-category-web.t, at the routes). The
+    # store, not the controller (GPForum::Web::UrlId), checks: that covers a
+    # space_id in the body as well as the category id in the path.
     ok(
         _answers_undef(
             sub {
@@ -421,6 +419,85 @@ sub _missing_rows {
         ),
         'update returns undef for a category id that is not a uuid'
     );
+    is_deeply( _tally($ctx), $before, 'and neither writes anything' );
+
+    return;
+}
+
+# categories_space_slug_key is not partial: a soft-deleted category keeps its
+# slug, while the store looks only for a live one. Creating that slug again
+# met the key with no live row to reuse and died, as did moving a category's
+# slug onto another's, live or soft-deleted: the route answered 503. Each is
+# the slug being taken, and none writes anything.
+sub _taken_slugs {
+    my ($ctx) = @_;
+
+    my $before   = _tally($ctx);
+    my $staff_id = _category_id( $ctx, 'staff' );
+    my ( $again, $tries ) = _tried( $ctx, 'categories',
+        sub { return _create( $ctx, { title => 'Announcements' } ) } );
+    is_deeply( $again, $SLUG_TAKEN,
+        'create answers that a soft-deleted category\'s slug is taken' );
+    is( $tries, 1, 'after the INSERT PostgreSQL refused' );
+
+    for my $taken (qw(announcements general-discussion)) {
+        is_deeply(
+            _store($ctx)->update_category(
+                {
+                    actor_user_id => $ctx->{actor_id},
+                    category_id   => $staff_id,
+                    slug          => $taken,
+                }
+            ),
+            $SLUG_TAKEN,
+            "update answers that the slug $taken is taken"
+        );
+    }
+    is( _category_id( $ctx, 'staff' ),
+        $staff_id, 'the category keeps its slug' );
+    is_deeply( _tally($ctx), $before,
+        'and none of them writes a row, event or audit entry' );
+
+    # A slug too long for the key's index fails it with no conflict, and the
+    # error names the index all the same. Read from the whole text, a slug
+    # that spells "duplicate key" made that failure a unique violation, and
+    # the store answered that a slug no category holds was taken.
+    my $overlong = 'duplicate key ' . _incompressible($OVERLONG_SLUG);
+    my %writes   = (
+        create => sub {
+            return _create( $ctx, { slug => $overlong, title => 'Long' } );
+        },
+        update => sub {
+            return _store($ctx)->update_category(
+                {
+                    actor_user_id => $ctx->{actor_id},
+                    category_id   => $staff_id,
+                    slug          => $overlong,
+                }
+            );
+        },
+    );
+    for my $write ( sort keys %writes ) {
+        my $taken = eval { return $writes{$write}->() };
+        my $error = $EVAL_ERROR;
+        ok( !$taken, "$write does not answer an over-long slug as taken" );
+        like(
+            $error,
+            qr/index [ ] row [ ] size [ ] [[:digit:]]+ [ ] exceeds/msx,
+            'but fails with the error PostgreSQL gave'
+        );
+    }
+    is_deeply( _tally($ctx), $before, 'and writes nothing' );
+
+    my $renamed = _store($ctx)->update_category(
+        {
+            actor_user_id => $ctx->{actor_id},
+            category_id   => $staff_id,
+            slug          => 'team',
+        }
+    );
+    is( $renamed->{slug},             'team', 'a free slug is still taken up' );
+    is( _category_id( $ctx, 'team' ), $staff_id, 'by the same category' );
 
     return;
 }
@@ -643,6 +720,19 @@ sub _tried {
     $storage->debugcb(undef);
 
     return ( $result, $inserts );
+}
+
+# $length characters of hex no compression shortens: the index row keeps them.
+sub _incompressible {
+    my ($length) = @_;
+
+    my $text  = q{};
+    my $round = 0;
+    while ( length $text < $length ) {
+        $text .= sha256_hex( $round++ );
+    }
+
+    return substr $text, 0, $length;
 }
 
 sub _titles {

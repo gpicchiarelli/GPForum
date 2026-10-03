@@ -110,16 +110,6 @@ sub _verdict_reason ($verdict) {
     return $undefined;
 }
 
-sub cleanup_orphans ( $self, $input ) {
-    my $cleanup = $self->store->cleanup_orphans($input);
-    for my $attachment ( @{ $cleanup->{deleted} } ) {
-        $self->storage->delete_object( $attachment->{object_key} )
-          if defined $attachment->{object_key};
-    }
-
-    return $cleanup;
-}
-
 sub _link_target ( $self, $input, $attachment_id ) {
     my $undefined;
     return $undefined if !_has_text( $input->{target_type} );
@@ -203,8 +193,6 @@ Version 0.001.
     );
     return $result->{errors} if !$result->{ok};
 
-    my $cleanup = $pipeline->cleanup_orphans( { limit => 100 } );
-
 =head1 DESCRIPTION
 
 One upload, start to finish. The bytes come from C<content> or from an
@@ -240,14 +228,6 @@ C<attachment> (the intent plus the validated C<media_type>, the C<state> and
 the C<scan_status>, C<pending> unless a scan was recorded), C<created> (what
 the store's C<create_intent> returned) and C<link> (the new link, or undef
 when no target was given).
-
-=head2 cleanup_orphans
-
-Takes the hash reference L<GPForum::Service::Attachment::Store/cleanup_orphans>
-takes (C<limit>, C<actor_id>, C<reason>). The store soft-deletes unlinked
-attachments still in the intent state; this method then deletes each one's
-object from storage. Returns the store's result,
-C<< { ok => 1, deleted => [ ... ] } >>.
 
 =head1 DIAGNOSTICS
 

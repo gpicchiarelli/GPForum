@@ -10,8 +10,9 @@ Responsibilities:
   update whose fields already match skips the store restamp;
 - reuse unique role, permission, and attach rows on conflict without a
   second audit;
-- reuse unique category `(space_id, slug)` rows on conflict without a
-  second event;
+- reuse a live category's unique `(space_id, slug)` row on conflict
+  without a second event; a slug a soft-deleted category holds, or an
+  edit onto another category's slug, is `slug is taken`;
 - reuse the unique default `general` space slug on conflict;
 - reuse unique active role-binding scope rows on conflict without a
   second audit;
@@ -46,7 +47,11 @@ exists, so the first administrator can add the first category without
 PerformanceSeed.
 
 Coverage lives in `t/97-admin-workflow.t`, `t/131-admin-event.t`,
-`t/137-web-admin-access.t`, `t/145-admin-category-store.t`,
-`t/152-write-unavailable.t`, and `t/153-lost-response-retry.t` and includes
-success, invalid input, missing-binding, command replay, and first-category
-outcomes. HTTP route ownership is covered by `t/96-admin-controllers.t`.
+`t/137-web-admin-access.t`, `t/152-write-unavailable.t`, and
+`t/153-lost-response-retry.t` and includes success, invalid input,
+missing-binding, command replay, and first-category outcomes. The category
+store runs on PostgreSQL in `t/integration/postgres-admin-categories.t`,
+the routes' answer to a space or category id that is not a uuid and to a
+taken slug in `t/integration/postgres-admin-category-web.t`, and the role
+catalog and binding stores in `t/integration/postgres-admin-authorization.t`.
+HTTP route ownership is covered by `t/96-admin-controllers.t`.

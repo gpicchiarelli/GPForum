@@ -573,6 +573,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- Removed `Attachment::UploadPipeline::cleanup_orphans`, which had no caller
+  and could not delete files in production; the purge is
+  `Attachment::Store::cleanup_orphans`, run by the scheduled jobs.
+
 - `GPFORUM_OS_WORKER_PRIORITY=on` reports the action `supervisor-nice` and
   the policy `declared-for-the-supervisor`: nothing in GPForum calls
   setpriority, the supervisor applies the nice value.
@@ -826,6 +830,13 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- Admin category routes answer 404, not 503, for a space id in the body or a
+  category id in the path that is not a uuid. A slug a soft-deleted category
+  still holds, or an edit onto another category's slug, answers 400 naming
+  the slug instead of 503: the store reports the slug taken (read from
+  PostgreSQL's own message, so an over-long slug is not mistaken for one) and
+  `Admin::Workflow` maps a store's errors to `invalid`.
 
 - A retried notification delivery no longer writes a second `notifications`
   row when its leftover row is stored at another time or in another month's

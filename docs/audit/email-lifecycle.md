@@ -70,9 +70,9 @@ Delivery stayed disconnected: tokens were issued and then discarded.
 
 ## Test evidence
 
-- `t/08-identity-store.t`: hashed token, expiry, SQL lock, single use,
-  credential rotation, session revocation, audit, confirmed email change, and
-  rejected replay.
+- `t/integration/postgres-identity-stores.t`: hashed token, expiry, SQL
+  lock, single use, credential rotation, session revocation, audit,
+  confirmed email change, and rejected replay.
 - `t/110-identity-account-store.t`: password/email/verification commands on the
   account store with injected collaborators, without `Crypt::URandom`.
 - `t/111-identity-auth-store.t`: pending login rejected with no session.
@@ -118,7 +118,8 @@ Delivery stayed disconnected: tokens were issued and then discarded.
 ## Minimum commands
 
 ```sh
-script/gpforum-carton exec prove -lr t/05-database.t t/06-identity-web.t t/08-identity-store.t \
+script/gpforum-carton exec prove -lr t/05-database.t t/06-identity-web.t \
+  t/integration/postgres-identity-stores.t \
   t/103-identity-workflow.t t/146-identity-mailer.t \
   t/147-identity-email-verification.t t/152-write-unavailable.t \
   t/153-lost-response-retry.t t/154-identity-mail.t t/162-mail-check.t

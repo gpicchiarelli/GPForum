@@ -183,6 +183,34 @@ my $missing_category = $workflow->update_category(
 is( $missing_category->{status},
     'not_found', 'update_category maps a missing category to not_found' );
 
+my $taken_create = $workflow->create_category(
+    {
+        actor_user_id => 'admin-1',
+        command_id    => 'category-taken',
+        slug          => 'taken',
+        title         => 'Taken',
+    }
+);
+is( $taken_create->{status},
+    'invalid', 'create_category maps a store refusing the slug to invalid' );
+is(
+    $taken_create->{errors}{slug},
+    'slug is taken',
+    'and hands on the store\'s own error'
+);
+ok( !$taken_create->{ok}, 'and does not report the write as done' );
+
+my $taken_update = $workflow->update_category(
+    {
+        actor_user_id => 'admin-1',
+        category_id   => 'category-1',
+        command_id    => 'category-update-taken',
+        slug          => 'taken',
+    }
+);
+is( $taken_update->{status},
+    'invalid', 'update_category maps a store refusing the slug to invalid' );
+
 my $idempotency = GPForum::Test::CommandIdempotency->new;
 my $commanded   = GPForum::Service::Admin::Workflow->new(
     binding_store       => $services,

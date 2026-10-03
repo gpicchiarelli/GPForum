@@ -107,6 +107,7 @@ sub create_category {
     my ( $self, $input ) = @_;
 
     push @{ $self->category_creates }, $input;
+    return _slug_taken() if _taken_slug($input);
 
     my $category;
     if ( !_missing_space( $input->{space_id} ) ) {
@@ -120,6 +121,7 @@ sub update_category {
     my ( $self, $input ) = @_;
 
     push @{ $self->category_updates }, $input;
+    return _slug_taken() if _taken_slug($input);
 
     my $category;
     if ( ( $input->{category_id} || q{} ) eq 'category-1' ) {
@@ -127,6 +129,18 @@ sub update_category {
     }
 
     return $category;
+}
+
+# The slug the category store refuses as taken, as the PostgreSQL store does
+# for a slug a soft-deleted category still holds.
+sub _taken_slug {
+    my ($input) = @_;
+
+    return ( $input->{slug} // q{} ) eq 'taken' ? 1 : 0;
+}
+
+sub _slug_taken {
+    return { errors => { slug => 'slug is taken' } };
 }
 
 sub _missing_space {

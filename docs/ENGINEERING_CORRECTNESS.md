@@ -18,7 +18,7 @@ websocket hubs, and workers are execution boundaries, not authority boundaries.
 | author edits | An author's post edit, delete or restore takes the thread row (`FOR KEY SHARE`) and then the post row (`FOR UPDATE`), and a thread title edit, delete, restore or move takes the thread row (`FOR UPDATE`); under those locks the store re-checks what the workflow checked. A post hidden or deleted since, or a thread locked, hidden, deleted or (for a thread restore) restored since, is refused with the workflow's own status, nothing is written, and the refusal is the command's recorded answer. | `t/11-forum-thread.t`, `t/12-forum-post.t`, `t/72-forum-bootstrap-workflow.t`, `t/integration/postgres-concurrency.t` |
 | read-state | Per-user thread read state is monotonic and stored with a delta row; lower positions cannot regress the marker. | `t/41-thread-read-state.t`, `t/86-engineering-correctness.t` |
 | moderation | Moderation state transitions are transactional, audited, evented, and outboxed; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/25-moderation-review.t`, `t/43-moderation-web.t`, `t/86-engineering-correctness.t` |
-| privacy | Deletion requests, legal holds, erasure jobs, and completion retries are transactional; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/29-privacy-rights.t`, `t/62-privacy-web.t`, `t/86-engineering-correctness.t` |
+| privacy | Deletion requests, legal holds, erasure jobs, and completion retries are transactional; full command-level replay safety is tracked in `docs/audit/transactional-correctness.md`. | `t/62-privacy-web.t`, `t/86-engineering-correctness.t`, `t/integration/postgres-privacy.t` |
 | controller boundary | Controllers do not access DBIx::Class resultsets or perform direct writes; write commands go through services/stores/workflows. | `script/architecture-check`, `t/34-architecture-discipline.t`, `t/86-engineering-correctness.t` |
 | templates | Templates render prepared view data only; no persistence access or business writes live in templates. | `script/architecture-check`, `t/86-engineering-correctness.t` |
 | hot paths | Application and template hot paths must not use `OFFSET`; pagination remains keyset/bounded. | `script/query-plan-check`, `t/47-query-plan-check.t`, `t/86-engineering-correctness.t` |
@@ -183,7 +183,13 @@ Idempotency is explicit at the domain edge, not inferred from transport retry:
 - notification delivery reuses the unique inbox `(recipient, notification)`
   row and does not insert a second notification on conflict; a unique race
   on leftover `notifications_pkey` reuses this notification and inserts the
-  missing inbox, and does not remint `notification_id`;
+  missing inbox, and does not remint `notification_id`. On PostgreSQL that
+  key is `(notification_id, created_at)` on the partitioned table, so the
+  race is raised only when the leftover row carries the `created_at` this
+  delivery writes. A leftover from another time never meets the key: the
+  delivery looks the id up in every partition before it inserts, writes no
+  second notification row, and gives the inbox row the stored `created_at`
+  (ADR 0116);
 - notification mark-read reuses the unique
   `(notification_id, recipient_user_id)` row and does not insert a second
   read on conflict;
@@ -220,7 +226,10 @@ Idempotency is explicit at the domain edge, not inferred from transport retry:
   insert a second event on conflict; a unique race on leftover
   `category_id` with this space and slug reuses the category and inserts
   the missing event; a unique race on `category_id` remints the id once
-  and does not return another category;
+  and does not return another category; a slug only a soft-deleted
+  category of the space holds, on create, or another category's slug, on
+  update, answers `slug is taken` and writes nothing (the key is not
+  partial);
 - default-space create reuses the unique `general` slug and does not insert
   a second space on conflict; a unique race on leftover `space_id` with
   this slug reuses the space; a unique race on `space_id` remints the id

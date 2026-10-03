@@ -511,6 +511,16 @@ sub _run_store ( $self, $not_found, $code ) {
         );
     }
 
+    # A store that refuses the write on its own terms (a slug taken by a
+    # soft-deleted category, which PostgreSQL's key still holds) answers its
+    # errors instead of a row: invalid, not a write that happened.
+    if ( ref $stored->{value} eq 'HASH' && $stored->{value}{errors} ) {
+        return _result(
+            errors => $stored->{value}{errors},
+            status => 'invalid',
+        );
+    }
+
     return _result(
         status => 'ok',
         stored => $stored->{value},

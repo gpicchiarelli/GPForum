@@ -51,7 +51,7 @@ the fake tests.
 | claim crash before dispatch | `t/84-outbox-concurrent-dispatcher.t`, `t/integration/postgres-outbox-reclaim.t` |
 | expired running lock reclaim (PG) | `t/integration/postgres-outbox-reclaim.t` |
 | forum rollback | `t/86-engineering-correctness.t` (thread, report, hide, approval) |
-| idempotent privacy erasure | `t/29-privacy-rights.t` |
+| idempotent privacy erasure | `t/integration/postgres-privacy.t` |
 | realtime DB unavailable | `t/81-realtime-operational.t` |
 | readiness payload | `t/23-operations-hardening.t`, `t/77-web-technical-payloads.t` |
 | write DB unavailable | `t/152-write-unavailable.t` |
@@ -68,8 +68,8 @@ the fake tests.
 - `ErasureJob` exposes `erasure_jobs_request_key`;
 - `DeletionWorkflow::approve_request` locks the deletion request with
   `FOR UPDATE` before looking up or creating the job;
-- `t/29-privacy-rights.t` verifies the lock, approval replay, and the absence of
-  duplicate jobs/actions.
+- `t/integration/postgres-privacy.t` verifies the lock, approval replay, and
+  the absence of duplicate jobs/actions.
 
 ## Next priority failure tests
 
