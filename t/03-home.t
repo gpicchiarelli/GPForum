@@ -38,7 +38,10 @@ $test->element_exists(q{a[href="/c/category-1"]});
 $test->element_exists(q{a[href="/t/thread-1"]});
 $test->text_is( 'ol li .ui-count' => '1 reply' );
 $test->element_exists(q{nav[aria-label="Latest discussion pagination"]});
-$test->content_like(qr/Web [ ] processes/msx);
+
+# The home page is the forum. How many processes serve it is the operator's
+# business, and is on the console's status page.
+$test->content_unlike(qr/Web [ ] processes/msx);
 $test->element_exists('footer a[href="/legal/terms"]');
 $test->element_exists('footer a[href="/legal/privacy"]');
 $test->element_exists('footer a[href="/legal/cookies"]');

@@ -906,10 +906,6 @@ msgctxt "auth.login_next_steps"
 msgid "Login next steps"
 msgstr "Passi successivi accesso"
 
-msgctxt "auth.login_status"
-msgid "You are signed in."
-msgstr "Hai effettuato l’accesso."
-
 msgctxt "auth.login_title"
 msgid "Login"
 msgstr "Accesso"
@@ -933,10 +929,6 @@ msgstr "Esci"
 msgctxt "auth.logout_next_steps"
 msgid "Logout next steps"
 msgstr "Passi successivi uscita"
-
-msgctxt "auth.logout_status"
-msgid "You are signed out."
-msgstr "Sei uscito."
 
 msgctxt "auth.new_password"
 msgid "New password"
@@ -1248,10 +1240,6 @@ msgctxt "forum.browse_categories"
 msgid "Browse categories"
 msgstr "Sfoglia categorie"
 
-msgctxt "forum.by_author"
-msgid "By"
-msgstr "Di"
-
 msgctxt "forum.categories_empty"
 msgid "No categories are visible yet."
 msgstr "Nessuna categoria visibile."
@@ -1523,10 +1511,6 @@ msgctxt "forum.reading_progress"
 msgid "Reading progress"
 msgstr "Avanzamento lettura"
 
-msgctxt "forum.realtime_processes"
-msgid "Realtime processes"
-msgstr "Processi realtime"
-
 msgctxt "forum.reply"
 msgid "Reply"
 msgstr "Risposta"
@@ -1557,11 +1541,6 @@ msgstr "Ripristina post"
 msgctxt "forum.restore_thread"
 msgid "Restore thread"
 msgstr "Ripristina discussione"
-
-# Same as English.
-msgctxt "forum.runtime"
-msgid "Runtime"
-msgstr "Runtime"
 
 msgctxt "forum.save_edit"
 msgid "Save edit"
@@ -1659,14 +1638,6 @@ msgstr "Privata"
 msgctxt "forum.visibility_public"
 msgid "Public"
 msgstr "Pubblica"
-
-msgctxt "forum.web_processes"
-msgid "Web processes"
-msgstr "Processi web"
-
-msgctxt "forum.worker_processes"
-msgid "Worker processes"
-msgstr "Processi worker"
 
 msgctxt "layout.flash_messages"
 msgid "Messages"
@@ -1819,10 +1790,6 @@ msgid ""
 msgstr ""
 "Gli operatori sostituiscono questa pagina con i termini dell'istanza prima "
 "della produzione. Il software è con licenza BSD-3."
-
-msgctxt "locale.apply"
-msgid "Apply"
-msgstr "Applica"
 
 msgctxt "locale.choose"
 msgid "Language"
@@ -2602,13 +2569,13 @@ msgctxt "profile.trust_badge"
 msgid "Trust badge"
 msgstr "Badge trust"
 
-msgctxt "search.author"
-msgid "Author"
-msgstr "Autore"
-
 msgctxt "search.by_author"
 msgid "By"
 msgstr "Di"
+
+msgctxt "search.by_one_author"
+msgid "By one author"
+msgstr "Di un solo autore"
 
 msgctxt "search.category"
 msgid "Category"
@@ -2684,6 +2651,10 @@ msgctxt "search.results_summary"
 msgid "{count} results"
 msgstr "{count} risultati"
 
+msgctxt "search.search_everywhere"
+msgid "Search everywhere"
+msgstr "Cerca ovunque"
+
 msgctxt "search.submit"
 msgid "Search"
 msgstr "Cerca"
@@ -2695,6 +2666,10 @@ msgstr "Cerca"
 msgctxt "search.to"
 msgid "To"
 msgstr "A"
+
+msgctxt "search.within_category"
+msgid "Within one category"
+msgstr "In una sola categoria"
 
 msgctxt "settings.appearance"
 msgid "Language and theme"
@@ -2883,10 +2858,6 @@ msgstr "Discussione"
 msgctxt "target.user"
 msgid "User"
 msgstr "Utente"
-
-msgctxt "theme.apply"
-msgid "Apply"
-msgstr "Applica"
 
 msgctxt "theme.auto"
 msgid "Automatic"

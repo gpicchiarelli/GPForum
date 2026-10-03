@@ -14,6 +14,10 @@
     actions_label => t('forum.category_actions'),
     actions => ui_actions(
       {
+        href => url_for('forum_search')->query(category_id => $category->{category_id}),
+        label => t('nav.search'),
+      },
+      {
         class => 'button',
         href => url_for('new_thread')->query(category_id => $category->{category_id}),
         label => t('nav.start_thread'),

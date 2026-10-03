@@ -84,17 +84,3 @@
       component_title => t('forum.no_public_discussions') %>
   % }
 </section>
-
-<section aria-labelledby="home-runtime-heading">
-  <%= include 'components/section_header',
-    heading_id => 'home-runtime-heading',
-    component_title => t('forum.runtime') %>
-  <dl>
-    <dt><%= t('forum.web_processes') %></dt>
-    <dd><%= $runtime->{web_processes} %></dd>
-    <dt><%= t('forum.worker_processes') %></dt>
-    <dd><%= $runtime->{worker_processes} %></dd>
-    <dt><%= t('forum.realtime_processes') %></dt>
-    <dd><%= $runtime->{realtime_processes} %></dd>
-  </dl>
-</section>

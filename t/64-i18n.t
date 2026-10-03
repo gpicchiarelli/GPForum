@@ -54,8 +54,8 @@ is(
     'template variables interpolate inside translated strings'
 );
 is(
-    $i18n->translate( 'it', 'auth.login_status' ),
-    'Hai effettuato l’accesso.',
+    $i18n->translate( 'it', 'auth.login_accepted_title' ),
+    'Hai effettuato l’accesso',
     'Italian UI uses real apostrophes'
 );
 is(
