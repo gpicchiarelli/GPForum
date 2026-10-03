@@ -8,13 +8,17 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
-use English    qw(-no_match_vars);
-use File::Temp qw(tempdir);
+use English       qw(-no_match_vars);
+use File::Temp    qw(tempdir);
+use JSON::MaybeXS qw(decode_json encode_json);
+use Mojolicious;
+use POSIX qw(_exit);
 use Test::More;
 
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Command::ScheduledJobs;
 use GPForum::Infrastructure::Id;
 use GPForum::Service::Attachment::Delivery;
 use GPForum::Service::Attachment::Event;
@@ -24,6 +28,7 @@ use GPForum::Service::Attachment::MediaProcessor;
 use GPForum::Service::Attachment::Store;
 use GPForum::Service::Attachment::UploadPipeline;
 use GPForum::Service::Forum::Readability;
+use GPForum::Service::Operations::ScheduledJobs;
 use GPForum::Test::Antivirus;
 use GPForum::Test::CountingAttachmentStorage;
 use GPForum::Test::FixedClock;
@@ -38,8 +43,7 @@ our $VERSION = '0.001';
 our $TODO;
 
 const my $NOW           => '2026-05-23T12:00:00Z';
-const my $EARLIER       => '2026-05-23T11:00:00Z';
-const my $EARLIEST      => '2026-05-23T10:00:00Z';
+const my $NOW_EPOCH     => 1_779_537_600;
 const my $VALID_BYTES   => 4_096;
 const my $VARIANT_BYTES => 512;
 const my $PURGE_LIMIT   => 10;
@@ -51,10 +55,31 @@ const my %TABLE_OF => (
     link_attachment => 'attachment_links',
 );
 
+# The orphan purge takes an intent a day old (Lifecycle::orphan_min_age):
+# these are its ages, oldest first, against the clock's $NOW. $A_DAY_AGO is
+# the boundary itself, which the purge takes, and $NEARLY_A_DAY a second
+# short of it, which the purge leaves.
+const my $THREE_DAYS_AGO => '2026-05-20T12:00:00Z';
+const my $TWO_DAYS_AGO   => '2026-05-21T12:00:00Z';
+const my $A_DAY_AGO      => '2026-05-22T12:00:00Z';
+const my $NEARLY_A_DAY   => '2026-05-22T12:00:01Z';
+const my $AN_HOUR_AGO    => '2026-05-23T11:00:00Z';
+const my $HALF_AN_HOUR   => 1_800;
+const my $UNSAFE_KEY     => 'attachments/not a safe key';
+
+# How long a purge in a child process is watched for waiting on a lock.
+const my $BLOCK_POLLS        => 100;
+const my $BLOCK_POLL_SECONDS => 0.05;
+const my $BLOCKED_ON_SQL => join q{ },
+  'SELECT count(*) FROM pg_stat_activity',
+  'WHERE ? = ANY (pg_blocking_pids(pid))';
+
+# The lock timeout of a purge that must give up on a held row rather than
+# wait for it (GPFORUM_DATABASE_LOCK_TIMEOUT_MS).
+const my $SHORT_LOCK_TIMEOUT_MS => 200;
+
 # The defects this test found in code outside its reach, each pinned where it
 # shows (quality program 5.1).
-const my $ROW_HASH_TODO =>
-  'Attachment::Record::row_hash reads no column of a DBIx::Class row';
 const my $THREAD_TODO =>
   'DownloadAccess reads hidden_at, a column threads do not have';
 
@@ -113,8 +138,9 @@ if ( !GPForum::Test::PgDatabase->admin_dsn ) {
 # can read the post or thread (ADR 0102). The antivirus stays a double; the
 # rows do not. These ran on a fake ORM in t/22, whose rows had a data method
 # no DBIx::Class row has: on PostgreSQL a replayed link, variant or thumbnail,
-# a deletion and a post's list of files come back without their columns. And
-# t/22 never served a file through a thread, which on PostgreSQL dies.
+# a deletion and a post's list of files came back without their columns, until
+# they were copied with get_columns. And t/22 never served a file through a
+# thread, which on PostgreSQL dies.
 my $clone = GPForum::Test::PgDatabase->fresh;
 my $files = _context($clone);
 
@@ -132,9 +158,14 @@ _pipeline($files);
 _pipeline_verdicts($files);
 _post_listing( $files, _reader_downloads($files) );
 
-# The purge takes from every intent in the database, so it has one to itself.
-my $purge_clone = GPForum::Test::PgDatabase->fresh;
-_orphans( _context($purge_clone) );
+# The purge takes from every intent in the database, so each of its cases has
+# one to itself.
+for my $case ( \&_orphans, \&_orphan_files, \&_orphan_limit, \&_orphan_job,
+    \&_orphan_runs_at_once, \&_orphan_link_in_flight, \&_orphan_lock_timeout, )
+{
+    my $database = GPForum::Test::PgDatabase->fresh;
+    $case->( _context($database) );
+}
 
 done_testing();
 
@@ -142,8 +173,9 @@ sub _context {
     my ($database) = @_;
 
     my $ctx = {
-        clock  => GPForum::Test::FixedClock->new,
+        clock  => GPForum::Test::FixedClock->new( epoch => $NOW_EPOCH ),
         dbh    => $database->dbh,
+        dsn    => $database->dsn,
         ids    => GPForum::Infrastructure::Id->new,
         schema => $database->schema,
     };
@@ -481,8 +513,6 @@ sub _link_id_races {
         $kept, 'leftover attachment link id race keeps this link' );
     is( _count( $ctx, 'attachment_links', { attachment_id => $kept_file } ),
         1, 'leftover attachment link id race does not insert a second link' );
-
-    local $TODO = $ROW_HASH_TODO;
     is( $replayed->{attachment_link_id},
         $kept, 'leftover attachment link id race reports the link it kept' );
     is( $replayed->{attachment_id},
@@ -640,8 +670,6 @@ sub _variant_id_races {
         1,
         'leftover variant id race does not insert a second variant'
     );
-
-    local $TODO = $ROW_HASH_TODO;
     is( $replayed->{attachment_variant_id},
         $kept, 'leftover variant id race reports the variant it kept' );
     is( $replayed->{attachment_id},
@@ -673,13 +701,11 @@ sub _delete_linked {
         'delete_linked is not a replay on the first delete' );
     is( _events( $ctx, $id, 'attachment.deleted' ),
         1, 'delete_linked records the deletion event' );
-    {
-        local $TODO = $ROW_HASH_TODO;
-        is( $deleted->{attachment}{attachment_id},
-            $id, 'delete_linked reports the attachment it deleted' );
-        is( _audits( $ctx, $id, 'attachment.deleted' ),
-            1, 'and audits the deletion under its id' );
-    }
+    is( $deleted->{attachment}{attachment_id},
+        $id, 'delete_linked reports the attachment it deleted' );
+    is( $deleted->{attachment}{state}, 'deleted', 'as deleted' );
+    is( _audits( $ctx, $id, 'attachment.deleted' ),
+        1, 'and audits the deletion under its id' );
 
     my $replay = $store->delete_linked($input);
     ok( $replay->{ok}, 'delete_linked replays an already-deleted row' );
@@ -687,11 +713,9 @@ sub _delete_linked {
         'delete_linked marks an already-deleted row as idempotent' );
     is( _events( $ctx, $id, 'attachment.deleted' ),
         1, 'a replayed delete records nothing more' );
-    {
-        local $TODO = $ROW_HASH_TODO;
-        is( $replay->{attachment}{attachment_id},
-            $id, 'a replayed delete reports the attachment it found deleted' );
-    }
+    is( $replay->{attachment}{attachment_id},
+        $id, 'a replayed delete reports the attachment it found deleted' );
+    is( $replay->{attachment}{state}, 'deleted', 'in the state it found it' );
 
     my $unlinked =
       $store->delete_linked( { %{$input}, target_id => $ctx->{ids}->uuid } );
@@ -806,11 +830,13 @@ sub _media {
         $replayed->{variant}{idempotent},
         'media processor retry is idempotent'
     );
-    {
-        local $TODO = $ROW_HASH_TODO;
-        is( $replayed->{variant}{variant_type},
-            'thumbnail', 'and names the thumbnail it kept' );
-    }
+    is( $replayed->{variant}{variant_type},
+        'thumbnail', 'and names the thumbnail it kept' );
+    is(
+        $replayed->{variant}{attachment_variant_id},
+        $processed->{variant}{attachment_variant_id},
+        'the one it wrote the first time'
+    );
     is( scalar @{ $media_storage->reads },
         1, 'already-applied thumbnail does not reread the object' );
     is( _count( $ctx, 'attachment_variants', { attachment_id => $id } ),
@@ -1007,27 +1033,29 @@ sub _post_listing {
         1, 'a members-only post lists its file to a member' );
     is_deeply( $store->attachments_for_posts( [$post], {} ),
         {}, 'and nothing to a visitor' );
-
-    local $TODO = $ROW_HASH_TODO;
     is( $listed->{$post}[0]{attachment_id},     $club_file,   'by its id' );
     is( $listed->{$post}[0]{original_filename}, 'seeded.txt', 'and its name' );
 
     return;
 }
 
-# The purge of orphans: intents nobody linked, oldest first and up to the
-# limit, soft-deleted with an event in their owner's name, or in the name and
-# for the reason the run gives. A linked intent and a served file stay; the
-# upload pipeline's purge removes the stored object as well.
+# The purge of orphans: intents nobody linked and a day old, oldest first and
+# up to the limit, soft-deleted with an event in their owner's name, or in the
+# name and for the reason the run gives. A linked intent, a served file and an
+# intent younger than a day -- an upload that may still be in flight -- stay.
+# The upload pipeline's purge is the same purge.
 sub _orphans {
     my ($ctx) = @_;
 
-    my $oldest = _intent_row( $ctx, $EARLIEST );
-    my $orphan = _intent_row( $ctx, $EARLIER );
-    my $linked = _intent_row( $ctx, $NOW );
+    my $oldest  = _intent_row( $ctx, $TWO_DAYS_AGO );
+    my $orphan  = _intent_row( $ctx, $A_DAY_AGO );
+    my $linked  = _intent_row( $ctx, $A_DAY_AGO );
+    my $served  = _attachment( $ctx, { created_at => $TWO_DAYS_AGO } );
+    my $young   = _intent_row( $ctx, $AN_HOUR_AGO );
+    my $nearly  = _intent_row( $ctx, $NEARLY_A_DAY );
+    my $storage = _storage();
+    my $store   = _store( $ctx, storage => $storage );
     _link( $ctx, $linked, $ctx->{forum}{post} );
-    my $served = _attachment( $ctx, { created_at => $EARLIEST } );
-    my $store  = _store($ctx);
 
     is( scalar @{ $store->cleanup_orphans( { limit => 1 } )->{deleted} },
         1, 'the purge stops at its limit' );
@@ -1038,19 +1066,25 @@ sub _orphans {
 
     my $cleanup = $store->cleanup_orphans( { limit => $PURGE_LIMIT } );
     is( scalar @{ $cleanup->{deleted} }, 1, 'cleanup deletes one orphan' );
+    is( $cleanup->{deleted}[0]{attachment_id},
+        $orphan, 'and reports the attachment it deleted' );
     is( _attachment_row( $ctx, $orphan )->{state},
         'deleted', 'cleanup soft-deletes orphan' );
     is( _attachment_row( $ctx, $linked )->{state},
         'intent', 'cleanup keeps linked attachment' );
     is( _attachment_row( $ctx, $served )->{state},
         'available', 'cleanup leaves a served file alone' );
+    is( _attachment_row( $ctx, $young )->{state},
+        'intent', 'and an intent younger than a day, which may be in flight' );
+    is( _attachment_row( $ctx, $nearly )->{state},
+        'intent', 'even one a second short of the day' );
     is_deeply(
         _deletion( $ctx, $orphan ),
         [ $ctx->{users}{author}, 'orphan cleanup' ],
         'the purge records the deletion in the owner\'s name, as orphan cleanup'
     );
 
-    my $swept = _intent_row( $ctx, $EARLIEST );
+    my $swept = _intent_row( $ctx, $TWO_DAYS_AGO );
     $store->cleanup_orphans(
         {
             actor_id => $ctx->{users}{other},
@@ -1064,22 +1098,408 @@ sub _orphans {
         'a purge run for someone records their name and reason instead'
     );
 
-    my $storage = GPForum::Service::Attachment::FilesystemStorage->new(
-        root => tempdir( CLEANUP => 1 ) );
-    my $crashed = _intent_row( $ctx, $EARLIEST );
+    $store->cleanup_orphans( { limit => $PURGE_LIMIT, min_age => 0 } );
+    is_deeply(
+        [ map { _attachment_row( $ctx, $_ )->{state} } $nearly, $young ],
+        [ 'intent',                                             'intent' ],
+        'a minimum age of zero is not taken: the day stands'
+    );
+    $store->cleanup_orphans(
+        { limit => $PURGE_LIMIT, min_age => $HALF_AN_HOUR } );
+    is( _attachment_row( $ctx, $young )->{state},
+        'deleted', 'a run given a shorter minimum age takes the hour-old one' );
+
+    my $crashed = _stored_intent( $ctx, $storage, $TWO_DAYS_AGO );
     my $key     = _attachment_row( $ctx, $crashed )->{object_key};
-    $storage->write_object( $key, $PNG_BYTES );
     GPForum::Service::Attachment::UploadPipeline->new(
         storage => $storage,
         store   => $store,
     )->cleanup_orphans( { limit => $PURGE_LIMIT } );
     is( _attachment_row( $ctx, $crashed )->{state},
         'deleted', 'the upload pipeline purges an orphan too' );
-
-    local $TODO = $ROW_HASH_TODO;
     ok( !$storage->exists_object($key), 'and removes its stored object' );
 
     return;
+}
+
+# What the purge does to the stored files: the original's and its variants'
+# go before the row, a run that finds them gone already purges the row all
+# the same, and a file the storage will not remove leaves its orphan for the
+# next run while the others are purged. Without a storage it purges nothing,
+# rather than delete rows whose files would then stay for good.
+sub _orphan_files {
+    my ($ctx) = @_;
+
+    my $storage   = _storage();
+    my $abandoned = _stored_intent( $ctx, $storage, $A_DAY_AGO );
+    my $original  = _attachment_row( $ctx, $abandoned )->{object_key};
+    _variant( $ctx, $abandoned );
+    my $thumbnail = "variants/$abandoned/thumb";
+    $storage->write_object( $thumbnail, $PNG_BYTES );
+    my $served = _attachment( $ctx, { created_at => $TWO_DAYS_AGO } );
+    $storage->write_object( _attachment_row( $ctx, $served )->{object_key},
+        $PNG_BYTES );
+    my $young = _stored_intent( $ctx, $storage, $AN_HOUR_AGO );
+
+    my $refused = _store($ctx)->cleanup_orphans( { limit => $PURGE_LIMIT } );
+    is_deeply(
+        $refused,
+        { deleted => [], ok => 1, skipped => 'no attachment storage' },
+        'a purge without a storage says so'
+    );
+    is( _attachment_row( $ctx, $abandoned )->{state},
+        'intent', 'and leaves the orphan for a run that can remove its files' );
+
+    my $store   = _store( $ctx, storage => $storage );
+    my $cleanup = $store->cleanup_orphans( { limit => $PURGE_LIMIT } );
+    is_deeply(
+        [
+            $cleanup->{ok}, map { $_->{attachment_id} } @{ $cleanup->{deleted} }
+        ],
+        [ 1, $abandoned ],
+        'the purge deletes the abandoned intent'
+    );
+    is( _attachment_row( $ctx, $abandoned )->{state},
+        'deleted', 'soft-deleting its row' );
+    ok( !$storage->exists_object($original),  'removes its stored object' );
+    ok( !$storage->exists_object($thumbnail), 'and the object of its variant' );
+    is(
+        _count( $ctx, 'attachment_variants', { attachment_id => $abandoned } ),
+        1,
+        'whose row stays with the deleted attachment'
+    );
+    ok(
+        $storage->exists_object(
+            _attachment_row( $ctx, $served )->{object_key}
+        ),
+        'a served file keeps its object'
+    );
+    ok(
+        $storage->exists_object(
+            _attachment_row( $ctx, $young )->{object_key}
+        ),
+        'and so does an upload that may be in flight'
+    );
+    is_deeply(
+        $store->cleanup_orphans( { limit => $PURGE_LIMIT } ),
+        { deleted => [], ok => 1 },
+        'a second run finds nothing to purge'
+    );
+
+    # A run that removed the files and died before the delete.
+    my $half_done = _intent_row( $ctx, $A_DAY_AGO );
+    is(
+        scalar
+          @{ $store->cleanup_orphans( { limit => $PURGE_LIMIT } )->{deleted} },
+        1,
+        'an orphan whose files are already gone is purged'
+    );
+    is( _attachment_row( $ctx, $half_done )->{state},
+        'deleted', 'its row deleted all the same' );
+
+    my $stuck = _attachment(
+        $ctx,
+        {
+            created_at  => $TWO_DAYS_AGO,
+            object_key  => $UNSAFE_KEY,
+            scan_status => 'pending',
+            state       => 'intent',
+        }
+    );
+    my $next    = _stored_intent( $ctx, $storage, $A_DAY_AGO );
+    my $partial = $store->cleanup_orphans( { limit => $PURGE_LIMIT } );
+    is( $partial->{ok}, 0, 'a file the storage will not remove fails the run' );
+    like(
+        join( qq{\n}, @{ $partial->{errors} || [] } ),
+qr/\A \Q$stuck\E: [ ] attachment [ ] object [ ] key [ ] is [ ] unsafe \z/msx,
+        'naming the orphan and why'
+    );
+    is( _attachment_row( $ctx, $stuck )->{state},
+        'intent', 'which stays for the next run' );
+    is_deeply( [ map { $_->{attachment_id} } @{ $partial->{deleted} } ],
+        [$next], 'while the orphan after it is purged' );
+    ok(
+        !$storage->exists_object(
+            _attachment_row( $ctx, $next )->{object_key}
+        ),
+        'with its file'
+    );
+
+    return;
+}
+
+# The limit counts orphans: linked intents at the head of the queue used to
+# fill it, and kept every run from reaching the orphan behind them.
+sub _orphan_limit {
+    my ($ctx) = @_;
+
+    for ( 1 .. 2 ) {
+        _link( $ctx, _intent_row( $ctx, $THREE_DAYS_AGO ),
+            $ctx->{forum}{post} );
+    }
+    my $orphan = _intent_row( $ctx, $A_DAY_AGO );
+    my $cleanup =
+      _store( $ctx, storage => _storage() )->cleanup_orphans( { limit => 2 } );
+    is_deeply( [ map { $_->{attachment_id} } @{ $cleanup->{deleted} } ],
+        [$orphan], 'linked intents ahead of an orphan do not use the limit' );
+    is( _attachment_row( $ctx, $orphan )->{state},
+        'deleted', 'and the orphan is purged' );
+
+    return;
+}
+
+# The scheduled job, as the timer runs it: the command takes its runner from
+# the application, whose attachment store is built without the storage, and
+# lends it the application's -- without it the purge removed nothing and said
+# so. The orphan's row and its file go, and the summary line counts it.
+sub _orphan_job {
+    my ($ctx) = @_;
+
+    my $storage     = _storage();
+    my $orphan      = _stored_intent( $ctx, $storage, $A_DAY_AGO );
+    my $key         = _attachment_row( $ctx, $orphan )->{object_key};
+    my $application = Mojolicious->new;
+    $application->log->level('fatal');
+    $application->helper( gp_attachment_storage => sub { return $storage; } );
+    $application->helper(
+        gp_scheduled_jobs => sub {
+            return GPForum::Service::Operations::ScheduledJobs->new(
+                attachment_store => _store($ctx) );
+        }
+    );
+
+    my $summary = q{};
+    open my $output, '>', \$summary or croak 'capture';
+    my $exit = GPForum::Command::ScheduledJobs->new(
+        app    => $application,
+        output => $output,
+    )->run( '--job', 'attachments', '--limit', $PURGE_LIMIT );
+    close $output or croak 'close capture';
+    is( $exit, 0, 'the scheduled orphan purge succeeds' );
+    is(
+        $summary,
+        "scheduled_jobs ok=1 attachments=1\n",
+        'and counts the orphan it purged'
+    );
+    is( _attachment_row( $ctx, $orphan )->{state},
+        'deleted', 'whose row it deleted' );
+    ok( !$storage->exists_object($key), 'and whose file it removed' );
+
+    return;
+}
+
+# Two runs at once: the first has deleted the orphan and not yet committed.
+# The second, which read the orphan among its candidates, waits on the row's
+# lock, finds it deleted once the first commits, and leaves it. Without the
+# lock, or without asking again once it is held, it deleted the row a second
+# time and recorded a second deletion.
+sub _orphan_runs_at_once {
+    my ($ctx) = @_;
+
+    my $storage = _storage();
+    my $orphan  = _stored_intent( $ctx, $storage, $A_DAY_AGO );
+    my $race    = _purge_while_held(
+        $ctx, $storage,
+        sub {
+            my ($holder) = @_;
+            return _store( $ctx, schema => $holder, storage => $storage )
+              ->cleanup_orphans( { limit => $PURGE_LIMIT } );
+        }
+    );
+
+    is_deeply( [ map { $_->{attachment_id} } @{ $race->{held}{deleted} } ],
+        [$orphan], 'the first run deletes the orphan' );
+    ok( $race->{waited}, 'the second waits on its lock' );
+    is_deeply(
+        $race->{outcome}{result},
+        { deleted => [], ok => 1 },
+        'and, once the first commits, finds it deleted and leaves it'
+    ) or diag( $race->{outcome}{error} // 'no error' );
+    is( _events( $ctx, $orphan, 'attachment.deleted' ),
+        1, 'so the orphan is deleted once' );
+
+    return;
+}
+
+# A link in flight -- its transaction open, its foreign-key check holding the
+# orphan's row -- holds the purge off: the purge waits on the row's lock
+# before it removes a file, and once the link commits the attachment is no
+# orphan and keeps its file. Without the lock, the purge removed the file of
+# the attachment being linked.
+sub _orphan_link_in_flight {
+    my ($ctx) = @_;
+
+    my $storage = _storage();
+    my $linked  = _stored_intent( $ctx, $storage, $A_DAY_AGO );
+    my $race    = _purge_while_held(
+        $ctx, $storage,
+        sub {
+            my ($holder) = @_;
+            return _link( { dbh => $holder->storage->dbh, ids => $ctx->{ids} },
+                $linked, $ctx->{forum}{post} );
+        }
+    );
+
+    ok( $race->{waited}, 'a purge waits on a link in flight' );
+    is_deeply(
+        $race->{outcome}{result},
+        { deleted => [], ok => 1 },
+        'and, once it commits, leaves the attachment'
+    ) or diag( $race->{outcome}{error} // 'no error' );
+    is( _attachment_row( $ctx, $linked )->{state},
+        'intent', 'whose row stays' );
+    ok(
+        $storage->exists_object(
+            _attachment_row( $ctx, $linked )->{object_key}
+        ),
+        'and whose file stays'
+    );
+
+    return;
+}
+
+# A row held past the lock timeout -- a link whose transaction stays open --
+# fails its orphan alone: the purge gives up on it, reports it, and goes on to
+# the orphan behind it; the held one keeps its row and its file, and the next
+# run, the link rolled back, purges it.
+sub _orphan_lock_timeout {
+    my ($ctx) = @_;
+
+    my $storage = _storage();
+    my $held    = _stored_intent( $ctx, $storage, $TWO_DAYS_AGO );
+    my $next    = _stored_intent( $ctx, $storage, $A_DAY_AGO );
+    my $holder  = _connect_schema($ctx);
+    $holder->txn_begin;
+    _link( { dbh => $holder->storage->dbh, ids => $ctx->{ids} },
+        $held, $ctx->{forum}{post} );
+
+    my $purger = do {
+        local $ENV{GPFORUM_DATABASE_LOCK_TIMEOUT_MS} = $SHORT_LOCK_TIMEOUT_MS;
+        _connect_schema($ctx);
+    };
+    my $store   = _store( $ctx, schema => $purger, storage => $storage );
+    my $cleanup = $store->cleanup_orphans( { limit => $PURGE_LIMIT } );
+    $holder->txn_rollback;
+    $holder->storage->disconnect;
+
+    is( $cleanup->{ok}, 0, 'a row held past the lock timeout fails the run' );
+    like(
+        join( qq{\n}, @{ $cleanup->{errors} || [] } ),
+        qr/\A \Q$held\E: [ ] [^\n]* lock [ ] timeout [^\n]* \z/msx,
+        'naming the orphan and why'
+    );
+    is_deeply( [ map { $_->{attachment_id} } @{ $cleanup->{deleted} } ],
+        [$next], 'and purges the orphan behind it' );
+    is( _attachment_row( $ctx, $held )->{state},
+        'intent', 'the held orphan keeps its row' );
+    ok(
+        $storage->exists_object( _attachment_row( $ctx, $held )->{object_key} ),
+        'and its file'
+    );
+    is_deeply(
+        [
+            map { $_->{attachment_id} } @{
+                $store->cleanup_orphans( { limit => $PURGE_LIMIT } )->{deleted}
+            }
+        ],
+        [$held],
+        'which the next run purges'
+    );
+    $purger->storage->disconnect;
+
+    return;
+}
+
+# $hold runs in a transaction on a second connection, left open; a purge runs
+# in a child process on a third, and the holder commits once the purge waits
+# on it, or once it has given up seeing it wait. Returns what $hold returned,
+# whether the purge waited, and the purge's outcome.
+sub _purge_while_held {
+    my ( $ctx, $storage, $hold ) = @_;
+
+    my $holder = _connect_schema($ctx);
+    $holder->txn_begin;
+    my $held = $hold->($holder);
+    my ($holder_pid) =
+      $holder->storage->dbh->selectrow_array('SELECT pg_backend_pid()');
+
+    my $purge = _spawn_worker(
+        sub {
+            return _store(
+                $ctx,
+                schema  => _connect_schema($ctx),
+                storage => $storage
+            )->cleanup_orphans( { limit => $PURGE_LIMIT } );
+        }
+    );
+    my $waited = _await_blocked_on( $ctx->{dbh}, $holder_pid );
+    $holder->txn_commit;
+    $holder->storage->disconnect;
+
+    return {
+        held    => $held,
+        outcome => _collect_worker($purge),
+        waited  => $waited,
+    };
+}
+
+sub _connect_schema {
+    my ($ctx) = @_;
+
+    local $ENV{GPFORUM_DATABASE_DSN} = $ctx->{dsn};
+    return GPForum::Test::PostgresHarness::connect_schema();
+}
+
+# $work in a child process, returned from at once so the parent can see it
+# wait. The child uses its own connection: the parent's handles are not
+# touched, and _exit skips the destructors that would close them.
+sub _spawn_worker {
+    my ($work) = @_;
+
+    pipe my $out_reader, my $out_writer or croak 'worker pipe failed';
+    my $pid = fork;
+    if ( !defined $pid ) {
+        croak "fork failed: $OS_ERROR";
+    }
+    if ( $pid == 0 ) {
+        close $out_reader or croak 'child worker reader close failed';
+        my $result = eval { return $work->() };
+        my $payload =
+          $result ? { ok => 1, result => $result } : { error => "$EVAL_ERROR" };
+        print {$out_writer} encode_json($payload)
+          or croak 'worker result write failed';
+        close $out_writer or croak 'child worker writer close failed';
+        _exit(0);
+    }
+
+    close $out_writer or croak 'parent worker writer close failed';
+    return { out => $out_reader, pid => $pid };
+}
+
+sub _collect_worker {
+    my ($child) = @_;
+
+    local $INPUT_RECORD_SEPARATOR = undef;
+    my $json = readline $child->{out};
+    close $child->{out} or croak 'parent worker reader close failed';
+    waitpid $child->{pid}, 0;
+
+    return decode_json($json);
+}
+
+# True once a backend waits on $holder_pid's locks; false if none does
+# within BLOCK_POLLS polls.
+sub _await_blocked_on {
+    my ( $dbh, $holder_pid ) = @_;
+
+    for ( 1 .. $BLOCK_POLLS ) {
+        my ($waiting) =
+          $dbh->selectrow_array( $BLOCKED_ON_SQL, undef, $holder_pid );
+        return 1 if $waiting;
+        $dbh->do( 'SELECT pg_sleep(?)', undef, $BLOCK_POLL_SECONDS );
+    }
+
+    return 0;
 }
 
 sub _downloads_as {
@@ -1252,6 +1672,23 @@ sub _intent_row {
             state       => 'intent',
         }
     );
+}
+
+# An intent whose bytes reached the storage: the upload wrote them, then its
+# row, and went no further.
+sub _stored_intent {
+    my ( $ctx, $storage, $created_at ) = @_;
+
+    my $id = _intent_row( $ctx, $created_at );
+    $storage->write_object( _attachment_row( $ctx, $id )->{object_key},
+        $PNG_BYTES );
+
+    return $id;
+}
+
+sub _storage {
+    return GPForum::Service::Attachment::FilesystemStorage->new(
+        root => tempdir( CLEANUP => 1 ) );
 }
 
 sub _link {

@@ -10,6 +10,8 @@ use Const::Fast;
 use GPForum::Service::Attachment::Record;
 use GPForum::Service::Clock;
 use Mojo::Base -base, -signatures;
+use POSIX        qw(strftime);
+use Scalar::Util qw(blessed);
 
 our $VERSION = '0.001';
 
@@ -20,6 +22,7 @@ const my $STATE_QUARANTINED    => 'quarantined';
 const my $SCAN_CLEAN           => 'clean';
 const my $SCAN_INFECTED        => 'infected';
 const my $ORPHAN_LIMIT         => 100;
+const my $ORPHAN_MIN_AGE       => 86_400;
 const my $ORPHAN_REASON        => 'orphan cleanup';
 const my $AUTHOR_DELETE_REASON => 'author delete';
 const my $LINKS_PER_POST       => 10;
@@ -32,6 +35,12 @@ has record => sub { return GPForum::Service::Attachment::Record->new; };
 sub already_uploaded ( $self, $attachment ) {
     my $state = $self->record->column( $attachment, 'state' ) || q{};
     return $state ne $STATE_INTENT ? 1 : 0;
+}
+
+# What the orphan purge asks again of the row it locked: one another run
+# deleted, or an upload that went on, is no longer its to purge.
+sub still_intent ( $self, $attachment ) {
+    return $self->already_uploaded($attachment) ? 0 : 1;
 }
 
 sub uploaded_replay ( $self, $attachment ) {
@@ -174,10 +183,23 @@ sub already_deleted ( $self, $attachment ) {
 
 sub deleted_replay ( $self, $attachment ) {
     return {
-        attachment => $self->record->row_hash($attachment),
+        attachment => $self->row_columns($attachment),
         idempotent => 1,
         ok         => 1,
     };
+}
+
+# A stored row as a plain hash. Record::row_hash copies a hash, or a row with
+# a data method -- which the fake ORM's rows had and no DBIx::Class row has:
+# on PostgreSQL every replay built from a stored row came back empty, a
+# replayed delete without its attachment and a replayed thumbnail without its
+# columns.
+sub row_columns ( $self, $row ) {
+    if ( blessed($row) && $row->can('get_columns') ) {
+        return { $row->get_columns };
+    }
+
+    return $self->record->row_hash($row);
 }
 
 sub orphan_limit ( $, $input ) {
@@ -186,6 +208,31 @@ sub orphan_limit ( $, $input ) {
     }
 
     return $ORPHAN_LIMIT;
+}
+
+# How old an intent must be before the purge takes it for abandoned. An
+# upload writes its bytes, then its intent, then moves it to uploaded within
+# the same request: an intent younger than this may be one still in flight,
+# and purging it would remove the file of an upload about to succeed. Only a
+# whole number of seconds above zero is taken: zero, or a negative age, would
+# put the cutoff at or after now and take every intent, the in-flight ones
+# with them.
+sub orphan_min_age ( $, $input ) {
+    my $min_age = $input->{min_age};
+    if (   defined $min_age
+        && $min_age =~ /\A [[:digit:]]+ \z/msx
+        && $min_age > 0 )
+    {
+        return int $min_age;
+    }
+
+    return $ORPHAN_MIN_AGE;
+}
+
+# From now_epoch alone, which every clock -- the test ones too -- answers.
+sub orphan_cutoff ( $self, $input ) {
+    return strftime '%Y-%m-%dT%H:%M:%SZ',
+      gmtime( $self->clock->now_epoch - $self->orphan_min_age($input) );
 }
 
 sub orphan_reason ( $, $input ) {
@@ -232,7 +279,14 @@ sub orphan_search_attrs ( $self, $input ) {
     };
 }
 
-sub cleanup_result ( $, $deleted ) {
+# Not ok when an orphan could not be purged -- a file the storage would not
+# remove -- so the timer that ran it is marked failed; the orphans before and
+# after it are purged all the same.
+sub cleanup_result ( $, $deleted, $errors = [] ) {
+    if ( @{$errors} ) {
+        return { deleted => $deleted, errors => $errors, ok => 0 };
+    }
+
     return {
         deleted => $deleted,
         ok      => 1,
@@ -273,9 +327,9 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Owns upload replay, scan state transitions, delete replay hashes, orphan
-cleanup search/actor/reason policy, and per-post link fetch caps. It does
-not write rows.
+Owns upload replay, scan state transitions, delete replay hashes and the row
+copies they are built from, orphan cleanup search/age/actor/reason policy,
+and per-post link fetch caps. It does not write rows.
 L<GPForum::Service::Attachment::Store> still updates attachments, deletes
 orphans, and records events.
 
@@ -284,6 +338,12 @@ orphans, and records events.
 =head2 already_uploaded
 
 True when the attachment has left the intent state.
+
+=head2 still_intent
+
+True when the attachment is still in the C<intent> state: the orphan purge
+asks it again of the row it has locked, and leaves one another run deleted
+or an upload moved on.
 
 =head2 uploaded_replay
 
@@ -331,11 +391,36 @@ True when the attachment is already deleted.
 
 =head2 deleted_replay
 
-Returns the idempotent delete hash.
+Returns the idempotent delete hash,
+C<< { ok => 1, idempotent => 1, attachment => \%columns } >>, with the
+attachment's columns as L</row_columns> copies them.
+
+=head2 row_columns
+
+Takes a row -- a hash, a DBIx::Class row, or a row with C<data> -- and
+returns its columns as a new plain hash (empty for no row). A DBIx::Class
+row is read with C<get_columns>; anything else goes to
+L<GPForum::Service::Attachment::Record/row_hash>, which does not understand
+one. The store and L<GPForum::Service::Attachment::MediaProcessor> build
+their replays with it.
 
 =head2 orphan_limit
 
 Returns the candidate row cap, defaulting to 100.
+
+=head2 orphan_min_age
+
+Returns the age in seconds an intent must reach before the purge takes it
+for abandoned: C<min_age> from the input when it is a whole number of
+seconds above zero, otherwise 86400 (one day). An upload moves its intent
+to C<uploaded> within the request that wrote it, so a younger intent may be
+an upload still in flight.
+
+=head2 orphan_cutoff
+
+Returns the creation time, as C<YYYY-MM-DDTHH:MM:SSZ>, at or before which an
+intent is old enough to purge: L</orphan_min_age> seconds before the clock's
+C<now_epoch>.
 
 =head2 orphan_reason
 
@@ -351,7 +436,9 @@ Returns the supplied actor id, otherwise the attachment owner.
 
 =head2 orphan_where
 
-Returns the intent-state search clause for orphan candidates.
+Returns the intent-state search clause for orphan candidates. The store adds
+the age (L</orphan_cutoff>) and the absence of links to it, so the row cap
+counts orphans only.
 
 =head2 orphan_search_attrs
 
@@ -359,7 +446,9 @@ Returns oldest-first search attributes including the row cap.
 
 =head2 cleanup_result
 
-Returns the normalized orphan cleanup hash.
+Takes the array reference of deleted attachments and, optionally, one of
+error messages. Returns C<< { ok => 1, deleted => \@deleted } >>, or with
+errors C<< { ok => 0, deleted => \@deleted, errors => \@errors } >>.
 
 =head2 links_per_post
 
@@ -383,12 +472,13 @@ None. Persistence errors stay in the store.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-None.
+None. The orphan defaults -- 100 candidates, a minimum age of one day -- are
+constants here, overridden per call through the input hash.
 
 =head1 DEPENDENCIES
 
 Uses L<Const::Fast>, L<GPForum::Service::Attachment::Record>,
-L<GPForum::Service::Clock>, and L<Mojo::Base>.
+L<GPForum::Service::Clock>, L<Mojo::Base>, L<POSIX> and L<Scalar::Util>.
 
 =head1 INCOMPATIBILITIES
 

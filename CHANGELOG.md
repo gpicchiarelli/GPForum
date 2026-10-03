@@ -790,6 +790,22 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- The hourly `attachments` job removes an orphan upload's file and its
+  thumbnails from `attachment_root`, not only its row; until now those files
+  stayed in storage indefinitely. The timer must see the same
+  `GPFORUM_ATTACHMENT_ROOT` and working directory as the application, as the
+  shipped units do.
+- An abandoned upload must be at least a day old before the job removes it,
+  so an upload still in progress is never touched, and `--limit` counts real
+  orphans only: linked uploads at the front of the queue no longer stop the
+  job reaching the orphans behind them.
+- An orphan the job cannot purge (its file cannot be removed, or its row stays
+  locked past `GPFORUM_DATABASE_LOCK_TIMEOUT_MS`) ends the run with
+  `ok=0 attachments_errors=N` and exit 1; the other orphans are still purged
+  and the failed one is retried on the next run.
+- Repeating a delete, or a thumbnail request for a thumbnail that already
+  exists, returns the attachment again instead of an empty one.
+
 - A database error that is not a unique violation is no longer taken for a
   conflict because the row's data contains the words "unique constraint":
   `UniqueConflict->is_conflict_on` now requires PostgreSQL's own message to

@@ -322,6 +322,45 @@ like( _run_command_output( $runner, '--help' ),
     );
 }
 
+# An orphan whose file the purge could not remove fails the run, and the line
+# says how many; a purge without the attachment storage says why it did
+# nothing, and fails nothing. t/integration/postgres-attachments.t runs the
+# purge itself.
+for my $case (
+    [
+        {
+            deleted => [ { attachment_id => 'att-1' } ],
+            errors  => ['att-2: attachment object key is unsafe'],
+            ok      => 0,
+        },
+        1,
+        "scheduled_jobs ok=0 attachments=1 attachments_errors=1\n",
+        'an orphan left in storage'
+    ],
+    [
+        { deleted => [], ok => 1, skipped => 'no attachment storage' },
+        0,
+        q{scheduled_jobs ok=1 attachments=0}
+          . qq{ attachments_skipped="no attachment storage"\n},
+        'a purge without the storage'
+    ],
+  )
+{
+    my ( $result, $status, $line, $label ) = @{$case};
+    my $orphans =
+      GPForum::Service::Operations::ScheduledJobs->new( attachment_store =>
+          GPForum::Test::ScheduledJobStores->new( orphan_result => $result ), );
+    my $captured = q{};
+    open my $handle, '>', \$captured or croak 'capture';
+    my $exit = GPForum::Command::ScheduledJobs->new(
+        jobs   => $orphans,
+        output => $handle,
+    )->run( '--job', 'attachments' );
+    close $handle or croak 'close capture';
+    is( $exit,     $status, "the command exits $status for $label" );
+    is( $captured, $line,   "and its line reports $label" );
+}
+
 done_testing();
 
 sub _run_command_output {

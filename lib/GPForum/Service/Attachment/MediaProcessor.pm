@@ -87,12 +87,16 @@ sub _existing_thumbnail ( $self, $attachment_id ) {
     );
 }
 
+# The variant comes from the database: Record::row_hash read none of its
+# columns, so a redelivered event answered with a thumbnail that had no type,
+# no key and no id.
 sub _skipped_variant ( $self, $existing ) {
     return {
         ok      => 1,
         skipped => 1,
         variant => {
-            %{ $self->store->record->row_hash($existing) }, idempotent => 1,
+            %{ $self->store->lifecycle->row_columns($existing) },
+            idempotent => 1,
         },
     };
 }

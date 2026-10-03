@@ -75,7 +75,24 @@ sub run_once ( $self, $options ) {
 sub _runner ($self) {
     return $self->jobs if $self->jobs;
 
-    return $self->_application->build_controller->gp_scheduled_jobs;
+    my $controller = $self->_application->build_controller;
+    my $jobs       = $controller->gp_scheduled_jobs;
+    _give_orphan_purge_storage( $jobs, $controller );
+
+    return $jobs;
+}
+
+# The orphan purge removes each orphan's files with its row, through the
+# attachment storage, and purges nothing without one; the application's
+# attachment store is built without it, having no other use for it. The
+# store is the runner's own, so lending it the storage reaches nothing else.
+sub _give_orphan_purge_storage ( $jobs, $controller ) {
+    my $store = $jobs->attachment_store;
+    return if !$store || !$store->can('storage') || $store->storage;
+
+    $store->storage( $controller->gp_attachment_storage );
+
+    return;
 }
 
 sub _application ($self) {
@@ -284,6 +301,13 @@ Version 0.001.
 
 Oneshoots the scheduled operational runner. systemd timers and launchd
 intervals invoke this command; it is not a long-running daemon.
+
+The runner comes from the application's C<gp_scheduled_jobs>. Its
+attachment store, when it has none, is given the application's attachment
+storage (C<gp_attachment_storage>), through which the C<attachments> job
+removes the files of the orphans it purges
+(L<GPForum::Service::Attachment::Store/cleanup_orphans>). A runner passed in
+as C<jobs> is used as it is.
 
 =head1 SUBROUTINES/METHODS
 

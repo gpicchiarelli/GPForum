@@ -7,6 +7,7 @@ use strict;
 use warnings;
 
 use Const::Fast;
+use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 
 use GPForum::Infrastructure::EventRecorder;
@@ -33,6 +34,14 @@ const my $LINK_TARGET_CONSTRAINT    => 'attachment_links_target_key';
 const my $VARIANT_ID_CONSTRAINT     => 'attachment_variants_pkey';
 const my $VARIANT_KEY_CONSTRAINT    => 'attachment_variants_variant_key';
 const my $VARIANT_OBJECT_CONSTRAINT => 'attachment_variants_object_key_key';
+const my $LTE                       => q{<} . q{=};
+const my $NO_STORAGE                => 'no attachment storage';
+
+# Correlated on the candidate, so PostgreSQL answers it with the links' unique
+# index (attachment_id first) as an anti-join.
+const my $UNLINKED => join q{ },
+  'NOT EXISTS (SELECT 1 FROM attachment_links',
+  'WHERE attachment_links.attachment_id = me.attachment_id)';
 
 has clock      => sub { return GPForum::Service::Clock->new; };
 has id_service => sub {
@@ -50,6 +59,12 @@ has recorder => sub {
 has schema      => undef;
 has record      => sub { return GPForum::Service::Attachment::Record->new; };
 has readability => undef;
+
+# The attachment storage (FilesystemStorage, or anything with delete_object):
+# the orphan purge removes the files with the rows, and does nothing without
+# it.
+has storage => undef;
+
 has download_access => sub {
     my ($self) = @_;
 
@@ -616,7 +631,7 @@ sub _create_variant ( $self, $input ) {
 }
 
 sub _idempotent_row ( $self, $existing ) {
-    return { %{ $self->record->row_hash($existing) }, idempotent => 1 };
+    return { %{ $self->lifecycle->row_columns($existing) }, idempotent => 1 };
 }
 
 sub find_attachment ( $self, $attachment_id ) {
@@ -651,16 +666,35 @@ sub attachments_for_posts ( $self, $post_ids, $input ) {
     return \%by_post;
 }
 
+# Uploads that never completed: intents nobody linked, old enough not to be
+# an upload still in flight (Lifecycle::orphan_min_age). Each one's files go
+# before its row (_purge_orphan). A deleted row is never selected again, so
+# the files of a purge that failed after the delete would stay in storage for
+# good. Without a storage there is no way to remove the files, and the rows
+# stay where the next run finds them. One orphan that fails is reported and
+# left; the others are purged all the same.
 sub cleanup_orphans ( $self, $input ) {
-    my @deleted;
+    if ( !$self->storage ) {
+        return {
+            %{ $self->lifecycle->cleanup_result( [] ) },
+            skipped => $NO_STORAGE
+        };
+    }
+
+    my ( @deleted, @errors );
     for my $attachment ( $self->_orphan_candidates($input) ) {
-        my $row = $self->_delete_orphan( $attachment, $input );
-        if ($row) {
+        my $row;
+        if ( !eval { $row = $self->_purge_orphan( $attachment, $input ); 1 } ) {
+            push @errors, join q{: },
+              $self->record->column( $attachment, 'attachment_id' ),
+              _error_reason($EVAL_ERROR);
+        }
+        elsif ($row) {
             push @deleted, $row;
         }
     }
 
-    return $self->lifecycle->cleanup_result( \@deleted );
+    return $self->lifecycle->cleanup_result( \@deleted, \@errors );
 }
 
 sub delete_linked ( $self, $input ) {
@@ -804,37 +838,89 @@ sub _push_visible_attachment ( $self, $input, $post_id ) {
         return;
     }
 
-    push @{ $input->{by_post}{$post_id} },
-      $self->record->view( $decision->{attachment} );
+    # The decision's own columns: its attachment is a copy Record::row_hash
+    # made of a DBIx::Class row, and came back empty, so a thread page listed
+    # each file without its id or its name.
+    push @{ $input->{by_post}{$post_id} }, $self->record->view($decision);
     return;
 }
 
+# Orphans only, so the row cap counts orphans: the linked intents and the
+# young ones used to be fetched and skipped, and enough of them at the head of
+# the queue kept every run from reaching an orphan behind them.
 sub _orphan_candidates ( $self, $input ) {
-    my $search = $self->schema->resultset('Attachment')->search_rs(
-        $self->lifecycle->orphan_where,
+    my $search = $self->_attachments->search_rs(
+        {
+            %{ $self->lifecycle->orphan_where },
+            created_at => { $LTE => $self->lifecycle->orphan_cutoff($input) },
+            -and       => [ \$UNLINKED ],
+        },
         $self->lifecycle->orphan_search_attrs($input),
     );
 
     return $self->record->rows($search);
 }
 
-sub _delete_orphan ( $self, $attachment, $input ) {
+# Under the row's lock (FOR UPDATE, which a link's foreign-key check waits
+# on), and asked again once it is held: a run that got there first has
+# deleted the row, and a link committed while this run waited keeps it, so
+# two runs at once purge an orphan once, and the files of an attachment just
+# linked are not removed. The files go before the row, inside the
+# transaction: one rolled back after the removal leaves the row for the next
+# run, whose removals find nothing and succeed.
+sub _purge_orphan ( $self, $attachment, $input ) {
+    my $attachment_id = $self->record->column( $attachment, 'attachment_id' );
+
+    return $self->schema->txn_do(
+        sub { return $self->_purge_locked_orphan( $attachment_id, $input ); } );
+}
+
+sub _purge_locked_orphan ( $self, $attachment_id, $input ) {
     my $undefined;
+    my $locked =
+      $self->_attachments->find( $attachment_id, { for => 'update' } );
+    return $undefined if !$locked || !$self->lifecycle->still_intent($locked);
+    return $undefined if $self->_attachment_has_links($locked);
 
-    if ( $self->_attachment_has_links($attachment) ) {
-        return $undefined;
-    }
+    $self->_remove_stored_objects($locked);
 
-    my $deleted = $self->soft_delete(
-        $self->record->column( $attachment, 'attachment_id' ),
-        $self->lifecycle->orphan_actor( $attachment, $input ),
+    return $self->_delete_attachment(
+        $locked,
+        $self->lifecycle->orphan_actor( $locked, $input ),
         $self->lifecycle->orphan_reason($input),
-    );
-    if ( $deleted->{ok} ) {
-        return $deleted->{attachment};
-    }
+    )->{attachment};
+}
 
-    return $undefined;
+# The variants' objects, then the original's. Removing an object that is not
+# there is not an error, so a run that repeats a removal does no harm.
+sub _remove_stored_objects ( $self, $attachment ) {
+    my $variants = $self->schema->resultset('AttachmentVariant')->search_rs(
+        {
+            attachment_id =>
+              $self->record->column( $attachment, 'attachment_id' )
+        },
+        { columns => ['object_key'] },
+    );
+    for my $variant ( $self->record->rows($variants) ) {
+        $self->storage->delete_object(
+            $self->record->column( $variant, 'object_key' ) );
+    }
+    $self->storage->delete_object(
+        $self->record->column( $attachment, 'object_key' ) );
+
+    return;
+}
+
+# The reason alone: the first line, without the " at FILE line N." that croak
+# and then txn_do's rethrow each add, nor the "{UNKNOWN}: " the rethrow puts
+# before an error that is not a DBIx::Class one.
+sub _error_reason ($error) {
+    my ($line) = split /\n/msx, $error // q{};
+    return q{} if !defined $line;
+    $line =~ s/\A [{] UNKNOWN [}] : \s+//msx;
+    $line =~ s/(?: \s+ at \s+ \S+ \s+ line \s+ \d+ [.]? )+ \s* \z//msx;
+
+    return $line;
 }
 
 sub _delete_attachment ( $self, $attachment, $actor_id, $reason ) {
@@ -860,7 +946,7 @@ sub _delete_attachment ( $self, $attachment, $actor_id, $reason ) {
 
 sub _record_deletion ( $self, $input ) {
     my $row = {
-        %{ $self->record->row_hash( $input->{attachment} ) },
+        %{ $self->lifecycle->row_columns( $input->{attachment} ) },
         deleted_at => $input->{timestamp},
         state      => $STATE_DELETED,
     };
@@ -1104,7 +1190,8 @@ thread or a profile, and variants (such as a thumbnail) are further objects
 derived from it. The storage of the bytes is elsewhere
 (L<GPForum::Service::Attachment::FilesystemStorage>); this class writes rows
 and the events and audit entries that go with them, through
-L<GPForum::Infrastructure::EventRecorder>.
+L<GPForum::Infrastructure::EventRecorder>, and asks the storage only to
+remove the files of the orphans it purges (L</cleanup_orphans>).
 
 Every write can be repeated. Intents, links and variants are found before
 they are inserted and inserted under savepoints through
@@ -1133,8 +1220,11 @@ L</unscanned_clean_ids> (ADR 0108).
 Mojo::Base constructor. C<schema> is required. C<readability> (an object
 with C<readable_by>, such as L<GPForum::Service::Forum::Readability>) is
 optional; without it, downloads through a post or thread are decided on the
-target's own visibility column. C<clock>, C<id_service>, C<recorder>,
-C<record>, C<download_access>, C<lifecycle> and C<events> have defaults.
+target's own visibility column. C<storage> (an object with
+C<delete_object>, such as L<GPForum::Service::Attachment::FilesystemStorage>)
+is optional, and L</cleanup_orphans> does nothing without it. C<clock>,
+C<id_service>, C<recorder>, C<record>, C<download_access>, C<lifecycle> and
+C<events> have defaults.
 
 =head2 create_intent
 
@@ -1253,18 +1343,37 @@ C<< { ok => 1, attachment, attachment_id, byte_size, media_type, object_key, ori
 Takes an array reference of post ids and a hash reference with C<viewer>
 and C<viewer_user_id>. Returns a hash reference from post id to an array
 reference of C<< { attachment_id, byte_size, media_type, original_filename } >>,
-one per linked attachment that L</download_for> lets the viewer have. The
-link query is capped at ten rows per requested post. Posts without such
-attachments have no key.
+one per linked attachment that L</download_for> lets the viewer have, read
+from the download decision's own columns. The link query is capped at ten
+rows per requested post. Posts without such attachments have no key.
 
 =head2 cleanup_orphans
 
-Takes a hash reference with optional C<limit> (100), C<actor_id> (each
-attachment's owner when absent) and C<reason> (C<orphan cleanup>).
-Soft-deletes attachments still in the C<intent> state and without links,
-oldest first, up to the limit, and returns
-C<< { ok => 1, deleted => \@attachments } >>. The stored objects are not
-removed here; L<GPForum::Service::Attachment::UploadPipeline> does that.
+Takes a hash reference with optional C<limit> (100), C<min_age> in seconds
+(one day), C<actor_id> (each attachment's owner when absent) and C<reason>
+(C<orphan cleanup>). Purges the orphans: attachments still in the C<intent>
+state, without links, and created at least C<min_age> ago -- younger, an
+intent may be an upload still in flight -- oldest first, up to the limit,
+which counts orphans only.
+
+Each orphan is purged in a transaction of its own, under its row's lock
+(C<SELECT ... FOR UPDATE>), and only if, once the lock is held, it is still
+an intent without links: two runs at once purge it once, and an attachment
+linked while the run waited keeps its files. It removes the stored object of
+every variant and then the attachment's own object through C<storage>, and
+then soft-deletes the row as L</soft_delete> does, recording the deletion in
+the actor's name for the reason. The files go first: a deleted row is never
+selected again, while a row left by a purge that failed after the removal is
+purged by the next run, whose removals find nothing and succeed. The variant
+rows stay with the soft-deleted attachment.
+
+Returns C<< { ok => 1, deleted => \@attachments } >>, the columns of each
+attachment this run deleted. An orphan that could not be purged -- a file
+the storage would not remove, a lock not had within the database's
+C<lock_timeout> -- is left as it is, and the run goes on to the next and
+returns C<< ok => 0 >> with C<errors>, one C<< "<attachment_id>: <reason>" >>
+each. Without a C<storage> nothing is purged, and it returns
+C<< { ok => 1, deleted => [], skipped => 'no attachment storage' } >>.
 
 =head2 delete_linked
 
@@ -1279,15 +1388,18 @@ delete it is the caller's decision.
 Takes an attachment id, an actor id and a reason. In a transaction, sets
 C<state> to C<deleted>, stamps C<deleted_at> and records an
 C<attachment.deleted> event and audit entry; returns
-C<< { ok => 1, attachment => \%attachment } >>. An attachment already
-deleted is returned with C<< idempotent => 1 >> and nothing written; an
-unknown id returns C<< { ok => 0, error => 'not_found' } >>.
+C<< { ok => 1, attachment => \%attachment } >>, the attachment's columns as
+they now are. An attachment already deleted is returned, with its columns,
+with C<< idempotent => 1 >> and nothing written; an unknown id returns
+C<< { ok => 0, error => 'not_found' } >>.
 
 =head1 DIAGNOSTICS
 
 Missing attachments, refused downloads and replays are returned, not
 thrown. Database errors other than the handled unique conflicts are
-rethrown, and a write inside a transaction rolls back.
+rethrown, and a write inside a transaction rolls back. L</cleanup_orphans>
+alone catches what fails for one orphan, storage and database errors alike,
+and reports it in C<errors>.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
