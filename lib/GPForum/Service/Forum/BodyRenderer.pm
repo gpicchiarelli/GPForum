@@ -260,8 +260,21 @@ sub _paragraph ( $self, $lines ) {
     return _wrap_paragraph( $self->_inline($raw) );
 }
 
+# A paragraph's text is its code spans and what lies between them. A span is
+# only escaped, so what it holds is shown as typed; the rest goes on to links
+# and emphasis. A backtick with no partner on its line stays a backtick.
 sub _inline ( $, $raw ) {
-    return _breaks( _emphasis( _links( xml_escape($raw) ) ) );
+    my @pieces = split /( ` [^`\n]+ ` )/msx, $raw;
+
+    return _breaks( join q{}, map { _inline_piece($_) } @pieces );
+}
+
+sub _inline_piece ($piece) {
+    if ( $piece =~ /\A ` ( [^`\n]+ ) ` \z/msx ) {
+        return _code_html($1);
+    }
+
+    return _emphasis( _links( xml_escape($piece) ) );
 }
 
 sub _flow_blocks ($text) {
@@ -601,7 +614,11 @@ sub _lf ($text) {
 }
 
 sub _fence_html ($text) {
-    return '<pre><code>' . xml_escape($text) . '</code></pre>';
+    return '<pre>' . _code_html($text) . '</pre>';
+}
+
+sub _code_html ($text) {
+    return '<code>' . xml_escape($text) . '</code>';
 }
 
 sub _wrap_quote ($html) {
@@ -641,8 +658,8 @@ Version 0.001.
 Turns post C<body_source> into sanitized HTML for
 C<post_bodies.body_rendered_safe> and forum post presenters. Input is escaped
 before any markup is introduced. The allowed subset is emphasis, http/https/mailto
-links, block quotes, and fenced code. Raw HTML, inline images, and @mentions are
-not interpreted.
+links, block quotes, fenced code, and code spans between backticks on one
+line. Raw HTML, inline images, and @mentions are not interpreted.
 
 =head1 SUBROUTINES/METHODS
 
@@ -670,7 +687,8 @@ None known.
 =head1 BUGS AND LIMITATIONS
 
 Inline images and @mention highlighting are intentionally left as literal
-text. Heading, list, and raw-HTML markdown are not implemented.
+text. Heading, list, and raw-HTML markdown are not implemented. A code span is
+read before links and emphasis, so neither can reach across one.
 
 =head1 AUTHOR
 

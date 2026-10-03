@@ -16,7 +16,7 @@ use GPForum::ViewModel::Forum::Rows;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 16;
+const my $EXPECTED_TESTS => 21;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -45,6 +45,30 @@ is(
 );
 unlike( $fenced, qr{<pre><code>.*<script}imsx,
     'fenced code does not contain a live script tag' );
+
+# A code span shows what was typed: escaped, and read by nothing else.
+is(
+    $renderer->render_safe('Move it from `LIKE` to an index.'),
+    '<p>Move it from <code>LIKE</code> to an index.</p>',
+    'backticks on one line make a code span'
+);
+is(
+    $renderer->render_safe('`<script>alert(1)</script>`'),
+    '<p><code>&lt;script&gt;alert(1)&lt;/script&gt;</code></p>',
+    'a code span escapes what it holds'
+);
+is(
+    $renderer->render_safe('`**bold** [x](https://example.com)` and *this*'),
+    '<p><code>**bold** [x](https://example.com)</code> and <em>this</em></p>',
+    'emphasis and links are not read inside a code span'
+);
+is(
+    $renderer->render_safe('a ` on its own'),
+    '<p>a ` on its own</p>',
+    'a backtick with no partner stays a backtick'
+);
+is( $renderer->render_safe("`one\ntwo`"),
+    '<p>`one<br>two`</p>', 'a code span does not reach across a line' );
 
 my $quote = $renderer->render_safe("> quoted <em>html</em>\n> **bold**");
 is(
