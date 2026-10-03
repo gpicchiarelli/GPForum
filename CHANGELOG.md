@@ -1572,6 +1572,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- `script/architecture-check` fails when a native `try`/`catch` does not end
+  with `};` (ADR 0117). PPI reads a catch block closed by a bare `}` as an
+  unfinished statement and folds the next statement into it, which misleads
+  Perl::Critic.
+
 - `GPForum::Infrastructure::Storage->dbh_of($schema)` and `storage_of` are
   the one copy of the "schema to database handle, or undef" probe that ten
   modules each keep as `_schema_dbh`. Callers move to it in later changes.

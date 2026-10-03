@@ -298,6 +298,74 @@ check_subroutine_prototypes() {
     fi
 }
 
+# ADR 0117: every native try/catch ends with "};". PPI, which Perl::Critic
+# reads the code through, takes a catch block that ends in a bare "}" as an
+# unfinished statement and swallows the statement after it into the same
+# one: RequireFinalReturn then misfires on a sub that ends in try/catch, and
+# every policy reads the next statement wrongly. perltidy keeps a block's
+# closing brace at the indentation of the line that opened it, so the end of
+# a catch block is the first later line indented no deeper than its catch.
+check_try_catch_closed() {
+    if ! {
+        find lib t bin -type f \( -path 'bin/*' -o -name '*.pm' -o -name '*.pl' -o -name '*.t' \)
+        for candidate in script/*; do
+            [ -f "$candidate" ] && head -n 1 "$candidate" | grep -q perl && echo "$candidate"
+        done
+    } | xargs perl -e '
+        my $failed = 0;
+        for my $file (@ARGV) {
+            open my $handle, q{<}, $file or die qq{cannot read $file: $!};
+            my @lines = <$handle>;
+            close $handle or die qq{cannot close $file: $!};
+            chomp @lines;
+
+            my $in_pod = 0;
+            for my $index ( 0 .. $#lines ) {
+                my $line = $lines[$index];
+                last if $line =~ /\A__ (?: END | DATA ) __\s*\z/msx;
+                if ( $line =~ /\A=cut\b/msx ) { $in_pod = 0; next; }
+                if ( $line =~ /\A=\w+/msx )   { $in_pod = 1; next; }
+                next if $in_pod;
+                # catch opening its line, or right after the brace that
+                # closes its try block.
+                next if $line !~ /\A ([ ]*) (?: (?: try \b [^#]* )? [}] \s* )? catch \b \s* (?: [(] | [{] )/msx;
+
+                my $indent = length $1;
+                my $where  = $file . q{:} . ( $index + 1 );
+                # A catch block on one line ends on that line.
+                ( my $code = $line ) =~ s/\s* [#] [^"]* \z//msx;
+                if ( $code !~ /[{] \s* \z/msx ) {
+                    next if $code =~ /[}] ; \s* \z/msx;
+                    print qq[$where: catch block does not end with "};"\n];
+                    $failed = 1;
+                    next;
+                }
+
+                my $closing;
+                for my $next ( $index + 1 .. $#lines ) {
+                    next if $lines[$next] !~ /\S/msx;
+                    $lines[$next] =~ /\A ([ ]*)/msx;
+                    if ( length $1 <= $indent ) { $closing = $next; last; }
+                }
+                if ( !defined $closing ) {
+                    print qq[$where: catch block has no closing brace\n];
+                    $failed = 1;
+                    next;
+                }
+                if ( $lines[$closing] !~ /\A [ ]* [}] ; \s* (?: [#] .* )? \z/msx ) {
+                    print $file . q{:} . ( $closing + 1 )
+                      . qq[: catch block does not end with "};"\n];
+                    $failed = 1;
+                }
+            }
+        }
+        exit $failed;
+    ' >&2; then
+        echo "architecture-check: a try/catch does not end with \"};\"" >&2
+        status=1
+    fi
+}
+
 # ADR 0107: a module depends only on its own layer and the layers below it,
 # as GPForum::Application::LayerMap declares them. The rule and the scan live
 # in t/192-layering.t, which the suite also runs; it needs the project's
@@ -326,6 +394,7 @@ check_unique_conflict_recovery
 check_subroutine_prototypes
 check_column_reader_empty_list
 check_universal_can_override
+check_try_catch_closed
 check_layering
 
 exit "$status"
