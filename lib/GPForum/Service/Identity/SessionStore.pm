@@ -278,7 +278,16 @@ sub _find_session ( $self, $input ) {
         $query{user_id} = $input->{user_id};
     }
 
-    return $self->_sessions->find( \%query );
+    return $self->_session_where( \%query );
+}
+
+# A session looked up by its id and its member's. DBIx::Class's find keeps
+# only the columns of a unique constraint the values satisfy -- here the
+# primary key -- and drops the rest from the WHERE clause, so a find on both
+# found the session whoever presented it: one member could revoke or
+# validate another's. A search keeps every column it is given.
+sub _session_where ( $self, $query ) {
+    return $self->_sessions->search_rs($query)->single;
 }
 
 sub _session_ids_present ( $self, $input ) {
@@ -293,7 +302,7 @@ sub _session_ids_present ( $self, $input ) {
 }
 
 sub _refresh_or_reject_session ( $self, $input ) {
-    my $session = $self->_sessions->find(
+    my $session = $self->_session_where(
         {
             session_id => $input->{session_id},
             user_id    => $input->{user_id},
@@ -424,17 +433,20 @@ hash reuses the session.
 
 =head2 revoke_session
 
-Revokes one session by id. A second revoke of the same session keeps the
-original timestamp and returns C<skipped>.
+Revokes one session by id. Given a C<user_id>, the session must belong to
+that member or the answer is C<not_found>; the member is matched in the
+query, not after the row is fetched. A second revoke of the same session
+keeps the original timestamp and returns C<skipped>.
 
 =head2 validate_session
 
-Accepts a live session, or rejects revoked/expired rows. The revoked and
-expired checks run on every call and only read the row. C<last_seen_at> is
-written only when the stored value is at least
-C<session_touch_interval_seconds> old (default 300), so an authenticated
-request does not turn into a session UPDATE every time. Unparseable
-C<last_seen_at> values are refreshed.
+Accepts a live session, or rejects revoked/expired rows. The session is
+looked up by its id and its member's together, so a session presented under
+another member's id is C<not_found>. The revoked and expired checks run on
+every call and only read the row. C<last_seen_at> is written only when the
+stored value is at least C<session_touch_interval_seconds> old (default
+300), so an authenticated request does not turn into a session UPDATE every
+time. Unparseable C<last_seen_at> values are refreshed.
 
 =head2 revoke_user_sessions
 

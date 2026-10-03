@@ -21,8 +21,6 @@ const my @STORAGE_ACCESSOR => qw(
 
 has row_locks             => 0;
 has skip_search_count     => 0;
-has existing_usernames    => sub { return {}; };
-has existing_emails       => sub { return {}; };
 has find_misses           => 0;
 has users                 => sub { return []; };
 has credentials           => sub { return []; };

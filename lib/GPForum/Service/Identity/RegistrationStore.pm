@@ -87,7 +87,20 @@ sub _same_open_user ( $self, $stored, $user ) {
         $user->{email_normalized} );
 }
 
+# The transaction that inserted the account rolled back on the conflict, so
+# the rest of the registration goes in a transaction of its own (ADR 0110).
+# It ran in autocommit: a failed audit left the credential and the event
+# behind, a registration half written.
 sub _reuse_user ( $self, $stored, $registration ) {
+    return $self->schema->txn_do(
+        sub {
+            $self->_complete_registration($registration);
+            return { ok => 1, user => $stored };
+        }
+    );
+}
+
+sub _complete_registration ( $self, $registration ) {
     my $user       = $registration->{user};
     my $credential = $registration->{credential};
     $self->credential_store->create_password_credential(
@@ -99,7 +112,7 @@ sub _reuse_user ( $self, $stored, $registration ) {
     );
     $self->audit->record_registration( $user, $self->id_service->uuid );
 
-    return { ok => 1, user => $stored };
+    return;
 }
 
 sub _user_by_id ( $self, $user_id ) {
@@ -213,14 +226,7 @@ sub _insert_registration ( $self, $registration ) {
     $user->{password_hash} ||= $credential->{secret_hash};
 
     my $created_user = $self->schema->resultset('User')->create($user);
-    $self->credential_store->create_password_credential(
-        {
-            secret_hash => $credential->{secret_hash},
-            type        => $credential->{type},
-            user_id     => $user->{id},
-        }
-    );
-    $self->audit->record_registration( $user, $self->id_service->uuid );
+    $self->_complete_registration($registration);
 
     return { user => $created_user };
 }
@@ -260,7 +266,8 @@ transaction. A unique race on insert returns the same field errors and does
 not persist a second user or credential. A unique C<id> collision remints
 the id once and does not return another user's account. A leftover unique
 C<id> with this username and email reuses the account and inserts the
-missing credential.
+missing credential, event and audit in one transaction of their own, so a
+failure there leaves none of them behind.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 

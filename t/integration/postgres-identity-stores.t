@@ -30,9 +30,9 @@ use GPForum::Test::PgDatabase;
 use GPForum::Test::RecordingPassword;
 use GPForum::Test::ScriptedId;
 use GPForum::Test::SessionToken;
+use GPForum::Test::UnauditedEventRecorder;
 
 our $VERSION = '0.001';
-our $TODO;
 
 const my $NOW         => '2026-05-23T12:00:00Z';
 const my $HALF_PAST   => '2026-05-23T12:30:00Z';
@@ -52,17 +52,6 @@ const my $NEWER_PASSWORD => 'a different sufficiently long password';
 const my $ADDRESS        => '198.51.100.10';
 const my $AGENT          => 'TestAgent';
 
-# The defects this test found in code outside its reach, pinned where they
-# show (quality program 5.1). SessionStore looks a session up with find on
-# its id and the member's, and DBIx::Class's find keeps only the columns of
-# a unique constraint the values satisfy: the primary key, so the member is
-# dropped from the WHERE clause. The fake ORM matched every column it was
-# given.
-const my $CREDENTIAL_TODO =>
-  'CredentialStore leaves created_at to the database clock';
-const my $SESSION_TODO =>
-  'SessionStore finds a session by its id alone, whoever presents it';
-
 # Each collision case mints its own series of deterministic session tokens,
 # so the hashes one case stores never collide with another case's.
 const my %SERIES => (
@@ -80,6 +69,13 @@ const my $USER_SQL => join q{ },
 const my $CREDENTIAL_SQL => join q{ },
   'INSERT INTO credentials (id, user_id, type, secret_hash, created_at)',
   q{VALUES (?, ?, 'password', ?, ?)};
+const my $REVOKED_CREDENTIAL_SQL => join q{ },
+  'INSERT INTO credentials',
+  '(id, user_id, type, secret_hash, created_at, revoked_at)',
+  q{VALUES (?, ?, 'password', ?, ?, ?)};
+const my $TYPED_CREDENTIAL_SQL => join q{ },
+  'INSERT INTO credentials (id, user_id, type, secret_hash, created_at)',
+  'VALUES (?, ?, ?, ?, ?)';
 const my $SESSION_SQL => join q{ },
   'INSERT INTO sessions (session_id, user_id, session_hash, created_at,',
   'last_seen_at, expires_at, revoked_at) VALUES (?, ?, ?, ?, ?, ?, ?)';
@@ -108,6 +104,9 @@ const my $USER_CREDENTIALS_SQL =>
   'SELECT count(*) FROM credentials WHERE user_id = ?';
 const my $ACTIVE_CREDENTIAL_SQL =>
   'SELECT * FROM credentials WHERE user_id = ? AND revoked_at IS NULL';
+const my $ACTIVE_TYPED_CREDENTIAL_SQL => join q{ },
+  'SELECT * FROM credentials',
+  'WHERE user_id = ? AND type = ? AND revoked_at IS NULL';
 const my $ACTIVE_CREDENTIALS_SQL => join q{ },
   'SELECT count(*) FROM credentials',
   'WHERE user_id = ? AND revoked_at IS NULL';
@@ -178,6 +177,7 @@ _duplicate_registration($identity);
 _registration_race($identity);
 _registration_id_collision($identity);
 _registration_id_race($identity);
+_registration_reuse_rollback($identity);
 _login($identity);
 _authentication($identity);
 _logout($identity);
@@ -197,6 +197,8 @@ _credential_rows($identity);
 _credential_race($identity);
 _credential_id_collision($identity);
 _credential_id_race($identity);
+_credential_id_revoked($identity);
+_credential_id_other_type($identity);
 _session_hash_collision($identity);
 _session_id_collision($identity);
 _session_id_leftover($identity);
@@ -431,6 +433,52 @@ sub _registration_id_race {
     return;
 }
 
+# The same race, and then the audit write fails. The account's own
+# transaction rolled back on the conflict; the credential, the event and the
+# audit that complete the reused account went in after it, in autocommit,
+# and a failed audit left the credential and the event behind.
+sub _registration_reuse_rollback {
+    my ($ctx) = @_;
+
+    my $id        = $ctx->{ids}->uuid;
+    my $unaudited = _identity(
+        $ctx,
+        recorder => GPForum::Test::UnauditedEventRecorder->new(
+            id_service => $ctx->{ids},
+            schema     => $ctx->{schema},
+        ),
+    );
+    my $completed = eval {
+        _before(
+            $ctx,
+            'user insert',
+            sub {
+                my ($rival) = @_;
+                _rival_user( $rival, $id, 'halfway' );
+                return;
+            },
+            sub {
+                return $unaudited->create_registration(
+                    _registration_input( $ctx, $id, 'halfway' ) );
+            }
+        );
+        1;
+    };
+    my $error = $EVAL_ERROR;
+    ok(
+        !$completed && $error =~ /audit[ ]write[ ]failed/msx,
+        'a reused registration whose audit fails reports the failure'
+    );
+    is( _value( $ctx, $USER_NAMED_SQL, 'halfway' ),
+        $id, 'the account the rival committed stays' );
+    is( _value( $ctx, $USER_CREDENTIALS_SQL, $id ),
+        0, 'the credential written before the audit rolls back' );
+    is( _value( $ctx, $USER_EVENTS_SQL, $id ),   0, 'and so does the event' );
+    is( _audits( $ctx, $id, 'user.registered' ), 0, 'leaving no audit' );
+
+    return;
+}
+
 sub _login {
     my ($ctx) = @_;
 
@@ -582,16 +630,24 @@ sub _logout {
         $version, 'and does not write the row again' );
     _at( $ctx, $NOW );
 
+    # DBIx::Class's find keeps only the columns of a unique constraint the
+    # values satisfy: a find on the session id and the member's dropped the
+    # member from the WHERE clause, and any member's id revoked the session.
+    # The fake ORM this ran on matched every column it was given.
     my $live    = _session( $ctx, $user );
     my $meddled = $revoke->(
         { session_id => $live, user_id => _member( $ctx, 'meddler' ) } );
-    {
-        local $TODO = $SESSION_TODO;
-        is( $meddled->{error}, 'not_found',
-            q{a member cannot revoke another member's session} );
-        is( _row( $ctx, $SESSION_ROW_SQL, $live )->{revoked_at},
-            undef, 'which stays live' );
-    }
+    is( $meddled->{error}, 'not_found',
+        q{a member cannot revoke another member's session} );
+    is( _row( $ctx, $SESSION_ROW_SQL, $live )->{revoked_at},
+        undef, 'which stays live' );
+
+    # Without a member id the session id alone, from the browser's own
+    # signed cookie, names the session to revoke.
+    ok( $revoke->( { session_id => $live } )->{ok},
+        'a logout that presents no member id revokes the session by its id' );
+    is( _utc( $ctx, _row( $ctx, $SESSION_ROW_SQL, $live )->{revoked_at} ),
+        $NOW, 'and stamps its revocation' );
 
     return;
 }
@@ -651,13 +707,13 @@ sub _session_validation {
         'the mismatch is reported as an invalid token' );
     ok( !$validate->($valid)->{ok},
         'a request that presents no token is rejected' );
+
+    # The token is this session's own: only the member's id is wrong, and
+    # the look-up has to say so, as find did not.
     my $borrowed =
       $validate->( $valid, $token{valid}, _member( $ctx, 'borrower' ) );
-    {
-        local $TODO = $SESSION_TODO;
-        is( $borrowed->{error}, 'not_found',
-            q{a session presented under another member's id is not found} );
-    }
+    is( $borrowed->{error}, 'not_found',
+        q{a session presented under another member's id is not found} );
 
     return;
 }
@@ -1127,14 +1183,12 @@ sub _password_change {
         $active->{secret_hash},
         'and the user row holds its hash'
     );
-    {
-        # Its revocation, when the next change comes, is stamped by the
-        # store's clock; a clock behind the database's then breaks the
-        # credentials_revoked_after_created_check.
-        local $TODO = $CREDENTIAL_TODO;
-        is( _utc( $ctx, $active->{created_at} ),
-            $NOW, 'the new credential is stamped by the store clock' );
-    }
+
+    # Its revocation, when the next change comes, is stamped by the store's
+    # clock, and so is its creation: left to the database's, a store clock
+    # behind it broke the credentials_revoked_after_created_check.
+    is( _utc( $ctx, $active->{created_at} ),
+        $NOW, 'the new credential is stamped by the store clock' );
     _assert_change_sessions( $ctx, $changed,
         { bystander => $bystander, current => $current, other => $other } );
     is( _audits( $ctx, $user, 'identity.password.changed' ),
@@ -1153,6 +1207,21 @@ sub _password_change {
         $credentials, 'unchanged secret does not rotate the credential' );
     is( _audits( $ctx, $user, 'identity.password.changed' ),
         1, 'unchanged secret does not write another audit' );
+
+    # The store's clock is months behind the database's here: the next
+    # change revokes the credential at $NOW, which is no earlier than it was
+    # created only if the store stamped its creation too.
+    my $next = eval {
+        return $change->(
+            {
+                current_password => $NEWER_PASSWORD,
+                new_password     => $OTHER_PASSWORD,
+            }
+        );
+    };
+    ok( $next && $next->{ok},
+        'a second change revokes the credential the first one created' )
+      or diag $EVAL_ERROR;
 
     return;
 }
@@ -1587,6 +1656,81 @@ sub _credential_id_race {
         $user, 'leftover credential id race keeps this user' );
     is( _value( $ctx, $USER_CREDENTIALS_SQL, $user ),
         1, 'leftover credential id race does not insert a second credential' );
+
+    return;
+}
+
+# The id the store mints is the member's own revoked credential: that is no
+# leftover of this insert. It was taken for one, handed back as the active
+# password, and the member was left with none.
+sub _credential_id_revoked {
+    my ($ctx) = @_;
+
+    my $user    = _member( $ctx, 'relapsed', { credential => 0 } );
+    my $retired = $ctx->{ids}->uuid;
+    $ctx->{dbh}->do( $REVOKED_CREDENTIAL_SQL, undef, $retired, $user,
+        'argon2id-retired', $EARLY, $REVOKED );
+    my $created = _in_transaction(
+        $ctx,
+        sub {
+            return _credentials( $ctx,
+                id_service =>
+                  GPForum::Test::ScriptedId->new( next_ids => [$retired] ) )
+              ->create_password_credential(
+                { secret_hash => 'argon2id-hash-current', user_id => $user } );
+        }
+    );
+    ok( !_skipped($created),
+        'a revoked credential under the minted id is not reused' );
+    my $id = _column( $created, 'id' );
+    ok( GPForum::Infrastructure::Id->is_uuid($id) && $id ne $retired,
+        'the store remints the id' );
+    my $active = _row( $ctx, $ACTIVE_CREDENTIAL_SQL, $user );
+    is( $active->{id}, $id, 'and the member has an active password again' );
+    is( $active->{secret_hash},
+        'argon2id-hash-current', 'the one the store was given' );
+    is(
+        _utc( $ctx, _row( $ctx, $CREDENTIAL_ROW_SQL, $retired )->{revoked_at} ),
+        $REVOKED,
+        'the revoked credential stays revoked'
+    );
+
+    return;
+}
+
+# The id the store mints is the member's own second factor, open: of
+# another type, it is no leftover of this password's insert either, and
+# taken for one it was handed back as the active password.
+sub _credential_id_other_type {
+    my ($ctx) = @_;
+
+    my $user   = _member( $ctx, 'twofactor', { credential => 0 } );
+    my $factor = $ctx->{ids}->uuid;
+    $ctx->{dbh}->do( $TYPED_CREDENTIAL_SQL, undef, $factor, $user, 'totp',
+        'totp-secret', $EARLY );
+    my $created = _in_transaction(
+        $ctx,
+        sub {
+            return _credentials( $ctx,
+                id_service =>
+                  GPForum::Test::ScriptedId->new( next_ids => [$factor] ) )
+              ->create_password_credential(
+                { secret_hash => 'argon2id-hash-typed', user_id => $user } );
+        }
+    );
+    ok( !_skipped($created),
+        'an open credential of another type under the minted id is not reused'
+    );
+    my $id = _column( $created, 'id' );
+    ok( GPForum::Infrastructure::Id->is_uuid($id) && $id ne $factor,
+        'the store remints the id for the password' );
+    my $password =
+      _row( $ctx, $ACTIVE_TYPED_CREDENTIAL_SQL, $user, 'password' );
+    is( $password->{id}, $id, 'and the member has an active password' );
+    is( $password->{secret_hash},
+        'argon2id-hash-typed', 'the one the store was given' );
+    is( _row( $ctx, $ACTIVE_TYPED_CREDENTIAL_SQL, $user, 'totp' )->{id},
+        $factor, 'the second factor stays as it was' );
 
     return;
 }

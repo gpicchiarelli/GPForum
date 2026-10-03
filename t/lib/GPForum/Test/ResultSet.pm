@@ -223,15 +223,6 @@ sub _search_rows {
 sub _find_user {
     my ( $self, $query ) = @_;
 
-    return
-         _find_user_row( $self, $query )
-      || _find_username( $self, $query )
-      || _find_email( $self, $query );
-}
-
-sub _find_user_row {
-    my ( $self, $query ) = @_;
-
     for my $row ( @{ $self->schema->users } ) {
         return $row if _matches_query( $row, $query );
     }
@@ -247,24 +238,6 @@ sub _find_session {
     }
 
     return;
-}
-
-sub _find_username {
-    my ( $self, $query ) = @_;
-
-    return if !exists $query->{username};
-
-    return $self->schema->existing_usernames->{ $query->{username} } ? 1 : 0;
-}
-
-sub _find_email {
-    my ( $self, $query ) = @_;
-
-    return if !exists $query->{email_normalized};
-
-    return $self->schema->existing_emails->{ $query->{email_normalized} }
-      ? 1
-      : 0;
 }
 
 sub _find_storage_row {

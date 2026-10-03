@@ -76,20 +76,32 @@ sub _credential_after_unique ( $self, $ctx, $error ) {
 
 sub _retry_or_reuse_credential ( $self, $ctx ) {
     my $stored = $self->_credential_by_id( $ctx->{row}{id} );
-    if ( $self->_same_open_credential( $stored, $ctx->{input} ) ) {
+    if ( $self->_same_open_credential( $stored, $ctx->{row} ) ) {
         return $self->_skipped_credential($stored);
     }
 
     return $self->_retry_credential_id($ctx);
 }
 
-sub _same_open_credential ( $self, $stored, $input ) {
+# A leftover of this very insert is this member's, of this type, and still
+# open. A revoked credential under the id was reused all the same: the store
+# answered with it as the active password, inserted none, and left the
+# member with no password at all.
+sub _same_open_credential ( $self, $stored, $row ) {
     if ( !$stored ) {
+        return 0;
+    }
+    if ( defined $self->support->column( $stored, 'revoked_at' ) ) {
+        return 0;
+    }
+    if (
+        !_same_text( $self->support->column( $stored, 'type' ), $row->{type} ) )
+    {
         return 0;
     }
 
     return _same_text( $self->support->column( $stored, 'user_id' ),
-        $input->{user_id} );
+        $row->{user_id} );
 }
 
 sub _retry_credential_id ( $self, $ctx ) {
@@ -136,8 +148,14 @@ sub _create_credential ( $self, $row ) {
     return $self->_credentials->create($row);
 }
 
+# created_at comes from the store's clock, as revoked_at does: the database
+# default stamped creation by the server's clock while revocation took the
+# application's, and an application clock behind the server's revoked a
+# credential before it was created, which credentials_revoked_after_created
+# refuses. The session and token stores stamp their rows the same way.
 sub _credential_row ( $self, $input ) {
     return {
+        created_at  => $self->clock->now_iso8601,
         id          => $self->id_service->uuid,
         secret_hash => $input->{secret_hash},
         type        => $input->{type} || 'password',
@@ -250,10 +268,12 @@ Creates, locates, and rotates password credentials.
 
 =head2 create_password_credential
 
-Inserts a password credential row. An already-active password for that user
-is returned with C<skipped> and is not inserted again. A unique C<id>
-collision remints the id once and does not return another user's credential.
-A leftover unique C<id> with this user reuses the active password.
+Inserts a password credential row, stamped C<created_at> by the store's
+clock, the clock that later stamps its C<revoked_at>. An already-active
+password for that user is returned with C<skipped> and is not inserted
+again. A unique C<id> collision remints the id once and does not return
+another user's credential, nor a revoked one. A leftover unique C<id> with
+this user and type, still open, reuses the active password.
 
 =head2 active_password_credential
 

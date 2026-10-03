@@ -94,6 +94,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- Session revoke and validation check, in SQL, that the session belongs to the
+  member id presented. A DBIx::Class `find` had dropped the member id from the
+  query, so one member could revoke or validate another member's session
+  given its id.
+
 - **The replication docs no longer recommend `pg_monitor`**, which also
   grants `pg_read_all_settings` and with it a standby's `primary_conninfo`,
   replication password included; `pg_read_all_stats` is enough.
@@ -565,7 +570,8 @@ CI, evidence and internal refactors with no change in behaviour.
   Poedit, Weblate and gettext's tools can open; `docs/i18n.md` describes the
   translator workflow. The catalogs are read once at startup, and a malformed
   file stops the application naming the file and line. A message left empty or
-  marked fuzzy is shown in English and the fallback is logged; for a counted
+  marked fuzzy is shown in English (and reported to a `missing_key_logger`
+  when one is set; `t/295` keeps the shipped catalogs complete); for a counted
   message one empty form is enough. Adding a locale also needs a migration that
   widens `users_preferred_locale_check`.
 
@@ -578,7 +584,8 @@ CI, evidence and internal refactors with no change in behaviour.
   readiness check `query_budget_drift` points at
   `docs/PERFORMANCE.md#query-budgets`, which also says what
   `script/query-budget --sync` cannot fix: a stored budget for an endpoint the
-  catalog no longer has stays `extra` until its row is deleted by hand.
+  catalog no longer has used to stay `extra` until its row was deleted by
+  hand; `--sync` now removes it (below).
 
 
 - **Notifications, attachments and community stores are tested on
@@ -808,6 +815,15 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- Password credentials take `created_at` from the application clock that also
+  sets `revoked_at`: an application clock behind the database clock no longer
+  breaks `credentials_revoked_after_created_check` on the next password change.
+  A new credential id that collides with one of the member's own revoked or
+  other-type credentials (a second factor) is minted again instead of being
+  returned as the active password, which left the member with none. A
+  registration that reuses a leftover account writes its credential, event and
+  audit in one transaction (ADR 0110).
 
 - The hourly `attachments` job removes an orphan upload's file and its
   thumbnails from `attachment_root`, not only its row; until now those files
