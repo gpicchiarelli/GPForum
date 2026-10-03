@@ -13,7 +13,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 348;
+const my $TEST_COUNT => 355;
 
 plan tests => $TEST_COUNT;
 
@@ -38,6 +38,13 @@ use_ok('GPForum::I18N::Namespace');
 use_ok('GPForum::Infrastructure::EventRecorder');
 use_ok('GPForum::Infrastructure::AuditRecord');
 use_ok('GPForum::Infrastructure::UniqueConflict');
+use_ok('GPForum::X');
+use_ok('GPForum::X::Argument');
+use_ok('GPForum::X::Check');
+use_ok('GPForum::X::Config');
+use_ok('GPForum::X::Conflict');
+use_ok('GPForum::X::Unavailable');
+use_ok('GPForum::X::Usage');
 use_ok('GPForum::Infrastructure::PgNotifications');
 use_ok('GPForum::Jobs::EventPayload');
 use_ok('GPForum::Runtime');

@@ -20,7 +20,7 @@ const my @LAYERS => (
         root       => 0,
         purpose    => 'configuration, persistence and cross-cutting contracts',
         namespaces => [
-            qw(Config Log Runtime OS Domain Jobs Schema Migration
+            qw(Base X Config Log Runtime OS Domain Jobs Schema Migration
               Infrastructure)
         ],
     },

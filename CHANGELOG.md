@@ -1572,6 +1572,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- Exceptions have classes: `GPForum::X` and its `Argument`, `Config`, `Usage`,
+  `Conflict`, `Unavailable` and `Check` subclasses (ADR 0118). An exception
+  stringifies to its message, so every reader of the old strings keeps
+  working. `UniqueConflict->attempt` returns a unique violation as a
+  `GPForum::X::Conflict` whose `on($constraint)` also matches the indexes of
+  a partitioned table, and `UniqueConflict->throw` raises one.
+
 - `my $undefined; return $undefined;` is now `return undef;` (ADR 0117), and
   the 63 dead returns after a final `UniqueConflict->rethrow` are gone. The
   profile no longer applies `ProhibitExplicitReturnUndef` and treats

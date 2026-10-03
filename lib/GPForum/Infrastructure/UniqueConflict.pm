@@ -9,71 +9,38 @@ use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 use v5.40;
 
+use GPForum::X::Conflict;
+
 our $VERSION = '0.001';
 
-const my $PG_UNIQUE     => '23505';
-const my $SQL_DBMS_NAME => 17;
-
-# The indexes a conflict on a unique constraint can be reported under: its
-# own and, when its table is partitioned, the index each partition attached
-# to it (pg_inherits, recursively, for partitions of partitions). A row is
-# stored in a partition, and PostgreSQL names the partition's index in the
-# conflict -- notifications_default_pkey, notifications_2026_10_pkey -- not
-# the parent's notifications_pkey. Partitions are attached while the
-# application runs -- by the daily partition-maintenance timer and every
-# migrate (ADR 0113) -- so the family is read when a conflict asks for it
-# rather than remembered.
-const my $INDEX_FAMILY_SQL => join q{ },
-  'WITH RECURSIVE family (index_oid, index_name) AS (',
-  'SELECT root.oid, root.relname::text FROM pg_class AS root',
-  q{WHERE root.oid = to_regclass(?) AND root.relkind IN ('i', 'I')},
-  'UNION ALL',
-  'SELECT child.oid, child.relname::text FROM family',
-  'JOIN pg_inherits AS link ON link.inhparent = family.index_oid',
-  'JOIN pg_class AS child ON child.oid = link.inhrelid',
-  ') SELECT index_name FROM family';
+const my $PG_UNIQUE => '23505';
 
 sub is_conflict ( $, $error ) {
     if ( !_has_text($error) ) {
         return 0;
     }
 
-    return _matches_unique($error);
+    return GPForum::X::Conflict->reports_unique($error);
 }
 
-# A unique violation of this constraint and no other. Stores accept a
-# conflict on the row they were writing and rethrow one on any other key, so
-# the name has to be matched; on a partitioned table PostgreSQL reports the
-# name of the partition's index, which is matched through the catalog. A test
-# double has no catalog, and its fake ORM raises the constraint's own name.
+# A unique violation of this constraint and no other, partitions included:
+# GPForum::X::Conflict->on, for an error that may not be an exception yet.
 sub is_conflict_on ( $, $schema, $error, $constraint ) {
     if ( !_has_text($error) || !_has_text($constraint) ) {
         return 0;
     }
 
-    # The server's sentence has to say it is a unique violation, as it has to
-    # name the index: is_conflict reads the whole text, where a member's text
-    # in the parameter values can say "unique constraint" on an error that is
-    # none. An index row too large for its index names that index, and was
-    # taken for a conflict on it.
-    my $message = _server_message($error);
-    if ( !_matches_unique($message) ) {
-        return 0;
-    }
-    if ( _names_index( $message, $constraint ) ) {
-        return 1;
-    }
-    for my $partition ( _partition_indexes( $schema, $constraint ) ) {
-        if ( _names_index( $message, $partition ) ) {
-            return 1;
-        }
-    }
-
-    return 0;
+    return GPForum::X::Conflict->new( message => "$error", schema => $schema )
+      ->on($constraint);
 }
 
 sub throw ( $, $constraint ) {
-    croak _message($constraint);
+    my ( undef, $file, $line ) = caller;
+    croak GPForum::X::Conflict->new(
+        message    => _message($constraint),
+        constraint => _has_text($constraint) ? $constraint : undef,
+        location   => "$file line $line",
+    );
 }
 
 sub rethrow ( $, $error ) {
@@ -88,7 +55,12 @@ sub attempt ( $, $schema, $code ) {
     my $error = $EVAL_ERROR;
     _finish_savepoint( $storage, $savepoint, $error );
 
-    return ( $value, $error );
+    # A unique violation comes back as a GPForum::X::Conflict that stringifies
+    # to the original text, so the stores matching that text keep working and
+    # a caller can ask $error->on($constraint). Any other error, and no error,
+    # comes back as it was.
+    return ( $value,
+        GPForum::X::Conflict->from_error( $error, $schema ) // $error );
 }
 
 # DBIx::Class mints the name so that nesting works. A fixed name does not:
@@ -149,43 +121,6 @@ sub _schema_storage ($schema) {
     return eval { return $schema->storage };
 }
 
-# The partitions' index names, read from the catalog the conflict came from.
-# A schema without a PostgreSQL handle has none to give, and neither has a
-# lookup that failed: the conflict is then matched on the constraint's own
-# name alone and anything else is rethrown, which is where the callers stood
-# before partitions were asked about.
-sub _partition_indexes ( $schema, $constraint ) {
-    my $dbh = _catalog_dbh($schema);
-    if ( !$dbh ) {
-        return ();
-    }
-
-    my $names = eval {
-        return $dbh->selectcol_arrayref( $INDEX_FAMILY_SQL, undef,
-            $constraint );
-    };
-    if ( ref $names ne 'ARRAY' ) {
-        return ();
-    }
-
-    return grep { $_ ne $constraint } @{$names};
-}
-
-sub _catalog_dbh ($schema) {
-    my $storage = _schema_storage($schema);
-    if ( !$storage || !$storage->can('dbh') ) {
-        return undef;
-    }
-
-    my $dbh  = eval { return $storage->dbh };
-    my $dbms = eval { return $dbh->get_info($SQL_DBMS_NAME) } // q{};
-    if ( $dbms ne 'PostgreSQL' ) {
-        return undef;
-    }
-
-    return $dbh;
-}
-
 sub _storage_supports_savepoint ($storage) {
     if ( !$storage->can('svp_begin') ) {
         return 0;
@@ -203,46 +138,6 @@ sub _storage_supports_savepoint ($storage) {
     }
 
     return 1;
-}
-
-sub _matches_unique ($error) {
-
-    # Delimited, not a bare substring. m/23505/ matched those five digits
-    # anywhere in the text, so an unrelated failure that happened to mention a
-    # byte offset, row count or id containing them was classified as a unique
-    # violation -- and the recovery path swallows what it classifies.
-    if ( $error =~ m/(?<![[:digit:]]) $PG_UNIQUE (?![[:digit:]])/msx ) {
-        return 1;
-    }
-    if ( $error =~ m/unique [ ] constraint/imsx ) {
-        return 1;
-    }
-    if ( $error =~ m/duplicate [ ] key/imsx ) {
-        return 1;
-    }
-
-    return 0;
-}
-
-# The server's own sentence: the error's first line, without the statement
-# and parameter values DBI appends to it when no DETAIL line follows. The
-# DETAIL line and those values carry the row's data, where a member's text
-# could spell any constraint's name.
-sub _server_message ($error) {
-    my ($message) = split m/\n/msx, "$error";
-    $message //= q{};
-    $message =~ s/[ ] [[]for [ ] Statement [ ] .*//msx;
-
-    return $message;
-}
-
-# A whole identifier, however the message quotes it: posts_pkey is not a
-# conflict on thread_posts_pkey, nor notifications_pkey one on
-# notifications_pkey_old.
-sub _names_index ( $message, $name ) {
-    return $message =~ m/(?<![[:word:]\$]) \Q$name\E (?![[:word:]\$])/msx
-      ? 1
-      : 0;
 }
 
 sub _message ($constraint) {
@@ -294,7 +189,9 @@ instead of returning a 500.
 C<is_conflict_on> narrows that to one constraint. On a partitioned table
 PostgreSQL names the partition's index in the conflict, not the table's
 constraint, so the partitions' index names are read from the catalog
-(C<pg_inherits>) when the error does not name the constraint itself.
+(C<pg_inherits>) when the error does not name the constraint itself. The
+rules live in L<GPForum::X::Conflict>, which C<attempt> returns for a unique
+violation.
 
 C<attempt> wraps an insert attempt in a PostgreSQL savepoint when the schema is
 inside an open transaction, so a unique violation does not abort the outer
@@ -320,11 +217,15 @@ PostgreSQL handle, leaves only the constraint's own name to match.
 =head2 attempt
 
 Runs a code reference and returns C<($value, $error)>. On a live PostgreSQL
-transaction, the attempt is guarded by a savepoint.
+transaction, the attempt is guarded by a savepoint. A unique violation comes
+back as a L<GPForum::X::Conflict> that stringifies to the original error text
+and carries the schema, so C<< $error->on($constraint) >> can ask about
+partitions; any other error comes back unchanged.
 
 =head2 throw
 
-Raises a unique-violation error for test fakes.
+Raises a L<GPForum::X::Conflict> for test fakes, whose text is a
+PostgreSQL-shaped unique violation naming the constraint.
 
 =head2 rethrow
 
@@ -332,7 +233,8 @@ Propagates a non-unique error with croak.
 
 =head1 DIAGNOSTICS
 
-C<throw> croaks with a PostgreSQL-shaped unique violation string.
+C<throw> croaks a L<GPForum::X::Conflict> whose message is a PostgreSQL-shaped
+unique violation string.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
@@ -340,7 +242,8 @@ None.
 
 =head1 DEPENDENCIES
 
-Uses L<Carp>, L<Const::Fast>, L<English>, and L<Mojo::Base>.
+Uses L<Carp>, L<Const::Fast>, L<English>, L<Mojo::Base> and
+L<GPForum::X::Conflict>, which holds the matching rules.
 
 =head1 INCOMPATIBILITIES
 

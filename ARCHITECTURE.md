@@ -42,7 +42,7 @@ runs the same test.
 | adapter | `Controller`, `Command`, `Worker`, `Benchmark` | the ways in: HTTP, the command line, jobs |
 | presentation | `Web`, `ViewModel`, `View`, `Theme`, `Security`, `I18N` | turning service results into pages and headers |
 | service | `Service` | the application: rules, workflows, readers, stores |
-| foundation | `Config`, `Log`, `Runtime`, `OS`, `Domain`, `Jobs`, `Schema`, `Migration`, `Infrastructure` | configuration, persistence, cross-cutting contracts |
+| foundation | `Base`, `X`, `Config`, `Log`, `Runtime`, `OS`, `Domain`, `Jobs`, `Schema`, `Migration`, `Infrastructure` | configuration, persistence, cross-cutting contracts |
 
 A new top-level namespace fails the check until it is placed in a layer. This
 is a layered architecture, not a hexagonal one: services read and write through
