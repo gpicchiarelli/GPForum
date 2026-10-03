@@ -101,7 +101,7 @@ $test->post_ok(
     }
 );
 $test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'Registration accepted' );
+$test->text_is( 'h1' => 'Check your email' );
 $test->content_like(qr/giacomo_forum/msx);
 
 $test->get_ok('/login');
@@ -145,7 +145,7 @@ $test->post_ok(
     }
 );
 $test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'Login request accepted' );
+$test->text_is( 'h1' => 'You are signed in' );
 $test->get_ok('/__test/session-state');
 $test->status_is($HTTP_OK);
 $test->json_is( '/user_id'    => 'user-1' );
@@ -387,7 +387,7 @@ $test->post_ok(
     }
 );
 $test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'Logout request accepted' );
+$test->text_is( 'h1' => 'You are signed out' );
 is( scalar @{ $audit->records }, 2, 'logout request is audited' );
 is( $audit->records->[1]{method},
     'record_logout_request', 'logout audit method is explicit' );

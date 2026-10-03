@@ -67,7 +67,7 @@ $test->post_ok(
     }
 );
 $test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'Registration accepted' );
+$test->text_is( 'h1' => 'Check your email' );
 $test->element_exists(
     'nav[aria-label="Registration next steps"] a[href="/login"]');
 
@@ -84,7 +84,7 @@ $test->post_ok(
     }
 );
 $test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'Login request accepted' );
+$test->text_is( 'h1' => 'You are signed in' );
 $test->content_like(qr/You [ ] are [ ] signed [ ] in/msx);
 $test->element_exists('form[action="/logout"]');
 $test->element_exists('form[action="/logout"] input[name="command_id"]');
@@ -189,7 +189,7 @@ $test->post_ok(
     }
 );
 $test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'Logout request accepted' );
+$test->text_is( 'h1' => 'You are signed out' );
 $test->content_like(qr/You [ ] are [ ] signed [ ] out/msx);
 $test->element_exists('nav[aria-label="Logout next steps"] a[href="/login"]');
 

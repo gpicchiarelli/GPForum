@@ -895,8 +895,8 @@ msgid "Login"
 msgstr "Accedi"
 
 msgctxt "auth.login_accepted_title"
-msgid "Login request accepted"
-msgstr "Richiesta accesso accettata"
+msgid "You are signed in"
+msgstr "Hai effettuato l’accesso"
 
 msgctxt "auth.login_again"
 msgid "Login again"
@@ -923,8 +923,8 @@ msgid "Logout"
 msgstr "Esci"
 
 msgctxt "auth.logout_accepted_title"
-msgid "Logout request accepted"
-msgstr "Richiesta uscita accettata"
+msgid "You are signed out"
+msgstr "Sei uscito"
 
 msgctxt "auth.logout_aria"
 msgid "Logout"
@@ -984,8 +984,8 @@ msgid "Create account"
 msgstr "Crea account"
 
 msgctxt "auth.registration_accepted_title"
-msgid "Registration accepted"
-msgstr "Registrazione accettata"
+msgid "Check your email"
+msgstr "Controlla la tua email"
 
 msgctxt "auth.registration_next_steps"
 msgid "Registration next steps"
