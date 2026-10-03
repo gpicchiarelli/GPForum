@@ -132,6 +132,12 @@ while ( $css =~ /--font-(?!size)[\w-]+: \s* ([^;]+);/gmsx ) {
 is_deeply( \@unshipped, [],
     'every font the stylesheet names is shipped or a system font' );
 
+# The type scale is its tokens. A rule that states a size of its own adds a
+# step the scale does not know about: 15px had crept into six rules that way.
+# Code is the exception, sized in em against the text around it.
+my @off_scale = $css =~ /^ \s+ font-size: \s* ( [\d.]+ (?:rem|px) ) ;/gmsx;
+is_deeply( \@off_scale, [], 'every font size is a token of the scale' );
+
 done_testing();
 
 sub _contrast_ok {    ## no critic (Subroutines::ProhibitManyArgs)

@@ -59,14 +59,14 @@
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   --typography-font-ui: var(--font-ui);
 
-  /* Seven sizes. Interface text is md; text read at length is body. */
+  /* Six sizes, and no other. Controls and metadata are sm, interface text
+     is md, text read at length is body. */
   --font-size-xs: 0.8125rem;
   --font-size-sm: 0.875rem;
   --font-size-md: 1rem;
   --font-size-body: 1.0625rem;
   --font-size-lg: 1.25rem;
-  --font-size-xl: 1.5rem;
-  --font-size-2xl: clamp(1.75rem, 1.35rem + 1.8vw, 2.375rem);
+  --font-size-xl: clamp(1.75rem, 1.35rem + 1.8vw, 2.375rem);
 
   --weight-regular: 400;
   --weight-medium: 500;
@@ -266,7 +266,7 @@ h3 {
 }
 
 h1 {
-  font-size: var(--font-size-2xl);
+  font-size: var(--font-size-xl);
   line-height: var(--line-height-tight);
   letter-spacing: var(--tracking-display);
 }
@@ -491,7 +491,7 @@ pre code {
 .identity-form a,
 .identity-form button {
   color: var(--color-muted);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-sm);
   font-weight: var(--weight-medium);
   text-decoration: none;
   white-space: nowrap;
@@ -704,7 +704,7 @@ button,
   background: var(--color-primary);
   color: var(--color-text-on-primary);
   padding: 0 1.1rem;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-sm);
   font-weight: var(--weight-semibold);
   line-height: 1;
   text-decoration: none;
@@ -907,7 +907,7 @@ legend {
   background: var(--color-surface-success);
   color: var(--color-foreground);
   padding: var(--space-3) var(--space-4);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-md);
   font-weight: var(--weight-medium);
 }
 
@@ -1170,7 +1170,7 @@ table,
 .table {
   inline-size: 100%;
   border-collapse: collapse;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-sm);
 }
 
 .ui-admin-table {
@@ -1219,7 +1219,7 @@ nav[aria-label$="pagination" i] a,
   background: var(--color-surface);
   color: var(--color-foreground);
   padding-inline: 1.1rem;
-  font-size: 0.9375rem;
+  font-size: var(--font-size-sm);
   font-weight: var(--weight-semibold);
   text-decoration: none;
   transition: background-color var(--ease);
@@ -1310,7 +1310,7 @@ nav[aria-label$="pagination" i] a:hover,
 
 .post__author {
   color: var(--color-foreground);
-  font-size: 0.9375rem;
+  font-size: var(--font-size-md);
   font-weight: var(--weight-semibold);
   text-decoration: none;
 }

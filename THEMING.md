@@ -57,8 +57,9 @@ logical (`inline`, `block`), and a size comes from the scale.
 
 - **Faces.** The platform's own: `--font-ui` and `--font-mono` name system
   fonts only, and no web font is shipped.
-- **Sizes.** Seven, `--font-size-xs` to `--font-size-2xl`. Interface text is
-  `md` (16px); text read at length, a post's body, is `body` (17px) at
+- **Sizes.** Six, `--font-size-xs` to `--font-size-xl`, and no literal size
+  beside them. Controls and metadata are `sm` (14px); interface text is `md`
+  (16px); text read at length, a post's body, is `body` (17px) at
   `--line-height-reading`. Headings are set tighter (`--tracking-display`,
   `--tracking-heading`), as large type asks.
 - **Weights.** `--weight-regular` to `--weight-bold`. Hierarchy comes from
