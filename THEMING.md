@@ -92,6 +92,11 @@ logical (`inline`, `block`), and a size comes from the scale.
   groups of buttons, one press each, the one in use marked `aria-pressed`.
 - **Lists.** Rows between hairlines (`.ui-card-list`), not boxes. A row with
   one destination is one target (`.ui-row`, `.ui-row__title`).
+- **Avatars.** `.avatar` is a name's initial on one of the palette's three
+  tints (`forest`, `steel`, `clay`), chosen from the username by
+  `ViewModel::Base::tint` and so always the same for a member.
+- **Console filters.** `.filter-form` lays its `.field`s out as a grid, as
+  many to a line as fit, so the list being filtered stays on the first screen.
 - **Sheets.** An action that needs a field or a second thought opens over the
   page: `components/sheet` is an HTML popover, opened by a button's
   `popovertarget`, closed by Escape or a click outside, with no script.
