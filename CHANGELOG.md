@@ -561,6 +561,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- Translations are gettext PO files, `locale/en.po` and `locale/it.po`, which
+  Poedit, Weblate and gettext's tools can open; `docs/i18n.md` describes the
+  translator workflow. The catalogs are read once at startup, and a malformed
+  file stops the application naming the file and line. A message left empty or
+  marked fuzzy is shown in English and the fallback is logged; for a counted
+  message one empty form is enough. Adding a locale also needs a migration that
+  widens `users_preferred_locale_check`.
+
 - The eight performance and database documents are now one,
   `docs/PERFORMANCE.md`: budgets, indexes and the plan gate, keyset pages,
   `CONCURRENTLY` migrations, query budgets, caching, search costs, profiling,

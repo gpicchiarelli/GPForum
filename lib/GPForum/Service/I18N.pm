@@ -255,14 +255,17 @@ Version 0.001.
 The facade that controllers, templates and the notification renderer ask
 for text. It wires three helpers together:
 L<GPForum::Service::I18N::Catalog> holds the messages (English and Italian,
-unless C<catalogs> says otherwise), L<GPForum::Service::I18N::Locale>
-negotiates and describes locales, and L<GPForum::Service::I18N::Formatter>
-formats dates, numbers and plural categories. The supported locales are the
-ones the catalogs carry.
+read from the gettext PO files in C<locale/>, unless C<catalogs> says
+otherwise), L<GPForum::Service::I18N::Locale> negotiates and describes
+locales, and L<GPForum::Service::I18N::Formatter> formats dates, numbers
+and plural categories. The supported locales are the ones the catalogs
+carry: one per PO file.
 
 A message the requested locale lacks is taken from English; when English
 lacks it too, the key itself is returned, so a page shows the key rather
-than failing. When C<missing_key_logger> is set, it is called with
+than failing. A locale lacks a message its PO file leaves out, leaves
+untranslated (an empty C<msgstr>) or marks fuzzy, as gettext would not show
+those either. When C<missing_key_logger> is set, it is called with
 C<< { key, locale, reason } >> for each lookup that falls back to English
 (C<< reason => 'fallback' >>) and again for a key found nowhere
 (C<< reason => 'missing' >>). For C<translate>, a plural message (a hash of
@@ -369,7 +372,8 @@ C<missing_key_logger>, never thrown.
 
 C<default_locale> (default C<en>), which the bootstrap sets from the
 configuration's C<default_locale>; C<catalogs>, to replace the bundled
-catalogs; and C<missing_key_logger>, a code reference.
+catalogs (L<GPForum::Service::I18N::Catalog/load_catalogs> reads another
+directory of PO files); and C<missing_key_logger>, a code reference.
 
 =head1 DEPENDENCIES
 
