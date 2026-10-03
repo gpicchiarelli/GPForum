@@ -459,11 +459,12 @@ qr/\A runtime_worker_policy [ ] must [ ] be [ ] configured [ ] or [ ] cap-to-cpu
     'invalid runtime worker policy fails validation',
 );
 
+my $theme_names = qr/auto, [ ] default, [ ] dark, [ ] or [ ] high_contrast/msx;
 throws_ok(
     sub {
         GPForum::Config->new( default_theme => 'neon' )->validate;
     },
-qr/\A default_theme [ ] must [ ] be [ ] auto, [ ] default, [ ] dark, [ ] or [ ] high_contrast/msx,
+    qr/\A default_theme [ ] must [ ] be [ ] $theme_names/msx,
     'invalid default theme fails validation',
 );
 
