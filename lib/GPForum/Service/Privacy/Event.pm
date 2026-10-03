@@ -91,6 +91,7 @@ sub completed ( $self, $input ) {
         metadata    => {
             deletion_action_id =>
               $self->record->column( $input->{action}, 'deletion_action_id' ),
+            discarded_exports => $input->{discarded_exports} || [],
         },
         payload => $self->_payload_with(
             $input->{request},
@@ -271,7 +272,9 @@ Returns the erasure-blocked event hash.
 
 =head2 completed
 
-Returns the erasure-completed event hash.
+Returns the erasure-completed event hash. Its audit metadata names the
+export requests the erasure discarded (C<discarded_exports>, empty when
+there were none).
 
 =head2 held
 

@@ -94,6 +94,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Security
 
+- Erasing a member also deletes all their export requests, whatever their
+  status, and removes the bundle from their stored `privacy.export` answers in
+  the command log, in the same transaction; the audit keeps the export events
+  and lists the discarded requests. An export locks the member's row until it
+  commits, so a concurrent erasure waits for it and then discards the bundle,
+  and an export for an erased member is refused (`not_found`).
+
 - Session revoke and validation check, in SQL, that the session belongs to the
   member id presented. A DBIx::Class `find` had dropped the member id from the
   query, so one member could revoke or validate another member's session
@@ -815,6 +822,12 @@ CI, evidence and internal refactors with no change in behaviour.
   production floors fail the same gate as OS preflight and query-budget drift.
 
 ### Fixed
+
+- The privacy dashboard no longer fails for a member with an export request,
+  and the export download returns the bundle as a JSON object instead of one
+  JSON string: the jsonb manifest is read decoded. An erasure job that runs
+  after its retention hold ends no longer keeps
+  `last_error = 'retention hold active'`.
 
 - Password credentials take `created_at` from the application clock that also
   sets `revoked_at`: an application clock behind the database clock no longer

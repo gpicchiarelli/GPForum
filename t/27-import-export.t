@@ -23,7 +23,7 @@ use GPForum::Test::ModerationSchema;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS          => 116;
+const my $EXPECTED_TESTS          => 75;
 const my $FIRST_ROW_INDEX         => 0;
 const my $ONE_CREATED_ROW         => 1;
 const my $TWO_CREATED_ROWS        => 2;
@@ -44,33 +44,18 @@ my $import_failures =
 my $legacy_map = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
 my $export_requests =
   GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $users       = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $posts       = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $post_bodies = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $attachments = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $inbox       = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $subscriptions =
-  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $preferences = GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-my $event_log   = GPForum::Test::ModerationResultSet->new;
+my $event_log       = GPForum::Test::ModerationResultSet->new;
 my $outbox_messages = GPForum::Test::ModerationResultSet->new;
 my $audit_log       = GPForum::Test::ModerationResultSet->new;
 my $schema          = GPForum::Test::ModerationSchema->new(
     resultsets => {
-        Attachment             => $attachments,
-        AuditLog               => $audit_log,
-        EventLog               => $event_log,
-        ExportRequest          => $export_requests,
-        ImportFailure          => $import_failures,
-        ImportJob              => $import_jobs,
-        LegacyIdMap            => $legacy_map,
-        NotificationInbox      => $inbox,
-        NotificationPreference => $preferences,
-        OutboxMessage          => $outbox_messages,
-        Post                   => $posts,
-        PostBody               => $post_bodies,
-        Subscription           => $subscriptions,
-        User                   => $users,
+        AuditLog      => $audit_log,
+        EventLog      => $event_log,
+        ExportRequest => $export_requests,
+        ImportFailure => $import_failures,
+        ImportJob     => $import_jobs,
+        LegacyIdMap   => $legacy_map,
+        OutboxMessage => $outbox_messages,
     },
 );
 
@@ -476,6 +461,11 @@ is( scalar @{ $map_leftover_maps->created },
     $ONE_CREATED_ROW,
     'leftover legacy map id race does not insert a second mapping' );
 
+# The bundle and its safe manifest, and completion from parts the caller
+# hands over. The export request store -- the pending request a retry
+# reuses, its races and id collisions, the completion from the member's
+# rows, its replay and what never leaves with it -- runs on PostgreSQL in
+# t/integration/postgres-privacy.t.
 my $export_builder = GPForum::Service::Portability::ExportBundleBuilder->new(
     schema     => $schema,
     clock      => $clock,
@@ -488,138 +478,6 @@ my $request = $export_builder->create_request(
         export_type       => 'user_data',
     }
 );
-is( $request->{export_request_id},
-    'generated-1', 'export request id is generated' );
-is( $request->{format}, 'json',    'export defaults to json' );
-is( $request->{status}, 'pending', 'export starts pending' );
-is( scalar @{ $export_requests->created },
-    $ONE_CREATED_ROW, 'export request row is inserted' );
-is( scalar @{ $event_log->created },
-    $ONE_CREATED_ROW, 'export request emits privacy event' );
-is( scalar @{ $outbox_messages->created },
-    $ONE_CREATED_ROW, 'export request queues outbox message' );
-is( scalar @{ $audit_log->created },
-    $ONE_CREATED_ROW, 'export request writes audit row' );
-
-my $request_again = $export_builder->create_request(
-    {
-        requester_user_id => 'user-1',
-        subject_user_id   => 'user-2',
-        export_type       => 'user_data',
-    }
-);
-is( $request_again->{export_request_id},
-    'generated-1', 'retry reuses the pending export request' );
-is( scalar @{ $export_requests->created },
-    $ONE_CREATED_ROW, 'retry does not insert a second export request' );
-is( scalar @{ $event_log->created },
-    $ONE_CREATED_ROW, 'retry does not emit a second export event' );
-
-$export_requests->skip_search(1);
-my $raced_export = $export_builder->create_request(
-    {
-        requester_user_id => 'user-1',
-        subject_user_id   => 'user-2',
-        export_type       => 'user_data',
-    }
-);
-is( $raced_export->{export_request_id},
-    'generated-1', 'unique race reuses the pending export request' );
-is( scalar @{ $export_requests->created },
-    $ONE_CREATED_ROW, 'unique race does not insert a second export request' );
-
-my $export_pk_rows =
-  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-$export_pk_rows->create(
-    {
-        export_request_id => 'generated-1',
-        export_type       => 'user_data',
-        format            => 'json',
-        requester_user_id => 'other-user',
-        status            => 'pending',
-        subject_user_id   => 'other-subject',
-    }
-);
-my $export_pk_events = GPForum::Test::ModerationResultSet->new;
-my $export_pk_outbox = GPForum::Test::ModerationResultSet->new;
-my $export_pk_audits = GPForum::Test::ModerationResultSet->new;
-my $export_pk_store  = GPForum::Service::Portability::ExportBundleBuilder->new(
-    clock      => GPForum::Test::FixedClock->new,
-    id_service => GPForum::Test::Id->new,
-    schema     => GPForum::Test::ModerationSchema->new(
-        resultsets => {
-            AuditLog      => $export_pk_audits,
-            EventLog      => $export_pk_events,
-            ExportRequest => $export_pk_rows,
-            OutboxMessage => $export_pk_outbox,
-        },
-    ),
-);
-my $export_pk = $export_pk_store->create_request(
-    {
-        export_type       => 'user_data',
-        requester_user_id => 'user-1',
-        subject_user_id   => 'user-2',
-    }
-);
-is( $export_pk->{export_request_id},
-    'generated-2', 'unique export id collision remints the id' );
-is( $export_pk->{requester_user_id},
-    'user-1', 'unique export id collision keeps this requester' );
-is( $export_pk->{subject_user_id},
-    'user-2', 'unique export id collision keeps this subject' );
-is( scalar @{ $export_pk_rows->created },
-    $TWO_CREATED_ROWS, 'unique export id collision inserts this request' );
-
-my $export_leftover_rows =
-  GPForum::Test::ModerationResultSet->new( filter_search => 1 );
-$export_leftover_rows->create(
-    {
-        export_request_id => 'generated-1',
-        export_type       => 'user_data',
-        format            => 'json',
-        requester_user_id => 'user-leftover',
-        status            => 'pending',
-        subject_user_id   => 'user-leftover-subject',
-    }
-);
-$export_leftover_rows->skip_search(1);
-my $export_leftover_events = GPForum::Test::ModerationResultSet->new;
-my $export_leftover_outbox = GPForum::Test::ModerationResultSet->new;
-my $export_leftover_audits = GPForum::Test::ModerationResultSet->new;
-my $export_leftover_store =
-  GPForum::Service::Portability::ExportBundleBuilder->new(
-    clock      => GPForum::Test::FixedClock->new,
-    id_service => GPForum::Test::Id->new,
-    schema     => GPForum::Test::ModerationSchema->new(
-        resultsets => {
-            AuditLog      => $export_leftover_audits,
-            EventLog      => $export_leftover_events,
-            ExportRequest => $export_leftover_rows,
-            OutboxMessage => $export_leftover_outbox,
-        },
-    ),
-  );
-my $export_leftover = $export_leftover_store->create_request(
-    {
-        export_type       => 'user_data',
-        requester_user_id => 'user-leftover',
-        subject_user_id   => 'user-leftover-subject',
-    }
-);
-is( $export_leftover->{export_request_id},
-    'generated-1', 'leftover export id race keeps this request' );
-is( $export_leftover->{requester_user_id},
-    'user-leftover', 'leftover export id race keeps this requester' );
-is( scalar @{ $export_leftover_rows->created },
-    $ONE_CREATED_ROW,
-    'leftover export id race does not insert a second request' );
-is( scalar @{ $export_leftover_events->created },
-    $ONE_CREATED_ROW, 'leftover export id race inserts the missing event' );
-is( scalar @{ $export_leftover_outbox->created },
-    $ONE_CREATED_ROW, 'leftover export id race inserts the missing outbox' );
-is( scalar @{ $export_leftover_audits->created },
-    $ONE_CREATED_ROW, 'leftover export id race inserts the missing audit' );
 
 my $bundle = $export_builder->build_user_bundle(
     'user-2',
@@ -654,7 +512,7 @@ ok(
 );
 
 my $completed_export = $export_builder->complete_user_export(
-    'generated-1',
+    $request->{export_request_id},
     {
         profile       => { username => 'giacomo' },
         posts         => [ { post_id         => 1 }, { post_id => 2 } ],
@@ -666,8 +524,12 @@ my $completed_export = $export_builder->complete_user_export(
 );
 is( $completed_export->{status},
     'completed', 'export completion updates request status' );
-is( $export_requests->find('generated-1')->get_column('status'),
-    'completed', 'export completion persists status' );
+is(
+    $export_requests->find( $request->{export_request_id} )
+      ->get_column('status'),
+    'completed',
+    'export completion persists status'
+);
 is( $completed_export->{manifest}{counts}{notifications},
     $ONE_NOTIFICATION, 'completed export stores safe notification count' );
 is( $completed_export->{manifest}{posts}[0]{post_id},
@@ -676,183 +538,5 @@ is( scalar @{ $event_log->created },
     $TWO_CREATED_ROWS, 'export completion emits second privacy event' );
 is( scalar @{ $outbox_messages->created },
     $TWO_CREATED_ROWS, 'export completion queues second outbox message' );
-my $completed_export_again = $export_builder->complete_user_export(
-    'generated-1',
-    {
-        profile => { username => 'changed' },
-    }
-);
-is( $completed_export_again->{status},
-    'completed', 'export completion is idempotent' );
-is( scalar @{ $audit_log->created },
-    $TWO_CREATED_ROWS,
-    'idempotent export completion avoids duplicate audit rows' );
-
-my $request_after_complete = $export_builder->create_request(
-    {
-        requester_user_id => 'user-1',
-        subject_user_id   => 'user-2',
-        export_type       => 'user_data',
-    }
-);
-isnt( $request_after_complete->{export_request_id},
-    'generated-1', 'a new export starts after the previous one completed' );
-is( scalar @{ $export_requests->created },
-    $TWO_CREATED_ROWS, 'completed export does not block a later request' );
-
-$users->create(
-    {
-        created_at        => '2026-01-01T00:00:00Z',
-        display_name      => 'Giacomo',
-        email_normalized  => 'giacomo@example.test',
-        email_verified_at => '2026-05-01T00:00:00Z',
-        id                => 'user-2',
-        password_hash     => 'must-not-export',
-        preferred_locale  => 'it',
-        preferred_theme   => 'dark',
-        status            => 'active',
-        username          => 'giacomo',
-    }
-);
-$posts->create(
-    {
-        author_user_id   => 'user-2',
-        created_at       => '2026-05-23T12:00:00Z',
-        deleted_at       => undef,
-        moderation_state => 'visible',
-        position         => 1,
-        post_id          => 'post-9',
-        thread_id        => 'thread-1',
-        updated_at       => '2026-05-23T12:00:00Z',
-        visibility       => 'public',
-    }
-);
-$post_bodies->create(
-    {
-        body_format => 'markdown',
-        body_source => 'Hello from export',
-        post_id     => 'post-9',
-    }
-);
-$posts->create(
-    {
-        author_user_id   => 'user-2',
-        created_at       => '2026-05-23T12:05:00Z',
-        deleted_at       => undef,
-        moderation_state => 'visible',
-        position         => 2,
-        post_id          => 'post-10',
-        thread_id        => 'thread-1',
-        updated_at       => '2026-05-23T12:05:00Z',
-        visibility       => 'public',
-    }
-);
-$post_bodies->create(
-    {
-        body_format => 'markdown',
-        body_source => 'Second post',
-        post_id     => 'post-10',
-    }
-);
-
-# A member's post bodies are read in batches: one bind per post in a single
-# statement stops working past libpq's 65,535 parameters, and a long-time
-# member of a large forum passes that. A batch of one proves the batching.
-$export_builder->body_batch_size(1);
-$attachments->create(
-    {
-        attachment_id     => 'att-1',
-        byte_size         => 12,
-        checksum          => 'abc',
-        created_at        => '2026-05-23T12:00:00Z',
-        deleted_at        => undef,
-        media_type        => 'text/plain',
-        object_key        => 'secret/object',
-        original_filename => 'notes.txt',
-        owner_user_id     => 'user-2',
-        scan_status       => 'clean',
-        state             => 'ready',
-        uploaded_at       => '2026-05-23T12:00:00Z',
-    }
-);
-$inbox->create(
-    {
-        created_at        => '2026-05-23T12:00:00Z',
-        notification_id   => 'notif-1',
-        read_at           => undef,
-        recipient_user_id => 'user-2',
-    }
-);
-$subscriptions->create(
-    {
-        created_at      => '2026-05-23T12:00:00Z',
-        muted_at        => undef,
-        preference      => 'all',
-        revoked_at      => undef,
-        subscription_id => 'sub-1',
-        target_id       => 'thread-1',
-        target_type     => 'thread',
-        user_id         => 'user-2',
-    }
-);
-$preferences->create(
-    {
-        channel          => 'email',
-        digest_frequency => 'daily',
-        enabled          => 1,
-        updated_at       => '2026-05-23T12:00:00Z',
-        user_id          => 'user-2',
-    }
-);
-
-my $stored_export = $export_builder->complete_user_export(
-    $request_after_complete->{export_request_id} );
-is( $stored_export->{status},
-    'completed', 'storage-backed export completes without caller parts' );
-is( $stored_export->{manifest}{profile}{email},
-    'giacomo@example.test', 'storage-backed export includes the member email' );
-is( $stored_export->{manifest}{profile}{username},
-    'giacomo', 'storage-backed export includes the public profile' );
-ok(
-    !exists $stored_export->{manifest}{profile}{password_hash},
-    'storage-backed export omits the password hash'
-);
-is(
-    $stored_export->{manifest}{posts}[0]{body_source},
-    'Hello from export',
-    'storage-backed export includes post source'
-);
-is_deeply(
-    [
-        sort map { $_->{body_source} // q{} }
-          @{ $stored_export->{manifest}{posts} }
-    ],
-    [ 'Hello from export', 'Second post' ],
-    'every post body arrives across batches'
-);
-is( scalar @{ $post_bodies->last_query->{post_id}{-in} },
-    1, 'and no statement binds more post ids than a batch' );
-ok(
-    !exists $stored_export->{manifest}{posts}[0]{index},
-    'storage-backed export does not use placeholder index rows'
-);
-is( $stored_export->{manifest}{attachments}[0]{original_filename},
-    'notes.txt', 'storage-backed export includes attachment names' );
-ok(
-    !exists $stored_export->{manifest}{attachments}[0]{object_key},
-    'storage-backed export omits storage object keys'
-);
-is( $stored_export->{manifest}{notifications}[0]{notification_id},
-    'notif-1', 'storage-backed export includes inbox rows' );
-is( $stored_export->{manifest}{subscriptions}[0]{target_id},
-    'thread-1', 'storage-backed export includes subscriptions' );
-is( $stored_export->{manifest}{preferences}[0]{channel},
-    'email', 'storage-backed export includes notification preferences' );
-ok( !exists $event_log->created->[-1]{payload}{manifest}{posts},
-    'export completion event omits post bodies' );
-ok(
-    exists $event_log->created->[-1]{payload}{manifest}{counts},
-    'export completion event keeps manifest counts'
-);
 
 1;

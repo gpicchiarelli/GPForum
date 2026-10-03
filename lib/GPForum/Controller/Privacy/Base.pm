@@ -325,9 +325,19 @@ sub render_export_download ( $self, $row ) {
         $self->privacy_access->export_download_disposition($request_id) );
 
     return $self->render(
-        json   => $self->_row_value( $row, 'manifest' ) || {},
+        json   => $self->_row_manifest($row) || {},
         status => $HTTP_OK,
     );
+}
+
+# Decoded: get_column returns the jsonb column's text, and the download sent
+# the whole bundle as one JSON string.
+sub _row_manifest ( $self, $row ) {
+    if ( ref $row ne 'HASH' && $row && $row->can('get_inflated_column') ) {
+        return $row->get_inflated_column('manifest');
+    }
+
+    return $self->_row_value( $row, 'manifest' );
 }
 
 sub _row_value ( $, $row, $name ) {

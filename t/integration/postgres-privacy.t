@@ -8,6 +8,7 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
+use Digest::SHA   qw(sha256_hex);
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(decode_json);
 use Test::More;
@@ -31,7 +32,6 @@ use GPForum::Test::ScriptedId;
 use GPForum::ViewModel::Privacy::Presenter;
 
 our $VERSION = '0.001';
-our $TODO;
 
 const my $NOW   => '2026-05-23T12:00:00Z';
 const my $LATER => '2026-05-23T13:00:00Z';
@@ -50,14 +50,6 @@ const my $JOB_ERROR    => 'retention hold active';
 
 # PostgreSQL's lock_not_available: the row is locked by another transaction.
 const my $LOCK_NOT_AVAILABLE => '55P03';
-
-# The defects this test found in code outside its reach, each pinned where it
-# shows. The manifest one is not cosmetic: the member dashboard template reads
-# $request->{manifest}{counts}, which dies under strict refs on the JSON text,
-# and the download route sends that text as one JSON string.
-const my $BUNDLE_TODO => 'erasure leaves the member\'s stored export bundles';
-const my $MANIFEST_TODO =>
-  'export manifests are read with get_column, which returns the JSON text';
 
 const my $USER_SQL => join q{ },
   'INSERT INTO users (id, username, display_name, email_normalized,',
@@ -118,6 +110,8 @@ const my $HOLD_SQL => join q{ },
 # The weakest lock a second approval could take. A FOR SHARE lock held by
 # the approval lets it through, and two approvals would then run side by
 # side; FOR UPDATE, or FOR NO KEY UPDATE, does not.
+const my $USER_LOCK_SQL =>
+  'SELECT id FROM users WHERE id = ? FOR NO KEY UPDATE NOWAIT';
 const my $LOCK_SQL => join q{ },
   'SELECT deletion_request_id FROM deletion_requests',
   'WHERE deletion_request_id = ? FOR SHARE NOWAIT';
@@ -199,6 +193,18 @@ const my $REPLAYED_EMAIL_SQL => join q{ },
   q{SELECT payload->'response'->'stored'->'manifest'->'profile'->>'email'},
   'FROM command_log WHERE idempotency_key = ?';
 
+# What the export command's row keeps once the bundle is gone: the request it
+# answered, whether the bundle is still in the answer, the answer and its
+# hash.
+const my $REPLAYED_ANSWER_SQL => join q{ },
+  q{SELECT payload->'response'->'stored'->>'export_request_id',},
+  q{payload->'response'->'stored'->'manifest' IS NULL,},
+  q{payload->'response', response_hash},
+  'FROM command_log WHERE idempotency_key = ?';
+const my $DISCARDED_SQL => join q{ },
+  q{SELECT metadata->'discarded_exports' FROM audit_log},
+  q{WHERE action = 'privacy.erasure_completed' AND target_id = ?};
+
 # The transaction that last wrote a row: a row that keeps it was not
 # written since, not even with the values it already held.
 const my %VERSION_SQL => (
@@ -231,6 +237,7 @@ my $story_database = GPForum::Test::PgDatabase->fresh;
 my $story          = _context($story_database);
 
 _export_bundle($story);
+_export_review($story);
 _deletion_request($story);
 _approval($story);
 _approval_replays($story);
@@ -241,7 +248,6 @@ _hold_blocks_approval($story);
 _hold_blocks_erasure($story);
 _hold_block_replays($story);
 _review($story);
-_export_review($story);
 
 $story->{rival}->storage->disconnect;
 
@@ -254,6 +260,7 @@ _export_id_collision($races);
 _export_id_race($races);
 _export_many_posts($races);
 _commanded_export($races);
+_export_holds_member($races);
 _deletion_request_race($races);
 _deletion_id_collision($races);
 _deletion_id_race($races);
@@ -562,14 +569,10 @@ sub _export_completed_again {
     my $again = _exports($ctx)
       ->complete_user_export( $id, { profile => { username => 'changed' } } );
     is( $again->{status}, 'completed', 'export completion is idempotent' );
-    is( _manifest( $again->{manifest} )->{profile}{username},
+    is( ref $again->{manifest},
+        'HASH', 'an already completed export returns its manifest decoded' );
+    is( $again->{manifest}{profile}{username},
         'subject', 'and returns the bundle as stored, not the parts passed' );
-  TODO: {
-        local $TODO = $MANIFEST_TODO;
-        is( ref $again->{manifest},
-            'HASH',
-            'an already completed export returns its manifest decoded' );
-    }
     is(
         _value(
             $ctx,                       $AUDITS_SQL,
@@ -746,6 +749,7 @@ sub _erasure {
 
     my ( $subject, $id, $job ) =
       ( $ctx->{users}{subject}, @{$ctx}{qw(request job)} );
+    _exports_before_erasure($ctx);
     my $worker    = _member( $ctx, 'worker' );
     my $completed = _deletion($ctx)->complete_job( $job, $worker );
     is( $completed->{erasure_job_id}, $job, 'completion returns job id' );
@@ -784,6 +788,28 @@ sub _erasure {
 
     _erased_identity($ctx);
     _erasure_keeps($ctx);
+
+    return;
+}
+
+# Besides the completed export: a pending one of the member's, which the
+# erasure discards too, and another member's completed export through the
+# command log, which it leaves alone.
+sub _exports_before_erasure {
+    my ($ctx) = @_;
+
+    $ctx->{pending_export} =
+      _exports($ctx)->request_user_export( $ctx->{users}{subject} )
+      ->{export_request_id};
+    ok( $ctx->{pending_export}, 'the member has a pending export too' );
+    my $other = _workflow($ctx)->request_export(
+        {
+            command_id => 'export-bystander-1',
+            user_id    => $ctx->{users}{bystander}
+        }
+    );
+    is( $other->{stored}{status},
+        'completed', 'and another member a completed one' );
 
     return;
 }
@@ -885,13 +911,87 @@ sub _erasure_keeps {
     is_deeply( _trail( $ctx, 'privacy.erasure_completed', $subject ),
         [@TRAIL], 'erasure records its event, outbox and audit' );
 
-  TODO: {
-        local $TODO = $BUNDLE_TODO;
-        is( _value( $ctx, $MANIFEST_EMAIL_SQL, $ctx->{export} ),
-            undef, 'erasure clears the email from the stored export bundle' );
-        is( _value( $ctx, $REPLAYED_EMAIL_SQL, 'export-subject-1' ),
-            undef, 'and from the export response the command log replays' );
-    }
+    _erased_exports($ctx);
+
+    return;
+}
+
+# The export bundle copied the member's e-mail and posts: the erasure
+# deletes it, and takes it out of the answer the command log replays, but
+# keeps the record that the export was asked for and delivered.
+sub _erased_exports {
+    my ($ctx) = @_;
+
+    my $subject = $ctx->{users}{subject};
+    is( _value( $ctx, $EXPORTS_SQL, $subject ),
+        0, 'erasure deletes the member\'s export bundles' );
+    is( _value( $ctx, $MANIFEST_EMAIL_SQL, $ctx->{export} ),
+        undef, 'so no stored bundle keeps the email' );
+    is( _value( $ctx, $REPLAYED_EMAIL_SQL, 'export-subject-1' ),
+        undef, 'nor does the export answer the command log replays' );
+    my ( $answered, $scrubbed, $answer, $hash ) =
+      $ctx->{dbh}
+      ->selectrow_array( $REPLAYED_ANSWER_SQL, undef, 'export-subject-1' );
+    is_deeply(
+        [ $answered,      $scrubbed ],
+        [ $ctx->{export}, 1 ],
+'the command row keeps its answer, naming the export, without the bundle'
+    );
+    is(
+        $hash,
+        sha256_hex(
+            JSON::MaybeXS->new( canonical => 1, utf8 => 1 )
+              ->encode( decode_json($answer) )
+        ),
+        'and a response hash that describes the answer it now holds'
+    );
+    is_deeply(
+        [
+            map { _value( $ctx, $AUDITS_SQL, $_, $subject ) }
+              qw(privacy.export_requested privacy.export_completed)
+        ],
+        [ 2, 1 ],
+        'the audit trail keeps both export requests and the completion'
+    );
+    is_deeply(
+        decode_json( _value( $ctx, $DISCARDED_SQL, $subject ) ),
+        [ sort $ctx->{export}, $ctx->{pending_export} ],
+        'and the erasure audit names the exports it discarded, pending too'
+    );
+    is( _value( $ctx, $EXPORTS_SQL, $ctx->{users}{bystander} ),
+        1, 'another member keeps their export' );
+    is(
+        _value( $ctx, $REPLAYED_EMAIL_SQL, 'export-bystander-1' ),
+        'bystander@example.test',
+        'and the bundle in the answer their export command replays'
+    );
+
+    my $replayed =
+      _workflow($ctx)
+      ->request_export(
+        { command_id => 'export-subject-1', user_id => $subject } );
+    is_deeply(
+        [
+            $replayed->{status},
+            $replayed->{stored}{export_request_id},
+            exists $replayed->{stored}{manifest} ? 1 : 0,
+        ],
+        [ 'ok', $ctx->{export}, 0 ],
+        'the export command replays its answer, without the bundle'
+    );
+    is( _value( $ctx, $EXPORTS_SQL, $subject ),
+        0, 'and does not export the erased member again' );
+
+    my $fresh =
+      _workflow($ctx)
+      ->request_export(
+        { command_id => 'export-subject-2', user_id => $subject } );
+    is_deeply(
+        [ $fresh->{status}, $fresh->{stored} ],
+        [ 'not_found',      undef ],
+        'a new export command for the erased member is refused'
+    );
+    is( _value( $ctx, $EXPORTS_SQL, $subject ), 0, 'and exports nothing' );
 
     return;
 }
@@ -1327,13 +1427,12 @@ sub _export_review {
       $review->completed_export_for_user( $subject, $ctx->{export} );
     is( $completed->get_column('export_request_id'),
         $ctx->{export}, 'a member can fetch their completed export' );
-  TODO: {
-        local $TODO = $MANIFEST_TODO;
-        my $shown = GPForum::ViewModel::Privacy::Presenter->new->export_request(
-            $completed);
-        is( ref $shown->{manifest},
-            'HASH', 'the dashboard reads the stored manifest decoded' );
-    }
+    my $shown =
+      GPForum::ViewModel::Privacy::Presenter->new->export_request($completed);
+    is( ref $shown->{manifest},
+        'HASH', 'the dashboard reads the stored manifest decoded' );
+    is( $shown->{manifest}{counts}{posts},
+        2, 'with the counts the dashboard shows' );
     is( $review->completed_export_for_user( $bystander, $ctx->{export} ),
         undef, 'another member cannot fetch it by its id' );
 
@@ -1599,6 +1698,44 @@ sub _commanded_export {
     );
     is( _value( $ctx, $COMPLETED_EXPORTS_SQL, $member ),
         2, 'a later export command creates and completes a second request' );
+
+    return;
+}
+
+# The export holds the member's account row for share from before its first
+# write until it commits: the erasure's anonymizing update cannot take the
+# row meanwhile, so it waits for the export and then discards its bundle.
+# Without the hold, the update went through and the erasure's delete could
+# not see the export's uncommitted rows.
+sub _export_holds_member {
+    my ($ctx) = @_;
+
+    my $member = _member( $ctx, 'held_exporter' );
+    my $locked;
+    my ($exported) = _statements(
+        $ctx,
+        sub {
+            my ($statement) = @_;
+            if ( !defined $locked
+                && $statement =~
+                /\A INSERT [ ] INTO [ ] export_requests [ ]/msx )
+            {
+                $locked = _user_lock_state( $ctx, $member );
+            }
+            return;
+        },
+        sub {
+            return _workflow($ctx)
+              ->request_export(
+                { command_id => 'export-held-1', user_id => $member } );
+        }
+    );
+    ok( $exported->{ok}, 'the member exports their data' );
+    is( $locked, $LOCK_NOT_AVAILABLE,
+            'the export holds their account row against an update before it'
+          . ' writes the request' );
+    is( _user_lock_state( $ctx, $member ),
+        q{}, 'and lets it go when it commits' );
 
     return;
 }
@@ -1935,6 +2072,8 @@ sub _hold_ends {
     my $blocked = _deletion($ctx)->complete_job( $job, $ctx->{approver} );
     is( $blocked->{error}, $HOLD_ERROR,
         'a hold placed after approval stops the job' );
+    is( _row( $ctx, $JOB_ROW_SQL, $job )->{last_error},
+        $JOB_ERROR, 'which records the hold as its error' );
 
     $ctx->{dbh}->do(
         'UPDATE retention_holds SET ends_at = ? WHERE retention_hold_id = ?',
@@ -1967,20 +2106,28 @@ sub _hold_ends {
         [qw(done completed)],
         'the job is done and the held request completed'
     );
+    is( _row( $ctx, $JOB_ROW_SQL, $job )->{last_error},
+        undef, 'and no longer carries the hold\'s error' );
     is_deeply( _trail( $ctx, 'privacy.erasure_completed', $member ),
         [@TRAIL], 'the erasure records its event, outbox and audit' );
 
     return;
 }
 
-# The erasure's last write fails after the member was anonymized and their
-# session revoked: the step rolls back whole, and the job, run again,
-# erases the member and records it once.
+# The erasure's last write fails after the member was anonymized, their
+# session revoked and their export discarded: the step rolls back whole, and
+# the job, run again, erases the member and records it once.
 sub _erasure_rolls_back {
     my ($ctx) = @_;
 
-    my $member   = _member( $ctx, 'interrupted' );
-    my $session  = _session( $ctx, $member );
+    my $member  = _member( $ctx, 'interrupted' );
+    my $session = _session( $ctx, $member );
+    ok(
+        _workflow($ctx)->request_export(
+            { command_id => 'export-interrupted-1', user_id => $member }
+        )->{ok},
+        'the member exported their data before the erasure'
+    );
     my $approved = _approved( $ctx, $member, $ctx->{approver} );
     my ( $id, $job ) =
       ( $approved->{request_id}, $approved->{job}{erasure_job_id} );
@@ -2010,6 +2157,14 @@ sub _erasure_rolls_back {
         ],
         'and rolls back the anonymization, the revocation and the completion'
     );
+    is_deeply(
+        [
+            _value( $ctx, $EXPORTS_SQL,        $member ),
+            _value( $ctx, $REPLAYED_EMAIL_SQL, 'export-interrupted-1' ),
+        ],
+        [ 1, 'interrupted@example.test' ],
+        'and the export bundle with its replayed answer'
+    );
 
     my $retried = _deletion($ctx)->complete_job( $job, $ctx->{approver} );
     ok( $retried->{ok}, 'the job, run again, erases the member' );
@@ -2023,6 +2178,14 @@ sub _erasure_rolls_back {
         ],
         [ 'deleted', $NOW, @TRAIL ],
         'revokes the session and records the erasure once'
+    );
+    is_deeply(
+        [
+            _value( $ctx, $EXPORTS_SQL,        $member ),
+            _value( $ctx, $REPLAYED_EMAIL_SQL, 'export-interrupted-1' ),
+        ],
+        [ 0, undef ],
+        'and discards the export bundle and its replayed answer'
     );
 
     return;
@@ -2166,6 +2329,18 @@ sub _approved {
 
 # How the rival connection finds the request row: 55P03 while another
 # transaction holds a lock it cannot share, nothing when it could take it.
+# Whether the rival can take the member's row as an update would: empty when
+# it can, the SQLSTATE when another transaction holds it.
+sub _user_lock_state {
+    my ( $ctx, $user_id ) = @_;
+
+    my $dbh = $ctx->{rival}->storage->dbh;
+    my $taken =
+      eval { $dbh->selectrow_array( $USER_LOCK_SQL, undef, $user_id ); 1 };
+
+    return $taken ? q{} : $dbh->state;
+}
+
 sub _lock_state {
     my ( $ctx, $id ) = @_;
 
@@ -2219,13 +2394,6 @@ sub _ids {
     my ( $column, $rows ) = @_;
 
     return [ map { $_->get_column($column) } @{$rows} ];
-}
-
-# A manifest as a hash, whether it came back decoded or as the column's text.
-sub _manifest {
-    my ($manifest) = @_;
-
-    return ref $manifest ? $manifest : decode_json($manifest);
 }
 
 sub _racing {

@@ -170,7 +170,7 @@ Patch applied: `save_bookmark` catches the unique violation on
 `remove_bookmark` and `remove_for_user_target` skip the update when `deleted_at`
 is already set. A second save on an already-active row with the same note
 rewrites neither `deleted_at` nor `note`. Fake tests in
-`t/146-concurrency-correctness.t` and `t/24-advanced-community.t`; PG evidence
+`t/159-concurrency-correctness.t` and `t/24-advanced-community.t`; PG evidence
 in `t/integration/postgres-concurrency.t`.
 Patch applicata: `save_bookmark` cattura unique su `bookmarks_user_target_key`,
 ricarica la riga vincente e la restore. `remove_bookmark` e
@@ -204,7 +204,7 @@ Patch applied: `save_subscription` catches the unique violation on
 `subscriptions_unique_target` and restores the winning row. Mute and revoke skip
 the update when the timestamp is already set. A second save on an already-active
 row with the same preference rewrites neither `muted_at`, `revoked_at`, nor
-`preference`. Fake tests in `t/146-concurrency-correctness.t` and
+`preference`. Fake tests in `t/159-concurrency-correctness.t` and
 `t/17-notifications.t`; PG evidence in `t/integration/postgres-concurrency.t`.
 Patch applicata: `save_subscription` cattura unique su
 `subscriptions_unique_target` e restore la riga vincente. Mute e revoke
@@ -237,7 +237,7 @@ runs two concurrent `create_report` calls → a single open report.
 Patch applied: `migrations/026_concurrency_uniqueness.sql` adds
 `idx_reports_reporter_target_open_unique`. `create_report` catches the conflict,
 reloads the open report, and records a `duplicate_blocked` audit entry. Fake
-tests in `t/146-concurrency-correctness.t`; PG evidence in
+tests in `t/159-concurrency-correctness.t`; PG evidence in
 Patch applicata: `migrations/026_concurrency_uniqueness.sql` aggiunge
 `idx_reports_reporter_target_open_unique`. `create_report` cattura il conflitto,
 ricarica il report aperto e registra un audit `duplicate_blocked`. Test fake in
@@ -288,7 +288,7 @@ event/audit/outbox write. A partial unique index
 `migrations/026_concurrency_uniqueness.sql`. When the target is already in the
 expected state, the store returns the most recent non-reversed action without a
 second insert. The HTTP forms mint and pass a `command_id`. Fake tests in
-`t/146-concurrency-correctness.t`, `t/25-moderation-review.t`, and
+`t/159-concurrency-correctness.t`, `t/25-moderation-review.t`, and
 `t/86-engineering-correctness.t`; same-`command_id` PG evidence in
 Patch applicata: hide/restore/lock/unlock bloccano il target con `FOR UPDATE`.
 Lo stesso `command_id` replay la `moderation_actions` esistente senza nuovo
@@ -317,13 +317,16 @@ boundary and, in the store, reloads a `pending`/`approved`/`held` request for th
 same `(resource_type, resource_id, request_type)` after `FOR UPDATE`. It does
 not insert a second row and does not emit a second event.
 
-Residual risk: the partial unique index on pending is no longer the gap; the
-two-connection PostgreSQL evidence still has to be run.
+Residual risk: closed by PG evidence. `t/integration/postgres-privacy.t`
+has a second connection commit the competing request between the store's
+lookup and its insert; PostgreSQL raises the unique violation and the store
+reuses the winner's request (`_deletion_request_race`, and the id collision
+cases beside it).
 
 Patch applied: `migrations/027_privacy_resource_uniqueness.sql` adds
 `idx_deletion_requests_open_resource_unique`. `DeletionWorkflow` catches the
-unique violation and reloads the open request. Fake tests in
-`t/29-privacy-rights.t`.
+unique violation and reloads the open request. Tests in
+`t/integration/postgres-privacy.t`.
 
 ### PRIV-002: concurrent approval can create multiple erasure jobs
 
@@ -343,14 +346,15 @@ and the DBIC schema `erasure_jobs_request_key`. A second approval of the same
 request id reloads the existing job and returns idempotently. When the job
 lookup misses and the insert violates `idx_erasure_jobs_request_unique`,
 `DeletionWorkflow` catches the conflict, reloads the job, and does not insert a
-second action. Fake tests in `t/29-privacy-rights.t`.
+second action. Tests in `t/integration/postgres-privacy.t`.
 
 Residual risk: closed by PG evidence. `t/integration/postgres-concurrency.t`
 runs two concurrent approvals on the same request id → a single erasure job.
 
 Patch applied: migration `024`, the DBIC constraint, an explicit lock on
 approval, a UniqueConflict catch on the job insert, and replay/race tests in
-`t/29-privacy-rights.t`; PG evidence in `t/integration/postgres-concurrency.t`.
+`t/integration/postgres-privacy.t`; two-approval PG evidence in
+`t/integration/postgres-concurrency.t`.
 
 ### PRIV-003: retention hold and held state repeatable without replay
 
@@ -367,12 +371,15 @@ Current behavior: `create_hold` reloads the active hold for the same resource.
 arguments besides the invocant. A state that is already `held` records no second
 event/action.
 
-Residual risk: the two-connection PostgreSQL evidence still has to be run.
+Residual risk: closed by PG evidence. `t/integration/postgres-privacy.t`
+has a second connection commit the competing hold between the store's lookup
+and its insert, and the store reuses it (`_hold_race`, `_hold_id_collision`,
+`_hold_id_race`).
 
 Patch applied: `migrations/027_privacy_resource_uniqueness.sql` adds
 `idx_retention_holds_active_resource_unique`. `RetentionHoldStore` catches the
-unique violation and reloads the active hold. Fake tests in
-`t/29-privacy-rights.t`.
+unique violation and reloads the active hold. Tests in
+`t/integration/postgres-privacy.t`.
 
 ### PRIV-005: complete_job with an active hold repeats the action and event
 
@@ -390,10 +397,15 @@ writes `last_error` on the job, and returns `retention_hold_active`. A second
 ends, a later `complete_job` can complete the erasure. `hold_request` stays at
 four arguments besides the invocant.
 
-Residual risk: the two-connection PostgreSQL evidence still has to be run.
+A job that runs once the hold has ended is `done` with `last_error` cleared:
+it used to keep `retention hold active`.
+
+Residual risk: closed by PG evidence. `t/integration/postgres-privacy.t`
+blocks, replays and finally runs the job on PostgreSQL (`_hold_blocks_erasure`,
+`_hold_block_replays`, `_hold_ends`), reading the rows back after each step.
 
 Patch applied: `_block_or_replay` in `DeletionWorkflow`, the `hold_block_replay`
-hash in `Completion`, and tests in `t/29-privacy-rights.t` and
+hash in `Completion`, and tests in `t/integration/postgres-privacy.t` and
 `t/125-privacy-completion.t`.
 
 ### PRIV-006: erasure failure after credential/session revocation
@@ -412,7 +424,11 @@ sessions, then marks the job/request and writes EventLog/outbox/audit in the sam
 the email, `deleted_at`, and `revoked_at`, and leaves the job `pending`. A later
 `complete_job` completes the erasure and the revocation.
 
-Residual risk: real PostgreSQL evidence of the rollback still has to be run.
+Residual risk: closed by PG evidence. `t/integration/postgres-privacy.t`
+(`_erasure_rolls_back`) has a trigger refuse the erasure's audit row after
+every other write of the step: the anonymization, the session revocation,
+the discarded export bundle and the completion all roll back, and the job,
+run again, erases the member and records it once.
 
 Patch applied: `ResultSet->all` on the correctness fake schema; timeout and
 retry tests in `t/86-engineering-correctness.t`.
@@ -432,12 +448,55 @@ Current behavior: `create_request` requires an HTTP `command_id` and reloads a
 already `completed` request stays idempotent. The same `command_id` after
 completion replays from `command_log` and does not open a second bundle.
 
-Residual risk: the two-connection PostgreSQL evidence still has to be run.
+Residual risk: closed by PG evidence. `t/integration/postgres-privacy.t`
+has a second connection commit the competing pending request between the
+store's lookup and its insert (`_export_request_race`, `_export_id_race`),
+and replays the export command from `command_log` (`_commanded_export`).
 
 Patch applied: `Privacy::Workflow` wraps `request_export` with
 `CommandIdempotency`. `migrations/027_privacy_resource_uniqueness.sql` adds
-`idx_export_requests_pending_unique`. Tests in `t/101-privacy-workflow.t`,
+`idx_export_requests_pending_unique`. Tests in
+`t/integration/postgres-privacy.t`, `t/101-privacy-workflow.t`,
 `t/62-privacy-web.t`, and `t/27-import-export.t`.
+
+### PRIV-007: erasure left the member's export bundles behind
+
+Severity: high. Closed in code.
+
+Files involved:
+
+- `lib/GPForum/Service/Privacy/DeletionWorkflow.pm`
+- `lib/GPForum/Service/Privacy/ErasedExports.pm`
+- `lib/GPForum/Service/Privacy/Workflow.pm`
+
+Current behavior: a completed export stores the member's bundle (profile with
+the e-mail address, post bodies) as `export_requests.manifest`, and the export
+command's answer in `command_log` carries the same bundle for a replay. The
+erasure anonymized the account and kept both copies. Now, in the erasure's
+own transaction, it deletes every export request whose subject is the member
+and removes the bundle from the answer of each `privacy.export` command they
+sent, recomputing `response_hash`. The command row stays, so the command id
+replays without the data instead of exporting again; the
+`privacy.export_requested`/`privacy.export_completed` events and audit rows
+(counts, never data) stay, and the erasure's audit metadata names the
+requests it discarded (`discarded_exports`).
+
+An export running while the erasure commits used to keep its bundle: the
+erasure's delete cannot see rows the export has not committed. Now
+`Privacy::Workflow` has the export take the member's `users` row `FOR SHARE`
+(`ErasedExports::may_export`) before it writes the request, and keep it
+until it commits. The erasure's anonymizing `UPDATE` of that row waits for
+the export, and its delete, a later statement, then sees the bundle; an
+export that waited for an erasure finds `deleted_at` set and answers
+`not_found` without exporting.
+
+Residual risk: an export path that skips `may_export` is not ordered against
+the erasure; `request_export` is the only one.
+
+Patch applied: `ErasedExports`, called from `DeletionWorkflow` before the
+job is marked done and from `Privacy::Workflow` before an export; PG
+evidence, rollback included, in `t/integration/postgres-privacy.t`
+(`_erased_exports`, `_erasure_rolls_back`, `_export_holds_member`).
 
 ### AUD-001: audit hash chain not serialized under concurrency
 
@@ -462,7 +521,7 @@ errors are no longer swallowed.
 
 Patch applied: `EventRecorder::record_audit` takes `pg_advisory_xact_lock`
 before the lookup. `AuditRecord` hashing is unchanged. An `AuditLog` search
-failure propagates. Fake tests in `t/146-concurrency-correctness.t`; PG evidence
+failure propagates. Fake tests in `t/159-concurrency-correctness.t`; PG evidence
 in `t/integration/postgres-concurrency.t`.
 Patch applicata: `EventRecorder::record_audit` prende
 `pg_advisory_xact_lock` prima del lookup. `AuditRecord` hashing è invariato.

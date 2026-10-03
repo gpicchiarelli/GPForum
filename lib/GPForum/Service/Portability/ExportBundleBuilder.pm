@@ -541,8 +541,18 @@ sub _request_hash ($request) {
         status            => _column( $request, 'status' ),
         created_at        => _column( $request, 'created_at' ),
         finished_at       => _column( $request, 'finished_at' ),
-        manifest          => _column( $request, 'manifest' ) || {},
+        manifest          => _manifest($request) || {},
     };
+}
+
+# The manifest decoded: get_column returns the jsonb column's text, so an
+# already completed export came back with its bundle as one string.
+sub _manifest ($request) {
+    if ( ref $request ne 'HASH' && $request->can('get_inflated_column') ) {
+        return $request->get_inflated_column('manifest');
+    }
+
+    return _column( $request, 'manifest' );
 }
 
 sub _rows ($search) {

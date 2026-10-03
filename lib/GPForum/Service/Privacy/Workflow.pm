@@ -9,6 +9,8 @@ use warnings;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
 
+use GPForum::Service::Privacy::ErasedExports;
+
 our $VERSION = '0.001';
 
 has command_idempotency => undef;
@@ -17,6 +19,20 @@ has export_builder      => undef;
 has hold_store          => undef;
 has logger              => undef;
 has reviewer            => undef;
+
+# Orders an export against the member's erasure; none for an export store
+# without a schema.
+has erased_exports => sub {
+    my ($self) = @_;
+    my $builder = $self->export_builder;
+    if ( !$builder || !$builder->can('schema') || !$builder->schema ) {
+        my $undefined;
+        return $undefined;
+    }
+
+    return GPForum::Service::Privacy::ErasedExports->new(
+        schema => $builder->schema );
+};
 
 sub request_export ( $self, $input ) {
     return $self->_export_with_command($input);
@@ -160,7 +176,28 @@ sub _run_export_store ( $self, $input ) {
     );
 }
 
+# The member's account row is held for share from before the request until
+# the export commits, so an erasure either waits for the export and then
+# discards it, or has committed and the export finds the member erased.
 sub _complete_export ( $self, $user_id ) {
+    my $guard = $self->erased_exports;
+    if ( !$guard ) {
+        return $self->_build_export($user_id);
+    }
+
+    return $guard->schema->txn_do(
+        sub {
+            if ( !$guard->may_export($user_id) ) {
+                my $undefined;
+                return $undefined;
+            }
+
+            return $self->_build_export($user_id);
+        }
+    );
+}
+
+sub _build_export ( $self, $user_id ) {
     my $request = $self->export_builder->request_user_export($user_id);
     my $completed =
       $self->export_builder->complete_user_export(
@@ -336,6 +373,11 @@ transaction, event, audit, and outbox ownership.
 =head2 request_export
 
 Creates and completes a user export bundle when a command id is present.
+When the export store has a schema, the export first holds the member's
+account row through L<GPForum::Service::Privacy::ErasedExports/may_export>
+for the rest of its transaction, so an erasure running at the same time
+either waits for it and discards the bundle or has committed already; an
+erased or unknown member gets C<not_found> and no export.
 
 =head2 request_deletion
 
@@ -367,11 +409,12 @@ exceptions are logged and mapped to C<failed>.
 =head1 CONFIGURATION AND ENVIRONMENT
 
 Uses deletion, export, hold, and review services supplied by the composition
-root.
+root. C<erased_exports> defaults to one over the export store's schema, and
+to none when the store has no schema.
 
 =head1 DEPENDENCIES
 
-Uses L<Mojo::Base>.
+Uses L<Mojo::Base> and L<GPForum::Service::Privacy::ErasedExports>.
 
 =head1 INCOMPATIBILITIES
 

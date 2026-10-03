@@ -66,6 +66,8 @@ sub deletion_request ( $self, $row ) {
     };
 }
 
+# The manifest is a jsonb column: get_column hands over its text, on which
+# the dashboard's $request->{manifest}{counts} died under strict refs.
 sub export_request ( $self, $row ) {
     my $request_id = $self->column( $row, 'export_request_id' );
 
@@ -75,7 +77,7 @@ sub export_request ( $self, $row ) {
         export_type       => $self->column( $row, 'export_type' ),
         finished_at       => $self->column( $row, 'finished_at' ),
         format            => $self->column( $row, 'format' ),
-        manifest          => $self->column( $row, 'manifest' ) || {},
+        manifest          => $self->inflated_column( $row, 'manifest' ) || {},
         requester_user_id => $self->column( $row, 'requester_user_id' ),
         status            => $self->column( $row, 'status' ),
         subject_user_id   => $self->column( $row, 'subject_user_id' ),

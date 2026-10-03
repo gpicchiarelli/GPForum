@@ -12,6 +12,7 @@ use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use GPForum::Service::Privacy::Completion;
+use GPForum::Service::Privacy::ErasedExports;
 use GPForum::Service::Privacy::Erasure;
 use GPForum::Service::Privacy::Event;
 use GPForum::Service::Privacy::Record;
@@ -63,6 +64,14 @@ has events => sub {
     my ($self) = @_;
 
     return GPForum::Service::Privacy::Event->new( record => $self->record );
+};
+has erased_exports => sub {
+    my ($self) = @_;
+
+    return GPForum::Service::Privacy::ErasedExports->new(
+        record => $self->record,
+        schema => $self->schema,
+    );
 };
 
 sub request_deletion ( $self, $input ) {
@@ -587,19 +596,32 @@ sub _block_action ( $self, $input ) {
     );
 }
 
+# A job a hold stopped keeps the hold's last_error until it runs: done, it
+# is no longer blocked, and the review read it as still held.
 sub _finish_erasure ( $self, $input ) {
     my $anonymized =
       $self->_anonymize_request_subject( $input->{request},
         $input->{timestamp} );
+    $input->{discarded_exports} = $self->_discard_exports($anonymized);
     $input->{job}->update(
         {
             completed_at => $input->{timestamp},
+            last_error   => undef,
             status       => $JOB_DONE,
         }
     );
     $self->_complete_request_row( $input->{request}, $input->{timestamp} );
 
     return $self->_completed_result( $input, $anonymized );
+}
+
+# The member's export bundles are copies of what the erasure removes.
+sub _discard_exports ( $self, $anonymized ) {
+    if ( !defined $anonymized->{user_id} ) {
+        return [];
+    }
+
+    return $self->erased_exports->discard( $anonymized->{user_id} );
 }
 
 sub _completed_result ( $self, $input, $anonymized ) {
@@ -1061,7 +1083,8 @@ C<ends_at>), in which case the request is put on hold instead. Running the
 job checks the hold again: under a hold it marks the request C<held> and the
 job's C<last_error>, and erases nothing; otherwise it anonymizes the member
 (when the resource is a C<user> that exists), revokes their credentials and
-sessions, and marks the job C<done> and the request C<completed>.
+sessions, discards the export bundles that copy their data, and marks the
+job C<done> and the request C<completed>.
 
 Inserts run inside savepoints. A lost race on a unique index reuses the row
 the other writer inserted; a collision on a generated id is retried once
@@ -1134,10 +1157,13 @@ C<< { ok => 0, error => 'retention_hold_active', idempotent => 1, erasure_job_id
 
 =item *
 
-otherwise, when the resource is a C<user> that exists, anonymizes the member
-and revokes their credentials and sessions; in every case it marks the job
-C<done> and the request C<completed>, records an
-C<anonymized> deletion action and C<privacy.erasure_completed>, and returns
+otherwise, when the resource is a C<user> that exists, anonymizes the member,
+revokes their credentials and sessions, and discards their export bundles
+through L<GPForum::Service::Privacy::ErasedExports> (the audit entry's
+C<discarded_exports> names the requests deleted); in every case it marks the
+job C<done>, clears its C<last_error> and marks the request C<completed>,
+records an C<anonymized> deletion action and C<privacy.erasure_completed>,
+and returns
 C<< { ok => 1, erasure_job_id, action, anonymized } >>. C<anonymized> is
 C<< { user_id, idempotent } >> (C<idempotent> 1 when the member was already
 anonymized), or C<< { skipped => 'resource_not_user' } >> or
@@ -1167,14 +1193,16 @@ C<< error => 'retention_hold_active' >>.
 =head1 CONFIGURATION AND ENVIRONMENT
 
 None. C<clock>, C<id_service>, C<recorder>, C<record>, C<completion>,
-C<erasure> and C<events> have defaults; the application passes its clock
-and id service.
+C<erasure>, C<erased_exports> and C<events> have defaults; the application
+passes its clock and id service.
 
 =head1 DEPENDENCIES
 
 L<GPForum::Infrastructure::EventRecorder>, L<GPForum::Infrastructure::Id>,
 L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Service::Clock>,
-L<GPForum::Service::Privacy::Completion>, L<GPForum::Service::Privacy::Erasure>,
+L<GPForum::Service::Privacy::Completion>,
+L<GPForum::Service::Privacy::ErasedExports>,
+L<GPForum::Service::Privacy::Erasure>,
 L<GPForum::Service::Privacy::Event>, L<GPForum::Service::Privacy::Record>.
 
 =head1 INCOMPATIBILITIES
