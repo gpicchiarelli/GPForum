@@ -1572,6 +1572,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- `GPForum::Infrastructure::Storage->dbh_of($schema)` and `storage_of` are
+  the one copy of the "schema to database handle, or undef" probe that ten
+  modules each keep as `_schema_dbh`. Callers move to it in later changes.
+
 - `GPForum::Base` lets a class declare the attributes it cannot work without:
   `__PACKAGE__->requires(qw(schema))` makes `new` throw a
   `GPForum::X::Argument` ("Store requires schema") when one is missing or
