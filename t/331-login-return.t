@@ -115,8 +115,8 @@ done_testing();
 sub _field {
     my ( $test_object, $name ) = @_;
 
-    my $input = $test_object->tx->res->dom->at(
-        qq{form[action="/login"] input[name="$name"]});
+    my $page  = $test_object->tx->res->dom;
+    my $input = $page->at(qq{form[action="/login"] input[name="$name"]});
 
     return $input ? $input->attr('value') : undef;
 }
