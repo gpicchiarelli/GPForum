@@ -45,6 +45,6 @@ facade.
 - `docs/adr/0014-identity-workflow-boundary.md`
 - `docs/architecture/identity-workflow.md`
 - `EVENTS.md`
-- `t/08-identity-store.t`
+- `t/integration/postgres-identity-stores.t`
 - `t/129-identity-event.t`
 - `docs/adr/0039-identity-login-logout-event.md`

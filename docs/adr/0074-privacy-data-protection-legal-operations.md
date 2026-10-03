@@ -139,7 +139,7 @@ storing secrets in logs; exposing private data through search or cache.
 - Code: `lib/GPForum/Service/Privacy/`, `lib/GPForum/Controller/Privacy.pm`,
   `lib/GPForum/Controller/Privacy/`, `lib/GPForum/Web/PrivacyAccess.pm`.
 - Migrations: `migrations/024_privacy_erasure_job_idempotency.sql`.
-- Tests: `t/29-privacy-rights.t`, `t/62-privacy-web.t`,
+- Tests: `t/integration/postgres-privacy.t`, `t/62-privacy-web.t`,
   `t/100-privacy-controllers.t`, `t/101-privacy-workflow.t`,
   `t/119-privacy-erasure.t`, `t/125-privacy-completion.t`,
   `t/128-privacy-event.t`, `t/136-web-privacy-access.t`.

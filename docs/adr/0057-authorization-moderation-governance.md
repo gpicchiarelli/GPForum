@@ -275,8 +275,9 @@ If federation is implemented in the future:
   `lib/GPForum/Web/ModerationAccess.pm`, `lib/GPForum/Web/AdminAccess.pm`
 - `docs/architecture/moderation-workflow.md`,
   `docs/architecture/admin-workflow.md`
-- `t/25-moderation-review.t`, `t/26-admin-authorization.t`,
-  `t/43-moderation-web.t`, `t/44-admin-web.t`, `t/45-admin-bootstrap.t`,
+- `t/25-moderation-review.t`,
+  `t/integration/postgres-admin-authorization.t`, `t/43-moderation-web.t`,
+  `t/44-admin-web.t`, `t/45-admin-bootstrap.t`,
   `t/55-security-abuse-hardening.t`, `t/95-moderation-workflow.t`,
   `t/97-admin-workflow.t`, `t/130-moderation-event.t`,
   `t/131-admin-event.t`, `t/135-web-moderation-access.t`,

@@ -573,6 +573,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- ADR 0115 records that the translation catalogs are the gettext PO files,
+  read at startup and looked up by key (`msgctxt`); it amends ADR 0021. The
+  ADRs name the PostgreSQL integration tests that replaced the deleted store
+  tests, and `t/00-load.t` loads every module added since.
+
 - Removed `Attachment::UploadPipeline::cleanup_orphans`, which had no caller
   and could not delete files in production; the purge is
   `Attachment::Store::cleanup_orphans`, run by the scheduled jobs.

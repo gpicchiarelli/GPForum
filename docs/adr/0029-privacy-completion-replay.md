@@ -41,7 +41,7 @@ HTTP and `Privacy::Workflow` keep calling the facade.
 
 - `docs/adr/0023-privacy-erasure-record.md`
 - `docs/architecture/privacy-workflow.md`
-- `t/29-privacy-rights.t`
+- `t/integration/postgres-privacy.t`
 - `t/119-privacy-erasure.t`
 - `t/125-privacy-completion.t`
 - `docs/adr/0032-privacy-event.md`

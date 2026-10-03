@@ -154,7 +154,8 @@ rebuild from event history.
   `script/perlcritic`, `script/perltidy-check`, `script/perl-syntax-check`,
   `Makefile`, `.github/workflows/ci.yml`.
 - Tests: `t/` (suite), `t/integration/postgres.t`, `t/lib/GPForum/Test/`,
-  `t/02-health.t`, `t/06-identity-web.t`, `t/26-admin-authorization.t`,
+  `t/02-health.t`, `t/06-identity-web.t`,
+  `t/integration/postgres-admin-authorization.t`,
   `t/35-forum-accessible-ssr.t`, `t/48-browser-security.t`,
   `t/50-security-hardening.t`, `t/86-engineering-correctness.t`,
   `t/144-cpan-install.t`.

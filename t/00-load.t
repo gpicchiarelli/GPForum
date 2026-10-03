@@ -14,7 +14,7 @@ use lib 't/lib';
 
 our $VERSION = '0.001';
 
-const my $TEST_COUNT => 343;
+const my $TEST_COUNT => 348;
 
 plan tests => $TEST_COUNT;
 
@@ -198,6 +198,8 @@ use_ok('GPForum::Web::IdentityAccess');
 use_ok('GPForum::Web::Access');
 use_ok('GPForum::Web::RealtimeAccess');
 use_ok('GPForum::Web::CookieSession');
+use_ok('GPForum::Web::UrlId');
+use_ok('GPForum::Web::AssetManifest');
 use_ok('GPForum::Service::Attachment::Delivery');
 use_ok('GPForum::Service::Attachment::FilesystemStorage');
 use_ok('GPForum::Service::Attachment::IntentBuilder');
@@ -253,6 +255,7 @@ use_ok('GPForum::Service::I18N');
 use_ok('GPForum::Service::I18N::Catalog');
 use_ok('GPForum::Service::I18N::Formatter');
 use_ok('GPForum::Service::I18N::Locale');
+use_ok('GPForum::Service::I18N::PoFile');
 use_ok('GPForum::Service::Moderation::ActionStore');
 use_ok('GPForum::Service::Moderation::Event');
 use_ok('GPForum::Service::Moderation::ReportStore');
@@ -275,6 +278,7 @@ use_ok('GPForum::Service::Operations::Profile');
 use_ok('GPForum::Service::Operations::QueryBudget');
 use_ok('GPForum::Service::Operations::RateLimiter');
 use_ok('GPForum::Service::Operations::Readiness');
+use_ok('GPForum::Service::Operations::Replication');
 use_ok('GPForum::Service::Operations::BatchPurge');
 use_ok('GPForum::Service::Operations::RetentionStore');
 use_ok('GPForum::Service::Operations::ScheduledJobs');
@@ -299,6 +303,7 @@ use_ok('GPForum::Service::Privacy::Event');
 use_ok('GPForum::Service::Privacy::Erasure');
 use_ok('GPForum::Service::Privacy::Record');
 use_ok('GPForum::Service::Privacy::RetentionHoldStore');
+use_ok('GPForum::Service::Privacy::ErasedExports');
 use_ok('GPForum::Service::Privacy::Workflow');
 use_ok('GPForum::Service::Forum::ThreadComposer');
 use_ok('GPForum::Service::Forum::ThreadStore');

@@ -186,5 +186,5 @@ Operational permissions:
   `migrations/009_admin_authorization.sql`
 - `docs/architecture/admin-workflow.md`,
   `docs/architecture/moderation-workflow.md`
-- `t/26-admin-authorization.t`, `t/45-admin-bootstrap.t`,
+- `t/integration/postgres-admin-authorization.t`, `t/45-admin-bootstrap.t`,
   `t/09-prompt-alignment.t`

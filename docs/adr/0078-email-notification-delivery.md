@@ -122,7 +122,7 @@ where policy requires; emit security events; rate-limit requests.
   `lib/GPForum/Service/Notification/`.
 - Migrations: `migrations/005_notifications_subscriptions.sql`,
   `migrations/025_identity_lifecycle_tokens.sql`.
-- Tests: `t/06-identity-web.t`, `t/08-identity-store.t`,
+- Tests: `t/06-identity-web.t`, `t/integration/postgres-identity-stores.t`,
   `t/17-notifications.t`, `t/107-notification-workflow.t`,
   `t/110-identity-account-store.t`.
 - Docs: `docs/audit/email-lifecycle.md`,

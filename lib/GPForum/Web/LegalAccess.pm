@@ -123,9 +123,10 @@ None known.
 
 =head1 BUGS AND LIMITATIONS
 
-Translated copy lives in L<GPForum::Service::I18N::Catalog>. Operators of a
-deployed instance still replace these pages with counsel-reviewed policy
-before production.
+The translated copy lives in the gettext catalogs, C<locale/en.po> and
+C<locale/it.po>, under the C<legal.*> keys, and is served through
+L<GPForum::Service::I18N::Catalog>. Operators of a deployed instance still
+replace these pages with counsel-reviewed policy before production.
 
 =head1 AUTHOR
 

@@ -432,8 +432,9 @@ planning, plugin integration, and AI-assisted implementation.
 - `docs/architecture/moderation-workflow.md`,
   `docs/architecture/admin-workflow.md`,
   `docs/architecture/privacy-workflow.md`
-- `t/25-moderation-review.t`, `t/26-admin-authorization.t`,
-  `t/29-privacy-rights.t`, `t/30-public-discovery.t`,
+- `t/25-moderation-review.t`,
+  `t/integration/postgres-admin-authorization.t`,
+  `t/integration/postgres-privacy.t`, `t/30-public-discovery.t`,
   `t/43-moderation-web.t`, `t/95-moderation-workflow.t`,
   `t/97-admin-workflow.t`, `t/116-infrastructure-audit-record.t`
 - `t/09-prompt-alignment.t`

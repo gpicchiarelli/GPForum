@@ -42,4 +42,4 @@ Created-hold envelopes and audit metadata are unit-testable with plain hashes.
 - `docs/architecture/privacy-workflow.md`
 - `EVENTS.md`
 - `t/128-privacy-event.t`
-- `t/29-privacy-rights.t`
+- `t/integration/postgres-privacy.t`

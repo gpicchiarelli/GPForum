@@ -109,7 +109,9 @@ emergency operations.
   `lib/GPForum/Service/Admin/`, `lib/GPForum/Web/AdminAccess.pm`,
   `bin/gpforum-admin-bootstrap`, `templates/admin/`.
 - Migrations: `migrations/009_admin_authorization.sql`.
-- Tests: `t/26-admin-authorization.t`, `t/44-admin-web.t`,
+- Tests: `t/integration/postgres-admin-authorization.t` (roles, bindings,
+  reviews and the permission gate), `t/26-admin-authorization.t` (the console
+  reader), `t/44-admin-web.t`,
   `t/45-admin-bootstrap.t`, `t/96-admin-controllers.t`,
   `t/97-admin-workflow.t`, `t/131-admin-event.t`,
   `t/137-web-admin-access.t`.

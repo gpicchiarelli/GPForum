@@ -49,5 +49,5 @@ calling the facade.
 
 - `docs/architecture/privacy-workflow.md`
 - `docs/audit/transactional-correctness.md`
-- `t/29-privacy-rights.t`
+- `t/integration/postgres-privacy.t`
 - `t/119-privacy-erasure.t`

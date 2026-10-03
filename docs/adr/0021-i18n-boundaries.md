@@ -2,7 +2,11 @@
 
 ## Status
 
-Accepted.
+Accepted. Amended by ADR 0115: the catalogs are no longer a Perl literal in
+`GPForum::Service::I18N::Catalog` but the gettext PO files `locale/en.po` and
+`locale/it.po`, read at startup by `GPForum::Service::I18N::PoFile`, which
+reverses the first alternative rejected below. The split of Catalog, Locale
+and Formatter stands.
 
 ## Context
 
@@ -35,12 +39,13 @@ helpers keep calling `t()`, `tc()`, and `ui_*` through the facade.
 ## Alternatives Rejected
 
 - Store catalogs as external JSON/PO files: rejected for the current two-locale
-  foundation; the catalogs stay compiled Perl hashes.
+  foundation; the catalogs stay compiled Perl hashes. Reversed by ADR 0115.
 - Move I18N into `GPForum::I18N::*`: rejected because `GPForum::I18N` already
   owns namespace validation, not runtime catalogs.
 
 ## Alignment
 
 - `docs/i18n.md`
+- `docs/adr/0115-catalogs-are-gettext-po-files.md`
 - `t/64-i18n.t`
 - `t/117-i18n-boundaries.t`

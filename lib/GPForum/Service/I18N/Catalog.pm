@@ -227,7 +227,8 @@ sub _check_header ( $file, $locale, $header ) {
 
 # As gettext reads a catalog: a fuzzy entry waits for a translator's review
 # and an empty msgstr is untranslated, so neither is shown. Its key falls
-# back to English, which GPForum::Service::I18N logs.
+# back to English, which GPForum::Service::I18N reports to its
+# missing_key_logger, when one is set.
 sub _translated ($entry) {
     if ( $entry->{flags}{fuzzy} ) {
         return 0;
@@ -300,7 +301,8 @@ They are read once, when the module loads, by
 L<GPForum::Service::I18N::PoFile>, into a hash of locale to key to message:
 a string, or a hash reference of C<one> and C<other> for a plural message.
 A fuzzy entry or an empty C<msgstr> is untranslated, as for gettext, and is
-left out, so the lookup falls back to English and is logged.
+left out, so the lookup falls back to English and is reported to the
+facade's C<missing_key_logger> when one is set.
 F<docs/i18n.md> describes the translators' workflow.
 
 =head1 SUBROUTINES/METHODS
