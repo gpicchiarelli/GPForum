@@ -357,6 +357,12 @@ mark {
   font-size: var(--font-size-body);
 }
 
+/* Something the page owes the reader to say, once, without raising its voice. */
+.ui-note {
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+}
+
 /* Text a member wrote: set to be read, at the reading size and measure. */
 .forum-post-body {
   max-inline-size: var(--measure-readable);
@@ -797,6 +803,13 @@ label {
   margin-block-start: calc(var(--space-2) - var(--space-4));
 }
 
+/* A field inside its label is still a field: it does not take the label's
+   weight or size. */
+label > :is(input, select, textarea) {
+  font-size: var(--font-size-md);
+  font-weight: var(--weight-regular);
+}
+
 input,
 select,
 textarea {
@@ -866,6 +879,85 @@ legend {
 
 .checkbox-field input {
   margin-block-start: 0.3rem;
+}
+
+.checkbox-field label span + span {
+  color: var(--color-subtle);
+  font-weight: var(--weight-regular);
+}
+
+/* What can be set aside until it is wanted: a search's filters. */
+summary {
+  inline-size: fit-content;
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+summary:hover {
+  color: var(--color-foreground);
+}
+
+details[open] > summary {
+  margin-block-end: var(--space-3);
+}
+
+/* Searching is one field and its button on one line, as wide as the page. */
+.search-form {
+  max-inline-size: none;
+}
+
+.search-form__bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.search-form__bar input {
+  font-size: var(--font-size-body);
+}
+
+.search-form__bar button {
+  min-block-size: 2.75rem;
+}
+
+.search-form fieldset {
+  max-inline-size: 30rem;
+}
+
+/* Settings are groups under hairlines, each a narrow column of fields. */
+.settings-form {
+  gap: var(--space-6);
+  max-inline-size: none;
+}
+
+.settings-group {
+  border-block-start: 1px solid var(--color-hairline);
+  padding-block-start: var(--space-5);
+}
+
+.settings-group > *,
+.settings-group fieldset > * {
+  max-inline-size: 30rem;
+}
+
+.settings-group p {
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+}
+
+.settings-group fieldset {
+  gap: var(--space-5);
+  border: 0;
+  padding: 0;
+}
+
+.settings-group legend {
+  margin-block-end: var(--space-2);
+  padding: 0;
+  color: var(--color-subtle);
 }
 
 /* Destructive staff actions (ADR 0079): never the same button as "Filter".
@@ -943,6 +1035,17 @@ legend {
 
 .form-error-summary a {
   color: inherit;
+}
+
+/* A count of results is a status to assistive technology and a line of
+   metadata to the eye. */
+.ui-meta[role="status"] {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--color-subtle);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-regular);
 }
 
 .flash-stack {

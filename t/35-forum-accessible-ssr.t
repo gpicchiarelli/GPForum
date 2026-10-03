@@ -17,7 +17,7 @@ use GPForum::Test::ForumWebServices;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS   => 258;
+const my $EXPECTED_TESTS   => 265;
 const my $FORM_SNIPPET     => 800;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_FOUND       => 302;
@@ -159,6 +159,11 @@ $test->element_exists('mark');
 $test->element_exists('a[href="/u/giacomo_forum"]');
 $test->content_like(qr/Snippets [ ] only [ ] include [ ] content/msx);
 
+# A post the search finds is reached through its thread.
+$test->get_ok('/search?q=reply');
+$test->element_exists(
+    'ol[aria-label="Search results"] a[href="/t/thread-1#post-post-1"]');
+
 $test->get_ok('/search?q=missing');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="search-no-results-heading"]');
@@ -289,17 +294,24 @@ $test->get_ok('/bookmarks');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="bookmarks-heading"]');
 $test->element_exists('a[href="/t/thread-1"]');
+
+# Each list names the discussion a row is about, not its id; a row about a
+# post leads to the post.
+$test->text_is( 'ol li h2 a[href="/t/thread-1"]' => 'Welcome' );
 $test->element_exists('nav[aria-label="Bookmark pagination"]');
 $test->get_ok('/feed');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="feed-heading"]');
 $test->element_exists('ol[aria-label="Personal feed"]');
+$test->text_is( 'ol li h2 a[href="/t/thread-1"]' => 'Welcome' );
 $test->element_exists('nav[aria-label="Feed pagination"]');
 $test->get_ok('/notifications');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="notifications-heading"]');
 $test->element_exists('ol[aria-label="Notification inbox"]');
 $test->element_exists('a[href="/t/thread-1#post-post-1"]');
+$test->text_is( 'ol li h2 a[href="/t/thread-1#post-post-1"]' => 'Welcome' );
+$test->element_exists('.ui-notification-surface--unread');
 $test->element_exists('form[action="/notifications/notification-1/read"]');
 $test->element_exists('form[action="/notifications/read-all"]');
 $test->element_exists('nav[aria-label="Notification pagination"]');
@@ -329,6 +341,7 @@ $test->get_ok('/mentions');
 $test->status_is($HTTP_OK);
 $test->element_exists('section[aria-labelledby="mentions-heading"]');
 $test->element_exists('ol[aria-label="Mention list"]');
+$test->text_is( 'ol li h2 a[href="/t/thread-1#post-post-1"]' => 'Welcome' );
 $test->element_exists('a[href="/u/reply_author"]');
 $test->element_exists('nav[aria-label="Mention pagination"]');
 

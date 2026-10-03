@@ -117,8 +117,9 @@ sub search_result ( $self, $row ) {
         snippet              => $self->column( $row, 'snippet' ),
         snippet_html         => $self->column( $row, 'snippet_html' ),
         source_created_at    => $self->column( $row, 'source_created_at' ),
-        title                => $self->column( $row, 'title' ),
-        ui                   => {
+        thread_id => $self->loaded_column( $row, 'source_thread_id' ),
+        title     => $self->column( $row, 'title' ),
+        ui        => {
                 heading_id => 'search-result-'
               . $self->string($entity_id)
               . '-heading',

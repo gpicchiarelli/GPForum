@@ -7,11 +7,11 @@
     component_title => t('settings.title'),
     description => t('settings.description') %>
 
-  <form method="post" action="<%= url_for('settings_update') %>">
+  <form class="settings-form" method="post" action="<%= url_for('settings_update') %>">
     <%= csrf_field %>
     <input type="hidden" name="command_id" value="<%= $settings_command_id || q{} %>">
 
-    <section class="ui-card" aria-labelledby="<%= $ui->{appearance_heading_id} %>">
+    <section class="settings-group" aria-labelledby="<%= $ui->{appearance_heading_id} %>">
       <h2 id="<%= $ui->{appearance_heading_id} %>"><%= t('settings.appearance') %></h2>
       <label for="settings-locale">
         <span><%= t('locale.choose') %></span>
@@ -40,7 +40,7 @@
       <p id="settings-timezone-help"><%= t('settings.timezone_help') %></p>
     </section>
 
-    <section class="ui-card" aria-labelledby="<%= $ui->{notifications_heading_id} %>">
+    <section class="settings-group" aria-labelledby="<%= $ui->{notifications_heading_id} %>">
       <h2 id="<%= $ui->{notifications_heading_id} %>"><%= t('settings.notifications') %></h2>
       <p><%= t('settings.notifications_description') %></p>
       <fieldset>
@@ -71,7 +71,7 @@
     <button type="submit"><%= t('settings.save') %></button>
   </form>
 
-  <section class="ui-card" aria-labelledby="<%= $ui->{credentials_heading_id} %>">
+  <section class="settings-group" aria-labelledby="<%= $ui->{credentials_heading_id} %>">
     <h2 id="<%= $ui->{credentials_heading_id} %>"><%= t('settings.credentials') %></h2>
     <form method="post" action="<%= url_for('settings_password_update') %>">
       <%= csrf_field %>
@@ -84,7 +84,7 @@
     </form>
   </section>
 
-  <section class="ui-card" aria-labelledby="<%= $ui->{email_heading_id} %>">
+  <section class="settings-group" aria-labelledby="<%= $ui->{email_heading_id} %>">
     <h2 id="<%= $ui->{email_heading_id} %>"><%= t('settings.email') %></h2>
     <form method="post" action="<%= url_for('settings_email_update') %>">
       <%= csrf_field %>

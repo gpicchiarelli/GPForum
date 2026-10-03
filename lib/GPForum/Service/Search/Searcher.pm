@@ -8,6 +8,7 @@ use Mojo::Base -base, -signatures;
 use v5.40;
 
 use GPForum::Infrastructure::Row;
+use GPForum::Service::Forum::SourceThread;
 use GPForum::Service::Search::DocumentBuilder;
 use Mojo::Date;
 use Mojo::Util  qw(html_unescape xml_escape);
@@ -196,6 +197,12 @@ sub search_resultset ( $self, $actor, $query, $options = undef ) {
                 qw(rank_score author_username author_display_name
                   category_visibility space_visibility candidate_count)
             ],
+
+            # Every candidate is one the actor may read, so each result may
+            # say which thread it is in: a post found is reached through it.
+            GPForum::Service::Forum::SourceThread->attributes(
+                1, 'me.entity_type', 'me.entity_id'
+            ),
             rows     => $limit,
             order_by => [
                 { -desc => _rank_expression($normalized) },
@@ -768,8 +775,11 @@ unexecuted resultset that
 C<ranked_search> runs, with the author, category and space joined and
 C<rank_score>, C<author_username>, C<author_display_name>,
 C<category_visibility>, C<space_visibility> and C<candidate_count>
-selected. The query is trimmed and its whitespace collapsed first. Public
-so the query-plan evidence examines the query the application sends.
+selected, and the thread each result is or belongs to as
+C<source_thread_id> and C<source_thread_title>
+(L<GPForum::Service::Forum::SourceThread>). The query is trimmed and its
+whitespace collapsed first. Public so the query-plan evidence examines the
+query the application sends.
 
 =head2 autocomplete
 

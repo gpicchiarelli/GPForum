@@ -937,13 +937,15 @@ sub list_page_for_user {
         return {
             items => [
                 {
-                    user_id            => $user_id,
-                    item_type          => 'thread',
-                    item_id            => 'thread-1',
-                    created_at         => '2026-05-23T12:00:00Z',
-                    rank_score         => 0,
-                    visibility_version => 1,
-                    permission_version => 1,
+                    user_id             => $user_id,
+                    item_type           => 'thread',
+                    item_id             => 'thread-1',
+                    source_thread_id    => 'thread-1',
+                    source_thread_title => 'Welcome',
+                    created_at          => '2026-05-23T12:00:00Z',
+                    rank_score          => 0,
+                    visibility_version  => 1,
+                    permission_version  => 1,
                 },
             ],
             next_cursor => 'feed-cursor',
@@ -954,15 +956,17 @@ sub list_page_for_user {
         return {
             items => [
                 {
-                    notification_id   => 'notification-1',
-                    recipient_user_id => $user_id,
-                    created_at        => '2026-05-23T12:00:00Z',
-                    read_at           => undef,
-                    rank_score        => 0,
-                    source_type       => 'post',
-                    source_id         => 'post-1',
-                    notification_type => 'mention',
-                    payload           => {
+                    notification_id     => 'notification-1',
+                    recipient_user_id   => $user_id,
+                    created_at          => '2026-05-23T12:00:00Z',
+                    read_at             => undef,
+                    rank_score          => 0,
+                    source_type         => 'post',
+                    source_id           => 'post-1',
+                    source_thread_id    => 'thread-1',
+                    source_thread_title => 'Welcome',
+                    notification_type   => 'mention',
+                    payload             => {
                         thread_id => 'thread-1',
                         post_id   => 'post-1',
                     },
@@ -975,13 +979,15 @@ sub list_page_for_user {
     return {
         items => [
             {
-                bookmark_id => 'bookmark-1',
-                user_id     => $user_id,
-                target_type => 'thread',
-                target_id   => 'thread-1',
-                note        => 'Read later',
-                created_at  => '2026-05-23T12:00:00Z',
-                deleted_at  => undef,
+                bookmark_id         => 'bookmark-1',
+                user_id             => $user_id,
+                target_type         => 'thread',
+                target_id           => 'thread-1',
+                source_thread_id    => 'thread-1',
+                source_thread_title => 'Welcome',
+                note                => 'Read later',
+                created_at          => '2026-05-23T12:00:00Z',
+                deleted_at          => undef,
             },
         ],
         next_cursor => 'bookmark-cursor',
@@ -997,6 +1003,8 @@ sub list_page_for_recipient {
                 mention_id          => 'mention-1',
                 source_type         => 'post',
                 source_id           => 'post-1',
+                source_thread_id    => 'thread-1',
+                source_thread_title => 'Welcome',
                 actor_id            => 'user-2',
                 actor_username      => 'reply_author',
                 actor_display_name  => 'Reply Author',
@@ -1170,6 +1178,8 @@ sub search {
         ];
     }
 
+    return [ _post_hit() ] if $query eq 'reply';
+
     return [
         {
             entity_type          => 'thread',
@@ -1186,6 +1196,24 @@ sub search {
             indexed_at           => '2026-05-23T12:00:00Z',
         },
     ];
+}
+
+# A post the search found, with the thread it belongs to as the searcher
+# selects it.
+sub _post_hit {
+    return {
+        entity_type         => 'post',
+        entity_id           => 'post-1',
+        source_thread_id    => 'thread-1',
+        author_user_id      => 'user-1',
+        author_username     => 'giacomo_forum',
+        author_display_name => 'Giacomo Picchiarelli',
+        title               => 'Welcome',
+        snippet_html        => 'A <mark>reply</mark>',
+        visibility          => 'public',
+        source_created_at   => '2026-05-23T12:00:00Z',
+        indexed_at          => '2026-05-23T12:00:00Z',
+    };
 }
 
 # What the search page asks for. 'capped' answers as a forum whose word filled
