@@ -51,9 +51,10 @@ Architecture audit result as of this document:
 
 Minimum:
 
-- OS system Perl `5.38.0` or newer (`/usr/bin/perl` / distro package, or
-  Homebrew's `perl` on macOS; version managers and custom PREFIX builds are
-  unsupported). Verify with `make system-perl`. On macOS,
+- OS system Perl `5.40.0` or newer (`/usr/bin/perl` on Debian 13, Ubuntu
+  26.04 or newer, FreeBSD ports/pkg perl, or Homebrew's `perl` on macOS;
+  version managers and custom PREFIX builds are unsupported). Verify with
+  `make system-perl`. On macOS,
   `eval "$(script/gpforum-homebrew-env)"` puts Homebrew's PostgreSQL client
   tools on `PATH`.
 - Carton installed for that system Perl, with dependencies locked by

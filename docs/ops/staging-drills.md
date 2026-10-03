@@ -71,7 +71,7 @@ export GPFORUM_DATABASE_USER="$USER"
 # password empty when using trust on localhost
 ```
 
-You still need OS system Perl 5.38+ (Homebrew's `perl` or distro
+You still need OS system Perl 5.40+ (Homebrew's `perl` or distro
 `/usr/bin/perl`) and `make install-deps-postgres` before `script/staging-drill`.
 Stop with `pg_ctl -D "$HOME/gpforum-pgdata" stop` when finished.
 

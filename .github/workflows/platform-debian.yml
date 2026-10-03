@@ -1,6 +1,6 @@
 name: Debian target
 
-# Debian is a named deployment platform (README, deploy/systemd). ubuntu-latest
+# Debian is a named deployment platform (README, deploy/systemd). ubuntu-26.04
 # proves the Ubuntu system Perl; this job proves the Debian stable system Perl
 # and the deploy/systemd runtime shape in a plain Debian container.
 

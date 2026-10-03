@@ -1,0 +1,7 @@
+# The Perl jobs run on ubuntu-26.04, whose system Perl is 5.40, the supported
+# floor (ADR 0117). The GitHub-hosted image is newer than the runner list built
+# into the pinned actionlint (1.7.12), which would otherwise report the label
+# as unknown. Drop this entry once the pinned actionlint knows the label.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04

@@ -15,6 +15,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Operator action required
 
+- **Perl 5.40 or newer is required.** The supported floor moves from 5.38 to
+  5.40 (ADR 0117): Debian 13 (trixie), Ubuntu 26.04, FreeBSD ports perl 5.40,
+  or Homebrew's perl. `script/gpforum-system-perl --require` and
+  `script/bootstrap-deps` refuse an older interpreter. A host on Ubuntu 24.04
+  (perl 5.38) must be upgraded before deploying this release; after changing
+  the interpreter, rebuild the locked tree (`script/bootstrap-deps --postgres
+  --rebuild-local`), because its XS modules are built for one Perl.
+
 - Alerting or scripts that read the readiness checks (`report.problems`,
   `partition_horizon`, `replication_slots`) must send the metrics token; see
   `docs/DEPLOYMENT.md#health-endpoints`.

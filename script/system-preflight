@@ -19,7 +19,7 @@ need() {
 }
 
 if ! script/gpforum-system-perl --preflight; then
-    echo "missing: system Perl 5.38+ (/usr/bin/perl, FreeBSD /usr/local, or Homebrew perl)"
+    echo "missing: system Perl 5.40+ (Debian 13, Ubuntu 26.04, /usr/bin/perl, FreeBSD /usr/local, or Homebrew perl)"
     echo "Debian/Ubuntu: apt install perl build-essential cpanminus libpq-dev"
     echo "FreeBSD: pkg install perl5 p5-App-cpanminus postgresql16-client"
     echo "macOS (Homebrew): brew install perl postgresql@18; eval \"\$(script/gpforum-homebrew-env)\""

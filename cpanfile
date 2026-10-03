@@ -1,4 +1,4 @@
-requires 'perl', '5.038.0';
+requires 'perl', '5.040.0';
 
 requires 'Mojolicious', '9.49';
 requires 'DBIx::Class', '0.082844';

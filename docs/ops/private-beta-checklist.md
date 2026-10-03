@@ -24,7 +24,7 @@ on a real target, and operator runbook evidence.
 
 | Phase | Tool | Docs | What PASS means here |
 | --- | --- | --- | --- |
-| System Perl | `script/gpforum-system-perl --preflight` | `CONTRIBUTING.md`, `Makefile` | Interpreter is OS/distro (or Homebrew) Perl 5.38+, not a version manager |
+| System Perl | `script/gpforum-system-perl --preflight` | `CONTRIBUTING.md`, `Makefile` | Interpreter is OS/distro (or Homebrew) Perl 5.40+, not a version manager |
 | Carton deps | `script/bootstrap-deps --postgres` (`--rebuild-local` if `local/` incomplete) | `script/bootstrap-deps`, `Makefile` | `script/gpforum-carton exec perl -MConst::Fast -e 1` succeeds |
 | Homebrew PATH | `script/gpforum-homebrew-env` | `docs/ops/staging-drills.md` | On macOS, `psql` / `pg_dump` / `pg_config` resolve under Homebrew's `postgresql@NN` keg (no-op skip on Linux) |
 | Migrations | `script/gpforum-carton exec bin/gpforum-migrate --apply` via `script/gpforum-carton` | `docs/DEPLOYMENT.md` | Target DB schema at current migration head (`001`–`036` on `main`) |

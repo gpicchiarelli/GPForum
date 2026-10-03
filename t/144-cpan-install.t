@@ -150,7 +150,7 @@ sub _assert_system_perl {
     );
     unlike( $helper, qr/\/opt\/local/msx,
         'and no longer MacPorts, which macOS hosts no longer use' );
-    like( $helper, qr/5[.]038/msx, 'system-perl helper requires Perl 5.38+' );
+    like( $helper, qr/5[.]040/msx, 'system-perl helper requires Perl 5.40+' );
     like(
         $bootstrap,
         qr/gpforum-system-perl [ ] --require/msx,

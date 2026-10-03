@@ -61,7 +61,7 @@ defaults:
 jobs:
   postgres:
     name: PostgreSQL ${{ matrix.postgres }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     strategy:
       fail-fast: false

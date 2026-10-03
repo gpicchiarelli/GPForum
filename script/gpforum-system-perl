@@ -13,7 +13,7 @@ usage() {
 Usage: script/gpforum-system-perl [--print|--require|--preflight]
 
   --print      print the absolute path of the system Perl (default)
-  --require    require Perl 5.38+ and exit non-zero on failure
+  --require    require Perl 5.40+ and exit non-zero on failure
   --preflight  print which/perl -v/-V evidence for operators and CI
 
 Environment:
@@ -93,7 +93,7 @@ is_system_prefix() {
 
 meets_version() {
     candidate=$1
-    "$candidate" -e 'exit($] < 5.038 ? 1 : 0)'
+    "$candidate" -e 'exit($] < 5.040 ? 1 : 0)'
 }
 
 canonicalize() {
@@ -134,7 +134,7 @@ reject_invalid() {
     fi
     if ! meets_version "$candidate"; then
         version=$("$candidate" -e 'print $]')
-        reject "Perl 5.38+ required (got $version at $candidate)"
+        reject "Perl 5.40+ required (got $version at $candidate)"
     fi
 }
 
@@ -148,7 +148,7 @@ resolve_candidate() {
     fi
 
     # Prefer distro paths; fall through so macOS's old /usr/bin/perl does
-    # not block Homebrew's perl when that meets 5.38+. Homebrew links it as
+    # not block Homebrew's perl when that meets 5.40+. Homebrew links it as
     # /opt/homebrew/bin/perl (Apple silicon) or /usr/local/bin/perl (Intel);
     # canonicalize resolves the link to the keg in the Cellar.
     for candidate in /usr/bin/perl /usr/local/bin/perl /opt/homebrew/bin/perl; do
