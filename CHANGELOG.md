@@ -827,6 +827,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- A retried notification delivery no longer writes a second `notifications`
+  row when its leftover row is stored at another time or in another month's
+  partition: the stored row is reused and the inbox row takes its time. Two
+  workers recording the same caller-supplied event id at different times no
+  longer both store it, and a caller-supplied audit id already stored at
+  another time is written under a new id (ADR 0116).
+
 - Every server profile ignores `GPFORUM_QUERY_BUDGET_ENFORCE=1` (production,
   production-small, production-medium, staging); before, only
   `GPFORUM_ENV=production` did, and elsewhere a breached budget left the

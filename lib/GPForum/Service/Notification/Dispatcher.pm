@@ -184,16 +184,30 @@ sub _delivery_after_conflict ( $self, $ctx, $error ) {
 
 sub _insert_delivery ( $self, $ctx ) {
     $self->_fill_delivery_rows($ctx);
-    $self->_insert_or_reuse_notification($ctx);
+    if ( !$ctx->{stored} ) {
+        $self->_insert_or_reuse_notification($ctx);
+    }
     $self->_create_inbox($ctx);
 
     return _created_delivery($ctx);
 }
 
+# ADR 0116. notifications_pkey is (notification_id, created_at), so a row
+# this delivery left at another time than the clock now reads -- a retry
+# after midnight, a slow worker, a leftover from before -- is no conflict:
+# the delivery wrote a second row under the same id, and the inbox row,
+# joined on both columns, reached only the new one. The id is derived from
+# the delivery and carries no time, so the stored row is looked up by id in
+# every partition, and its time is the one both rows use. No lock is needed:
+# two deliveries racing past the lookup both write the inbox row, whose key
+# is the recipient and the id alone, and the loser's savepoint takes its
+# notification row back with it.
 sub _fill_delivery_rows ( $self, $ctx ) {
     my $input           = $ctx->{input};
     my $notification_id = $ctx->{notification_id};
-    my $created_at      = $self->clock->now_iso8601;
+    my $stored          = $self->_stored_notification_time($notification_id);
+    my $created_at      = $stored // $self->clock->now_iso8601;
+    $ctx->{stored}       = defined $stored ? 1 : 0;
     $ctx->{notification} = {
         created_at        => $created_at,
         notification_id   => $notification_id,
@@ -215,6 +229,21 @@ sub _fill_delivery_rows ( $self, $ctx ) {
     };
 
     return;
+}
+
+# The created_at of the notification already stored under this id, in
+# whichever partition holds it, exactly as PostgreSQL returns it: the inbox
+# row joins on it. The primary key's leading column serves the lookup in
+# each partition.
+sub _stored_notification_time ( $self, $notification_id ) {
+    my $search = $self->schema->resultset('Notification')->search_rs(
+        { notification_id => $notification_id },
+        { columns         => ['created_at'], rows => 1 },
+    );
+    my ($stored) = _rows($search);
+    return if !$stored;
+
+    return _column( $stored, 'created_at' );
 }
 
 sub _insert_or_reuse_notification ( $self, $ctx ) {
@@ -881,7 +910,10 @@ that key, so a retried delivery finds the inbox row it made the first time
 and is reported as a C<duplicate> instead of notifying twice. The outbox
 relies on this to retry a fan-out safely. Inserts run inside savepoints; a
 unique conflict with a concurrent delivery is resolved by reading the row
-that won.
+that won. C<notifications> is partitioned by C<created_at> and keyed on the
+id and that time, so a notification row already stored under the id, at
+whatever time, is looked up first and reused, its C<created_at> given to
+the inbox row (ADR 0116).
 
 A recipient is notified only if the C<permission_engine> agrees (ADR 0102:
 only about a source they can read) and their C<in_app> channel is enabled
@@ -930,7 +962,9 @@ the recipient turned the channel off. Otherwise writes the rows in a
 transaction and returns C<< { ok => 1, duplicate, idempotency_key,
 notification, inbox, unread_count } >>: C<notification> and C<inbox> are
 hash references of the stored fields, the notification's C<payload>
-carrying the C<idempotency_key>. C<duplicate> is 1 when the recipient
+carrying the C<idempotency_key>. A notification row already stored under
+the id, at any time, is not written again, and both carry its
+C<created_at> as PostgreSQL returns it. C<duplicate> is 1 when the recipient
 already had this notification; then nothing is written and no badge is
 sent, though C<unread_count> is still read. C<unread_count> is undef when
 the count failed after the write (see L</DESCRIPTION>).

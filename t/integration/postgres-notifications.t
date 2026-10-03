@@ -36,7 +36,6 @@ use GPForum::Test::ScriptedId;
 use GPForum::Worker::Handler::NotificationDispatch;
 
 our $VERSION = '0.001';
-our $TODO;
 
 const my $NOW     => '2026-05-23T12:00:00Z';
 const my $LATER   => '2026-05-23T13:00:00Z';
@@ -147,6 +146,11 @@ const my $INBOX_ROWS_SQL =>
 const my $INBOX_ROW_SQL => join q{ },
   'SELECT * FROM notification_inbox',
   'WHERE recipient_user_id = ? AND notification_id = ?';
+const my $INBOX_NOTIFICATION_SQL => join q{ },
+  'SELECT count(*) FROM notification_inbox AS inbox',
+  'JOIN notifications AS notification',
+  'USING (notification_id, created_at)',
+  'WHERE inbox.recipient_user_id = ? AND inbox.notification_id = ?';
 const my $INBOX_ORDER_SQL => join q{ },
   'SELECT notification_id FROM notification_inbox',
   'WHERE recipient_user_id = ?',
@@ -192,6 +196,7 @@ _delivery($notifications);
 _raced_delivery($notifications);
 _leftover_notification($notifications);
 _leftover_at_another_time($notifications);
+_raced_delivery_at_another_time($notifications);
 _refused_delivery($notifications);
 _fanout($notifications);
 _outbox_fanout($notifications);
@@ -964,16 +969,26 @@ sub _leftover_in {
 
 # A leftover notification stored at another time than the delivery's clock
 # reads. notifications_pkey is (notification_id, created_at), so the insert
-# does not conflict: a second notifications row with the same id is written
-# beside the leftover, which no inbox row reaches any more. Which of the two
-# a delivery should keep is a decision of its own.
+# did not conflict: a second notifications row with the same id was written
+# beside the leftover, and the new inbox row, joined on both columns, reached
+# only the second. ADR 0116: the dispatcher looks the id up in every
+# partition and gives the inbox row the leftover's time.
 sub _leftover_at_another_time {
     my ($ctx) = @_;
+
+    _leftover_from( $ctx, $EARLIER, 'an earlier hour, in the same partition' );
+    _leftover_from( $ctx, $IN_THIS_MONTH, q{another month's partition} );
+
+    return;
+}
+
+sub _leftover_from {
+    my ( $ctx, $time, $when ) = @_;
 
     my $member = $ctx->{users}{orphan};
     my $id     = $ctx->{ids}->uuid;
     my $post   = _post( $ctx, $ctx->{thread_id} );
-    $ctx->{dbh}->do( $NOTIFICATION_SQL, undef, $id, $member, $post, $EARLIER );
+    $ctx->{dbh}->do( $NOTIFICATION_SQL, undef, $id, $member, $post, $time );
     my $orphan = eval {
         return _at(
             $ctx, $NOW,
@@ -994,18 +1009,71 @@ sub _leftover_at_another_time {
     my $error = $EVAL_ERROR;
 
     ok( $orphan && $orphan->{ok},
-        'a leftover notification from an earlier time completes its delivery' )
+        "a leftover notification from $when completes its delivery" )
       or note $error;
-  TODO: {
-        local $TODO = 'notifications_pkey is (notification_id, created_at):'
-          . ' a leftover row at another time does not conflict';
-        is(
-            _value( $ctx, $NOTIFICATION_ID_ROWS_SQL, $id ),
-            1,
-            'a leftover notification from an earlier time is not inserted'
-              . ' again'
-        );
-    }
+    ok( $orphan && !$orphan->{duplicate},
+        "a leftover notification from $when is no duplicate delivery" );
+    is( _value( $ctx, $NOTIFICATION_ID_ROWS_SQL, $id ),
+        1, "a leftover notification from $when is not inserted again" );
+    is(
+        _utc( $ctx, _row( $ctx, $INBOX_ROW_SQL, $member, $id )->{created_at} ),
+        $time,
+        "a leftover notification from $when gives its inbox row its time"
+    );
+    is( _value( $ctx, $INBOX_NOTIFICATION_SQL, $member, $id ),
+        1, "the inbox row of a leftover from $when reaches the notification" );
+    is( $orphan && _utc( $ctx, $orphan->{notification}{created_at} ),
+        $time, "a leftover notification from $when is answered with its time" );
+
+    return;
+}
+
+# Another worker commits the same delivery, at another time than the
+# dispatcher's clock, after the dispatcher looked for the notification and
+# before its inserts. Its notification insert does not conflict, but its
+# inbox row does -- notification_inbox_pkey is the recipient and the id,
+# whatever the time -- and the savepoint takes both back: ADR 0116's lookup
+# needs no lock.
+sub _raced_delivery_at_another_time {
+    my ($ctx) = @_;
+
+    my $member = $ctx->{users}{racer};
+    my $id     = $ctx->{ids}->uuid;
+    my $post   = _post( $ctx, $ctx->{thread_id} );
+    my $inbox  = _value( $ctx, $INBOX_ROWS_SQL, $member );
+    my $raced  = _at(
+        $ctx, $NOW,
+        sub {
+            return _racing(
+                $ctx,
+                sub {
+                    my ($peer) = @_;
+                    $peer->do( $NOTIFICATION_SQL,
+                        undef, $id, $member, $post, $EARLIER );
+                    return $peer->do( $INBOX_SQL, undef, $member, $id,
+                        $EARLIER );
+                },
+                sub {
+                    return $ctx->{dispatcher}->create_notification(
+                        {
+                            notification_id   => $id,
+                            notification_type => 'reply',
+                            recipient_user_id => $member,
+                            source_id         => $post,
+                            source_type       => 'post',
+                        }
+                    );
+                }
+            );
+        }
+    );
+
+    ok( $raced->{duplicate},
+        'a delivery raced at another time is identified as duplicate' );
+    is( _value( $ctx, $NOTIFICATION_ID_ROWS_SQL, $id ),
+        1, 'a delivery raced at another time leaves one notification row' );
+    is( _value( $ctx, $INBOX_ROWS_SQL, $member ),
+        $inbox + 1, 'and one inbox row' );
 
     return;
 }

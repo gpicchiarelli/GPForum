@@ -10,15 +10,18 @@ use Carp qw(croak);
 use Const::Fast;
 use Digest::SHA qw(sha256_base64);
 use English     qw(-no_match_vars);
-use POSIX       qw(strftime);
+use Mojo::JSON  qw(decode_json encode_json);
+use POSIX       qw(_exit strftime);
 use Test::More;
 
 use lib 'lib';
 use lib 't/lib';
 
+use GPForum::Config;
 use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::Id;
 use GPForum::Infrastructure::UniqueConflict;
+use GPForum::Schema;
 use GPForum::Test::PgDatabase;
 use GPForum::Test::RacedSchema;
 
@@ -32,6 +35,17 @@ const my $IN_DEFAULT      => '2026-05-23T12:00:00Z';
 const my $IN_THIS_MONTH   => strftime( '%Y-%m-15T12:00:00Z',       gmtime );
 const my $THIS_MONTH_PKEY => strftime( 'notifications_%Y_%m_pkey', gmtime );
 const my $IN_JANUARY      => '2099-01-15T12:00:00Z';
+const my $EARLIER_HOUR    => '2026-05-23T11:00:00Z';
+
+# A row stored at the first time, written again under its id at the second.
+const my @ANOTHER_TIME => (
+    [ $IN_DEFAULT, $EARLIER_HOUR,  'an earlier hour in the same partition' ],
+    [ $IN_DEFAULT, $IN_THIS_MONTH, q{another month's partition} ],
+);
+
+# How long the race below waits for the second writer to queue on the first.
+const my $LOCK_POLLS        => 50;
+const my $LOCK_POLL_SECONDS => 0.1;
 
 const my %PARTITION_AT => (
     $IN_DEFAULT    => 'the default partition',
@@ -88,6 +102,15 @@ const my $OUTBOX_ROWS_SQL =>
   'SELECT count(*) FROM outbox_messages WHERE event_id = ?';
 const my $AUDIT_ROWS_SQL =>
   'SELECT count(*) FROM audit_log WHERE correlation_id = ?';
+const my $AUDIT_ID_ROWS_SQL =>
+  'SELECT count(*) FROM audit_log WHERE audit_id = ?';
+
+# Backends of this database queued on an advisory lock.
+const my $ADVISORY_WAITERS_SQL => join q{ },
+  'SELECT count(*) FROM pg_locks',
+  q{WHERE locktype = 'advisory' AND NOT granted},
+  'AND database = (SELECT oid FROM pg_database',
+  'WHERE datname = current_database())';
 
 if ( !GPForum::Test::PgDatabase->admin_dsn ) {
     plan skip_all =>
@@ -107,6 +130,7 @@ my $database    = GPForum::Test::PgDatabase->fresh;
 my $partitioned = {
     conflict => 'GPForum::Infrastructure::UniqueConflict',
     dbh      => $database->dbh,
+    dsn      => $database->dsn,
     ids      => GPForum::Infrastructure::Id->new,
     schema   => $database->schema,
 };
@@ -122,6 +146,9 @@ _inside_a_transaction($partitioned);
 _refused_lookup($partitioned);
 _raced_event($partitioned);
 _colliding_audit_id($partitioned);
+_event_at_another_time($partitioned);
+_event_raced_at_another_time($partitioned);
+_audit_id_at_another_time($partitioned);
 
 done_testing();
 
@@ -452,6 +479,187 @@ sub _colliding_audit_id {
     }
 
     return;
+}
+
+# ADR 0116. event_log_pkey is (event_id, created_at): an event stored under
+# its id at another time is no conflict for the insert. The recorder's
+# lookup by id, in every partition, reuses it.
+sub _event_at_another_time {
+    my ($ctx) = @_;
+
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => $ctx->{ids},
+        schema     => $ctx->{schema},
+    );
+    for my $case (@ANOTHER_TIME) {
+        my ( $first, $again, $when ) = @{$case};
+        my $event_id = $ctx->{ids}->uuid;
+        my %event    = _event( $ctx, $event_id, $first );
+        $recorder->record_event(%event);
+        my $retried =
+          eval { return $recorder->record_event( %event, timestamp => $again ) };
+        my $error = $EVAL_ERROR;
+
+        ok( $retried && $retried->{skipped},
+            "an event written again at $when reuses the stored one" )
+          or note $error;
+        is( _value( $ctx, $EVENT_ROWS_SQL, $event_id ),
+            1, "an event written again at $when is stored once" );
+        is( _value( $ctx, $OUTBOX_ROWS_SQL, $event_id ),
+            1, "an event written again at $when has one outbox row" );
+    }
+
+    return;
+}
+
+# Two workers write the same event at once, each at its own time. Each
+# looked the id up before the other committed, and with the times apart
+# neither insert conflicted: the id was stored twice. The recorder locks a
+# caller's event id to the end of its transaction, so the second worker
+# queues on the first, and looks only once it committed.
+sub _event_raced_at_another_time {
+    my ($ctx) = @_;
+
+    my $event_id = $ctx->{ids}->uuid;
+    my %event    = _event( $ctx, $event_id, $IN_DEFAULT );
+    my $holder   = _connect($ctx);
+    $holder->txn_begin;
+    GPForum::Infrastructure::EventRecorder->new(
+        id_service => $ctx->{ids},
+        schema     => $holder,
+    )->record_event(%event);
+
+    my $child = _spawn(
+        sub {
+            my $recorder = GPForum::Infrastructure::EventRecorder->new(
+                id_service => GPForum::Infrastructure::Id->new,
+                schema     => _connect($ctx),
+            );
+            my $stored =
+              $recorder->record_event( %event, timestamp => $IN_THIS_MONTH );
+            return {
+                event_id => $stored->{event_id},
+                skipped  => $stored->{skipped} ? 1 : 0,
+            };
+        }
+    );
+    ok( _await_advisory_waiter($ctx),
+        'a second worker writing the same event queues on the first' );
+    $holder->txn_commit;
+    $holder->storage->disconnect;
+    my $outcome = _collect($child);
+
+    ok( $outcome->{skipped}, 'and once the first committed, reuses its event' )
+      or note explain $outcome;
+    is( $outcome->{event_id}, $event_id, 'under its id' );
+    is( _value( $ctx, $EVENT_ROWS_SQL, $event_id ),
+        1, 'an event raced at another time is stored once' );
+    is( _value( $ctx, $OUTBOX_ROWS_SQL, $event_id ), 1, 'with one outbox row' );
+
+    return;
+}
+
+# ADR 0116. audit_log_pkey is (audit_id, created_at): an audit id already
+# stored at another time is no conflict for the insert, and was written a
+# second time. It is a collision like the one on the key, and is written
+# under a new id.
+sub _audit_id_at_another_time {
+    my ($ctx) = @_;
+
+    my $recorder = GPForum::Infrastructure::EventRecorder->new(
+        id_service => $ctx->{ids},
+        schema     => $ctx->{schema},
+    );
+    for my $case (@ANOTHER_TIME) {
+        my ( $first, $again, $when ) = @{$case};
+        my %audit = (
+            action         => 'test.partition_conflict',
+            audit_id       => $ctx->{ids}->uuid,
+            correlation_id => $ctx->{ids}->uuid,
+            created_at     => $first,
+            metadata       => { when => $when },
+            target_id      => $ctx->{ids}->uuid,
+            target_type    => 'thread',
+        );
+        $recorder->record_audit(%audit);
+        my $retried = eval {
+            return $recorder->record_audit( %audit, created_at => $again );
+        };
+        my $error = $EVAL_ERROR;
+
+        ok(
+            $retried && $retried->{audit_id} ne $audit{audit_id},
+            "an audit id taken at $when is written under a new id"
+        ) or note $error;
+        is( _value( $ctx, $AUDIT_ID_ROWS_SQL, $audit{audit_id} ),
+            1, "an audit id taken at $when is stored once" );
+        is( _value( $ctx, $AUDIT_ROWS_SQL, $audit{correlation_id} ),
+            2, "and the record taken at $when is kept beside it" );
+        ok(
+            $retried && $recorder->verify_audit_record($retried),
+            "and the record written under a new id at $when verifies"
+        );
+    }
+
+    return;
+}
+
+# A schema of its own on the test's database: a backend apart from the
+# test's, as another worker's is.
+sub _connect {
+    my ($ctx) = @_;
+
+    local $ENV{GPFORUM_DATABASE_DSN} = $ctx->{dsn};
+
+    return GPForum::Schema->connect_from_config(
+        GPForum::Config->from_environment );
+}
+
+sub _await_advisory_waiter {
+    my ($ctx) = @_;
+
+    for ( 1 .. $LOCK_POLLS ) {
+        return 1 if _value( $ctx, $ADVISORY_WAITERS_SQL );
+        $ctx->{dbh}->do( 'SELECT pg_sleep(?)', undef, $LOCK_POLL_SECONDS );
+    }
+
+    return 0;
+}
+
+# $work in a child process, on its own connection; its answer comes back
+# through a pipe.
+sub _spawn {
+    my ($work) = @_;
+
+    pipe my $reader, my $writer or croak 'worker pipe failed';
+    my $pid = fork;
+    if ( !defined $pid ) {
+        croak "fork failed: $OS_ERROR";
+    }
+    if ( $pid == 0 ) {
+        close $reader or croak 'child reader close failed';
+        my $result = eval { return $work->() };
+        my $answer = $result // { error => "$EVAL_ERROR" };
+        print {$writer} encode_json($answer) or croak 'child write failed';
+        close $writer or croak 'child writer close failed';
+
+        # _exit skips the destructors that would close the parent's handles.
+        _exit(0);
+    }
+
+    close $writer or croak 'parent writer close failed';
+    return { pid => $pid, reader => $reader };
+}
+
+sub _collect {
+    my ($child) = @_;
+
+    local $INPUT_RECORD_SEPARATOR = undef;
+    my $json = readline $child->{reader};
+    close $child->{reader} or croak 'parent reader close failed';
+    waitpid $child->{pid}, 0;
+
+    return decode_json($json);
 }
 
 sub _event {
