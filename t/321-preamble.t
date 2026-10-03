@@ -5,7 +5,9 @@ package main;
 
 use v5.40;
 
+use Carp qw(croak);
 use Const::Fast;
+use English    qw(-no_match_vars);
 use List::Util qw(any);
 use Mojo::File qw(path);
 use Test::More;
@@ -45,14 +47,32 @@ const my @LINE_RULES => (
     [ 'finally'   => qr/\A \s* (?:[}] \s*)? finally \s* [{]/msx ],
 );
 
+# The names `use v5.40` imports: builtin's ":5.40" version bundle. indexed is
+# one of them; inf, nan, stringify, is_bool, created_as_* and the other
+# experimental builtins are not, and a sub may carry their names.
 const my @BUILTIN_NAMES => qw(
-  blessed ceil created_as_number created_as_string false floor inf is_tainted
-  is_weak nan refaddr reftype stringify trim true unweaken weaken
+  blessed ceil false floor indexed is_tainted is_weak refaddr reftype trim true
+  unweaken weaken
 );
 
 my %unconverted = map { $_ => 1 } @UNCONVERTED;
 my $builtin     = join q{|}, @BUILTIN_NAMES;
 my @files       = _perl_files();
+
+is_deeply(
+    [ _imported_builtins() ],
+    [ sort @BUILTIN_NAMES ],
+    'the builtin names are the ones use v5.40 imports'
+);
+is_deeply(
+    [
+        _code_problems(
+            "use v5.40;\n\nsub indexed {\n    return;\n}\n", $builtin
+        )
+    ],
+    ['a sub named like a builtin: indexed'],
+    'a sub named indexed is refused'
+);
 
 cmp_ok( scalar @files, '>', $MINIMUM_FILES, 'the gate reads the whole tree' );
 for my $file (@UNCONVERTED) {
@@ -93,8 +113,30 @@ sub _perl_files {
     return @sorted;
 }
 
+# Which builtins a file declaring `use v5.40` sees under their own names,
+# asked of this perl in a child process: under the declaration such a name is
+# the lexical alias of the builtin, any other name a sub of the package.
+sub _imported_builtins {
+    my @candidates = grep { builtin->can($_) } sort keys %builtin::;
+    my $probe      = join q{}, "use v5.40;\n",
+      map { "print qq{$_\\n} if \\&$_ == \\&builtin::$_;\n" } @candidates;
+
+    open my $child, q{-|}, $EXECUTABLE_NAME, '-e', $probe
+      or croak "cannot run $EXECUTABLE_NAME: $OS_ERROR";
+    my @imported = <$child>;
+    chomp @imported;
+    close $child or croak "the builtin probe failed: $CHILD_ERROR";
+
+    return @imported;
+}
+
 sub _problems ( $file, $builtin_names ) {
-    my ($code)   = split /^__END__$/msx, path($file)->slurp, 2;
+    my ($code) = split /^__END__$/msx, path($file)->slurp, 2;
+
+    return _code_problems( $code, $builtin_names );
+}
+
+sub _code_problems ( $code, $builtin_names ) {
     my @lines    = split /\n/msx, $code;
     my @problems = ( _preamble_problems(@lines), _mojo_base_problems(@lines) );
 
