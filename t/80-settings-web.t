@@ -174,7 +174,7 @@ sub _authenticated_settings_app {
             password   => 'correct horse battery staple',
         }
     );
-    $test->status_is($HTTP_ACCEPTED);
+    $test->status_is($HTTP_FOUND);
 
     return ( $test, $identity_store, $preference_store );
 }

@@ -184,7 +184,8 @@ $forum->element_exists('footer.site-footer form.theme-form');
 my $anonymous = Test::Mojo->new('GPForum');
 _install_forum_fakes($anonymous);
 $anonymous->get_ok('/categories')->status_is($HTTP_OK);
-$anonymous->element_exists('header.site-header a[href="/login"]');
+$anonymous->element_exists(
+    'header.site-header a[href="/login?return_to=%2Fcategories"]');
 $anonymous->element_exists_not('header.site-header a[href="/password/reset"]');
 
 my ($narrow) =

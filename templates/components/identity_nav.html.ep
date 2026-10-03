@@ -8,6 +8,8 @@
 % } else {
   <nav class="identity-nav" aria-label="<%= t('nav.identity') %>">
     <a href="<%= url_for('register') %>"><%= t('auth.register') %></a>
-    <a href="<%= url_for('login') %>"><%= t('auth.login') %></a>
+    %# Signing in leads back to this page, unless this page is the way in.
+    % my $here = ui_return_to;
+    <a href="<%= $here eq q{/} || $here =~ m{\A/(?:login|register)}msx ? url_for('login') : url_for('login')->query(return_to => $here) %>"><%= t('auth.login') %></a>
   </nav>
 % }

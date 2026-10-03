@@ -23,6 +23,7 @@ use GPForum::Test::NotificationSchema;
 our $VERSION = '0.001';
 
 const my $HTTP_ACCEPTED    => 202;
+const my $HTTP_FOUND       => 302;
 const my $HTTP_BAD_REQUEST => 400;
 const my $HTTP_OK          => 200;
 
@@ -95,7 +96,7 @@ sub _signed_in_app {
             password   => 'correct horse battery staple',
         }
     );
-    $app->status_is($HTTP_ACCEPTED);
+    $app->status_is($HTTP_FOUND);
 
     return $app;
 }

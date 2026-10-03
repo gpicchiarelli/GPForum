@@ -144,8 +144,8 @@ $test->post_ok(
         password   => 'correct horse battery staple',
     }
 );
-$test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'You are signed in' );
+$test->status_is($HTTP_FOUND);
+$test->header_is( Location => q{/} );
 $test->get_ok('/__test/session-state');
 $test->status_is($HTTP_OK);
 $test->json_is( '/user_id'    => 'user-1' );

@@ -469,9 +469,9 @@ my $login_form = {
     password   => 'correct horse battery staple',
 };
 $test->post_ok( '/login' => form => $login_form );
-$test->status_is($HTTP_ACCEPTED);
+$test->status_is($HTTP_FOUND);
 $test->post_ok( '/login' => form => $login_form );
-$test->status_is($HTTP_ACCEPTED);
+$test->status_is($HTTP_FOUND);
 
 # A login is never replayed from the command log (that handed the stored
 # session to anyone with the command id): a retry checks the password again

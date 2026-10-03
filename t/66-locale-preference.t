@@ -99,7 +99,7 @@ subtest 'authenticated locale persists on profile and survives logout' => sub {
             password   => 'correct horse battery staple',
         }
     );
-    $test->status_is($HTTP_ACCEPTED);
+    $test->status_is($HTTP_FOUND);
 
     $test->get_ok('/login');
     $test->element_exists('form.locale-form input[name="command_id"]');
@@ -149,7 +149,7 @@ subtest 'authenticated locale persists on profile and survives logout' => sub {
             password   => 'correct horse battery staple',
         }
     );
-    $test->status_is($HTTP_ACCEPTED);
+    $test->status_is($HTTP_FOUND);
     $test->get_ok('/__test/session-state');
     $test->json_is( '/preferred_locale' => 'it' );
 };

@@ -17,6 +17,11 @@ const my $HTTP_ACCEPTED     => 202;
 const my $HTTP_BAD_REQUEST  => 400;
 const my $HTTP_UNAUTHORIZED => 401;
 
+# The pages a reader passes through to sign in, up or out: none of them is
+# where they were going.
+const my $IDENTITY_PATH =>
+qr{\A / (?: login | logout | register | password | email ) (?: [/?] | \z )}msx;
+
 sub register_form ($self) {
     return $self->render(
         template   => 'identity/register',
@@ -166,10 +171,27 @@ sub _accept_login ( $self, $authenticated ) {
         }
     );
 
-    return $self->render(
-        template => 'identity/login_accepted',
-        status   => $HTTP_ACCEPTED,
-    );
+    # A client that asked for JSON keeps the answer it always had. A reader
+    # is sent on: to a page that says "you are signed in" they would have to
+    # leave at once, they prefer the page they were on.
+    if ( $self->_wants_json ) {
+        return $self->render(
+            template => 'identity/login_accepted',
+            status   => $HTTP_ACCEPTED,
+        );
+    }
+
+    $self->flash( success => $self->t('auth.login_accepted_title') );
+    return $self->redirect_to( $self->_after_login );
+}
+
+# Where a reader goes once signed in: back to the page the login form was
+# reached from, when it carried one and that is a page of this forum which
+# is not itself part of signing in; the home page otherwise.
+sub _after_login ($self) {
+    my $return_to = $self->safe_return_to( $self->param('return_to') );
+
+    return $return_to =~ $IDENTITY_PATH ? q{/} : $return_to;
 }
 
 sub _login_form_error ( $self, $errors ) {

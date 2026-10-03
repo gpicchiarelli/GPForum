@@ -83,14 +83,17 @@ $test->post_ok(
         password   => 'correct horse battery staple',
     }
 );
-$test->status_is($HTTP_ACCEPTED);
-$test->text_is( 'h1' => 'You are signed in' );
-$test->content_like(qr/You [ ] are [ ] signed [ ] in/msx);
+$test->status_is($HTTP_FOUND);
+
+# Signing in sends the reader on, to the home page when the form named no
+# other, and that page says what happened.
+$test->header_is( Location => q{/} );
+$test->get_ok(q{/});
+$test->status_is($HTTP_OK);
+$test->text_is( 'p.flash--success[role="status"]' => 'You are signed in' );
 $test->element_exists('form[action="/logout"]');
 $test->element_exists('form[action="/logout"] input[name="command_id"]');
 $test->element_exists('nav[aria-label="Primary"] a[href="/bookmarks"]');
-$test->element_exists(
-    'nav[aria-label="Login next steps"] a[href="/new-thread"]');
 
 $test->get_ok('/new-thread?category_id=category-1');
 $test->status_is($HTTP_OK);
