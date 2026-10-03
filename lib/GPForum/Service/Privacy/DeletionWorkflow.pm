@@ -3,9 +3,6 @@
 
 package GPForum::Service::Privacy::DeletionWorkflow;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use GPForum::Infrastructure::EventRecorder;
@@ -17,6 +14,7 @@ use GPForum::Service::Privacy::Erasure;
 use GPForum::Service::Privacy::Event;
 use GPForum::Service::Privacy::Record;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,11 +3,9 @@
 
 package GPForum::Log;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base -strict, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

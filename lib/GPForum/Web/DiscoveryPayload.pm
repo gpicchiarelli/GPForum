@@ -3,9 +3,7 @@
 
 package GPForum::Web::DiscoveryPayload;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use Const::Fast;
 

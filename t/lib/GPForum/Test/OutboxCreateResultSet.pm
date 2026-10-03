@@ -3,12 +3,10 @@
 
 package GPForum::Test::OutboxCreateResultSet;
 
-use strict;
-use warnings;
-
 use Carp    qw(croak);
 use English qw(-no_match_vars);
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Infrastructure::UniqueConflict;
 

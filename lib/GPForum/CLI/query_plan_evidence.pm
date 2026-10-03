@@ -8,10 +8,8 @@
 package GPForum::CLI::query_plan_evidence;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::QueryPlanEvidence;
 use GPForum::Command::Usage;

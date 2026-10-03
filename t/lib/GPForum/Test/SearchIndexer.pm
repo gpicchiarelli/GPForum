@@ -3,11 +3,9 @@
 
 package GPForum::Test::SearchIndexer;
 
-use strict;
-use warnings;
-
 use List::Util qw(max min);
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

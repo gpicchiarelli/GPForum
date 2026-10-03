@@ -3,11 +3,9 @@
 
 package GPForum::Service::Realtime::EventEnvelope;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::JSON qw(decode_json encode_json);
 
 use GPForum::Service::Clock;

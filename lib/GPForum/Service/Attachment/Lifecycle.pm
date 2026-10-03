@@ -3,13 +3,11 @@
 
 package GPForum::Service::Attachment::Lifecycle;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Service::Attachment::Record;
 use GPForum::Service::Clock;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use POSIX        qw(strftime);
 use Scalar::Util qw(blessed);
 

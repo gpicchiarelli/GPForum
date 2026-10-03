@@ -3,8 +3,7 @@
 
 package GPForum::Test::PgDatabase;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Carp qw(carp croak);
 use Const::Fast;

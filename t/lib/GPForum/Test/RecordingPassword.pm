@@ -3,10 +3,8 @@
 
 package GPForum::Test::RecordingPassword;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Service::Password';
+use v5.40;
 
 our $VERSION = '0.001';
 

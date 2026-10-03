@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use File::Temp qw(tempdir);
 use Mojolicious;

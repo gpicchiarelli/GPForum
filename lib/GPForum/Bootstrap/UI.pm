@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::UI;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Theme::Registry;
 use GPForum::View::Presenter;

@@ -8,10 +8,8 @@
 package GPForum::CLI::admin_bootstrap;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::AdminBootstrap;
 use GPForum::Command::Usage;

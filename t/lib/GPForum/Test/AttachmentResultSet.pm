@@ -3,11 +3,9 @@
 
 package GPForum::Test::AttachmentResultSet;
 
-use strict;
-use warnings;
-
 use List::Util qw(any);
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Test::Query;
 
@@ -448,10 +446,8 @@ sub _read_column {
 
 package GPForum::Test::AttachmentSearch;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

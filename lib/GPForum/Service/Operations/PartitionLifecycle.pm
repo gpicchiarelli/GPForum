@@ -3,15 +3,13 @@
 
 package GPForum::Service::Operations::PartitionLifecycle;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English     qw(-no_match_vars);
 use POSIX       qw(strftime);
 use Time::HiRes ();
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

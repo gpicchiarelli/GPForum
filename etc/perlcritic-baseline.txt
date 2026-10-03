@@ -533,8 +533,6 @@
 [ValuesAndExpressions::ProhibitEscapedCharacters] Numeric escapes in interpolated string at t/22-attachments.t line 37, column 33. Severity: 2. See pages 54,55 of PBP. const my $PNG_BYTES          => "\x89PNG\x0d\x0a\x1a\x0aattachment";
 [ValuesAndExpressions::ProhibitEscapedCharacters] Numeric escapes in interpolated string at t/63-attachments-web.t line 32, column 37. Severity: 2. See pages 54,55 of PBP. const my $PNG_BYTES              => "\x89PNG\x0d\x0a\x1a\x0a";
 [ValuesAndExpressions::ProhibitEscapedCharacters] Numeric escapes in interpolated string at t/lib/GPForum/Test/AttachmentWebServices.pm line 122, column 30. Severity: 2. See pages 54,55 of PBP.         content           => "\x89PNG\x0d\x0a\x1a\x0a",
-[ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/HypnotoadBenchmark.pm line 185, column 27. Severity: 3. See pages 60,61 of PBP. sub _reverse_proxy_report ( $backend_runtime, $proxy_runtime, $options,
-[ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/HypnotoadBenchmark.pm line 822, column 37. Severity: 3. See pages 60,61 of PBP. sub _reverse_proxy_runtime_metadata ( $backend_runtime, $proxy_runtime,
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/PerformanceSeed.pm line 149, column 13. Severity: 3. See pages 60,61 of PBP. q{
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/PerformanceSeed.pm line 158, column 13. Severity: 3. See pages 60,61 of PBP. q{
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/PerformanceSeed.pm line 169, column 13. Severity: 3. See pages 60,61 of PBP. q{
@@ -563,8 +561,6 @@
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/PerformanceSeed.pm line 793, column 13. Severity: 3. See pages 60,61 of PBP. q{
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/PerformanceSeed.pm line 822, column 13. Severity: 3. See pages 60,61 of PBP. q{
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Command/PerformanceSeed.pm line 849, column 13. Severity: 3. See pages 60,61 of PBP. q{
-[ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Controller/Identity.pm line 213, column 37. Severity: 3. See pages 60,61 of PBP. sub _apply_login_preference_cookies ( $self, $preferred_locale,
-[ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Service/Identity/SessionStore.pm line 80, column 26. Severity: 3. See pages 60,61 of PBP. sub revoke_user_sessions ( $self, $user_id, $revoked_at,
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Service/Operations/RateLimiter/PostgreSQLStore.pm line 74, column 15. Severity: 3. See pages 60,61 of PBP. my $sql = q{
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Service/Search/Indexer.pm line 21, column 32. Severity: 3. See pages 60,61 of PBP. const my $VECTOR_EXPRESSION => q{
 [ValuesAndExpressions::ProhibitImplicitNewlines] Literal line breaks in a string at lib/GPForum/Service/Search/Searcher.pm line 25, column 30. Severity: 3. See pages 60,61 of PBP. const my $RANK_EXPRESSION => q{

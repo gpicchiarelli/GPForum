@@ -8,10 +8,8 @@
 package GPForum::CLI::stress_load;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::StressLoad;
 use GPForum::Command::Usage;

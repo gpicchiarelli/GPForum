@@ -3,12 +3,10 @@
 
 package GPForum::ViewModel::Forum::Form;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::ViewModel::Forum::Rows;
 use Mojo::Base 'GPForum::ViewModel::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -7,10 +7,8 @@
 package GPForum::CLI::antivirus_check;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::AntivirusCheck;
 use GPForum::Command::Usage;

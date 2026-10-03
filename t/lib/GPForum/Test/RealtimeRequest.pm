@@ -3,10 +3,8 @@
 
 package GPForum::Test::RealtimeRequest;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 use Mojo::Message::Request;
 use Mojo::URL;
 

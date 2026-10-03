@@ -3,10 +3,8 @@
 
 package GPForum::Test::InterleavedClock;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::FixedClock';
+use v5.40;
 
 our $VERSION = '0.001';
 

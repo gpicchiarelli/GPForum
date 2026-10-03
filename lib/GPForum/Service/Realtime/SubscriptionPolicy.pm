@@ -3,11 +3,9 @@
 
 package GPForum::Service::Realtime::SubscriptionPolicy;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 
@@ -22,7 +20,7 @@ has suspension_store => undef;
 # Named `permits` rather than `can`, which would override UNIVERSAL::can.
 # actor, action, resource and context are the authorization question; collapsing
 # them into one hashref would hide which of them a caller forgot.
-sub permits ( $self, $actor, $action, $resource, $context ) {    ## no critic (Subroutines::ProhibitManyArgs)
+sub permits ( $self, $actor, $action, $resource, $context ) {
     return _deny('forbidden')               if $action ne $ACTION_SUBSCRIBE;
     return _deny('authentication_required') if !_user_id($actor);
 

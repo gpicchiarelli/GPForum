@@ -1,9 +1,7 @@
 package GPForum::Test::AuditLookupResultSet;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::ResultSet';
+use v5.40;
 
 our $VERSION = '0.001';
 

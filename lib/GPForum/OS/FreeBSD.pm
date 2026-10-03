@@ -3,10 +3,8 @@
 
 package GPForum::OS::FreeBSD;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::OS::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

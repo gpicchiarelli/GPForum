@@ -3,10 +3,8 @@
 
 package GPForum::Schema::Result::CommandLog;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'DBIx::Class::Core', -signatures;
+use v5.40;
 
 use GPForum::Schema::JsonColumn;
 

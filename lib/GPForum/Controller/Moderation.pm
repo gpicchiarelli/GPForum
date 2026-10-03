@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Moderation;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'GPForum::Controller::Moderation::Base', -signatures;
+use v5.40;
 
 use GPForum::Web::UrlId;
 

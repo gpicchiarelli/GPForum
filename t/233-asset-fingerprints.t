@@ -3,9 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);

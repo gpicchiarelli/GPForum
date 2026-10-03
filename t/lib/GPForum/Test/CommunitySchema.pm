@@ -3,11 +3,9 @@
 
 package GPForum::Test::CommunitySchema;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base 'GPForum::Test::TransactionalSchema';
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,11 +3,9 @@
 
 package GPForum::Service::Search::Searcher;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::Row;
 use GPForum::Service::Search::DocumentBuilder;

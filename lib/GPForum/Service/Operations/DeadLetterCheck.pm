@@ -3,14 +3,12 @@
 
 package GPForum::Service::Operations::DeadLetterCheck;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
 use GPForum::Service::Outbox::Dispatcher;
@@ -241,9 +239,6 @@ sub _has_text ($value) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeFailure;
 
-use strict;
-use warnings;
-
 use overload q{""} => sub { return $_[0]->{message} }, fallback => 1;
 
 sub new ( $class, $message, $failure_type ) {
@@ -265,10 +260,8 @@ sub failure_type ($self) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeTransport;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has fail_ids   => sub { return {}; };
 has fail_types => sub { return {}; };
@@ -289,10 +282,8 @@ sub dispatch ( $self, $message ) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeRow;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has data    => sub { return {}; };
 has updates => sub { return []; };
@@ -314,10 +305,8 @@ sub get_column ( $self, $column ) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeSearch;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has rows => sub { return []; };
 
@@ -329,10 +318,8 @@ sub all ($self) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeOutbox;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has rows => sub { return []; };
 
@@ -379,10 +366,8 @@ sub _row_matches ( $row, $query ) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeLetters;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has created => sub { return []; };
 has rows    => sub { return {}; };
@@ -430,10 +415,8 @@ sub purge_older_than ( $self, $cutoff ) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has outbox_resultset      => undef;
 has dead_letter_resultset => undef;
@@ -454,10 +437,8 @@ sub txn_do ( $self, $code ) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeClock;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 sub now_iso8601 {
     return '2026-09-21T12:00:00Z';
@@ -472,10 +453,8 @@ sub epoch_plus_iso8601 ( $self, $seconds ) {
 
 package GPForum::Service::Operations::DeadLetterCheck::ProbeId;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 has counter => 0;
 

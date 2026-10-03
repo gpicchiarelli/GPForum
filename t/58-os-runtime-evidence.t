@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Const::Fast;
 use Test::More;
@@ -136,10 +135,8 @@ is( $no_db->{postgresql}{available},
 
 package GPForum::Test::RuntimeEvidenceFailingDbh;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 sub selectall_arrayref {
     die 'pg_settings unavailable';
@@ -149,10 +146,8 @@ sub selectall_arrayref {
 
 package GPForum::Test::RuntimeEvidenceDbh;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 sub selectall_arrayref {
     my ( $self, $sql, $attributes, @settings ) = @_;

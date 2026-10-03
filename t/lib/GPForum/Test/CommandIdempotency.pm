@@ -3,8 +3,7 @@
 
 package GPForum::Test::CommandIdempotency;
 
-use strict;
-use warnings;
+use v5.40;
 
 use parent 'GPForum::Service::Operations::CommandIdempotency';
 

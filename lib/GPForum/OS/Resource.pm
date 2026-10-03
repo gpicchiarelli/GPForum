@@ -3,11 +3,9 @@
 
 package GPForum::OS::Resource;
 
-use strict;
-use warnings;
-
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use POSIX qw(sysconf);
 
 our $VERSION = '0.001';

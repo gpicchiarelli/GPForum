@@ -3,11 +3,9 @@
 
 package GPForum::Service::Privacy::Workflow;
 
-use strict;
-use warnings;
-
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Privacy::ErasedExports;
 

@@ -3,11 +3,9 @@
 
 package GPForum::Test::QueryPlanEvidenceDbh;
 
-use strict;
-use warnings;
-
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

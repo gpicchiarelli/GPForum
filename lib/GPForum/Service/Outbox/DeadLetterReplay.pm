@@ -3,11 +3,9 @@
 
 package GPForum::Service::Outbox::DeadLetterReplay;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::Id;

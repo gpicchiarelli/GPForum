@@ -3,13 +3,11 @@
 
 package GPForum::Service::Admin::Diagnostics;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English      qw(-no_match_vars);
 use Scalar::Util qw(blessed);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::Id;

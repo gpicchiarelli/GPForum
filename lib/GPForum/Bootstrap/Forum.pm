@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Forum;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Infrastructure::Antivirus;
 use GPForum::Service::Attachment::Delivery;

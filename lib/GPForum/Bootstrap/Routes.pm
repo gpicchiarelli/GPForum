@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Routes;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 our $VERSION = '0.001';
 

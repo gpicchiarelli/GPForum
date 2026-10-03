@@ -8,10 +8,8 @@
 package GPForum::CLI::hypnotoad_scaling;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::HypnotoadScaling;
 use GPForum::Command::Usage;

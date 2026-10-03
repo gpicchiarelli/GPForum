@@ -3,10 +3,8 @@
 
 package GPForum::Test::SlotLimitConfig;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Config';
+use v5.40;
 
 our $VERSION = '0.001';
 

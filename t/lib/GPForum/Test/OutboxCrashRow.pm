@@ -3,11 +3,9 @@
 
 package GPForum::Test::OutboxCrashRow;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base 'GPForum::Test::OutboxRow';
+use v5.40;
 
 our $VERSION = '0.001';
 

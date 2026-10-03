@@ -3,12 +3,10 @@
 
 package GPForum::Service::Operations::ScheduledJobs;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::Row;
 use GPForum::Service::Attachment::Scanner;

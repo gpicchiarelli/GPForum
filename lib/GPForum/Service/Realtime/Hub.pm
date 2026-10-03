@@ -3,12 +3,10 @@
 
 package GPForum::Service::Realtime::Hub;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use List::Util qw(uniq);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Realtime::ChannelAuthorizer;
 use GPForum::Service::Realtime::ConnectionRegistry;

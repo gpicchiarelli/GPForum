@@ -3,12 +3,10 @@
 
 package GPForum::Service::Realtime::ListenerSupervisor;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::IOLoop;
 use Scalar::Util qw(weaken);
 

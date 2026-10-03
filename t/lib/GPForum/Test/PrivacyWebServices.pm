@@ -3,10 +3,8 @@
 
 package GPForum::Test::PrivacyWebServices;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 use Const::Fast;
 

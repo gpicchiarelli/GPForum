@@ -1,9 +1,7 @@
 package GPForum::Test::AuditLookupSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::AuditChainSchema';
+use v5.40;
 
 use GPForum::Test::AuditLookupResultSet;
 

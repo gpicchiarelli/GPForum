@@ -3,12 +3,10 @@
 
 package GPForum::Service::Identity::Registration;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Unicode::Normalize qw(NFC);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Password;
 

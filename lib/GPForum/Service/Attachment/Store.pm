@@ -3,12 +3,10 @@
 
 package GPForum::Service::Attachment::Store;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::UniqueConflict;

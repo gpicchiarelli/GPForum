@@ -3,9 +3,6 @@
 
 package GPForum::Infrastructure::Antivirus::Command;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English qw(-no_match_vars);
@@ -13,6 +10,7 @@ use File::Spec;
 use File::Temp qw(tempfile);
 use IPC::Open3 qw(open3);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Symbol qw(gensym);
 
 our $VERSION = '0.001';

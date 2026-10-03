@@ -3,11 +3,9 @@
 
 package GPForum::Service::Outbox::ClaimedMessage;
 
-use strict;
-use warnings;
-
 use JSON::MaybeXS qw(decode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

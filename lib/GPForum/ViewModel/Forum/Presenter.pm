@@ -3,11 +3,9 @@
 
 package GPForum::ViewModel::Forum::Presenter;
 
-use strict;
-use warnings;
-
 use GPForum::ViewModel::Forum::Form;
 use Mojo::Base 'GPForum::ViewModel::Forum::Page', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

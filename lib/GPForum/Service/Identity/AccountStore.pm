@@ -3,11 +3,9 @@
 
 package GPForum::Service::Identity::AccountStore;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;

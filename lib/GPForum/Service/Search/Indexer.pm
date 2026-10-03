@@ -3,14 +3,12 @@
 
 package GPForum::Service::Search::Indexer;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use List::Util  qw(any none uniq);
 use Digest::SHA qw(sha1_hex);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::CountedQuery;
 use GPForum::Infrastructure::Row;

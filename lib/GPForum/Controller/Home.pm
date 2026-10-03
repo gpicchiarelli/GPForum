@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Home;
 
-use strict;
-use warnings;
-
 use English qw(-no_match_vars);
 use GPForum::Web::HomeAccess;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

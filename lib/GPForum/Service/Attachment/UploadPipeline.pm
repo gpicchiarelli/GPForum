@@ -3,12 +3,10 @@
 
 package GPForum::Service::Attachment::UploadPipeline;
 
-use strict;
-use warnings;
-
 use Carp        qw(croak);
 use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Attachment::IntentBuilder;
 use GPForum::Service::Attachment::Store;

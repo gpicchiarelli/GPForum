@@ -3,12 +3,10 @@
 
 package GPForum::Service::Identity::Support;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use POSIX       qw(strftime);
 use Time::Local qw(timegm_modern);
 

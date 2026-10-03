@@ -3,10 +3,8 @@
 
 package GPForum::Service::Notification::RecipientPolicy;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Service::Forum::Readability', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 
@@ -15,7 +13,7 @@ our $VERSION = '0.001';
 # members-only category, used to notify everyone subscribed or mentioned and
 # hand them the thread, the post and the actor. A public source costs one
 # query; any other, the recipient's viewer as well.
-sub can_notify ( $self, $recipient, $source_type, $source_id, @ ) {    ## no critic (Subroutines::ProhibitManyArgs)
+sub can_notify ( $self, $recipient, $source_type, $source_id, @ ) {
     return $self->readable_by( $recipient, $source_type, $source_id );
 }
 

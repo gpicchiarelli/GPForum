@@ -3,13 +3,11 @@
 
 package GPForum::Controller::Identity::Settings;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use GPForum::Web::Access;
 use Mojo::Base 'GPForum::Controller::Identity::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

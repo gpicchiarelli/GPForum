@@ -3,10 +3,8 @@
 
 package GPForum::Infrastructure::Antivirus;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::Antivirus::Clamd;
 use GPForum::Infrastructure::Antivirus::Command;

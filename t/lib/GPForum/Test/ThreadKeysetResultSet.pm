@@ -1,9 +1,7 @@
 package GPForum::Test::ThreadKeysetResultSet;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::ForumReadResultSet';
+use v5.40;
 
 use GPForum::Test::ForumReadSearch;
 

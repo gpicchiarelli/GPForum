@@ -8,10 +8,8 @@
 package GPForum::CLI::search_rebuild;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::SearchRebuild;
 use GPForum::Command::Usage;

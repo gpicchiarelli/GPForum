@@ -3,11 +3,9 @@
 
 package GPForum::Controller::Legal;
 
-use strict;
-use warnings;
-
 use GPForum::Web::LegalAccess;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

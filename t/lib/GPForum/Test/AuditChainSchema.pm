@@ -1,9 +1,7 @@
 package GPForum::Test::AuditChainSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::Schema';
+use v5.40;
 
 use GPForum::Test::AuditChainStorage;
 

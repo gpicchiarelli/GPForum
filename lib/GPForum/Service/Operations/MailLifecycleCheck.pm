@@ -3,14 +3,12 @@
 
 package GPForum::Service::Operations::MailLifecycleCheck;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Config;
 use GPForum::Service::Identity::Mailer;

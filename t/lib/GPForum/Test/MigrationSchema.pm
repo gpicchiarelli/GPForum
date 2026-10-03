@@ -3,10 +3,8 @@
 
 package GPForum::Test::MigrationSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Test::MigrationStorage;
 

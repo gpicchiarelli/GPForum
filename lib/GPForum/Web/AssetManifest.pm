@@ -3,13 +3,11 @@
 
 package GPForum::Web::AssetManifest;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Digest::SHA;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File qw(path);
 
 our $VERSION = '0.001';

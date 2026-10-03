@@ -3,11 +3,9 @@
 
 package GPForum::Test::FailingSearchResultSet;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base 'GPForum::Test::SearchResultSet';
+use v5.40;
 
 our $VERSION = '0.001';
 

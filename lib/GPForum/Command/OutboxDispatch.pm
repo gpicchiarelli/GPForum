@@ -3,13 +3,11 @@
 
 package GPForum::Command::OutboxDispatch;
 
-use strict;
-use warnings;
-
 use Carp    qw(croak);
 use English qw(-no_match_vars);
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Command::Usage;
 

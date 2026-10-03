@@ -3,14 +3,12 @@
 
 package GPForum::Command::PlatformCheck;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English    qw(-no_match_vars);
 use List::Util qw(any);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Command::Usage;
 use GPForum::Config;

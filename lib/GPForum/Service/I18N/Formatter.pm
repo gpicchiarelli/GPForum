@@ -3,11 +3,9 @@
 
 package GPForum::Service::I18N::Formatter;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use DateTime;
 use DateTime::TimeZone;
 use GPForum::Service::Clock;

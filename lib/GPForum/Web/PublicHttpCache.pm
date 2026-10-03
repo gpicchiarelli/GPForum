@@ -3,15 +3,13 @@
 
 package GPForum::Web::PublicHttpCache;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Digest::SHA qw(sha1_hex);
 use GPForum::Web::Access;
 use GPForum::Web::PublicCacheAccess;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::Date;
 use Mojo::Path;
 use Mojo::URL;

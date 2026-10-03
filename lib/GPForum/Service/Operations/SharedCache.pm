@@ -3,9 +3,6 @@
 
 package GPForum::Service::Operations::SharedCache;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Crypt::URandom ();
@@ -13,6 +10,7 @@ use English        qw(-no_match_vars);
 use JSON::MaybeXS;
 use List::Util qw(uniq);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Clock;
 

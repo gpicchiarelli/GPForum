@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Carp qw(croak);
 use Const::Fast;
@@ -30,8 +29,7 @@ my $witness   = "$directory/witness";
 my $program   = "$directory/fake-scanner";
 _write( $program, <<"SCANNER" );
 #!$EXECUTABLE_NAME
-use strict;
-use warnings;
+use v5.40;
 my \$path = \$ARGV[-1];
 open my \$witness, '>', '$witness' or exit 2;
 printf {\$witness} "%s %o\\n", \$path, ( stat \$path )[2] & 07777;

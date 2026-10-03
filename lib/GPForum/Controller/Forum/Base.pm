@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Forum::Base;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::Row;
 use GPForum::Web::Access;

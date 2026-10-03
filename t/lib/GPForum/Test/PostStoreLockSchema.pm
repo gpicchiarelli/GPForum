@@ -3,10 +3,8 @@
 
 package GPForum::Test::PostStoreLockSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::Schema';
+use v5.40;
 
 use GPForum::Test::PostStoreLockStorage;
 

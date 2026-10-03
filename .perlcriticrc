@@ -32,6 +32,10 @@ verbose = [%p] %m at %f line %l, column %c. Severity: %s. %e. %r\n
 [Subroutines::ProhibitExcessComplexity]
 max_mccabe = 12
 
+# Under `use v5.40` (ADR 0117) PPI parses a signature as a signature, and this
+# policy then counts only arguments unpacked from @_: a signature with five
+# parameters no longer trips it. The fourteen baseline entries it recorded for
+# signatures stay until a signature-arity check replaces it.
 [Subroutines::ProhibitManyArgs]
 max_arguments = 4
 
@@ -50,6 +54,13 @@ max_mccabe = 12
 # prototypes directly, and can be precise because a prototype contains only
 # sigil characters while every signature here names at least one variable. The
 # tree contains no real prototypes today and the guard fails if one appears.
+#
+# Since every file declares `use v5.40` (ADR 0117), PPI recognises the
+# signatures feature and stops reading signatures as prototypes: in the
+# converted files ProhibitSubroutinePrototypes reports nothing, so it can come
+# back once the files t/321-preamble.t lists as unconverted are converted.
+# RequireInterpolationOfMetachars still finds 43 genuine strings (SQL $$
+# bodies, Argon2 hashes) and stays off.
 [-Subroutines::ProhibitSubroutinePrototypes]
 [-ValuesAndExpressions::RequireInterpolationOfMetachars]
 

@@ -3,11 +3,9 @@
 
 package GPForum::Web::PublicCacheAccess;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::Date;
 
 use GPForum::Web::Access;

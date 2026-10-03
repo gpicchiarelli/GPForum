@@ -3,13 +3,11 @@
 
 package GPForum::Service::Forum::PostingWorkflow;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use English     qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Forum::Viewer;
 

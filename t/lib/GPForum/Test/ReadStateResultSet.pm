@@ -3,10 +3,8 @@
 
 package GPForum::Test::ReadStateResultSet;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Test::ReadStateRow;

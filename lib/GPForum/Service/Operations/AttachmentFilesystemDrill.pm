@@ -3,9 +3,6 @@
 
 package GPForum::Service::Operations::AttachmentFilesystemDrill;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
@@ -17,6 +14,7 @@ use File::Spec;
 use File::Temp    qw(tempdir);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File qw(path);
 
 use GPForum::Service::Attachment::FilesystemStorage;

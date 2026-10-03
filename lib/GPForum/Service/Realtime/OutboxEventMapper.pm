@@ -3,11 +3,9 @@
 
 package GPForum::Service::Realtime::OutboxEventMapper;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Jobs::EventPayload;
 use GPForum::Service::Realtime::EventEnvelope;

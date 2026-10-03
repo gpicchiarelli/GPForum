@@ -3,11 +3,9 @@
 
 package GPForum::Test::SearchEventRecorder;
 
-use strict;
-use warnings;
-
 use List::Util qw(any);
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Test::TransactionalSchema;
 

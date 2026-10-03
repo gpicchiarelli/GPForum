@@ -3,10 +3,8 @@
 
 package GPForum::Test::SearchResultSet;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 use Scalar::Util qw(looks_like_number);
 
 use GPForum::Infrastructure::UniqueConflict;

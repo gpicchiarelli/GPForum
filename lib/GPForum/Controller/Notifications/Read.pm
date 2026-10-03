@@ -3,10 +3,8 @@
 
 package GPForum::Controller::Notifications::Read;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Controller::Notifications::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

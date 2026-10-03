@@ -8,10 +8,8 @@
 package GPForum::CLI::mail_lifecycle_check;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::MailLifecycleCheck;
 use GPForum::Command::Usage;

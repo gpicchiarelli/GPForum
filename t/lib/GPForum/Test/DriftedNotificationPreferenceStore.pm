@@ -3,10 +3,8 @@
 
 package GPForum::Test::DriftedNotificationPreferenceStore;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Service::Notification::PreferenceStore';
+use v5.40;
 
 our $VERSION = '0.001';
 

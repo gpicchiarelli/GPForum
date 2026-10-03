@@ -3,10 +3,8 @@
 
 package GPForum::Service::Identity::SecurityAudit;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::EventRecorder;
 use GPForum::Service::Clock;

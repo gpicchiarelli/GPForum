@@ -3,11 +3,9 @@
 
 package GPForum::Service::Search::PermissionEngine;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Forum::Viewer;
 use GPForum::Service::Forum::Visibility;
@@ -48,7 +46,7 @@ sub search_visibility_for ( $self, $actor, $options ) {
 # visibility columns Searcher selects; SQL has already applied it, so this
 # only ever agrees -- it guards callers that bypass search_condition.
 # actor, action, resource and options are the authorization question.
-sub permits ( $self, $actor, $action, $resource, $options ) {    ## no critic (Subroutines::ProhibitManyArgs)
+sub permits ( $self, $actor, $action, $resource, $options ) {
     return 0 if $action ne 'search.view';
 
     return GPForum::Service::Forum::Visibility->readable(

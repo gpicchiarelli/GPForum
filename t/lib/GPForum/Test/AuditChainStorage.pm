@@ -1,9 +1,7 @@
 package GPForum::Test::AuditChainStorage;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,14 +3,12 @@
 
 package GPForum::Service::Operations::EvidenceValidate;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(decode_json encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File qw(path);
 
 our $VERSION = '0.001';

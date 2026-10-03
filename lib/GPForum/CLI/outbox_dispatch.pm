@@ -8,10 +8,8 @@
 package GPForum::CLI::outbox_dispatch;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::OutboxDispatch;
 use GPForum::Command::Usage;

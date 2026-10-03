@@ -3,9 +3,6 @@
 
 package GPForum::Infrastructure::Antivirus::Clamd;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English qw(-no_match_vars);
@@ -14,6 +11,7 @@ use IO::Select;
 use IO::Socket::UNIX;
 use List::Util qw(min);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Socket      qw(SOCK_STREAM);
 use Time::HiRes qw(time);
 use Time::Piece ();

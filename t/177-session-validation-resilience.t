@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Const::Fast;
 use Test::Mojo;
@@ -20,6 +19,7 @@ our $VERSION = '0.001';
 package Local::Telemetry;
 
 use Mojo::Base -base;
+use v5.40;
 
 has events => sub { return []; };
 
@@ -41,6 +41,7 @@ package Local::BrokenStore;
 
 use Carp qw(croak);
 use Mojo::Base -base;
+use v5.40;
 
 has broken => 1;
 has calls  => 0;
@@ -57,6 +58,7 @@ sub validate_session {
 package Local::Schema;
 
 use Mojo::Base -base;
+use v5.40;
 
 package main;
 

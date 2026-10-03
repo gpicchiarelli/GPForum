@@ -3,11 +3,9 @@
 
 package GPForum::Test::AdminAuditLog;
 
-use strict;
-use warnings;
-
 use JSON::MaybeXS;
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

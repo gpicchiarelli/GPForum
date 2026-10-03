@@ -3,11 +3,9 @@
 
 package GPForum::Service::Admin::RoleCatalog;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Scalar::Util qw(blessed);
 
 use GPForum::Infrastructure::Row;

@@ -3,15 +3,13 @@
 
 package GPForum::Command::QueryPlanEvidence;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(decode_json encode_json);
 use MIME::Base64  qw(encode_base64url);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Command::Usage;
 use GPForum::Config;

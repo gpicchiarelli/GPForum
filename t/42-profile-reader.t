@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Const::Fast;
 use MIME::Base64 qw(encode_base64url);

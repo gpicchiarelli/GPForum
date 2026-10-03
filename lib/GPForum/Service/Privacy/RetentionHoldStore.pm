@@ -3,9 +3,6 @@
 
 package GPForum::Service::Privacy::RetentionHoldStore;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Infrastructure::EventRecorder;
 use GPForum::Infrastructure::UniqueConflict;
@@ -13,6 +10,7 @@ use GPForum::Service::Clock;
 use GPForum::Service::Privacy::Event;
 use GPForum::Service::Privacy::Record;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

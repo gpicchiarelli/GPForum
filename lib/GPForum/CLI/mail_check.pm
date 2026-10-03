@@ -8,10 +8,8 @@
 package GPForum::CLI::mail_check;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::MailCheck;
 use GPForum::Command::Usage;

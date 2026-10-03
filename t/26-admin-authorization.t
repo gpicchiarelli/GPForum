@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Test::More;
 
@@ -124,6 +123,7 @@ done_testing();
 package GPForum::Test::AdminRuntimeStatus;
 
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Security;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Security::BrowserHeaders;
 

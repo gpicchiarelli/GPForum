@@ -3,9 +3,6 @@
 
 package GPForum::Command::HypnotoadBenchmark;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Cwd        qw(abs_path);
@@ -15,6 +12,7 @@ use IO::Socket::INET;
 use IPC::Open3    qw(open3);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::UserAgent;
 use POSIX       qw(setsid WNOHANG);
 use Symbol      qw(gensym);
@@ -469,8 +467,7 @@ sub _write_hypnotoad_app ($app_file) {
     open my $handle, '>', $app_file
       or croak "failed to write benchmark hypnotoad app $app_file";
     print {$handle} <<"APP" or croak "failed to write $app_file";
-use strict;
-use warnings;
+use v5.40;
 use lib '$library';
 use GPForum;
 GPForum->new;

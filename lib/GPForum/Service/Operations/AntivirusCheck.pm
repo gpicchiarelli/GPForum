@@ -3,12 +3,10 @@
 
 package GPForum::Service::Operations::AntivirusCheck;
 
-use strict;
-use warnings;
-
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Config;
 use GPForum::Infrastructure::Antivirus;

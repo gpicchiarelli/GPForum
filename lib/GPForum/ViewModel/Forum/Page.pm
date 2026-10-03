@@ -3,11 +3,9 @@
 
 package GPForum::ViewModel::Forum::Page;
 
-use strict;
-use warnings;
-
 use English qw(-no_match_vars);
 use Mojo::Base 'GPForum::ViewModel::Forum::Rows', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

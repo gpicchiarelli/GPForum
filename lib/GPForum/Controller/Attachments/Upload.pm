@@ -3,10 +3,8 @@
 
 package GPForum::Controller::Attachments::Upload;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Controller::Attachments::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

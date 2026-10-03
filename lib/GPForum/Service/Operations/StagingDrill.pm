@@ -3,9 +3,6 @@
 
 package GPForum::Service::Operations::StagingDrill;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use DBI;
@@ -14,6 +11,7 @@ use File::Temp    qw(tempfile);
 use IPC::Open3    qw(open3);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File qw(path);
 use POSIX      qw(WIFEXITED WEXITSTATUS);
 use Symbol     qw(gensym);

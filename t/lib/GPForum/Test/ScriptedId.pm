@@ -3,10 +3,8 @@
 
 package GPForum::Test::ScriptedId;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Infrastructure::Id';
+use v5.40;
 
 our $VERSION = '0.001';
 

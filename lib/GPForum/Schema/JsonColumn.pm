@@ -3,9 +3,7 @@
 
 package GPForum::Schema::JsonColumn;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use Const::Fast;
 use JSON::MaybeXS;

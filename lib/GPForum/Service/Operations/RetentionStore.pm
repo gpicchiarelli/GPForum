@@ -3,11 +3,9 @@
 
 package GPForum::Service::Operations::RetentionStore;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use POSIX qw(strftime);
 
 use GPForum::Service::Clock;

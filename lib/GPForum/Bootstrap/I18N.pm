@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::I18N;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Bootstrap::UI;
 use GPForum::Service::I18N;

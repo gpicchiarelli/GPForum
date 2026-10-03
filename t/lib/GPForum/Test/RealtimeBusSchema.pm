@@ -3,11 +3,9 @@
 
 package GPForum::Test::RealtimeBusSchema;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Test::RealtimeBusStorage;
 

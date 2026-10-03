@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Admin;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Service::Admin::AuditReview;
 use GPForum::Service::Admin::CategoryStore;

@@ -3,14 +3,12 @@
 
 package GPForum::Controller::Realtime;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Web::Access;
 use GPForum::Web::RealtimeAccess;
 use GPForum::Web::RealtimePayload;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,11 +3,9 @@
 
 package GPForum::Test::BrokenAttachmentServices;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base 'GPForum::Test::AttachmentWebServices';
+use v5.40;
 
 our $VERSION = '0.001';
 

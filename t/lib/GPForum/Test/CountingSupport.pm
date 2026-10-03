@@ -3,10 +3,8 @@
 
 package GPForum::Test::CountingSupport;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Service::Identity::Support';
+use v5.40;
 
 our $VERSION = '0.001';
 

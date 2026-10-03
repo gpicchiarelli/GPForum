@@ -3,10 +3,8 @@
 
 package GPForum::Test::PostStoreLockStorage;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::Storage';
+use v5.40;
 
 our $VERSION = '0.001';
 

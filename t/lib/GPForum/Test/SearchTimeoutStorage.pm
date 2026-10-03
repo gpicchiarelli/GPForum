@@ -3,10 +3,8 @@
 
 package GPForum::Test::SearchTimeoutStorage;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::Storage';
+use v5.40;
 
 use GPForum::Test::SearchTimeoutDbh;
 

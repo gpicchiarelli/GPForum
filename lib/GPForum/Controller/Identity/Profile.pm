@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Identity::Profile;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Web::ErrorPayload;
 use Mojo::Base 'GPForum::Controller::Identity::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

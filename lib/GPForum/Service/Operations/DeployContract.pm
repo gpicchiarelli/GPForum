@@ -3,9 +3,7 @@
 
 package GPForum::Service::Operations::DeployContract;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use Const::Fast;
 use Exporter qw(import);

@@ -3,8 +3,7 @@
 
 package GPForum::Test::OutboxFailure;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Carp qw(croak);
 use overload q{""} => 'message', fallback => 1;

@@ -3,15 +3,13 @@
 
 package GPForum::Service::Operations::CommandIdempotency;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use English     qw(-no_match_vars);
 use JSON::MaybeXS;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;

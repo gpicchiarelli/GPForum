@@ -3,10 +3,8 @@
 
 package GPForum::Controller::Moderation::Actions;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Controller::Moderation::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

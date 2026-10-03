@@ -3,10 +3,8 @@
 
 package GPForum;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious', -signatures;
+use v5.40;
 
 use GPForum::Bootstrap::Admin;
 use GPForum::Bootstrap::Core;

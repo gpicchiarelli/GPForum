@@ -8,10 +8,8 @@
 package GPForum::CLI::performance_seed;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::PerformanceSeed;
 use GPForum::Command::Usage;

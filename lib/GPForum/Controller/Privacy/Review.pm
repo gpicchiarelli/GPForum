@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Privacy::Review;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'GPForum::Controller::Privacy::Base', -signatures;
+use v5.40;
 
 use GPForum::Web::DangerConfirmation;
 

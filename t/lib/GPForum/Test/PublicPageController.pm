@@ -3,10 +3,8 @@
 
 package GPForum::Test::PublicPageController;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::PublicCacheRequest';
+use v5.40;
 use Mojo::Message::Response;
 
 our $VERSION = '0.001';

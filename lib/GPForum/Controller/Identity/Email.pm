@@ -3,11 +3,9 @@
 
 package GPForum::Controller::Identity::Email;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base 'GPForum::Controller::Identity::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

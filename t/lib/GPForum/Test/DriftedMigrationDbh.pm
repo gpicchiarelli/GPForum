@@ -3,10 +3,8 @@
 
 package GPForum::Test::DriftedMigrationDbh;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Test::MigrationDbh';
+use v5.40;
 
 our $VERSION = '0.001';
 

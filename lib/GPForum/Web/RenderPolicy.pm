@@ -3,11 +3,9 @@
 
 package GPForum::Web::RenderPolicy;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::Util qw(xml_escape);
 
 our $VERSION = '0.001';

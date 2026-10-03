@@ -3,9 +3,6 @@
 
 package GPForum::Command::PerformanceSeed;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use DateTime;
@@ -13,6 +10,7 @@ use Digest::SHA   qw(sha256_hex);
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Command::Usage;
 use GPForum::Config;

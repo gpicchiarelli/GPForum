@@ -3,11 +3,9 @@
 
 package GPForum::Web::RealtimeAccess;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::JSON qw(encode_json);
 use Mojo::URL;
 

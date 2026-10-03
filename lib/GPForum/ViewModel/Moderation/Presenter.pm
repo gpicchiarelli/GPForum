@@ -3,10 +3,8 @@
 
 package GPForum::ViewModel::Moderation::Presenter;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::ViewModel::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

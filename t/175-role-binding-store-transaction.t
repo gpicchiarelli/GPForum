@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use English qw(-no_match_vars);
 use Test::More;
@@ -21,6 +20,7 @@ my $false_attempts = 0;
 package Local::Row;
 
 use Mojo::Base -base;
+use v5.40;
 
 has columns => sub { return {}; };
 
@@ -41,6 +41,7 @@ sub update {
 package Local::Search;
 
 use Mojo::Base -base;
+use v5.40;
 
 has matched => sub { return []; };
 
@@ -53,6 +54,7 @@ sub single {
 package Local::ResultSet;
 
 use Mojo::Base -base;
+use v5.40;
 
 has name   => undef;
 has schema => undef;
@@ -127,6 +129,7 @@ sub _matches_column {
 package Local::PlainSchema;
 
 use Mojo::Base -base;
+use v5.40;
 
 has created    => sub { return {}; };
 has find_attrs => sub { return []; };
@@ -157,6 +160,7 @@ sub rows_for {
 package Local::Schema;
 
 use Mojo::Base 'Local::PlainSchema';
+use v5.40;
 
 has transactions => 0;
 
@@ -171,6 +175,7 @@ sub txn_do {
 package Local::Recorder;
 
 use Mojo::Base -base;
+use v5.40;
 
 has audits => sub { return []; };
 
@@ -185,6 +190,7 @@ sub record_audit {
 package Local::FalseRetryStore;
 
 use Mojo::Base 'GPForum::Service::Admin::RoleBindingStore';
+use v5.40;
 
 sub _create_binding {
     $false_attempts = $false_attempts + 1;
@@ -199,6 +205,7 @@ package Local::FailingStore;
 
 use Carp qw(croak);
 use Mojo::Base 'GPForum::Service::Admin::RoleBindingStore';
+use v5.40;
 
 sub _create_binding {
     croak 'role binding store offline';

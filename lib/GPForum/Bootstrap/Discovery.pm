@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Discovery;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Service::Discovery::CanonicalUrl;
 use GPForum::Service::Discovery::FeedBuilder;

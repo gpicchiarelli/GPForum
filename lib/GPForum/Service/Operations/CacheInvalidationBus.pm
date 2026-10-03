@@ -3,12 +3,10 @@
 
 package GPForum::Service::Operations::CacheInvalidationBus;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use JSON::MaybeXS ();
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::PgNotifications;
 

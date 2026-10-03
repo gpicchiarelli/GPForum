@@ -3,13 +3,11 @@
 
 package GPForum::Infrastructure::EventRecorder;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use JSON::MaybeXS;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Domain::EventEnvelope;
 use GPForum::Infrastructure::AuditRecord;

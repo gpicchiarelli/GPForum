@@ -3,10 +3,8 @@
 
 package GPForum::Infrastructure::Id;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use Const::Fast;
 

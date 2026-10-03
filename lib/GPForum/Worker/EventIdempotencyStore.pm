@@ -3,13 +3,11 @@
 
 package GPForum::Worker::EventIdempotencyStore;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Infrastructure::UniqueConflict;
 use GPForum::Service::Clock;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

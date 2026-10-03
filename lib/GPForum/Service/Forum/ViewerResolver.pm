@@ -3,13 +3,11 @@
 
 package GPForum::Service::Forum::ViewerResolver;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English       qw(-no_match_vars);
 use JSON::MaybeXS qw(decode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::CountedQuery;
 use GPForum::Infrastructure::Id;

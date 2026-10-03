@@ -3,13 +3,11 @@
 
 package GPForum::Infrastructure::AuditRecord;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use JSON::MaybeXS;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use POSIX qw(strftime);
 
 our $VERSION = '0.001';

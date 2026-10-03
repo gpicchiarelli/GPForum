@@ -3,10 +3,8 @@
 
 package GPForum::ViewModel::Community::Presenter;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::ViewModel::Base', -signatures;
+use v5.40;
 
 use GPForum::ViewModel::Notifications::Presenter;
 

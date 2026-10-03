@@ -3,11 +3,9 @@
 
 package GPForum::Web::IdentityAccess;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Web::Access;
 use GPForum::Web::ErrorPayload;

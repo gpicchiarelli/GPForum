@@ -3,12 +3,10 @@
 
 package GPForum::Service::Admin::AuditReview;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use MIME::Base64 qw(decode_base64url encode_base64url);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::Id;
 use GPForum::Infrastructure::Keyset;

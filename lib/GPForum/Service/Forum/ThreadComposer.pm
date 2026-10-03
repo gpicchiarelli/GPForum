@@ -3,11 +3,9 @@
 
 package GPForum::Service::Forum::ThreadComposer;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Forum::BodyRenderer;
 use GPForum::Infrastructure::Id;

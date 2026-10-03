@@ -3,10 +3,8 @@
 
 package GPForum::Test::SearchSearch;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 use Scalar::Util qw(refaddr);
 
 our $VERSION = '0.001';

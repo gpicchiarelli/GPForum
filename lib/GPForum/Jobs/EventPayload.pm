@@ -3,10 +3,8 @@
 
 package GPForum::Jobs::EventPayload;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

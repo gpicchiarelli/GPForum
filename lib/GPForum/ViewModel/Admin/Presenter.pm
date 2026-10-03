@@ -3,10 +3,8 @@
 
 package GPForum::ViewModel::Admin::Presenter;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::ViewModel::Base', -signatures;
+use v5.40;
 use Mojo::JSON qw(encode_json);
 
 our $VERSION = '0.001';

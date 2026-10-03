@@ -3,10 +3,8 @@
 
 package GPForum::Test::PurgeSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Test::PurgeResultSet;
 use GPForum::Test::PurgeRow;

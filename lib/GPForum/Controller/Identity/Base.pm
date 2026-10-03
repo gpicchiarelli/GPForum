@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Identity::Base;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 use Time::HiRes qw(time);
 
 use GPForum::Web::Access;

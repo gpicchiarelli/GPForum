@@ -3,14 +3,11 @@
 
 package GPForum::Service::Password;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Crypt::Argon2 qw(argon2id_pass argon2id_verify);
 use Mojo::Base -base, -signatures;
-use feature qw(state);
+use v5.40;
 
 our $VERSION = '0.001';
 

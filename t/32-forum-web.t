@@ -3,11 +3,9 @@
 
 package main;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base;
+use v5.40;
 use Test::Mojo;
 use Test::More;
 

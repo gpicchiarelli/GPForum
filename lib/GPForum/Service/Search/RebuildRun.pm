@@ -3,11 +3,9 @@
 
 package GPForum::Service::Search::RebuildRun;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Infrastructure::CountedQuery;
 use GPForum::Infrastructure::EventRecorder;

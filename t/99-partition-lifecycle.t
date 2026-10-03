@@ -3,8 +3,7 @@
 
 package main;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Const::Fast;
 use English     qw(-no_match_vars);

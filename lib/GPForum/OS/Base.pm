@@ -3,12 +3,10 @@
 
 package GPForum::OS::Base;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::OS::CpuCount;
 use GPForum::OS::Filesystem;

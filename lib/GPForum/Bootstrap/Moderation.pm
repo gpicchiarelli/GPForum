@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Moderation;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Service::Moderation::ActionStore;
 use GPForum::Service::Moderation::ReportStore;

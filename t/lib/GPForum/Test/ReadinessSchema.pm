@@ -3,10 +3,8 @@
 
 package GPForum::Test::ReadinessSchema;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base;
+use v5.40;
 
 use GPForum::Service::Operations::QueryBudget;
 use GPForum::Test::QueryBudgetResultSet;

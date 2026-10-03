@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Workers;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use Carp          qw(croak);
 use English       qw(-no_match_vars);

@@ -3,12 +3,10 @@
 
 package GPForum::Controller::Admin;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use Mojo::Base 'GPForum::Controller::Admin::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

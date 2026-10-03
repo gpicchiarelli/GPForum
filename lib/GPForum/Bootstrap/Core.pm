@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Core;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Service::Clock;
 use GPForum::Infrastructure::Id;

@@ -3,11 +3,9 @@
 
 package GPForum::Service::Forum::BodyRenderer;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::Util qw(xml_escape);
 
 our $VERSION = '0.001';

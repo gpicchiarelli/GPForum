@@ -3,15 +3,13 @@
 
 package GPForum::Service::Attachment::FilesystemStorage;
 
-use strict;
-use warnings;
-
 use Carp           qw(croak);
 use English        qw(-no_match_vars);
 use File::Basename qw(dirname);
 use File::Path     qw(make_path);
 use File::Spec;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::OS::Filesystem;
 

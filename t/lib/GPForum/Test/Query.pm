@@ -3,8 +3,7 @@
 
 package GPForum::Test::Query;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Carp qw(croak);
 use Const::Fast;

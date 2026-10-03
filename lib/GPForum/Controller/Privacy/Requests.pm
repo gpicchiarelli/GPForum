@@ -3,10 +3,8 @@
 
 package GPForum::Controller::Privacy::Requests;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Controller::Privacy::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

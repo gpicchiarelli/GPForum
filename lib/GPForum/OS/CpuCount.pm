@@ -3,13 +3,11 @@
 
 package GPForum::OS::CpuCount;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English    qw(-no_match_vars);
 use IPC::Open3 qw(open3);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use POSIX qw(ceil sysconf);
 
 our $VERSION = '0.001';

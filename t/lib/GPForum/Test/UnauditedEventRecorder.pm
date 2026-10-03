@@ -3,11 +3,9 @@
 
 package GPForum::Test::UnauditedEventRecorder;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base 'GPForum::Infrastructure::EventRecorder';
+use v5.40;
 
 our $VERSION = '0.001';
 

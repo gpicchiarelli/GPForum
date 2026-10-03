@@ -3,14 +3,12 @@
 
 package GPForum::Test::EventIdempotencyResultSet;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use GPForum::Test::EventIdempotencyRow;
 use GPForum::Test::EventIdempotencySearch;
 use GPForum::Infrastructure::UniqueConflict;
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

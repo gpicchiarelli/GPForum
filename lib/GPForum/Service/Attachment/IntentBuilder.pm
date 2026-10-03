@@ -3,10 +3,8 @@
 
 package GPForum::Service::Attachment::IntentBuilder;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 use GPForum::Service::Clock;
 

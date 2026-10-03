@@ -3,14 +3,12 @@
 
 package GPForum::Service::Outbox::DomainEventTransport;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use GPForum::Jobs::EventPayload;
 use GPForum::Service::Realtime::OutboxEventMapper;
 use GPForum::Service::Outbox::HandlerIdempotency;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

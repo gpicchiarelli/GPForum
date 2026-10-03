@@ -3,14 +3,12 @@
 
 package GPForum::Service::Forum::PageWindow;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use English qw(-no_match_vars);
 use GPForum::Infrastructure::Id;
 use MIME::Base64 qw(decode_base64url encode_base64url);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

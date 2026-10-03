@@ -3,15 +3,13 @@
 
 package GPForum::OS::RuntimeEvidence;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Cwd        qw(abs_path);
 use English    qw(-no_match_vars);
 use File::Temp qw(tempdir);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Socket ();
 
 use GPForum::Config;

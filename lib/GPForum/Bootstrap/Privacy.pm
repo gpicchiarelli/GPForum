@@ -3,9 +3,7 @@
 
 package GPForum::Bootstrap::Privacy;
 
-use strict;
-use warnings;
-use feature 'signatures';
+use v5.40;
 
 use GPForum::Service::Portability::ExportBundleBuilder;
 use GPForum::Service::Privacy::DataRightsReview;

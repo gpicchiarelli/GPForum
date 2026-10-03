@@ -3,9 +3,6 @@
 
 package GPForum::Service::Operations::DeployChecklistDrill;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use English       qw(-no_match_vars);
@@ -13,6 +10,7 @@ use File::Temp    qw(tempdir);
 use IPC::Open3    qw(open3);
 use JSON::MaybeXS qw(encode_json);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File qw(path);
 use Symbol     qw(gensym);
 

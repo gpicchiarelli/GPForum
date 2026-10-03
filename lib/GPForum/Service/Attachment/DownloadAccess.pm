@@ -3,12 +3,10 @@
 
 package GPForum::Service::Attachment::DownloadAccess;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Service::Attachment::Record;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

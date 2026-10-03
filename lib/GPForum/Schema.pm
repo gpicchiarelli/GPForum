@@ -3,10 +3,8 @@
 
 package GPForum::Schema;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'DBIx::Class::Schema', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

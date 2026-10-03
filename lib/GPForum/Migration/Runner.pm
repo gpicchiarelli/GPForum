@@ -3,14 +3,12 @@
 
 package GPForum::Migration::Runner;
 
-use strict;
-use warnings;
-
 use Carp    qw(croak);
 use English qw(-no_match_vars);
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base, -signatures;
+use v5.40;
 use Mojo::File  qw(path);
 use Time::HiRes qw(time);
 

@@ -3,12 +3,10 @@
 
 package GPForum::Service::Identity::Event;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Digest::SHA qw(sha256_hex);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

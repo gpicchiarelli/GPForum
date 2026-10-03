@@ -3,12 +3,10 @@
 
 package GPForum::Test::StatementTimeoutReadability;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Const::Fast;
 use Mojo::Base -base;
+use v5.40;
 
 our $VERSION = '0.001';
 

@@ -3,14 +3,12 @@
 
 package GPForum::Service::I18N;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Service::I18N::Catalog;
 use GPForum::Service::I18N::Formatter;
 use GPForum::Service::I18N::Locale;
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

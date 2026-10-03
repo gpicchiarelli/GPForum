@@ -3,11 +3,9 @@
 
 package GPForum::Test::ReadStateSchema;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base 'GPForum::Test::TransactionalSchema';
+use v5.40;
 
 our $VERSION = '0.001';
 

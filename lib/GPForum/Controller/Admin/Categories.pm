@@ -3,10 +3,8 @@
 
 package GPForum::Controller::Admin::Categories;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::Controller::Admin::Base', -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

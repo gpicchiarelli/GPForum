@@ -8,10 +8,8 @@
 package GPForum::CLI::partition_maintenance;
 ## use critic
 
-use strict;
-use warnings;
-
 use Mojo::Base 'Mojolicious::Command', -signatures;
+use v5.40;
 
 use GPForum::Command::PartitionMaintenance;
 use GPForum::Command::Usage;

@@ -3,11 +3,9 @@
 
 package GPForum::Controller::Moderation::Base;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use Mojo::Base 'Mojolicious::Controller', -signatures;
+use v5.40;
 
 use GPForum::Web::Access;
 use GPForum::Web::Guard;

@@ -3,11 +3,9 @@
 
 package GPForum::Service::Forum::Viewer;
 
-use strict;
-use warnings;
-
 use List::Util qw(any);
 use Mojo::Base -base, -signatures;
+use v5.40;
 
 our $VERSION = '0.001';
 

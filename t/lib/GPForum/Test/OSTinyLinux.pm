@@ -3,10 +3,8 @@
 
 package GPForum::Test::OSTinyLinux;
 
-use strict;
-use warnings;
-
 use Mojo::Base 'GPForum::OS::Linux';
+use v5.40;
 
 our $VERSION = '0.001';
 
