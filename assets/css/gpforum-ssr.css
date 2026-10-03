@@ -1032,6 +1032,27 @@ details[open] > summary {
   color: var(--color-subtle);
 }
 
+/* A console's filters are a grid of fields with their button at the end: as
+   many to a line as fit, so the list they filter stays on the first screen. */
+.filter-form {
+  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+  gap: var(--space-3) var(--space-4);
+  align-items: end;
+  max-inline-size: none;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.filter-form__actions {
+  display: flex;
+  gap: var(--space-4);
+  align-items: center;
+  min-block-size: 2.75rem;
+}
+
 /* Destructive staff actions (ADR 0079): never the same button as "Filter".
    The consequence is stated, and a checkbox the server requires stands
    between the operator and the button. */
@@ -1392,12 +1413,26 @@ td {
   vertical-align: top;
 }
 
-th,
-.ui-admin-table th {
+thead th,
+.ui-admin-table thead th {
   border-block-end-color: var(--color-border);
   color: var(--color-subtle);
   font-size: var(--font-size-xs);
   font-weight: var(--weight-semibold);
+}
+
+/* The cell that names its row is set as the row's title. */
+tbody th {
+  font-weight: var(--weight-semibold);
+}
+
+/* A row's own links stay on its line, apart from each other. */
+.ui-row-links {
+  white-space: nowrap;
+}
+
+.ui-row-links a + a {
+  margin-inline-start: var(--space-3);
 }
 
 th:first-child,

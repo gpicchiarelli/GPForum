@@ -24,19 +24,23 @@
     fields => \@fields,
     summary_id => 'audit-filter-errors' %>
 
-  <form method="get" action="<%= url_for('admin_audit') %>" aria-label="<%= t('admin.audit_filters') %>">
+  <form class="filter-form" method="get" action="<%= url_for('admin_audit') %>" aria-label="<%= t('admin.audit_filters') %>">
     % for my $field (@fields) {
-      <label for="<%= $field->{id} %>"><%= $field->{label} %></label>
-      <input id="<%= $field->{id} %>" name="<%= $field->{name} %>"
-        type="<%= $field->{type} || 'text' %>"
-        value="<%= $shown{ $field->{name} } // '' %>"
-        % if ( $invalid{ $field->{name} } ) {
-        aria-invalid="true" aria-describedby="audit-filter-errors"
-        % }
-      >
+      <div class="field">
+        <label for="<%= $field->{id} %>"><%= $field->{label} %></label>
+        <input id="<%= $field->{id} %>" name="<%= $field->{name} %>"
+          type="<%= $field->{type} || 'text' %>"
+          value="<%= $shown{ $field->{name} } // '' %>"
+          % if ( $invalid{ $field->{name} } ) {
+          aria-invalid="true" aria-describedby="audit-filter-errors"
+          % }
+        >
+      </div>
     % }
-    <button type="submit"><%= t('common.filter') %></button>
-    <a href="<%= url_for('admin_audit') %>"><%= t('admin.audit_clear_filters') %></a>
+    <div class="filter-form__actions">
+      <button type="submit"><%= t('common.filter') %></button>
+      <a href="<%= url_for('admin_audit') %>"><%= t('admin.audit_clear_filters') %></a>
+    </div>
   </form>
 
   % if (@{$audit_rows}) {
@@ -51,7 +55,7 @@
               <dt><%= t('common.target') %></dt>
               <dd><%= ui_label('target', $row->{target_type} || 'system') %>: <%= $row->{target_id} || '' %></dd>
               <dt><%= t('common.created') %></dt>
-              <dd><time datetime="<%= $row->{created_at} %>"><%= dt($row->{created_at}) %></time></dd>
+              <dd><%= include 'components/timestamp', at => $row->{created_at} %></dd>
               <dt><%= t('common.correlation') %></dt>
               <dd><a href="<%= url_for('admin_audit')->query( correlation_id => $row->{correlation_id} ) %>"><%= $row->{correlation_id} %></a></dd>
               % if (@{ $row->{metadata_items} || [] }) {

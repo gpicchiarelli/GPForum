@@ -491,6 +491,7 @@ sub _ui_breadcrumbs ($controller) {
 
     my %route_key_for = (
         admin_audit            => 'nav.admin',
+        admin_categories       => 'nav.admin',
         admin_dashboard        => 'nav.admin',
         admin_jobs             => 'nav.admin',
         admin_roles            => 'nav.admin',

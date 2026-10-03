@@ -87,7 +87,7 @@ $test->content_like(qr/Attivo/msx);
 
 $test->get_ok('/admin/users');
 $test->status_is($HTTP_OK);
-$test->element_exists(q{ol[aria-label="Admin user list"]});
+$test->element_exists(q{table[aria-label="Admin user list"]});
 $test->element_exists(q{a[href="/admin/users/user-1/roles"]});
 
 _get_json_ok( $test, '/admin/users' );
