@@ -4,7 +4,8 @@
 
 Accepted. Converted on 2026-09-19 from `prompt/1.txt` ("GPForum —
 Foundational Architecture Constitution"); this ADR replaces the prompt as the
-binding source.
+binding source. Amended by ADR 0117, whose `use v5.40;` preamble stands for
+`use strict` and `use warnings`.
 
 ## Context
 

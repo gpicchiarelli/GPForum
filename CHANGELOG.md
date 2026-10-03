@@ -1572,6 +1572,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- ADR 0117 records the Perl 5.40 floor, the `use v5.40` preamble, native
+  `try`/`catch` closed with `};` and the `return undef` policy; ADR 0118
+  records the `GPForum::X` exception classes, why refusals stay result
+  values, and `GPForum::Base->requires`. Both amend ADR 0052.
+
 - `script/architecture-check` fails when a native `try`/`catch` does not end
   with `};` (ADR 0117). PPI reads a catch block closed by a bare `}` as an
   unfinished statement and folds the next statement into it, which misleads

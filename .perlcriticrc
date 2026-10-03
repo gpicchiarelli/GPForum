@@ -56,9 +56,11 @@ max_mccabe = 12
 # tree contains no real prototypes today and the guard fails if one appears.
 #
 # Since every file declares `use v5.40` (ADR 0117), PPI recognises the
-# signatures feature and stops reading signatures as prototypes: in the
-# converted files ProhibitSubroutinePrototypes reports nothing, so it can come
-# back once the files t/321-preamble.t lists as unconverted are converted.
+# signatures feature and stops reading signatures as prototypes, and
+# ProhibitSubroutinePrototypes reports nothing anywhere in the tree. It stays
+# off all the same: under the signatures feature `sub f ($$)` does not
+# compile, so a prototype can only be written as `:prototype($$)`, which the
+# policy does not read.
 # RequireInterpolationOfMetachars still finds 43 genuine strings (SQL $$
 # bodies, Argon2 hashes) and stays off.
 [-Subroutines::ProhibitSubroutinePrototypes]

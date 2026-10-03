@@ -3,7 +3,9 @@
 ## Status
 
 Accepted. Amended by ADR 0107, which names the layers the code actually
-has and makes the dependency direction a checked rule.
+has and makes the dependency direction a checked rule; by ADR 0117, whose
+`use v5.40;` preamble stands for `use strict;` and `use warnings;`; and by
+ADR 0118, which names the error classes.
 
 Converted on 2026-09-19 from `prompt/4.txt` ("GPForum — Perl Engineering &
 Coding Discipline Constitution"); this ADR replaces the prompt as the binding
