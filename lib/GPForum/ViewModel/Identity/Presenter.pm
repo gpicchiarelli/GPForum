@@ -238,8 +238,11 @@ sub profile ( $self, $profile ) {
         trust   => $profile->{trust}   || {},
         user    => {
             %{$user},
+            initial =>
+              $self->initial( $user->{display_name} // $user->{username} ),
             profile_label => $user->{profile_label}
               || $self->profile_label( $user->{username} ),
+            tint => $self->tint( $user->{username} ),
         },
     };
     $safe_profile->{ui} = {

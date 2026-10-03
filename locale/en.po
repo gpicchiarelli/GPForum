@@ -2366,6 +2366,10 @@ msgctxt "privacy.deletion_approved"
 msgid "Deletion approved"
 msgstr "Deletion approved"
 
+msgctxt "privacy.deletion_description"
+msgid "Ask for your account and your personal data to be erased. Staff review each request before anything is removed."
+msgstr "Ask for your account and your personal data to be erased. Staff review each request before anything is removed."
+
 msgctxt "privacy.deletion_held"
 msgid "Legal hold applied"
 msgstr "Legal hold applied"
@@ -2389,6 +2393,10 @@ msgstr "Erasure completed"
 msgctxt "privacy.erasure_jobs"
 msgid "Erasure jobs"
 msgstr "Erasure jobs"
+
+msgctxt "privacy.export_description"
+msgid "A copy of your posts, attachments and notifications, prepared as a file to download."
+msgstr "A copy of your posts, attachments and notifications, prepared as a file to download."
 
 msgctxt "privacy.export_requested"
 msgid "Export requested"

@@ -1345,6 +1345,14 @@ ul[aria-label]:not(.ui-card-list) {
   letter-spacing: 0;
 }
 
+/* Inside a section, a list with nothing in it is a sentence, not a banner. */
+section section .ui-empty-state {
+  justify-items: start;
+  border: 0;
+  padding-block: 0;
+  text-align: start;
+}
+
 dl {
   display: grid;
   grid-template-columns: minmax(8rem, 14rem) minmax(0, 1fr);
@@ -1432,6 +1440,68 @@ nav[aria-label$="pagination" i] a:hover,
 
 /* 8. Reading --------------------------------------------------------------- */
 
+/* The mark that stands where a picture would: a name's initial on one of the
+   palette's three tints, forest, steel or clay, and always the same one for
+   the same name. */
+.avatar {
+  display: grid;
+  place-items: center;
+  inline-size: var(--avatar-size);
+  block-size: var(--avatar-size);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--color-surface));
+  color: var(--color-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  user-select: none;
+}
+
+.avatar--steel {
+  background: color-mix(in srgb, var(--color-secondary) 14%, var(--color-surface));
+  color: var(--color-secondary);
+}
+
+.avatar--clay {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-surface));
+  color: var(--color-accent);
+}
+
+.avatar--large {
+  --avatar-size: 4rem;
+  font-size: var(--font-size-lg);
+}
+
+/* A member's page opens with who they are, then what they have done in a
+   line of figures. */
+.profile {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: center;
+}
+
+.ui-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-6);
+}
+
+.ui-stats > div {
+  display: flex;
+  flex-direction: column-reverse;
+}
+
+.ui-stats dd {
+  font-size: var(--font-size-lg);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-stats dt {
+  font-size: var(--font-size-xs);
+}
+
 .thread__header {
   display: grid;
   gap: var(--space-3);
@@ -1485,20 +1555,9 @@ nav[aria-label$="pagination" i] a:hover,
 }
 
 .post__avatar {
-  display: grid;
   grid-column: 1;
   grid-row: 1 / span 2;
-  place-items: center;
   align-self: start;
-  inline-size: var(--avatar-size);
-  block-size: var(--avatar-size);
-  border-radius: 50%;
-  background: var(--color-surface-alt);
-  color: var(--color-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--weight-semibold);
-  line-height: 1;
-  user-select: none;
 }
 
 .post__header {

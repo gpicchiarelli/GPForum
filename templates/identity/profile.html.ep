@@ -2,44 +2,54 @@
 % title $profile->{user}{display_name} . ' - ' . t('app.name');
 
 <section aria-labelledby="profile-heading">
-  <%= include 'components/page_header',
-    heading_id => 'profile-heading',
-    component_title => $profile->{user}{display_name},
-    description => $profile->{user}{profile_label} %>
+  % my $user = $profile->{user};
   % my $counts = $profile->{counts} || {};
-  <dl aria-label="<%= t('profile.contributor_summary') %>">
-    <dt><%= t('profile.public_contributions') %></dt>
-    <dd><%= $counts->{total_public} // 0 %></dd>
-    <dt><%= t('profile.public_threads') %></dt>
-    <dd><%= $counts->{public_threads} // 0 %></dd>
-    <dt><%= t('profile.public_replies') %></dt>
-    <dd><%= $counts->{public_replies} // 0 %></dd>
-    <dt><%= t('admin.trust_level') %></dt>
-    <dd><%= $profile->{trust}{trust_level} %></dd>
-    <dt><%= t('profile.trust_badge') %></dt>
-    <dd><%= $profile->{trust}{badge} || t('profile.new_contributor') %></dd>
-    <dt><%= t('profile.reputation_score') %></dt>
-    <dd><%= $profile->{trust}{score} %></dd>
-    % if ($profile->{user}{created_at}) {
-      <dt><%= t('profile.joined') %></dt>
-      <dd><time datetime="<%= $profile->{user}{created_at} %>"><%= dt($profile->{user}{created_at}) %></time></dd>
+  % my $is_own = ($user->{user_id} // q{}) eq (session('user_id') // q{});
+  <div class="profile">
+    <span class="avatar avatar--large avatar--<%= $user->{tint} %>" aria-hidden="true"><%= $user->{initial} %></span>
+    <%= include 'components/page_header',
+      heading_id => 'profile-heading',
+      component_title => $user->{display_name},
+      description => $user->{profile_label} %>
+  </div>
+  <p class="ui-meta">
+    <span class="ui-badge"><%= $profile->{trust}{badge} || t('profile.new_contributor') %></span>
+    % if ($user->{created_at}) {
+      <span><%= t('profile.joined') %> <%= include 'components/timestamp', at => $user->{created_at} %></span>
     % }
+  </p>
+  <dl class="ui-stats" aria-label="<%= t('profile.contributor_summary') %>">
+    <div>
+      <dt><%= t('profile.public_contributions') %></dt>
+      <dd><%= $counts->{total_public} // 0 %></dd>
+    </div>
+    <div>
+      <dt><%= t('profile.public_threads') %></dt>
+      <dd><%= $counts->{public_threads} // 0 %></dd>
+    </div>
+    <div>
+      <dt><%= t('profile.public_replies') %></dt>
+      <dd><%= $counts->{public_replies} // 0 %></dd>
+    </div>
+    <div>
+      <dt><%= t('profile.reputation_score') %></dt>
+      <dd><%= $profile->{trust}{score} %></dd>
+    </div>
+    <div>
+      <dt><%= t('admin.trust_level') %></dt>
+      <dd><%= $profile->{trust}{trust_level} %></dd>
+    </div>
   </dl>
-  % if (session('user_id')) {
-    <form method="post" action="<%= url_for('profile_report', username => $profile->{user}{username}) %>">
-      <%= csrf_field %>
-      <input type="hidden" name="command_id" value="<%= $profile->{report_command_id} || q{} %>">
-      <label for="profile-report-reason"><%= t('moderation.report_profile') %></label>
-      <select id="profile-report-reason" name="reason" required>
-        <option value="spam"><%= t('moderation.reason.spam') %></option>
-        <option value="abuse"><%= t('moderation.reason.abuse') %></option>
-        <option value="privacy"><%= t('moderation.reason.privacy') %></option>
-        <option value="other"><%= t('moderation.reason.other') %></option>
-      </select>
-      <label for="profile-report-details"><%= t('common.details') %></label>
-      <textarea id="profile-report-details" name="details" rows="3"></textarea>
-      <button type="submit"><%= t('moderation.submit_report') %></button>
-    </form>
+  % if (session('user_id') && !$is_own) {
+    <div class="toolbar">
+      <button type="button" class="button--quiet" popovertarget="profile-report"><%= t('moderation.report_profile') %></button>
+      <%= include 'components/sheet', sheet_id => 'profile-report', component_title => t('moderation.report_profile'), sheet_body => begin %>
+        <%= include 'forum/_report_form',
+          post_to => url_for('profile_report', username => $user->{username}),
+          command_id => $profile->{report_command_id},
+          field_id => 'profile-report' %>
+      <% end %>
+    </div>
   % }
 </section>
 
@@ -51,13 +61,13 @@
   % if (@{ $replies->{items} }) {
     <ol class="ui-card-list" aria-label="<%= t('profile.recent_public_replies_by_contributor') %>">
       % for my $reply (@{ $replies->{items} }) {
-        <li class="ui-card-list__item">
+        <li class="ui-card-list__item ui-row">
           <article aria-labelledby="profile-reply-<%= $reply->{post_id} %>-heading">
-            <h3 id="profile-reply-<%= $reply->{post_id} %>-heading">
+            <h3 class="ui-row__title" id="profile-reply-<%= $reply->{post_id} %>-heading">
               <a href="<%= url_for('thread', thread_id => $reply->{thread_id})->fragment('post-' . $reply->{post_id}) %>"><%= $reply->{thread_title} || t('profile.discussion_reply') %></a>
             </h3>
             % if ($reply->{created_at}) {
-              <p class="ui-meta"><%= t('profile.replied') %> <time datetime="<%= $reply->{created_at} %>"><%= dt($reply->{created_at}) %></time></p>
+              <p class="ui-meta"><span><%= t('profile.replied') %> <%= include 'components/timestamp', at => $reply->{created_at} %></span></p>
             % }
           </article>
         </li>
@@ -77,13 +87,13 @@
   % if (@{ $profile->{threads}{items} }) {
     <ol class="ui-card-list" aria-label="<%= t('profile.public_discussions_by_contributor') %>">
       % for my $thread (@{ $profile->{threads}{items} }) {
-        <li class="ui-card-list__item">
+        <li class="ui-card-list__item ui-row">
           <article aria-labelledby="profile-thread-<%= $thread->{thread_id} %>-heading">
-            <h3 id="profile-thread-<%= $thread->{thread_id} %>-heading">
+            <h3 class="ui-row__title" id="profile-thread-<%= $thread->{thread_id} %>-heading">
               <a href="<%= url_for('thread', thread_id => $thread->{thread_id}) %>"><%= $thread->{title} %></a>
             </h3>
             % if ($thread->{last_activity_at}) {
-              <p class="ui-meta"><%= t('forum.last_activity') %> <time datetime="<%= $thread->{last_activity_at} %>"><%= dt($thread->{last_activity_at}) %></time></p>
+              <p class="ui-meta"><span><%= t('forum.last_activity') %> <%= include 'components/timestamp', at => $thread->{last_activity_at} %></span></p>
             % }
           </article>
         </li>

@@ -3,11 +3,14 @@
 
 package GPForum::ViewModel::Base;
 
+use Const::Fast;
 use Mojo::Base -base, -signatures;
 use v5.40;
 use Scalar::Util qw(blessed);
 
 our $VERSION = '0.001';
+
+const my @TINTS => qw(forest steel clay);
 
 sub column ( $self, $row, $name ) {
     return undef                   if !$row;
@@ -55,6 +58,18 @@ sub initial ( $self, $name ) {
     my ($first) = $self->string($name) =~ /(\X)/msx;
 
     return uc $self->string($first);
+}
+
+# Which of the palette's three tints the mark of a name takes. The same name
+# always takes the same one, so the voices of a thread can be told apart at a
+# glance without a picture.
+sub tint ( $self, $name ) {
+    my $sum = 0;
+    for my $character ( split //msx, $self->string($name) ) {
+        $sum += ord $character;
+    }
+
+    return $TINTS[ $sum % @TINTS ];
 }
 
 sub related ( $self, $row, $method ) {

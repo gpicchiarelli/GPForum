@@ -447,6 +447,14 @@ $test->json_is( '/report/resolution' => 'content_hidden' );
 $test->get_ok('/u/giacomo_forum');
 $test->status_is($HTTP_OK);
 $test->element_exists(q{form[action="/u/giacomo_forum/report"]});
+
+# The profile opens with who the member is; reporting them waits in a sheet.
+$test->element_exists('.profile .avatar.avatar--large');
+$test->element_exists('dl.ui-stats');
+$test->element_exists('button[popovertarget="profile-report"]');
+$test->element_exists(
+q{#profile-report.sheet[popover] form[action="/u/giacomo_forum/report"] select[name="reason"]}
+);
 $test->element_exists(
     q{form[action="/u/giacomo_forum/report"] input[name="command_id"]});
 

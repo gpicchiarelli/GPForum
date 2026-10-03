@@ -513,7 +513,7 @@ sub _ui_breadcrumbs ($controller) {
         moderation_suspensions => 'nav.moderation',
         new_thread             => 'nav.start_thread',
         notifications          => 'nav.notifications',
-        privacy_dashboard      => 'nav.privacy',
+        privacy_dashboard      => 'nav.your_data',
         privacy_review         => 'nav.privacy',
         profile                => 'nav.profile',
         register               => 'auth.register',

@@ -65,6 +65,15 @@ $test->element_exists(q{form[action="/privacy/export"]});
 $test->element_exists(
     q{form[action="/privacy/export"] input[name="command_id"]});
 $test->element_exists(q{form[action="/privacy/deletion"] textarea[required]});
+
+# Asking for an account to be erased is not one press beside "Request
+# export": it opens a sheet that says what will happen, and its button is the
+# destructive one.
+$test->element_exists('button[popovertarget="privacy-deletion"]');
+$test->element_exists(
+q{#privacy-deletion.sheet[popover] form[action="/privacy/deletion"] button.button--danger}
+);
+$test->element_exists('#privacy-deletion .sheet__consequence');
 $test->element_exists(
     q{form[action="/privacy/deletion"] input[name="command_id"]});
 $test->element_exists(qq{a[href="/privacy/export/$ID{export}"]});
@@ -81,7 +90,7 @@ $test->status_is($HTTP_NOT_FOUND);
 
 $test->get_ok( '/privacy' => { 'Accept-Language' => 'it' } );
 $test->status_is($HTTP_OK);
-$test->text_is( 'h1' => 'Privacy' );
+$test->text_is( 'h1' => 'I tuoi dati' );
 $test->content_like(qr/Export [ ] dati/msx);
 $test->content_like(qr/Richiedi [ ] cancellazione/msx);
 

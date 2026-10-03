@@ -82,6 +82,26 @@ my ($presented_visibility) =
 is( $presented_visibility->{value},
     'members', 'presenter facade still builds the new-thread form' );
 
+# A name's mark: its initial, as one grapheme, on one of three tints that is
+# always the same for that name.
+is(
+    $rows->initial("\N{LATIN SMALL LETTER E WITH ACUTE}lodie"),
+    "\N{LATIN CAPITAL LETTER E WITH ACUTE}",
+    'an initial keeps its accent'
+);
+is( $rows->initial(undef), q{}, 'no name, no initial' );
+my %tint    = map { $_ => $rows->tint($_) } qw(elena marco sofia giacomo_forum);
+my %palette = map { $_ => 1 } qw(forest steel clay);
+is_deeply( [ grep { !$palette{$_} } values %tint ],
+    [], 'a tint is one of the palette\'s three' );
+is( $rows->tint('elena'), $tint{elena}, 'and the same each time for a name' );
+cmp_ok( scalar( keys %{ { reverse %tint } } ),
+    '>', 1, 'different names do not all share one' );
+my $written = $rows->post(
+    { author_username => 'elena', author_display_name => 'Elena Marchetti' } );
+is( $written->{author_initial}, 'E', 'a post carries its author\'s initial' );
+is( $written->{author_tint},    $tint{elena}, 'and their tint' );
+
 done_testing();
 
 1;

@@ -9,7 +9,7 @@
 
 <article class="post" id="<%= $dom_id %>" aria-labelledby="<%= $dom_id %>-heading">
   <h3 class="visually-hidden" id="<%= $dom_id %>-heading"><%= t('forum.post_number', { position => $post->{position} }) %></h3>
-  <span class="post__avatar" aria-hidden="true"><%= $post->{author_initial} %></span>
+  <span class="avatar avatar--<%= $post->{author_tint} %> post__avatar" aria-hidden="true"><%= $post->{author_initial} %></span>
   <header class="post__header">
     <p class="ui-meta post__byline">
       % if ($post->{author_username}) {

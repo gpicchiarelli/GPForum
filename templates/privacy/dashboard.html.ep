@@ -1,15 +1,16 @@
 % layout 'default';
-% title t('nav.privacy') . ' - ' . t('app.name');
+% title t('nav.your_data') . ' - ' . t('app.name');
 
 <section aria-labelledby="privacy-dashboard-heading">
   <%= include 'components/page_header',
     heading_id => 'privacy-dashboard-heading',
-    component_title => t('nav.privacy') %>
+    component_title => t('nav.your_data') %>
 
   <section aria-labelledby="privacy-export-heading">
     <%= include 'components/section_header',
       heading_id => 'privacy-export-heading',
-      component_title => t('privacy.data_export') %>
+      component_title => t('privacy.data_export'),
+      description => t('privacy.export_description') %>
     <form method="post" action="<%= url_for('privacy_export_request') %>">
       <%= csrf_field %>
       <input type="hidden" name="command_id" value="<%= $export_command_id || q{} %>">
@@ -23,9 +24,9 @@
           <li class="ui-card-list__item">
             <article aria-labelledby="<%= $request->{ui}{heading_id} %>">
               <h3 id="<%= $request->{ui}{heading_id} %>"><%= ui_label('state', $request->{status}) %></h3>
-              <p>
+              <p class="ui-meta">
                 <span><%= $request->{format} %></span>
-                <time datetime="<%= $request->{created_at} %>"><%= dt($request->{created_at}) %></time>
+                <span><%= include 'components/timestamp', at => $request->{created_at} %></span>
               </p>
               % if (%{$counts}) {
                 <p><%= t('data.posts') %> <%= $counts->{posts} || 0 %>, <%= t('data.attachments') %> <%= $counts->{attachments} || 0 %>, <%= t('data.notifications') %> <%= $counts->{notifications} || 0 %>, <%= t('data.subscriptions') %> <%= $counts->{subscriptions} || 0 %>.</p>
@@ -47,14 +48,21 @@
   <section aria-labelledby="privacy-deletion-heading">
     <%= include 'components/section_header',
       heading_id => 'privacy-deletion-heading',
-      component_title => t('privacy.account_deletion') %>
-    <form method="post" action="<%= url_for('privacy_deletion_request') %>">
-      <%= csrf_field %>
-      <input type="hidden" name="command_id" value="<%= $deletion_command_id || q{} %>">
-      <label for="privacy-deletion-reason"><%= t('common.reason') %></label>
-      <textarea id="privacy-deletion-reason" name="reason" required></textarea>
-      <button type="submit"><%= t('privacy.request_deletion') %></button>
-    </form>
+      component_title => t('privacy.account_deletion'),
+      description => t('privacy.deletion_description') %>
+    <div class="toolbar">
+      <button type="button" class="button--secondary" popovertarget="privacy-deletion"><%= t('privacy.request_deletion') %></button>
+    </div>
+    <%= include 'components/sheet', sheet_id => 'privacy-deletion', component_title => t('privacy.account_deletion'), sheet_body => begin %>
+      <form method="post" action="<%= url_for('privacy_deletion_request') %>">
+        <%= csrf_field %>
+        <input type="hidden" name="command_id" value="<%= $deletion_command_id || q{} %>">
+        <p class="sheet__consequence"><%= t('privacy.deletion_description') %></p>
+        <label for="privacy-deletion-reason"><%= t('common.reason') %></label>
+        <textarea id="privacy-deletion-reason" name="reason" required></textarea>
+        <button type="submit" class="button--danger"><%= t('privacy.request_deletion') %></button>
+      </form>
+    <% end %>
 
     % if (@{$deletion_requests}) {
       <ol class="ui-card-list" aria-label="<%= t('privacy.account_deletion_requests') %>">
@@ -62,13 +70,13 @@
           <li class="ui-card-list__item">
             <article aria-labelledby="<%= $request->{ui}{heading_id} %>">
               <h3 id="<%= $request->{ui}{heading_id} %>"><%= ui_label('state', $request->{status}) %></h3>
-              <p>
-                <%= $request->{request_type} %>
-                <time datetime="<%= $request->{created_at} %>"><%= dt($request->{created_at}) %></time>
+              <p class="ui-meta">
+                <span><%= $request->{request_type} %></span>
+                <span><%= include 'components/timestamp', at => $request->{created_at} %></span>
+                % if ($request->{completed_at}) {
+                  <span><%= t('state.completed') %> <%= include 'components/timestamp', at => $request->{completed_at} %></span>
+                % }
               </p>
-              % if ($request->{completed_at}) {
-                <p><%= t('state.completed') %> <time datetime="<%= $request->{completed_at} %>"><%= dt($request->{completed_at}) %></time></p>
-              % }
             </article>
           </li>
         % }

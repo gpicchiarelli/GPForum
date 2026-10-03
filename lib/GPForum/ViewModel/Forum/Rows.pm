@@ -84,6 +84,7 @@ sub post ( $self, $row ) {
     return {
         author_display_name  => $display_name,
         author_initial       => $self->initial( $display_name // $username ),
+        author_tint          => $self->tint($username),
         author_profile_label => $self->profile_label($username),
         author_user_id       => $self->column( $row, 'author_user_id' ),
         author_username      => $username,
@@ -281,7 +282,7 @@ Returns a thread payload with lock and heading metadata.
 =head2 post
 
 Returns a post payload: its safe rendered body when present, when it was
-written when the reader loaded that, and its author's initial.
+written when the reader loaded that, and its author's initial and tint.
 
 =head2 search_result
 
