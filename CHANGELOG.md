@@ -561,6 +561,17 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- The eight performance and database documents are now one,
+  `docs/PERFORMANCE.md`: budgets, indexes and the plan gate, keyset pages,
+  `CONCURRENTLY` migrations, query budgets, caching, search costs, profiling,
+  OS tuning, and how to reproduce the evidence, re-measured on 2026-10-03
+  (PostgreSQL 18.6, Perl 5.44). The old paths are gone; the May 2026 tables
+  stay in git history (`git show 0d0ec4a:docs/PERFORMANCE_EVIDENCE.md`). The
+  readiness check `query_budget_drift` points at
+  `docs/PERFORMANCE.md#query-budgets`, which also says what
+  `script/query-budget --sync` cannot fix: a stored budget for an endpoint the
+  catalog no longer has stays `extra` until its row is deleted by hand.
+
 
 - **Notifications, attachments and community stores are tested on
   PostgreSQL** (`t/integration/postgres-{notifications,attachments,community}.t`,
@@ -1441,6 +1452,9 @@ CI, evidence and internal refactors with no change in behaviour.
   and controller `optional_param` now return an explicit undef.
 
 ### Development
+
+- `t/299-readiness-runbook-sections.t` fails when a readiness runbook names a
+  section heading its file does not have.
 
 - The privacy data-rights stores are tested on PostgreSQL: export bundles,
   deletion requests, approval and its row lock, legal holds (including one that

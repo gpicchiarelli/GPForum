@@ -34,10 +34,8 @@ jobs:
           test -f CHANGELOG.md
           test -f docs/CPAN_LICENSE_REVIEW.md
           test -f docs/OPERATIONAL_BASELINE.md
-          test -f docs/PERFORMANCE_BASELINE.md
-          test -f docs/PERFORMANCE_EVIDENCE.md
+          test -f docs/PERFORMANCE.md
           test -f docs/OBSERVABILITY.md
-          test -f docs/OS_OPTIMIZATION.md
           test -f docs/OS_RUNTIME_ENFORCEMENT.md
           test -f docs/OS_RUNTIME_EVIDENCE.md
           test -f docs/DEPLOYMENT.md

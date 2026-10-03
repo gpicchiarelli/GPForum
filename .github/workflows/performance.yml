@@ -1,7 +1,7 @@
 name: Performance and profiling
 
 # The profiling smoke validation stage of prompt/11.txt, plus the benchmark
-# evidence that docs/PERFORMANCE_EVIDENCE.md and docs/PROFILING.md describe.
+# evidence that docs/PERFORMANCE.md describes.
 # ci.yml keeps the fast smoke gates; this workflow runs the wider set and keeps
 # the measurements as artifacts.
 #

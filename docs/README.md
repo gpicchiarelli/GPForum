@@ -58,11 +58,8 @@ starting work on any of the areas below.
 
 | Document | What it covers |
 | --- | --- |
-| [PERFORMANCE.md](PERFORMANCE.md) | Performance readiness |
-| [PERFORMANCE_BASELINE.md](PERFORMANCE_BASELINE.md) · [PERFORMANCE_EVIDENCE.md](PERFORMANCE_EVIDENCE.md) · [PERFORMANCE_AUDIT.md](PERFORMANCE_AUDIT.md) | Baseline numbers, evidence gate, and audit |
-| [DB_PERFORMANCE.md](DB_PERFORMANCE.md) · [QUERY_BUDGET_POLICY.md](QUERY_BUDGET_POLICY.md) | Query shape, indexes, and per-route query budgets |
-| [PROFILING.md](PROFILING.md) | Devel::NYTProf workflow |
-| [OS_OPTIMIZATION.md](OS_OPTIMIZATION.md) · [OS_RUNTIME_ENFORCEMENT.md](OS_RUNTIME_ENFORCEMENT.md) · [OS_RUNTIME_EVIDENCE.md](OS_RUNTIME_EVIDENCE.md) | OS-level performance contract and evidence |
+| [PERFORMANCE.md](PERFORMANCE.md) | Principles and budgets; indexes, the plan gate, keyset pages and migrations; query budgets; caching; search costs; profiling; OS tuning; the evidence and how to reproduce it |
+| [OS_RUNTIME_ENFORCEMENT.md](OS_RUNTIME_ENFORCEMENT.md) · [OS_RUNTIME_EVIDENCE.md](OS_RUNTIME_EVIDENCE.md) | Runtime enforcement of the OS contract, and its evidence |
 
 ## Security and correctness
 

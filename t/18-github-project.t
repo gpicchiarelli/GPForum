@@ -12,7 +12,7 @@ use Test::More;
 
 our $VERSION = '0.001';
 
-const my $EXPECTED_TESTS => 198;
+const my $EXPECTED_TESTS => 196;
 const my $CURLY_CLASS    => '[{]';
 
 plan tests => $EXPECTED_TESTS;
@@ -41,10 +41,8 @@ for my $required_file (
     docs/ENTRYPOINTS.md
     docs/CPAN_LICENSE_REVIEW.md
     docs/OPERATIONAL_BASELINE.md
-    docs/PERFORMANCE_BASELINE.md
-    docs/PERFORMANCE_EVIDENCE.md
+    docs/PERFORMANCE.md
     docs/SECURITY_HARDENING.md
-    docs/OS_OPTIMIZATION.md
     docs/OS_RUNTIME_ENFORCEMENT.md
     docs/OS_RUNTIME_EVIDENCE.md
     docs/DEPLOYMENT.md

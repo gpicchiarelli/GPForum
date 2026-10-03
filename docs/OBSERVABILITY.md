@@ -232,7 +232,7 @@ Covered endpoints:
 | thread view, halfway down, signed in | `posts_thread_position_viewer_keyset` |
 
 Each statement is the one the application executes, rendered from the method
-that builds it; [PERFORMANCE_EVIDENCE.md](PERFORMANCE_EVIDENCE.md) names each
+that builds it; [PERFORMANCE.md](PERFORMANCE.md#the-plan-gate) names each
 source.
 
 Signed in is a member (ADR 0102) with a `category.read` grant on another

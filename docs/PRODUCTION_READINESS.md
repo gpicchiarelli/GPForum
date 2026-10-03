@@ -416,11 +416,7 @@ Do not tune without measurement. Required evidence:
 - worker throughput: `script/bench-outbox-dispatcher`;
 - query counts: benchmark-only DB query headers and query budget catalog.
 
-Current numbers and methodology live in:
-
-- `docs/PERFORMANCE_BASELINE.md`
-- `docs/PERFORMANCE_EVIDENCE.md`
-- `docs/DB_PERFORMANCE.md`
+Current numbers and methodology live in `docs/PERFORMANCE.md`.
 
 ## Production Verdict Rule
 

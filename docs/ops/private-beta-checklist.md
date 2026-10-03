@@ -28,7 +28,7 @@ on a real target, and operator runbook evidence.
 | Carton deps | `script/bootstrap-deps --postgres` (`--rebuild-local` if `local/` incomplete) | `script/bootstrap-deps`, `Makefile` | `script/gpforum-carton exec perl -MConst::Fast -e 1` succeeds |
 | Homebrew PATH | `script/gpforum-homebrew-env` | `docs/ops/staging-drills.md` | On macOS, `psql` / `pg_dump` / `pg_config` resolve under Homebrew's `postgresql@NN` keg (no-op skip on Linux) |
 | Migrations | `script/gpforum-carton exec bin/gpforum-migrate --apply` via `script/gpforum-carton` | `docs/DEPLOYMENT.md` | Target DB schema at current migration head (`001`–`036` on `main`) |
-| Query budget | `script/query-budget --sync` then `--check` | `docs/QUERY_BUDGET_POLICY.md` | Catalog synced; readiness not 503 for empty budgets |
+| Query budget | `script/query-budget --sync` then `--check` | `docs/PERFORMANCE.md#query-budgets` | Catalog synced; readiness not 503 for empty budgets |
 | Staging DB drill | `script/staging-drill` | `docs/ops/staging-drills.md` | Fresh migrate, upgrade path, dump/restore on throwaway DBs |
 | Attachments + deploy checklist | `script/staging-drill-attachments` | `docs/ops/staging-drills.md` | Populated throwaway `var/attachments` restore + static (and optional host) nginx/systemd checks — **not** live install/reload |
 | Staging host verify | `script/staging-host-verify` | `docs/ops/staging-host.md` | Repo artifacts; optional env-file keys, systemd `is-active`, HTTP health — **not** an install |
