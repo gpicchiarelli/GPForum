@@ -1609,8 +1609,13 @@ nav[aria-label$="pagination" i] a:hover,
   font-size: var(--font-size-md);
 }
 
-.sheet__dismiss {
+/* Where sheets are panels in the page there is nothing to open or close,
+   so the buttons that would are not shown. */
+button[popovertarget] {
   display: none;
+}
+
+.sheet__dismiss {
   inline-size: 2rem;
   margin-block-start: calc(-1 * var(--space-1));
   margin-inline-end: calc(-1 * var(--space-2));
@@ -1653,8 +1658,7 @@ nav[aria-label$="pagination" i] a:hover,
     background: var(--color-scrim);
   }
 
-  /* Only where the browser can close a sheet is there a button to do it. */
-  .sheet__dismiss {
+  button[popovertarget] {
     display: inline-flex;
   }
 }

@@ -6,6 +6,7 @@ package main;
 use v5.40;
 
 use Const::Fast;
+use Mojo::File qw(path);
 use Test::Mojo;
 use Test::More;
 
@@ -79,6 +80,28 @@ for my $sheet ( $dom->find('.sheet')->each ) {
     ok( $sheet->at(qq{button[popovertarget="$id"][popovertargetaction="hide"]}),
         "$id has a button that closes it" );
 }
+
+# A browser without popovers shows each sheet as a panel in the page, where
+# its form works as it always did. It shows no button to open or close one:
+# those are hidden until the stylesheet knows popovers are there.
+my $css = path('assets/css/gpforum-ssr.css')->slurp;
+my ( $before, $supported ) =
+  split /\@supports \s+ selector[(]:popover-open[)]/msx, $css, 2;
+like(
+    $before,
+    qr/^button\[popovertarget\] \s* [{] \s* display: \s* none;/msx,
+    'sheet buttons are hidden by default'
+);
+like(
+    $supported // q{},
+    qr/button\[popovertarget\] \s* [{] \s* display: \s* inline-flex;/msx,
+    'and shown where popovers are supported'
+);
+unlike(
+    $before,
+    qr/[.]sheet \s* [{] [^}]* opacity/msx,
+    'a sheet is never hidden outside that support'
+);
 
 # A reader who is not signed in gets the conversation and nothing to manage.
 my $anonymous = Test::Mojo->new('GPForum');

@@ -83,7 +83,9 @@ logical (`inline`, `block`), and a size comes from the scale.
 - **Sheets.** An action that needs a field or a second thought opens over the
   page: `components/sheet` is an HTML popover, opened by a button's
   `popovertarget`, closed by Escape or a click outside, with no script.
-  Without popover support it is a panel in the page and its form still works.
+  Without popover support it is a panel in the page and its form still
+  works; the buttons that would open or close it are hidden until the
+  stylesheet knows popovers are there (`t/320`).
 
 ## Accessibility
 
