@@ -21,9 +21,10 @@ const my $SQL_DBMS_NAME => 17;
 # to it (pg_inherits, recursively, for partitions of partitions). A row is
 # stored in a partition, and PostgreSQL names the partition's index in the
 # conflict -- notifications_default_pkey, notifications_2026_10_pkey -- not
-# the parent's notifications_pkey. Partitions are added every month while the
-# application runs, so the family is read when a conflict asks for it rather
-# than remembered.
+# the parent's notifications_pkey. Partitions are attached while the
+# application runs -- by the daily partition-maintenance timer and every
+# migrate (ADR 0113) -- so the family is read when a conflict asks for it
+# rather than remembered.
 const my $INDEX_FAMILY_SQL => join q{ },
   'WITH RECURSIVE family (index_oid, index_name) AS (',
   'SELECT root.oid, root.relname::text FROM pg_class AS root',
@@ -47,12 +48,20 @@ sub is_conflict ( $, $error ) {
 # the name has to be matched; on a partitioned table PostgreSQL reports the
 # name of the partition's index, which is matched through the catalog. A test
 # double has no catalog, and its fake ORM raises the constraint's own name.
-sub is_conflict_on ( $class, $schema, $error, $constraint ) {
-    if ( !$class->is_conflict($error) || !_has_text($constraint) ) {
+sub is_conflict_on ( $, $schema, $error, $constraint ) {
+    if ( !_has_text($error) || !_has_text($constraint) ) {
         return 0;
     }
 
+    # The server's sentence has to say it is a unique violation, as it has to
+    # name the index: is_conflict reads the whole text, where a member's text
+    # in the parameter values can say "unique constraint" on an error that is
+    # none. An index row too large for its index names that index, and was
+    # taken for a conflict on it.
     my $message = _server_message($error);
+    if ( !_matches_unique($message) ) {
+        return 0;
+    }
     if ( _names_index( $message, $constraint ) ) {
         return 1;
     }
@@ -310,12 +319,12 @@ True when the error text is a unique constraint violation.
 =head2 is_conflict_on
 
 Takes the schema, the error and a constraint name. True when the error is a
-unique violation of that constraint: named in the server's message (not in
-its DETAIL, the statement or its parameter values) as the constraint itself
-or, on PostgreSQL, as the index of one of its table's partitions. Call it
-after C<attempt>, whose savepoint leaves the transaction able to run the
-catalog lookup; a lookup that fails, or a schema with no PostgreSQL handle,
-leaves only the constraint's own name to match.
+unique violation of that constraint: the server's message (not its DETAIL,
+the statement or its parameter values) reports a unique violation and names
+the constraint itself or, on PostgreSQL, the index of one of its table's
+partitions. Call it after C<attempt>, whose savepoint leaves the transaction
+able to run the catalog lookup; a lookup that fails, or a schema with no
+PostgreSQL handle, leaves only the constraint's own name to match.
 
 =head2 attempt
 

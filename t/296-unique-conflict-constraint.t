@@ -26,6 +26,13 @@ const my $PREFIX => 'DBIx::Class::Storage::DBI::_dbh_execute(): DBI Exception:'
 const my $STATEMENT => ' [for Statement "INSERT INTO users ( display_name,'
   . ' id ) VALUES ( ?, ? )" with ParamValues: 1=%s, 2=7]';
 
+# PostgreSQL's program_limit_exceeded (54000) for a key too large to index:
+# its first line names the index, and it is no unique violation.
+const my $TOO_LARGE => 'DBIx::Class::Storage::DBI::_dbh_execute(): DBI'
+  . ' Exception: DBD::Pg::st execute failed: ERROR:  index row size 3072'
+  . ' exceeds btree version 4 maximum 2704 for index "users_pkey"'
+  . "\nDETAIL:  Index row references tuple (0,1) in relation \"users\".";
+
 # A constraint quoted as German messages quote it.
 const my $GUILLEMETS => "\N{RIGHT-POINTING DOUBLE ANGLE QUOTATION MARK}"
   . 'users_pkey'
@@ -101,6 +108,18 @@ ok(
         'users_pkey'
     ),
     'while the server sentence before them still names its own'
+);
+
+# Nor is the data what says the error is a unique violation: is_conflict
+# reads the whole text, and an index row too large for its index names that
+# index on an error that is no conflict.
+my $too_large = $TOO_LARGE . sprintf $STATEMENT,
+  q{'duplicate key value violates unique constraint'};
+ok( $conflict->is_conflict($too_large),
+    'an error whose values spell a unique violation reads as one as a whole' );
+ok(
+    !$conflict->is_conflict_on( undef, $too_large, 'users_pkey' ),
+    'but is no conflict on the index its server sentence names'
 );
 
 # A test double's schema has a storage and a handle, but no PostgreSQL to

@@ -224,7 +224,7 @@ check_entrypoint_references() {
 # that $EVAL_ERROR and $@ must never reach conflict recovery.
 check_unique_conflict_recovery() {
     offenders=$(grep -rnE \
-        '(_after_conflict|_after_unique|UniqueConflict->(rethrow|is_conflict))[[:space:]]*\(.*\$(EVAL_ERROR|@)' \
+        '(_after_conflict|_after_unique|UniqueConflict->(rethrow|is_conflict(_on)?))[[:space:]]*\(.*\$(EVAL_ERROR|@)' \
         lib --include='*.pm' || true)
 
     if [ -n "$offenders" ]; then

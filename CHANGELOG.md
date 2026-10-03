@@ -790,6 +790,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- A database error that is not a unique violation is no longer taken for a
+  conflict because the row's data contains the words "unique constraint":
+  `UniqueConflict->is_conflict_on` now requires PostgreSQL's own message to
+  report the violation as well as to name the index.
+
 - A raced notification, event or audit id is reused or minted again on
   PostgreSQL. Those tables are partitioned, and PostgreSQL names the
   partition's index in a unique violation (`notifications_default_pkey`), not
@@ -1420,6 +1425,12 @@ CI, evidence and internal refactors with no change in behaviour.
   and controller `optional_param` now return an explicit undef.
 
 ### Development
+
+- Known defect pinned as TODO in `t/integration/postgres-notifications.t`: a
+  notification, event or audit row left over with a different `created_at`
+  does not conflict on its `(id, created_at)` primary key, so delivering it
+  again writes a second row with the same id. `script/architecture-check`
+  also guards `is_conflict_on` against hand-caught errors.
 
 - **Query-plan gate review fixes.** The "most rows" allowance is limited to
   the relation a search ranks (it had exempted full scans of any joined

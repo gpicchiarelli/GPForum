@@ -11,6 +11,7 @@ use Const::Fast;
 use English    qw(-no_match_vars);
 use Mojo::JSON qw(encode_json);
 use Mojo::Log;
+use POSIX qw(strftime);
 use Test::More;
 
 use lib 'lib';
@@ -35,14 +36,15 @@ use GPForum::Test::ScriptedId;
 use GPForum::Worker::Handler::NotificationDispatch;
 
 our $VERSION = '0.001';
+our $TODO;
 
 const my $NOW     => '2026-05-23T12:00:00Z';
 const my $LATER   => '2026-05-23T13:00:00Z';
 const my $EARLIER => '2026-05-23T11:00:00Z';
 
-# Inside notifications_2026_10, one of the monthly partitions migration 038
-# creates; the times above fall in notifications_default.
-const my $IN_OCTOBER => '2026-10-15T12:00:00Z';
+# Inside this UTC month's partition, which migrating creates (ADR 0113); the
+# times above fall in notifications_default.
+const my $IN_THIS_MONTH => strftime( '%Y-%m-15T12:00:00Z', gmtime );
 
 const my $LIST_LIMIT          => 10;
 const my $LISTED              => 3;
@@ -189,6 +191,7 @@ _preference_race($notifications);
 _delivery($notifications);
 _raced_delivery($notifications);
 _leftover_notification($notifications);
+_leftover_at_another_time($notifications);
 _refused_delivery($notifications);
 _fanout($notifications);
 _outbox_fanout($notifications);
@@ -907,8 +910,8 @@ sub _raced_delivery {
 sub _leftover_notification {
     my ($ctx) = @_;
 
-    _leftover_in( $ctx, $NOW,        'the default partition' );
-    _leftover_in( $ctx, $IN_OCTOBER, 'a monthly partition' );
+    _leftover_in( $ctx, $NOW,           'the default partition' );
+    _leftover_in( $ctx, $IN_THIS_MONTH, 'a monthly partition' );
 
     return;
 }
@@ -955,6 +958,54 @@ sub _leftover_in {
         "a leftover notification in $partition gets its missing inbox row" );
     is( _value( $ctx, $NOTIFICATION_ID_ROWS_SQL, $id ),
         1, "a leftover notification in $partition is not inserted again" );
+
+    return;
+}
+
+# A leftover notification stored at another time than the delivery's clock
+# reads. notifications_pkey is (notification_id, created_at), so the insert
+# does not conflict: a second notifications row with the same id is written
+# beside the leftover, which no inbox row reaches any more. Which of the two
+# a delivery should keep is a decision of its own.
+sub _leftover_at_another_time {
+    my ($ctx) = @_;
+
+    my $member = $ctx->{users}{orphan};
+    my $id     = $ctx->{ids}->uuid;
+    my $post   = _post( $ctx, $ctx->{thread_id} );
+    $ctx->{dbh}->do( $NOTIFICATION_SQL, undef, $id, $member, $post, $EARLIER );
+    my $orphan = eval {
+        return _at(
+            $ctx, $NOW,
+            sub {
+                return $ctx->{dispatcher}->create_notification(
+                    {
+                        notification_id   => $id,
+                        notification_type => 'reply',
+                        payload           => { thread_id => $ctx->{thread_id} },
+                        recipient_user_id => $member,
+                        source_id         => $post,
+                        source_type       => 'post',
+                    }
+                );
+            }
+        );
+    };
+    my $error = $EVAL_ERROR;
+
+    ok( $orphan && $orphan->{ok},
+        'a leftover notification from an earlier time completes its delivery' )
+      or note $error;
+  TODO: {
+        local $TODO = 'notifications_pkey is (notification_id, created_at):'
+          . ' a leftover row at another time does not conflict';
+        is(
+            _value( $ctx, $NOTIFICATION_ID_ROWS_SQL, $id ),
+            1,
+            'a leftover notification from an earlier time is not inserted'
+              . ' again'
+        );
+    }
 
     return;
 }

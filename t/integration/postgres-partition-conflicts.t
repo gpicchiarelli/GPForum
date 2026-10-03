@@ -8,7 +8,9 @@ use warnings;
 
 use Carp qw(croak);
 use Const::Fast;
-use English qw(-no_match_vars);
+use Digest::SHA qw(sha256_base64);
+use English     qw(-no_match_vars);
+use POSIX       qw(strftime);
 use Test::More;
 
 use lib 'lib';
@@ -22,24 +24,27 @@ use GPForum::Test::RacedSchema;
 
 our $VERSION = '0.001';
 
-# A time in each kind of partition: the DEFAULT one, a monthly one migration
-# 038 creates, and a month this test adds a partition for while it runs.
-const my $IN_DEFAULT => '2026-05-23T12:00:00Z';
-const my $IN_OCTOBER => '2026-10-15T12:00:00Z';
-const my $IN_JANUARY => '2027-01-15T12:00:00Z';
+# A time in each kind of partition: the DEFAULT one, this UTC month's, which
+# migrating creates (ADR 0113), and a month this test adds a partition for
+# while it runs -- far enough ahead that no migration will have created it
+# first.
+const my $IN_DEFAULT      => '2026-05-23T12:00:00Z';
+const my $IN_THIS_MONTH   => strftime( '%Y-%m-15T12:00:00Z',       gmtime );
+const my $THIS_MONTH_PKEY => strftime( 'notifications_%Y_%m_pkey', gmtime );
+const my $IN_JANUARY      => '2099-01-15T12:00:00Z';
 
 const my %PARTITION_AT => (
-    $IN_DEFAULT => 'the default partition',
-    $IN_OCTOBER => 'a monthly partition',
+    $IN_DEFAULT    => 'the default partition',
+    $IN_THIS_MONTH => 'a monthly partition',
 );
 
 const my $RECIPIENT => '018f1000-0000-7000-8000-00000000c001';
 const my $ROLL_BACK => 'roll the aborted transaction back';
 
 const my $JANUARY_PARTITION_SQL => join q{ },
-  'CREATE TABLE notifications_2027_01 PARTITION OF notifications',
-  q{FOR VALUES FROM (TIMESTAMPTZ '2027-01-01 00:00:00+00')},
-  q{TO (TIMESTAMPTZ '2027-02-01 00:00:00+00')};
+  'CREATE TABLE notifications_2099_01 PARTITION OF notifications',
+  q{FOR VALUES FROM (TIMESTAMPTZ '2099-01-01 00:00:00+00')},
+  q{TO (TIMESTAMPTZ '2099-02-01 00:00:00+00')};
 
 # The test's own table, in its own clone: partitioned twice over, so the row
 # lands in a partition of a partition.
@@ -59,6 +64,22 @@ const my @LEDGER_SQL => (
 );
 const my $LEDGER_ENTRY_SQL =>
   q{INSERT INTO test_ledger (entry_id, booked_on) VALUES (1, '2026-10-15')};
+
+# Another of the test's own, keyed on text, for a key too large to index.
+const my @NOTEBOOK_SQL => (
+    join( q{ },
+        'CREATE TABLE test_notebook (note text NOT NULL,',
+        'noted_on date NOT NULL,',
+        'CONSTRAINT test_notebook_pkey PRIMARY KEY (note, noted_on))',
+        'PARTITION BY RANGE (noted_on)' ),
+    'CREATE TABLE test_notebook_default PARTITION OF test_notebook DEFAULT',
+);
+const my $NOTE_SQL =>
+  q{INSERT INTO test_notebook (note, noted_on) VALUES (?, '2026-10-15')};
+
+# Digests do not compress, so a note of this many is too large for a btree
+# index row (2704 bytes) and small enough that PostgreSQL names the index.
+const my $NOTE_DIGESTS => 75;
 
 const my $NOTIFICATION_ROWS_SQL =>
   'SELECT count(*) FROM notifications WHERE notification_id = ?';
@@ -94,6 +115,7 @@ _recipient($partitioned);
 _partition_conflicts($partitioned);
 _other_constraints($partitioned);
 _named_in_the_data($partitioned);
+_unique_in_the_data($partitioned);
 _nested_partitions($partitioned);
 _partition_added_later($partitioned);
 _inside_a_transaction($partitioned);
@@ -124,8 +146,8 @@ sub _partition_conflicts {
     my ($ctx) = @_;
 
     for my $case (
-        [ $IN_DEFAULT, 'notifications_default_pkey' ],
-        [ $IN_OCTOBER, 'notifications_2026_10_pkey' ],
+        [ $IN_DEFAULT,    'notifications_default_pkey' ],
+        [ $IN_THIS_MONTH, $THIS_MONTH_PKEY ],
       )
     {
         my ( $time, $index ) = @{$case};
@@ -148,7 +170,7 @@ sub _other_constraints {
 
     my $conflict = $ctx->{conflict};
     my $schema   = $ctx->{schema};
-    my $error    = _duplicate_notification( $ctx, $IN_OCTOBER );
+    my $error    = _duplicate_notification( $ctx, $IN_THIS_MONTH );
     ok(
         !$conflict->is_conflict_on(
             $schema, $error, 'notification_inbox_pkey'
@@ -200,6 +222,38 @@ sub _named_in_the_data {
     return;
 }
 
+# Nor do the values make an error a unique violation. A key too large for its
+# index is refused with that index's name on the server's line -- a
+# partition's, here -- and a member's note that says "unique constraint" put
+# the words is_conflict looks for into the parameter values: the error was
+# taken for a conflict on the table, and its row for one already stored.
+sub _unique_in_the_data {
+    my ($ctx) = @_;
+
+    for my $statement (@NOTEBOOK_SQL) {
+        $ctx->{dbh}->do($statement);
+    }
+    my $note = 'duplicate key value violates unique constraint ' . join q{},
+      map { sha256_base64($_) } 1 .. $NOTE_DIGESTS;
+    my $error =
+      _error( sub { return $ctx->{dbh}->do( $NOTE_SQL, undef, $note ) } );
+
+    like(
+        $error,
+        qr/index [ ] row [ ] size .* "test_notebook_default_pkey"/msx,
+        q{PostgreSQL refuses a key too large for a partition's index}
+    );
+    ok( $ctx->{conflict}->is_conflict($error),
+        'and the note in its values reads as a unique violation' );
+    ok(
+        !$ctx->{conflict}
+          ->is_conflict_on( $ctx->{schema}, $error, 'test_notebook_pkey' ),
+        'which is no conflict on the table'
+    );
+
+    return;
+}
+
 sub _nested_partitions {
     my ($ctx) = @_;
 
@@ -232,7 +286,7 @@ sub _partition_added_later {
     $ctx->{dbh}->do($JANUARY_PARTITION_SQL);
     my $error = _duplicate_notification( $ctx, $IN_JANUARY );
 
-    like( $error, qr/"notifications_2027_01_pkey"/msx,
+    like( $error, qr/"notifications_2099_01_pkey"/msx,
         'PostgreSQL names a partition added after the others were asked about'
     );
     ok(
@@ -252,20 +306,20 @@ sub _inside_a_transaction {
 
     my $schema   = $ctx->{schema};
     my $conflict = $ctx->{conflict};
-    my $taken    = _notification( $ctx, $ctx->{ids}->uuid, $IN_OCTOBER );
+    my $taken    = _notification( $ctx, $ctx->{ids}->uuid, $IN_THIS_MONTH );
     my $after    = $ctx->{ids}->uuid;
     my $answer   = $schema->txn_do(
         sub {
             my ( undef, $error ) = $conflict->attempt(
                 $schema,
                 sub {
-                    return _notification( $ctx, $taken, $IN_OCTOBER );
+                    return _notification( $ctx, $taken, $IN_THIS_MONTH );
                 }
             );
             my $recognised =
               $conflict->is_conflict_on( $schema, $error,
                 'notifications_pkey' );
-            _notification( $ctx, $after, $IN_OCTOBER );
+            _notification( $ctx, $after, $IN_THIS_MONTH );
 
             return $recognised;
         }
@@ -287,7 +341,7 @@ sub _refused_lookup {
 
     my $schema   = $ctx->{schema};
     my $conflict = $ctx->{conflict};
-    my $taken    = _notification( $ctx, $ctx->{ids}->uuid, $IN_OCTOBER );
+    my $taken    = _notification( $ctx, $ctx->{ids}->uuid, $IN_THIS_MONTH );
     my %answer;
     my $rolled_back = _error(
         sub {
@@ -295,12 +349,13 @@ sub _refused_lookup {
                 sub {
                     my $error = _error(
                         sub {
-                            return _notification( $ctx, $taken, $IN_OCTOBER );
+                            return _notification( $ctx, $taken,
+                                $IN_THIS_MONTH );
                         }
                     );
                     %answer = (
                         partition => $conflict->is_conflict_on(
-                            $schema, $error, 'notifications_2026_10_pkey'
+                            $schema, $error, $THIS_MONTH_PKEY
                         ),
                         table => $conflict->is_conflict_on(
                             $schema, $error, 'notifications_pkey'
