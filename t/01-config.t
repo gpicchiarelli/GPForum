@@ -463,7 +463,7 @@ throws_ok(
     sub {
         GPForum::Config->new( default_theme => 'neon' )->validate;
     },
-qr/\A default_theme [ ] must [ ] be [ ] default, [ ] dark, [ ] or [ ] high_contrast/msx,
+qr/\A default_theme [ ] must [ ] be [ ] auto, [ ] default, [ ] dark, [ ] or [ ] high_contrast/msx,
     'invalid default theme fails validation',
 );
 

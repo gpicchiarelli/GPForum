@@ -101,7 +101,7 @@ is( $controller->ui_tone( 'state', 'suspended' ),
     'danger', 'ui_tone accepts namespaced calls for template ergonomics' );
 
 is( $controller->ui_theme_options->[0]{label},
-    'Default', 'ui_theme_options localizes theme labels' );
+    'Automatic', 'ui_theme_options localizes theme labels' );
 
 $test->get_ok( '/__bootstrap-ui' => { 'Accept-Language' => 'it' } )
   ->status_is(200)

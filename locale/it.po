@@ -2868,6 +2868,10 @@ msgctxt "theme.apply"
 msgid "Apply"
 msgstr "Applica"
 
+msgctxt "theme.auto"
+msgid "Automatic"
+msgstr "Automatico"
+
 msgctxt "theme.choose"
 msgid "Theme"
 msgstr "Tema"
@@ -2877,8 +2881,8 @@ msgid "Dark"
 msgstr "Scuro"
 
 msgctxt "theme.default"
-msgid "Default"
-msgstr "Predefinito"
+msgid "Light"
+msgstr "Chiaro"
 
 msgctxt "theme.high_contrast"
 msgid "High contrast"

@@ -131,6 +131,20 @@ while ( $css =~ /--font-(?!size)[\w-]+: \s* ([^;]+);/gmsx ) {
 is_deeply( \@unshipped, [],
     'every font the stylesheet names is shipped or a system font' );
 
+# The automatic theme is the dark one when the device asks for dark. CSS
+# cannot share one block between a selector and a media query, so the dark
+# palette is written twice; this is what keeps the two copies one palette.
+my $in_the_dark = qr/\@media \s* [(]prefers-color-scheme: \s* dark[)]/msx;
+my $auto_block  = qr/html\[data-theme="auto"\] \s* [{] ( [^}]* ) [}]/msx;
+my ($auto_dark) = $css =~ /$in_the_dark \s* [{] \s* $auto_block/msx;
+my ($chosen_dark) =
+  $css =~ /^html\[data-theme="dark"\] \s* [{] ( [^}]* ) [}]/msx;
+is_deeply(
+    _declarations($auto_dark),
+    _declarations($chosen_dark),
+    'the automatic theme in the dark is the dark theme, token for token'
+);
+
 # The type scale is its tokens. A rule that states a size of its own adds a
 # step the scale does not know about: 15px had crept into six rules that way.
 # Code is the exception, sized in em against the text around it.
@@ -184,6 +198,16 @@ sub _linear {
 # The first block is the light theme at :root; the dark theme redefines the
 # same tokens under html[data-theme="dark"], so it inherits whatever it does
 # not name.
+# A block's declarations, one string each, in the order written.
+sub _declarations {
+    my ($block) = @_;
+
+    return [
+        grep { length } map { s/\A \s+ | \s+ \z//gmsxr } split /;/msx,
+        $block // q{}
+    ];
+}
+
 sub _tokens_in_block {
     my ( $marker, $inherit_light ) = @_;
 

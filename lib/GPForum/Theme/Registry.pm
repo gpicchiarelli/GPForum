@@ -9,8 +9,10 @@ use v5.40;
 
 our $VERSION = '0.001';
 
-const my $FALLBACK_THEME => 'default';
-const my @THEME_NAMES    => qw(default dark high_contrast);
+const my $FALLBACK_THEME => 'auto';
+const my @THEME_NAMES    => qw(auto default dark high_contrast);
+const my $PREFERS_LIGHT  => '(prefers-color-scheme: light)';
+const my $PREFERS_DARK   => '(prefers-color-scheme: dark)';
 const my @TOKEN_NAMES => qw(
   background foreground muted surface surface_alt primary secondary accent
   border danger success focus_ring info warning surface_warning surface_danger
@@ -62,6 +64,20 @@ sub theme_color ( $self, $name ) {
     return $self->theme($name)->{theme_color};
 }
 
+# The colour of the browser's own chrome around the page, as the meta tags
+# that state it: one for a theme with one palette, and for the automatic
+# theme one for each setting of the device.
+sub theme_colors ( $self, $name ) {
+    my $theme = $self->theme($name);
+
+    return [ { color => $theme->{theme_color} } ] if $theme->{name} ne 'auto';
+
+    return [
+        { color => $theme->{theme_color},      media => $PREFERS_LIGHT },
+        { color => $self->theme_color('dark'), media => $PREFERS_DARK },
+    ];
+}
+
 sub color_scheme ( $self, $name ) {
     return $self->theme($name)->{color_scheme};
 }
@@ -93,7 +109,23 @@ sub _css_token_name ($name) {
     return 'color-' . $name;
 }
 
+# The automatic theme has no palette of its own: it is the light one until
+# the device asks for dark, and the stylesheet makes it the dark one then.
+# Its tokens here are the light theme's, which is what a server that cannot
+# see the device has to assume.
 sub _theme_contracts {
+    my $contracts = _palettes();
+    $contracts->{auto} = {
+        %{ $contracts->{default} },
+        color_scheme => 'light dark',
+        label_key    => 'theme.auto',
+        name         => 'auto',
+    };
+
+    return $contracts;
+}
+
+sub _palettes {
     return {
         default => _contract(
             'default',

@@ -9,12 +9,20 @@ The runtime registry is `GPForum::Theme::Registry`; CSS tokens live in
 
 Current contracts:
 
-- `default`
+- `auto`: the light palette until the reader's device asks for dark, and the
+  dark one then. It has no tokens of its own: the stylesheet repeats the dark
+  block under `prefers-color-scheme: dark`, and `t/188-theme-contrast.t` holds
+  the two copies to the same declarations. The page states `color-scheme:
+  light dark` and a `theme-color` for each setting of the device.
+- `default`: the light palette, whatever the device asks. Shown as "Light".
 - `dark`
 - `high_contrast`
 
-`GPFORUM_DEFAULT_THEME` configures the SSR default. Supported values are
-`default`, `dark`, and `high_contrast`. The SSR shell exposes a POST `/theme`
+`GPFORUM_DEFAULT_THEME` configures the SSR default, which is `auto` unless
+set. Supported values are `auto`, `default`, `dark`, and `high_contrast`.
+Migration 050 lets `users.preferred_theme` hold `auto` and makes it what a
+new member starts with; a member who had `default` keeps the light theme.
+The SSR shell exposes a POST `/theme`
 selector backed by CSRF protection, and authenticated users can manage the same
 theme from `/settings`. Guests persist a validated `gpforum_theme` cookie;
 authenticated users also persist `users.preferred_theme`. Invalid values fall

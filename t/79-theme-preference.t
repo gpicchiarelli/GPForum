@@ -31,7 +31,7 @@ subtest 'guest theme selector persists in a cookie' => sub {
     $test->element_exists_not('form.theme-form input[name="command_id"]');
     $test->element_exists('select[name="theme"] option[value="dark"]');
     $test->element_exists(
-        'select[name="theme"] option[value="default"][selected]');
+        'select[name="theme"] option[value="auto"][selected]');
 
     my $csrf_token = _csrf_token($test);
     $test->post_ok(
@@ -66,14 +66,14 @@ subtest 'unsupported theme inputs fall back safely' => sub {
         }
     );
     $test->status_is($HTTP_FOUND);
-    $test->header_like( 'Set-Cookie' => qr/gpforum_theme=default/msx );
+    $test->header_like( 'Set-Cookie' => qr/gpforum_theme=auto/msx );
 
     $test->get_ok('/login');
     $test->status_is($HTTP_OK);
     $test->element_exists(
-        'html[data-theme="default"][data-color-scheme="light"]');
+        'html[data-theme="auto"][data-color-scheme="light dark"]');
     $test->element_exists(
-        'select[name="theme"] option[value="default"][selected]');
+        'select[name="theme"] option[value="auto"][selected]');
 };
 
 subtest 'authenticated theme persists on profile and survives logout' => sub {

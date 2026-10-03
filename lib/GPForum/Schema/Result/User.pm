@@ -48,7 +48,7 @@ __PACKAGE__->add_columns(
     },
     preferred_theme => {
         data_type     => 'text',
-        default_value => 'default',
+        default_value => 'auto',
         is_nullable   => 0,
     },
     preferred_timezone => {

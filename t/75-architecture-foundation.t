@@ -620,9 +620,24 @@ subtest 'theme registry exposes explicit theme contracts' => sub {
 
     is_deeply(
         $registry->supported_themes,
-        [qw(default dark high_contrast)],
-        'theme registry names default, dark, and high contrast themes'
+        [qw(auto default dark high_contrast)],
+        'theme registry names automatic, light, dark and high contrast themes'
     );
+    is_deeply(
+        $registry->theme_colors('auto'),
+        [
+            { color => '#f8f6ef', media => '(prefers-color-scheme: light)' },
+            { color => '#111412', media => '(prefers-color-scheme: dark)' },
+        ],
+        'the automatic theme names a browser colour for light and for dark'
+    );
+    is_deeply(
+        $registry->theme_colors('dark'),
+        [ { color => '#111412' } ],
+        'a theme with one palette names one'
+    );
+    is( $registry->color_scheme('auto'),
+        'light dark', 'the automatic theme may be either scheme' );
     ok( $registry->supported('dark'), 'dark theme is supported' );
     is( $registry->theme_color('unknown'),
         '#f8f6ef', 'unknown theme falls back safely to default color' );
@@ -637,7 +652,7 @@ subtest 'theme registry exposes explicit theme contracts' => sub {
         [ map { "color-$_" =~ s/_/-/gr } @{ $registry->token_names } ],
         'theme registry exports CSS variable names for every token'
     );
-    is( $registry->theme_options('dark')->[1]{current},
+    is( $registry->theme_options('dark')->[2]{current},
         1, 'theme options mark the current theme' );
 };
 

@@ -148,7 +148,24 @@ $test->content_like(qr/GPForum/msx);
 $test->get_ok( '/login' => { 'Accept-Language' => 'it' } );
 $test->status_is($HTTP_OK);
 $test->element_exists(
-'html[lang="it"][dir="ltr"][data-locale="it"][data-direction="ltr"][data-script="Latn"][data-theme="default"][data-color-scheme="light"]'
+'html[lang="it"][dir="ltr"][data-locale="it"][data-direction="ltr"][data-script="Latn"][data-theme="auto"][data-color-scheme="light dark"]'
+);
+
+# A reader who has chosen nothing gets the automatic theme: the page says it
+# can be either, and names the browser's colour for each setting of the
+# device. The stylesheet does the rest.
+$test->element_exists('meta[name="color-scheme"][content="light dark"]');
+$test->element_exists(
+'meta[name="theme-color"][media="(prefers-color-scheme: light)"][content="#f8f6ef"]'
+);
+$test->element_exists(
+'meta[name="theme-color"][media="(prefers-color-scheme: dark)"][content="#111412"]'
+);
+my $in_the_dark = qr/\@media \s* [(]prefers-color-scheme: \s* dark[)]/msx;
+like(
+    $css,
+    qr/$in_the_dark \s* [{] \s* html\[data-theme="auto"\]/msx,
+    'the automatic theme is the dark one when the device asks for dark'
 );
 $test->element_exists('body.app-shell.typography-latin');
 $test->element_exists('link[rel="stylesheet"][href^="/gpforum-ssr.css?v="]');
@@ -166,10 +183,18 @@ $test->get_ok( '/login' => { Cookie => 'gpforum_theme=dark' } );
 $test->status_is($HTTP_OK);
 $test->element_exists('html[data-theme="dark"][data-color-scheme="dark"]');
 $test->element_exists('meta[name="theme-color"][content="#111412"]');
+$test->element_exists_not('meta[name="theme-color"][media]');
+
+# The light theme, chosen, stays light whatever the device asks.
+$test->get_ok( '/login' => { Cookie => 'gpforum_theme=default' } );
+$test->element_exists('html[data-theme="default"][data-color-scheme="light"]');
+$test->element_exists('meta[name="theme-color"][content="#f8f6ef"]');
+$test->element_exists_not('meta[name="theme-color"][media]');
 
 $test->get_ok( '/login' => { Cookie => 'gpforum_theme=neon' } );
 $test->status_is($HTTP_OK);
-$test->element_exists('html[data-theme="default"][data-color-scheme="light"]');
+$test->element_exists(
+    'html[data-theme="auto"][data-color-scheme="light dark"]');
 
 done_testing();
 

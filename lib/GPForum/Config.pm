@@ -17,7 +17,7 @@ const my $DEFAULT_LOG_PATH                  => q{};
 const my $DEFAULT_ATTACHMENT_ROOT           => 'var/attachments';
 const my $DEFAULT_ATTACHMENT_ACCEL_REDIRECT => q{};
 const my $DEFAULT_LOCALE                    => 'en';
-const my $DEFAULT_THEME                     => 'default';
+const my $DEFAULT_THEME                     => 'auto';
 const my $DEFAULT_TIMEZONE                  => 'UTC';
 const my $DEFAULT_PUBLIC_BASE_URL           => 'http://127.0.0.1:3000';
 const my $DEFAULT_SESSION_SECRET => 'gpforum-development-secret-change-me';
@@ -112,7 +112,7 @@ const my %VALID_OS_FEATURE_SETTING => map { $_ => 1 } qw(auto on off);
 const my %VALID_OS_AFFINITY        => map { $_ => 1 } qw(off manual);
 const my %VALID_RUNTIME_WORKER_POLICY => map { $_ => 1 }
   qw(configured cap-to-cpu);
-const my %VALID_THEME => map { $_ => 1 } qw(default dark high_contrast);
+const my %VALID_THEME => map { $_ => 1 } qw(auto default dark high_contrast);
 const my %VALID_MAIL_TRANSPORT => map { $_ => 1 } qw(test smtp sendmail);
 const my %VALID_ANTIVIRUS      => map { $_ => 1 } qw(clamd command none);
 const my %ROTATED_SECRET_ENV => map { $_ => 1 } qw(
@@ -717,7 +717,7 @@ sub _require_timezone ($value) {
 }
 
 sub _require_theme ($value) {
-    croak 'default_theme must be default, dark, or high_contrast'
+    croak 'default_theme must be auto, default, dark, or high_contrast'
       if !exists $VALID_THEME{$value};
 
     return;
