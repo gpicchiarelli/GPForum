@@ -33,6 +33,11 @@ const my $UUID => qr{\A [[:xdigit:]]{8} (?: - [[:xdigit:]]{4} ){3}
 const my @TABLES => qw(roles permissions role_permissions role_bindings
   audit_log);
 
+# Sorts before every minted uuid. The member holds this role on a space and
+# space_moderator globally, so a review ordered by role alone would list the
+# space binding first.
+const my $FIRST_ROLE_ID => '00000000-0000-4000-8000-000000000000';
+
 const my $USER_SQL => join q{ },
   'INSERT INTO users (id, username, display_name, email_normalized,',
   q{password_hash, status) VALUES (?, ?, ?, ?, 'x', 'active')};
@@ -83,6 +88,7 @@ _binding_id_collisions($fixture);
 _revocation($fixture);
 _review($fixture);
 _gate($fixture);
+_partial_scopes($fixture);
 
 done_testing();
 
@@ -94,7 +100,7 @@ sub _context {
         ids    => GPForum::Infrastructure::Id->new,
         schema => $db->schema,
     };
-    for my $name (qw(admin moderator member revoker)) {
+    for my $name (qw(admin moderator member revoker warden curator)) {
         my $id = $context->{ids}->uuid;
         $context->{dbh}->do( $USER_SQL, undef, $id, $name, ucfirst $name,
             "$name\@example.test" );
@@ -247,7 +253,7 @@ sub _catalog_repeats_and_races {
 sub _catalog_id_collisions {
     my ($ctx) = @_;
 
-    my $other_role = $ctx->{ids}->uuid;
+    my $other_role = $FIRST_ROLE_ID;
     $ctx->{dbh}->do( $ROLE_SQL, undef, $other_role, 'other_role', q{} );
     my ( $reminted, $role_tries ) = _tried(
         $ctx, 'roles',
@@ -733,6 +739,85 @@ sub _gate {
     );
 
     return;
+}
+
+# A binding is global only when its resource_id and its space_id are both
+# NULL; one naming either is scoped, and meets only a check naming the same
+# resource and space. The warden holds the role on a space named by its
+# space_id alone, the curator on a category named without its space. An
+# empty scope is no scope.
+sub _partial_scopes {
+    my ($ctx) = @_;
+
+    my %scope = %{ $ctx->{scope} };
+    for my $grant (
+        [ 'warden',  'space',    undef,            $scope{space} ],
+        [ 'curator', 'category', $scope{category}, undef ],
+      )
+    {
+        my ( $name, $type, $resource_id, $space_id ) = @{$grant};
+        _bind(
+            $ctx,
+            {
+                resource_id   => $resource_id,
+                resource_type => $type,
+                role_id       => $ctx->{role_id},
+                space_id      => $space_id,
+                user_id       => $ctx->{users}{$name},
+            }
+        );
+    }
+    my $gate =
+      GPForum::Service::Admin::PermissionGate->new( schema => $ctx->{schema} );
+    my $warden  = { user_id => $ctx->{users}{warden} };
+    my $curator = { user_id => $ctx->{users}{curator} };
+
+    is( _allowed( $gate, $warden, {%VIEW_QUEUE} ),
+        0, 'a binding naming only a space is not a global one' );
+    is( _allowed( $gate, $curator, {%VIEW_QUEUE} ),
+        0, 'nor is one naming only a resource' );
+    is(
+        _allowed( $gate, $warden, { %VIEW_QUEUE, space_id => $scope{space} } ),
+        1,
+        'a check naming only a space is met by a binding on that space'
+    );
+    is(
+        _allowed(
+            $gate, $warden,
+            {
+                %VIEW_QUEUE,
+                resource_id => $scope{category},
+                space_id    => $scope{space},
+            }
+        ),
+        0,
+        'but not a check on a category in it'
+    );
+    is(
+        _allowed(
+            $gate, $curator,
+            { %VIEW_QUEUE, resource_id => $scope{category} }
+        ),
+        1,
+        'a check naming only a resource is met by a binding on that resource'
+    );
+
+    my $empty = { %VIEW_QUEUE, resource_id => q{}, space_id => q{} };
+    is( _allowed( $gate, { user_id => $ctx->{users}{member} }, $empty ),
+        1, 'an empty scope is no scope: a global binding meets it' );
+    is( _allowed( $gate, $warden, $empty ), 0, 'and a scoped one does not' );
+
+    return;
+}
+
+# The gate's answer, or "died": a scope PostgreSQL cannot read as a uuid
+# fails the statement rather than the check.
+sub _allowed {
+    my ( $gate, $actor, $permission ) = @_;
+
+    my $answer = eval { return $gate->allowed( $actor, $permission ) };
+
+    return $answer // 'died';
 }
 
 sub _catalog_call {

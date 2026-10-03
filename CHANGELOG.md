@@ -1426,6 +1426,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- The permission gate tests on PostgreSQL fail if a binding that names only a
+  space, or only a resource, is treated as a global grant; an empty scope is
+  tested to mean no scope, and a category created without a space is tested to
+  go to the first live space by position.
+
 - Known defect pinned as TODO in `t/integration/postgres-notifications.t`: a
   notification, event or audit row left over with a different `created_at`
   does not conflict on its `(id, created_at)` primary key, so delivering it

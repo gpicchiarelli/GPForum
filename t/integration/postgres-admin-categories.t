@@ -55,6 +55,10 @@ const my $CATEGORY_ROW_SQL => join q{ },
   'FROM categories WHERE category_id = ?';
 const my $DELETE_SQL =>
   'UPDATE categories SET deleted_at = now() WHERE category_id = ?';
+const my $SPACE_POSITION_SQL =>
+  'UPDATE spaces SET position = ? WHERE space_id = ?';
+const my $SPACE_DELETE_SQL =>
+  'UPDATE spaces SET deleted_at = now() WHERE space_id = ?';
 
 # The defect this test found in code outside its reach, pinned where it shows
 # (quality program 5.1).
@@ -67,11 +71,12 @@ if ( !GPForum::Test::PgDatabase->admin_dsn ) {
 
 # The admin category store on PostgreSQL: a category's first write with its
 # event, outbox message and audit entry, the default space a fresh install
-# gets, edits and their visibility, the listing's order, and every race the
-# store recovers from. These ran on a fake ORM (t/145, removed when they
-# moved here) whose searches matched rows in Perl and whose unique keys were
-# its own; here the unique violation, the savepoint that recovers from it and
-# the row read back are PostgreSQL's. Only the look that misses is scripted
+# gets and the space a category given none goes to, edits and their
+# visibility, the listing's order, and every race the store recovers from.
+# These ran on a fake ORM (t/145, removed when they moved here) whose
+# searches matched rows in Perl and whose unique keys were its own; here the
+# unique violation, the savepoint that recovers from it and the row read back
+# are PostgreSQL's. Only the look that misses is scripted
 # (GPForum::Test::RacedSchema), and the id a store mints when a collision is
 # the point (GPForum::Test::ScriptedId).
 my $install = _context( GPForum::Test::PgDatabase->fresh );
@@ -84,7 +89,9 @@ _listing($install);
 _missing_rows($install);
 
 # The id collisions need a database the default space is not in yet.
-_space_and_category_collisions( _context( GPForum::Test::PgDatabase->fresh ) );
+my $spaces      = _context( GPForum::Test::PgDatabase->fresh );
+my $other_space = _space_and_category_collisions($spaces);
+_first_live_space( $spaces, $other_space );
 
 done_testing();
 
@@ -383,7 +390,13 @@ sub _missing_rows {
 
     # t/145 pinned these with ids that were not uuids, which the fake ORM
     # matched as text and did not find. PostgreSQL refuses the statement,
-    # and the admin category routes pass the id on as it came.
+    # and the admin category routes pass the id on as it came, so the store
+    # dies and the route answers 503 for what is a 404. These pass once the
+    # store answers undef for such an id, as for a uuid naming no row: the
+    # workflow already turns that undef into "space not found" or "category
+    # not found". Refusing the id in the controller instead
+    # (GPForum::Web::UrlId) would cover the category id in the path, not a
+    # space_id in the body, and leave these to be dropped rather than pass.
     local $TODO = $MALFORMED_TODO;
     ok(
         _answers_undef(
@@ -494,6 +507,27 @@ sub _space_and_category_collisions {
         $other_id, 'a unique category id collision keeps this space' );
 
     _category_id_leftover( $ctx, $other_id );
+
+    return $other_id;
+}
+
+# A category given no space goes to the first live one, by position, then
+# slug. Here the general space and the other one, both at position 0.
+sub _first_live_space {
+    my ( $ctx, $other_id ) = @_;
+
+    my $general_id = _space_id( $ctx, 'general' );
+    is( _create( $ctx, { title => 'Unplaced Tie' } )->{space_id},
+        $general_id,
+        'a category given no space goes to the first space by slug' );
+
+    $ctx->{dbh}->do( $SPACE_POSITION_SQL, undef, $TOP, $other_id );
+    is( _create( $ctx, { title => 'Unplaced Top' } )->{space_id},
+        $other_id, 'or to one of a lower position before it' );
+
+    $ctx->{dbh}->do( $SPACE_DELETE_SQL, undef, $other_id );
+    is( _create( $ctx, { title => 'Unplaced Live' } )->{space_id},
+        $general_id, 'but never to a soft-deleted space' );
 
     return;
 }
