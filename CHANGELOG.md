@@ -1564,6 +1564,12 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- The six modules that used Try::Tiny use native `try`/`catch`, and `cpanfile`
+  no longer declares Try::Tiny (DBIx::Class, DateTime and Email::Sender still
+  install it). `Identity::Support->trim` and `I18N::Locale->trim` are now
+  `trimmed`: under `use v5.40` a package sub named `trim` collides with the
+  lexical builtin.
+
 - `t/299-readiness-runbook-sections.t` fails when a readiness runbook names a
   section heading its file does not have.
 

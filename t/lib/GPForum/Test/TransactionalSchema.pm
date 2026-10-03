@@ -3,12 +3,9 @@
 
 package GPForum::Test::TransactionalSchema;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base -base;
-use Try::Tiny;
+use v5.40;
 
 use GPForum::Test::Storage;
 
@@ -39,8 +36,8 @@ sub txn_do {
     try {
         $result = $code->();
     }
-    catch {
-        $failure = $_;
+    catch ($error) {
+        $failure = $error;
     };
     $self->_leave_transaction;
     if ($failure) {
@@ -237,7 +234,7 @@ None.
 
 =head1 DEPENDENCIES
 
-L<Mojo::Base>, L<Carp>, L<Try::Tiny>, L<GPForum::Test::Storage>.
+L<Mojo::Base>, L<Carp>, L<GPForum::Test::Storage>.
 
 =head1 INCOMPATIBILITIES
 

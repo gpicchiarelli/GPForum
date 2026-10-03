@@ -58,3 +58,10 @@ max_mccabe = 12
 [TestingAndDebugging::RequireUseStrict]
 
 [TestingAndDebugging::RequireUseWarnings]
+
+# Every file declares `use v5.40;` (ADR 0117). The policy exists to keep code
+# loadable by perls older than 5.8.1, which cannot parse a v-string version;
+# the supported floor is 5.40, and `use v5.40` is the spelling perldoc and the
+# quality program use. Its only alternative, `use 5.040`, says the same thing
+# less readably.
+[-ValuesAndExpressions::ProhibitVersionStrings]

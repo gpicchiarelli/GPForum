@@ -14,7 +14,7 @@ requirements without review.
 | Minion | runtime | Artistic-2.0 | optional async worker framework | allowed |
 | JSON::MaybeXS | runtime | Perl 5 license | JSON adapter selection | allowed |
 | Cpanel::JSON::XS | runtime | Perl 5 license | preferred JSON::MaybeXS backend; pinned for CVE-2026-9334 and CVE-2026-9516 | allowed |
-| Try::Tiny | runtime | MIT | small exception helper | allowed |
+| Try::Tiny | runtime (transitive) | MIT | required by DBIx::Class, DateTime and Email::Sender; GPForum itself uses native try/catch | allowed |
 | DateTime | runtime | Perl 5 license | date/time core dependency | allowed |
 | Crypt::Argon2 | runtime | Apache-2.0 | password hashing XS dependency | allowed |
 | Crypt::URandom | runtime | Perl 5 license | entropy source | allowed |

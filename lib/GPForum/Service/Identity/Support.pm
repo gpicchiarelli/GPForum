@@ -50,7 +50,7 @@ sub has_text ( $, $value ) {
     return defined $value && length $value ? 1 : 0;
 }
 
-sub trim ( $, $value ) {
+sub trimmed ( $, $value ) {
     if ( !defined $value ) {
         $value = q{};
     }
@@ -61,7 +61,7 @@ sub trim ( $, $value ) {
 }
 
 sub normalize_identifier ( $self, $value ) {
-    return lc $self->trim($value);
+    return lc $self->trimmed($value);
 }
 
 sub hash_value ( $self, $value ) {
@@ -156,7 +156,7 @@ Writes a value hash onto a hash or DBIx::Class row.
 
 True when the value is defined and non-empty.
 
-=head2 trim
+=head2 trimmed
 
 Strips surrounding whitespace.
 

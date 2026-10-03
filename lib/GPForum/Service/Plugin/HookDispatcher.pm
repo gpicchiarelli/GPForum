@@ -3,11 +3,8 @@
 
 package GPForum::Service::Plugin::HookDispatcher;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
-use Try::Tiny;
+use v5.40;
 
 our $VERSION = '0.001';
 
@@ -50,14 +47,10 @@ sub _dispatch_hook ( $self, $hook, $payload ) {
     }
 
     my $result;
-    my $error = try {
+    try {
         $result = $handler->( $payload, $hook );
-        return;
     }
-    catch {
-        return $_;
-    };
-    if ($error) {
+    catch ($error) {
         return $self->_record_failure(
             $hook,
             {
@@ -66,7 +59,7 @@ sub _dispatch_hook ( $self, $hook, $payload ) {
                 payload       => $payload,
             }
         );
-    }
+    };
 
     return {
         ok            => 1,
@@ -169,7 +162,7 @@ None.
 
 =head1 DEPENDENCIES
 
-L<GPForum::Service::Plugin::FailureRecorder>, L<Try::Tiny>.
+L<GPForum::Service::Plugin::FailureRecorder>.
 
 =head1 INCOMPATIBILITIES
 

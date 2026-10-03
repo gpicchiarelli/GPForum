@@ -272,7 +272,7 @@ sub _issued_token ( $self, $input ) {
 
 sub consume_token ( $self, $token_type, $raw_token ) {
     my $token_hash =
-      $self->session_tokens->hash_token( $self->support->trim($raw_token) );
+      $self->session_tokens->hash_token( $self->support->trimmed($raw_token) );
     $self->_lock_token_hash($token_hash);
 
     my $row = $self->_tokens->search_rs(

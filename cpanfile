@@ -7,7 +7,6 @@ requires 'JSON::MaybeXS', '1.004008';
 # Never loaded by name: it is the XS backend JSON::MaybeXS selects at runtime,
 # and the floor is what keeps it from falling back to the pure-Perl one.
 requires 'Cpanel::JSON::XS', '4.53';
-requires 'Try::Tiny', '0.32';
 requires 'DateTime', '1.67';
 # Named directly by the date formatter and the time zone preference (9.3).
 requires 'DateTime::TimeZone', '2.71';

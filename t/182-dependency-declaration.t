@@ -59,6 +59,11 @@ unlike(
     qr/requires [ ] 'Type::Tiny'/msx,
     'a declared dependency with no call site is gone'
 );
+unlike(
+    $cpanfile,
+    qr/requires [ ] 'Try::Tiny'/msx,
+'Try::Tiny is not declared: the code uses native try/catch, and the distributions that need it bring it'
+);
 
 done_testing();
 

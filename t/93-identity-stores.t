@@ -15,7 +15,7 @@ use Test::More;
 our $VERSION = '0.001';
 
 my $support = GPForum::Service::Identity::Support->new;
-is( $support->trim('  giacomo  '),
+is( $support->trimmed('  giacomo  '),
     'giacomo', 'support trims surrounding whitespace' );
 is( $support->normalize_identifier('Giacomo@Example.TEST'),
     'giacomo@example.test', 'support normalizes identifiers' );

@@ -3,12 +3,9 @@
 
 package GPForum::Test::EngineeringCorrectness::Schema;
 
-use strict;
-use warnings;
-
 use Carp qw(croak);
 use Mojo::Base -base;
-use Try::Tiny;
+use v5.40;
 
 use GPForum::Test::EngineeringCorrectness::ResultSet;
 
@@ -41,8 +38,8 @@ sub txn_do {
     try {
         $result = $code->();
     }
-    catch {
-        $failure = $_;
+    catch ($error) {
+        $failure = $error;
     };
     if ($failure) {
         $self->created($snapshot);

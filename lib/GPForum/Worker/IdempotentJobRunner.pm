@@ -3,11 +3,8 @@
 
 package GPForum::Worker::IdempotentJobRunner;
 
-use strict;
-use warnings;
-
 use Mojo::Base -base, -signatures;
-use Try::Tiny;
+use v5.40;
 
 our $VERSION = '0.001';
 
@@ -28,14 +25,15 @@ sub run ( $self, $idempotency_key, $code, $event_id = undef ) {
     return { ok => 1, skipped => 1 }
       if !$self->store->begin( $idempotency_key, $event_id );
 
-    my $result = try {
+    my $result;
+    try {
         my $value = $code->();
         $self->store->mark_done( $idempotency_key, $value );
-        return { ok => 1, skipped => 0, result => $value };
+        $result = { ok => 1, skipped => 0, result => $value };
     }
-    catch {
-        $self->store->mark_failed( $idempotency_key, "$_" );
-        return { ok => 0, skipped => 0, error => "$_" };
+    catch ($error) {
+        $self->store->mark_failed( $idempotency_key, "$error" );
+        $result = { ok => 0, skipped => 0, error => "$error" };
     };
 
     return $result;

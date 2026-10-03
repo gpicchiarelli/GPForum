@@ -101,10 +101,10 @@ sub normalize ( $self, $tag ) {
         return q{};
     }
 
-    return $self->_normalized( $self->trim($tag) );
+    return $self->_normalized( $self->trimmed($tag) );
 }
 
-sub trim ( $, $value ) {
+sub trimmed ( $, $value ) {
     if ( !defined $value ) {
         return q{};
     }
@@ -146,7 +146,7 @@ sub _ordered_ranges ( $self, $accept_language ) {
 }
 
 sub _range_from_part ( $self, $part, $position ) {
-    my ( $tag, @parameters ) = map { $self->trim($_) } split /;/msx, $part;
+    my ( $tag, @parameters ) = map { $self->trimmed($_) } split /;/msx, $part;
     my $normalized = $self->normalize($tag);
     if ( !$self->has_text($normalized) ) {
         my $undefined;
@@ -333,7 +333,7 @@ Returns the configured default when supported, otherwise English.
 
 Lowercases and hyphenates a locale tag.
 
-=head2 trim
+=head2 trimmed
 
 Strips surrounding whitespace.
 

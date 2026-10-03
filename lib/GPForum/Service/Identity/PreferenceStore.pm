@@ -53,7 +53,7 @@ sub update_preferred_timezone ( $self, $input ) {
     my $user = $self->_find_user_by_id( $input->{user_id} );
     return { error => 'not_found', ok => 0 } if !$user;
 
-    my $zone = $self->support->trim( $input->{preferred_timezone} );
+    my $zone = $self->support->trimmed( $input->{preferred_timezone} );
     if ( length $zone && !DateTime::TimeZone->is_valid_name($zone) ) {
         return { error => 'timezone_invalid', ok => 0 };
     }
@@ -102,7 +102,7 @@ sub _update_preference ( $self, $command ) {
 
 sub _write_preference ( $self, $user, $command ) {
     my $column  = $command->{column};
-    my $trimmed = $self->support->trim( $command->{input}{$column} );
+    my $trimmed = $self->support->trimmed( $command->{input}{$column} );
     if ( !length $trimmed ) {
         return { error => $command->{required}, ok => 0 };
     }

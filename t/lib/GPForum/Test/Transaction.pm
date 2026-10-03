@@ -3,12 +3,10 @@
 
 package GPForum::Test::Transaction;
 
-use strict;
-use warnings;
+use v5.40;
 
 use Carp qw(croak);
 use Const::Fast;
-use Try::Tiny;
 
 our $VERSION = '0.001';
 
@@ -26,8 +24,8 @@ sub run {
     try {
         $result = $code->();
     }
-    catch {
-        $failure = $_;
+    catch ($error) {
+        $failure = $error;
     };
     if ($failure) {
         _restore($snapshot);
@@ -165,7 +163,7 @@ None.
 
 =head1 DEPENDENCIES
 
-Uses L<Carp>, L<Const::Fast>, and L<Try::Tiny>.
+Uses L<Carp> and L<Const::Fast>.
 
 =head1 INCOMPATIBILITIES
 

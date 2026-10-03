@@ -3,9 +3,6 @@
 
 package GPForum::Service::Outbox::Dispatcher;
 
-use strict;
-use warnings;
-
 use Const::Fast;
 use GPForum::Service::Clock;
 use GPForum::Service::Outbox::ClaimedMessage;
@@ -14,7 +11,7 @@ use GPForum::Service::Outbox::DeadLetterRecorder;
 use GPForum::Service::Outbox::FailureType;
 use GPForum::Service::Outbox::Retry;
 use Mojo::Base -base, -signatures;
-use Try::Tiny;
+use v5.40;
 
 our $VERSION = '0.001';
 
@@ -180,16 +177,19 @@ sub _supports_postgresql_claim ($self) {
     return _dbh_driver_name($dbh) eq 'Pg';
 }
 
+# Undef when the schema has no storage or the storage cannot give a handle,
+# which _supports_postgresql_claim reads as "not PostgreSQL".
 sub _schema_dbh ($self) {
-    my $storage = try { return $self->schema->storage; }
-    catch { return; };
-    if ( !$storage ) {
-        my $undefined;
-        return $undefined;
+    my $dbh;
+    try {
+        my $storage = $self->schema->storage;
+        if ($storage) {
+            $dbh = $storage->dbh;
+        }
     }
-
-    my $dbh = try { return $storage->dbh; }
-    catch { return; };
+    catch ($error) {
+        $dbh = undef;
+    };
 
     return $dbh;
 }
@@ -223,15 +223,14 @@ sub _search_rows ($search) {
 }
 
 sub _dispatch_one ( $self, $message ) {
-    my $outcome = try {
+    try {
         $self->transport->dispatch($message);
-        return $DONE_STATUS;
     }
-    catch {
-        return $self->_mark_failed( $message, $_ );
+    catch ($error) {
+        return $self->_mark_failed( $message, $error );
     };
 
-    return $outcome;
+    return $DONE_STATUS;
 }
 
 sub _claimed_message_for_row {
@@ -498,8 +497,7 @@ C<max_attempts> defaults to 5. PostgreSQL claim requires a C<Pg> DBI driver.
 
 =head1 DEPENDENCIES
 
-Uses L<Const::Fast>, L<Mojo::Base>, L<Try::Tiny>, and the outbox helpers
-above.
+Uses L<Const::Fast>, L<Mojo::Base> and the outbox helpers above.
 
 =head1 INCOMPATIBILITIES
 
