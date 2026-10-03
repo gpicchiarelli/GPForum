@@ -67,8 +67,7 @@ sub find_category ( $self, $category_id, $viewer = undef ) {
         return $category if $category->{category_id} eq $category_id;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub list_category_threads ( $self, $request ) {
@@ -90,8 +89,7 @@ sub list_public_threads ( $self, $request ) {
 }
 
 sub find_thread ( $self, $thread_id ) {
-    my $undefined;
-    return $undefined if $thread_id ne 'thread-1';
+    return undef if $thread_id ne 'thread-1';
 
     return $self->_thread(1);
 }

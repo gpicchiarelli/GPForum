@@ -44,8 +44,7 @@ sub request_payload ( $self, $request ) {
 
 sub job_hash ( $self, $job ) {
     if ( !$job ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -60,8 +59,7 @@ sub job_hash ( $self, $job ) {
 
 sub request_hash ( $self, $request ) {
     if ( !$request ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -82,8 +80,7 @@ sub _row_column ( $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _listed_rows ($search) {

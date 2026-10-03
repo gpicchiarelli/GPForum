@@ -32,8 +32,7 @@ sub storage {
 sub dbh {
     my ($self) = @_;
 
-    my $undefined;
-    return $undefined if !length $self->error;
+    return undef if !length $self->error;
 
     croak $self->error;
 }

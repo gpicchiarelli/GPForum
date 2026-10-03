@@ -1572,6 +1572,11 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- `my $undefined; return $undefined;` is now `return undef;` (ADR 0117), and
+  the 63 dead returns after a final `UniqueConflict->rethrow` are gone. The
+  profile no longer applies `ProhibitExplicitReturnUndef` and treats
+  `rethrow` and `throw` as terminal for `RequireFinalReturn`.
+
 - Every Perl file declares `use v5.40;` in place of `use strict;` and `use
   warnings;`, on the line after each `use Mojo::Base` (ADR 0117).
   `t/321-preamble.t` holds every file to it and names the files still to be

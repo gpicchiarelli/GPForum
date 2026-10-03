@@ -81,13 +81,11 @@ sub _missing_required_field ($event) {
         }
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _type_rejection_reason ($event) {
-    my $undefined;
-    return $undefined if $event->{type} =~ $TYPE_PATTERN;
+    return undef if $event->{type} =~ $TYPE_PATTERN;
 
     return 'invalid_type';
 }
@@ -96,25 +94,22 @@ sub _schema_version_rejection_reason ($event) {
     if (   $event->{schema_version} =~ /\A [[:digit:]]+ \z/msx
         && $event->{schema_version} >= 1 )
     {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return 'invalid_schema_version';
 }
 
 sub _payload_rejection_reason ($event) {
-    my $undefined;
-    return $undefined if ref $event->{payload} eq 'HASH';
+    return undef if ref $event->{payload} eq 'HASH';
 
     return 'invalid_payload';
 }
 
 sub _metadata_rejection_reason ($event) {
-    my $undefined;
-    return $undefined if !exists $event->{metadata};
+    return undef if !exists $event->{metadata};
 
-    return $undefined if ref $event->{metadata} eq 'HASH';
+    return undef if ref $event->{metadata} eq 'HASH';
 
     return 'invalid_metadata';
 }

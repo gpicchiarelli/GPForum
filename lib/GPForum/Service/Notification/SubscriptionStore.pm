@@ -63,8 +63,6 @@ sub _subscription_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _subscription_after_id_conflict ( $self, $input ) {
@@ -86,8 +84,6 @@ sub _retry_subscription_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_subscription_row ( $self, $input, $error ) {

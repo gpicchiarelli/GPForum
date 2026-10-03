@@ -218,13 +218,11 @@ sub _community_write_failure ( $self, $result ) {
 }
 
 sub _community_status_failure ( $self, $result, $mapped ) {
-    my $undefined;
-
     if ( !defined $mapped ) {
-        return $undefined;
+        return undef;
     }
     if ( $mapped eq 'ok' ) {
-        return $undefined;
+        return undef;
     }
 
     return $self->_community_error_response( $result, $mapped );
@@ -244,8 +242,7 @@ sub _community_error_response ( $self, $result, $mapped ) {
         return $self->_conflict( $result->{error} );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _community_write_success ( $self, $kind, $status, $result ) {

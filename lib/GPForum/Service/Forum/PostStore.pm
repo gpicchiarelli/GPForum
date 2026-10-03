@@ -132,8 +132,7 @@ sub _reply_store_block ( $thread, $replier ) {
         return { ok => 0, error => 'thread is locked' };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 # ThreadDetailReader's answer for the writer as a viewer: hidden or another
@@ -224,8 +223,6 @@ sub _retry_post_id ( $self, $command ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_post_id ( $self, $command ) {
@@ -311,8 +308,6 @@ sub _post_copy_after_conflict ( $self, $ctx, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _retry_or_reuse_post_copy_body ( $self, $ctx ) {
@@ -343,8 +338,6 @@ sub _retry_post_copy_body_id ( $self, $ctx ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_body_id ( $self, $command ) {
@@ -408,8 +401,6 @@ sub _retry_post_copy_revision_id ( $self, $ctx ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _retry_post_copy_shard ( $self, $ctx ) {
@@ -521,8 +512,7 @@ sub _moderated_post_refusal ( $post, $thread, $author ) {
         return { ok => 0, error => 'thread is locked' };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _post_thread_gone ( $thread, $author ) {
@@ -628,8 +618,6 @@ sub _retry_revision_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_revision_id ( $self, $command ) {
@@ -663,9 +651,6 @@ sub _reuse_edit ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow( $input->{error} );
-
-    my $undefined;
-    return $undefined;
 }
 
 sub _update_allocated ( $self, $existing, $input_command ) {
@@ -683,8 +668,7 @@ sub _insert_or_reuse_body ( $self, $command ) {
         sub { return $self->_create_body($command); },
       );
     if ($created) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_body_after_conflict( $command, $error );
@@ -738,8 +722,6 @@ sub _retry_body_id ( $self, $command ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _finish_edit ( $self, $command, $post ) {
@@ -770,8 +752,7 @@ sub _body_unchanged ( $self, $existing, $command ) {
 sub _current_body ( $self, $post ) {
     my $body_id = _column( $post, 'current_body_id' );
     if ( !_has_text($body_id) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('PostBody')
@@ -1048,8 +1029,7 @@ sub _insert_or_reuse_shard ( $self, $shard ) {
         sub { return $self->_create_shard($shard); },
       );
     if ($created) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_shard_after_conflict( $shard, $error );
@@ -1261,8 +1241,7 @@ sub _valid_position ($position) {
 
 sub _schema_dbh ($schema) {
     my $storage = eval { return $schema->storage; };
-    my $undefined;
-    return $undefined if !$storage || !$storage->can('dbh');
+    return undef if !$storage || !$storage->can('dbh');
 
     my $dbh = eval { return $storage->dbh; };
     return $dbh;

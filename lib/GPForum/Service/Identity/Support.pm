@@ -32,8 +32,7 @@ sub column ( $, $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub update_row ( $self, $row, $values ) {
@@ -76,14 +75,12 @@ sub iso8601_from_epoch ( $, $epoch ) {
 }
 
 sub epoch_from_timestamp ( $, $value ) {
-    my $undefined;
-
     if ( !defined $value ) {
-        return $undefined;
+        return undef;
     }
     my @parts = $value =~ $TIMESTAMP;
     if ( !@parts ) {
-        return $undefined;
+        return undef;
     }
 
     my $zone = pop @parts;
@@ -93,7 +90,7 @@ sub epoch_from_timestamp ( $, $value ) {
             $year );
     };
     if ( !defined $epoch ) {
-        return $undefined;
+        return undef;
     }
 
     return $epoch - _zone_offset_seconds($zone);

@@ -23,8 +23,7 @@ sub search_config ($class) {
 }
 
 sub build_thread ( $self, $thread ) {
-    my $undefined;
-    return $undefined if !_thread_is_visible($thread);
+    return undef if !_thread_is_visible($thread);
 
     return {
         entity_type        => 'thread',
@@ -45,11 +44,10 @@ sub build_thread ( $self, $thread ) {
 }
 
 sub build_post ( $self, $post ) {
-    my $undefined;
-    return $undefined if !_post_is_visible($post);
+    return undef if !_post_is_visible($post);
 
     my $thread = $post->thread;
-    return $undefined if !_thread_is_visible($thread);
+    return undef if !_thread_is_visible($thread);
 
     my $body = $post->current_body;
 
@@ -72,18 +70,16 @@ sub build_post ( $self, $post ) {
 }
 
 sub _thread_is_visible ($row) {
-    my $undefined;
-    return $undefined if !$row;
-    return $undefined if defined $row->get_column('deleted_at');
+    return undef if !$row;
+    return undef if defined $row->get_column('deleted_at');
 
     my $state = $row->get_column('moderation_state');
     return $state && ( $state eq 'visible' || $state eq 'locked' ) ? 1 : 0;
 }
 
 sub _post_is_visible ($row) {
-    my $undefined;
-    return $undefined if !$row;
-    return $undefined if defined $row->get_column('deleted_at');
+    return undef if !$row;
+    return undef if defined $row->get_column('deleted_at');
 
     return $row->get_column('moderation_state') eq 'visible' ? 1 : 0;
 }
@@ -93,15 +89,14 @@ sub _permission_scope ($row) {
 }
 
 sub _space_id_for_thread ($thread) {
-    my $undefined;
     return $thread->get_column('space_id')
       if $thread->can('has_column')
       && $thread->has_column('space_id');
 
-    return $undefined if !$thread->can('category');
+    return undef if !$thread->can('category');
 
     my $category = $thread->category;
-    return $undefined if !$category;
+    return undef if !$category;
 
     return $category->get_column('space_id');
 }

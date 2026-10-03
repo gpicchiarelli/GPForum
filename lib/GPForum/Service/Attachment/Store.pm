@@ -149,8 +149,6 @@ sub _intent_after_unique ( $self, $intent, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _retry_or_reuse_id ( $self, $intent ) {
@@ -182,8 +180,6 @@ sub _retry_attachment_id ( $self, $intent ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reissued_intent ( $self, $intent ) {
@@ -278,8 +274,6 @@ sub _link_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _link_after_id_conflict ( $self, $input ) {
@@ -301,8 +295,6 @@ sub _retry_link_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_link ( $self, $input, $error ) {
@@ -346,8 +338,7 @@ sub _create_link ( $self, $input ) {
 sub mark_uploaded ( $self, $attachment_id ) {
     my $attachment = $self->find_attachment($attachment_id);
     if ( !$attachment ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( $self->lifecycle->already_uploaded($attachment) ) {
         return $self->lifecycle->uploaded_replay($attachment);
@@ -376,8 +367,7 @@ sub record_scan ( $self, $input ) {
 # in the UPDATE itself, so when two scans race -- the outbox retry and the
 # hourly rescan, say -- the database decides, and the loser is a replay.
 sub _record_scan_once ( $self, $input ) {
-    my $undefined;
-    return $undefined if !$self->find_attachment( $input->{attachment_id} );
+    return undef if !$self->find_attachment( $input->{attachment_id} );
 
     my $changes = $self->lifecycle->scan_changes($input);
     my $updated = $self->_attachments->search_rs(
@@ -496,8 +486,7 @@ sub _format_checked ($query) {
 
 sub terminal_scan ( $self, $attachment ) {
     if ( !$self->lifecycle->already_scanned($attachment) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->lifecycle->scanned_replay($attachment);
@@ -545,8 +534,6 @@ sub _variant_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _variant_after_id_conflict ( $self, $input ) {
@@ -568,8 +555,6 @@ sub _retry_variant_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_variant ( $self, $input, $error ) {
@@ -757,8 +742,7 @@ sub _existing_variant ( $self, $input ) {
 sub _variant_by_object_key ( $self, $input ) {
     my $object_key = $input->{object_key};
     if ( !defined $object_key || !length $object_key ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_single_row(
@@ -813,8 +797,7 @@ sub _post_links ( $self, $post_ids ) {
 sub _append_post_attachment ( $self, $input ) {
     my $post_id = $self->record->column( $input->{link}, 'target_id' );
     if ( !$input->{requested}{$post_id} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_push_visible_attachment( $input, $post_id );
@@ -874,11 +857,10 @@ sub _purge_orphan ( $self, $attachment, $input ) {
 }
 
 sub _purge_locked_orphan ( $self, $attachment_id, $input ) {
-    my $undefined;
     my $locked =
       $self->_attachments->find( $attachment_id, { for => 'update' } );
-    return $undefined if !$locked || !$self->lifecycle->still_intent($locked);
-    return $undefined if $self->_attachment_has_links($locked);
+    return undef if !$locked || !$self->lifecycle->still_intent($locked);
+    return undef if $self->_attachment_has_links($locked);
 
     $self->_remove_stored_objects($locked);
 
@@ -1056,8 +1038,7 @@ sub _record_scan_event ( $self, $input ) {
 sub _update_attachment ( $self, $attachment_id, $changes ) {
     my $attachment = $self->find_attachment($attachment_id);
     if ( !$attachment ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $attachment->update($changes);
@@ -1085,20 +1066,18 @@ sub _attachment_has_links ( $self, $attachment ) {
 }
 
 sub _target_row ( $self, $target_type, $target_id ) {
-    my $undefined;
-
     my %resultset_for = (
         post   => 'Post',
         thread => 'Thread',
     );
     if ( !exists $resultset_for{$target_type} ) {
-        return $undefined;
+        return undef;
     }
 
     my $resultset =
       eval { return $self->schema->resultset( $resultset_for{$target_type} ); };
     if ( !$resultset ) {
-        return $undefined;
+        return undef;
     }
 
     return $resultset->find($target_id);

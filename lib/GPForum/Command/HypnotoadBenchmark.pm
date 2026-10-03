@@ -350,8 +350,7 @@ sub _route_status ( $p95, $p99, $rps, $threshold, $statuses, $db_queries ) {
 }
 
 sub _compare_route ( $route, $baseline, $tolerance ) {
-    my $undefined;
-    return $undefined if !$baseline;
+    return undef if !$baseline;
 
     my @violations;
     _upper_regression( \@violations, $route, $baseline, $tolerance, 'p95_ms' );
@@ -417,13 +416,12 @@ sub _in_process_report ($options) {
 }
 
 sub _route_from_report ( $report, $route ) {
-    my $undefined;
-    return $undefined if !$report;
+    return undef if !$report;
     for my $candidate ( @{ $report->{routes} || [] } ) {
         return $candidate if $candidate->{route} eq $route;
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _start_hypnotoad ($options) {
@@ -646,8 +644,7 @@ sub _find_binary ($name) {
         return $candidate if -x $candidate && !-d $candidate;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _proxy_version ( $binary, $kind ) {
@@ -843,14 +840,13 @@ sub _reverse_proxy_runtime_metadata ( $backend_runtime, $proxy_runtime,
 }
 
 sub _read_pid_file ($pid_file) {
-    my $undefined;
-    return $undefined if !$pid_file || !-e $pid_file;
+    return undef if !$pid_file || !-e $pid_file;
 
-    open my $handle, '<', $pid_file or return $undefined;
+    open my $handle, '<', $pid_file or return undef;
     my $pid = <$handle>;
-    close $handle or return $undefined;
+    close $handle or return undef;
 
-    return $undefined if !defined $pid;
+    return undef if !defined $pid;
     $pid =~ s/\A \s+//msx;
     $pid =~ s/\s+ \z//msx;
 

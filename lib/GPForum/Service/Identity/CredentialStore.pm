@@ -68,8 +68,6 @@ sub _credential_after_unique ( $self, $ctx, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _retry_or_reuse_credential ( $self, $ctx ) {
@@ -113,8 +111,6 @@ sub _retry_credential_id ( $self, $ctx ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_active_password ( $self, $input, $error ) {
@@ -188,8 +184,7 @@ sub _credential_hash ( $self, $credential ) {
 
 sub active_password_credential ( $self, $user_id ) {
     if ( !$self->support->has_text($user_id) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_credentials->search_rs(

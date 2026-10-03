@@ -36,8 +36,7 @@ sub supported_locale ( $self, $locale ) {
 
 sub matching ( $self, $tag ) {
     if ( !$self->has_text($tag) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( $self->supported->{$tag} ) {
         return $tag;
@@ -48,7 +47,7 @@ sub matching ( $self, $tag ) {
 
 sub language_ranges ( $self, $accept_language ) {
 
-    # A bare `return` and not `return $undefined`: this is called in list
+    # A bare `return` and not `return undef`: this is called in list
     # context by negotiate, where returning a scalar yields a one-element list
     # holding undef rather than an empty one. That made every request without
     # an Accept-Language header — curl, health checks, most API clients — loop
@@ -147,8 +146,7 @@ sub _range_from_part ( $self, $part, $position ) {
     my ( $tag, @parameters ) = map { $self->trimmed($_) } split /;/msx, $part;
     my $normalized = $self->normalize($tag);
     if ( !$self->has_text($normalized) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_quality_range( $normalized, \@parameters, $position );
@@ -157,8 +155,7 @@ sub _range_from_part ( $self, $part, $position ) {
 sub _quality_range ( $self, $tag, $parameters, $position ) {
     my $quality = $self->_quality($parameters);
     if ( $quality <= $ZERO_QUALITY ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -184,8 +181,7 @@ sub _quality_value ( $, $parameter ) {
         return $1 + 0;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _sort_ranges ( $, $ranges ) {
@@ -203,8 +199,7 @@ sub _base_match ( $self, $tag ) {
         return $base_tag;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _entry ( $self, $locale ) {

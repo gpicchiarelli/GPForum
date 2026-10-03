@@ -69,8 +69,7 @@ sub _domain_realtime_event_for ( $self, $payload ) {
     return $self->_moderation_event($payload)
       if $event_type =~ /\A moderation[.] | \A report[.] /msx;
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _post_content_event ($event_type) {
@@ -91,8 +90,7 @@ sub _thread_content_event ($event_type) {
 
 sub _post_created_event ( $self, $payload ) {
     my $thread_id = _event_value( $payload, 'thread_id' );
-    my $undefined;
-    return $undefined if !defined $thread_id;
+    return undef if !defined $thread_id;
 
     return $self->realtime_contract->build(
         event_id       => $payload->{event_id},

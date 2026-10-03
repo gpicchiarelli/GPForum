@@ -73,8 +73,7 @@ sub start_request ( $self, $metadata ) {
 
 sub finish_request ( $self, $token, $metadata ) {
     my $request = $self->{current};
-    my $undefined;
-    return $undefined if !$request;
+    return undef if !$request;
 
     $request->{route} = $metadata->{route}
       if defined $metadata->{route};
@@ -94,8 +93,7 @@ sub finish_request ( $self, $token, $metadata ) {
 }
 
 sub record_budget_observation ( $self, $request_id, $observation ) {
-    my $undefined;
-    return $undefined if !defined $request_id || !$observation;
+    return undef if !defined $request_id || !$observation;
 
     for my $request ( @{ $self->{recent_requests} } ) {
         next if $request->{request_id} != $request_id;
@@ -106,12 +104,11 @@ sub record_budget_observation ( $self, $request_id, $observation ) {
         return { %{$request} };
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub last_request ($self) {
-    my $undefined;
-    return $undefined if !@{ $self->{recent_requests} };
+    return undef if !@{ $self->{recent_requests} };
 
     my $request = $self->{recent_requests}[-1];
 

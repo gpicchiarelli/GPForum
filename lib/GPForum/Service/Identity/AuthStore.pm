@@ -29,8 +29,7 @@ sub _authenticatable_user ( $self, $identifier ) {
     my $user = $self->_find_login_user(
         $self->support->normalize_identifier($identifier) );
     if ( !$user || $self->_deleted_user($user) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $user;
@@ -79,8 +78,7 @@ sub _password_matches ( $self, $user, $password ) {
 
 sub _find_login_user ( $self, $identifier ) {
     if ( !length $identifier ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_lookup_login_user($identifier);

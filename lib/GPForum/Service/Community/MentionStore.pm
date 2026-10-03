@@ -124,8 +124,7 @@ sub _record_mention ( $self, $mention, $ctx ) {
     my $user = $ctx->{resolved}{ $mention->{username} };
     if ( !$user ) {
         push @{ $ctx->{skipped} }, _skip( $mention, 'unknown_user' );
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $ctx->{user} = $user;
@@ -137,13 +136,11 @@ sub _record_resolved ( $self, $mention, $ctx ) {
     my $mentioned_user_id = _column( $ctx->{user}, 'id' );
     if ( $mentioned_user_id eq $ctx->{input}{actor_id} ) {
         push @{ $ctx->{skipped} }, _skip( $mention, 'self_mention' );
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( !$self->_source_readable( $mentioned_user_id, $ctx->{input} ) ) {
         push @{ $ctx->{skipped} }, _skip( $mention, 'source_not_readable' );
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_insert_or_reuse_mention( $mention, $ctx );
@@ -160,33 +157,30 @@ sub _insert_or_reuse_mention ( $self, $mention, $ctx ) {
     my $row = $self->_mention_row( $mention, $ctx );
     if ( $self->_existing_mention($row) ) {
         $self->_capture_mention_notification( $row, $ctx );
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_create_or_reuse_mention( $row, $ctx );
 }
 
 sub _create_or_reuse_mention ( $self, $row, $ctx ) {
-    my $undefined;
-
     my ( $created, $error ) =
       GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
         sub { return $self->_create_mention($row); },
       );
     if ($created) {
         push @{ $ctx->{created} }, $created;
-        return $undefined;
+        return undef;
     }
 
     my $recovered = $self->_mention_after_conflict( $row, $error );
     if ($recovered) {
         push @{ $ctx->{created} }, $recovered;
-        return $undefined;
+        return undef;
     }
 
     $self->_capture_mention_notification( $row, $ctx );
-    return $undefined;
+    return undef;
 }
 
 sub _create_mention ( $self, $row ) {
@@ -224,15 +218,12 @@ sub _mention_after_unique ( $self, $row, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _mention_after_id_conflict ( $self, $row ) {
     my $existing = $self->_existing_mention($row);
     if ($existing) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_retry_mention_id($row);
@@ -249,8 +240,6 @@ sub _retry_mention_id ( $self, $row ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_mention_row ( $self, $row, $error ) {
@@ -300,17 +289,15 @@ sub _notify_mentions ( $self, $input, $mentions ) {
 }
 
 sub _accepted_notification ( $self, $input, $mention ) {
-    my $undefined;
-
     my $result = $self->_notify_mention( $input, $mention );
     if ( !$result ) {
-        return $undefined;
+        return undef;
     }
     if ( !$result->{ok} ) {
-        return $undefined;
+        return undef;
     }
     if ( $result->{duplicate} ) {
-        return $undefined;
+        return undef;
     }
 
     return $result;
@@ -318,8 +305,7 @@ sub _accepted_notification ( $self, $input, $mention ) {
 
 sub _notify_mention ( $self, $input, $mention ) {
     if ( !$self->notification_dispatcher ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->notification_dispatcher->create_notification(
@@ -343,8 +329,7 @@ sub _notify_mention ( $self, $input, $mention ) {
 sub _payload_post_id ($input) {
     return $input->{source_id} if $input->{source_type} eq 'post';
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _existing_mention ( $self, $row ) {

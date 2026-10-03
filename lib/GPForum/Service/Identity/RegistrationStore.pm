@@ -125,8 +125,7 @@ sub _user_column ( $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _same_text ( $stored, $candidate ) {
@@ -150,8 +149,6 @@ sub _retry_user_id ( $self, $registration ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reissued_registration ( $self, $registration ) {

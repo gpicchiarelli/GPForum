@@ -192,16 +192,14 @@ sub suspension_revoked_status {
 }
 
 sub write_flash_key ( $, $status ) {
-    my $undefined;
-
     if ( !defined $status ) {
-        return $undefined;
+        return undef;
     }
     if ( exists $WRITE_FLASH{$status} ) {
         return $WRITE_FLASH{$status};
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub authorization_target ( $, $resource_type, $action = undef ) {
@@ -234,8 +232,7 @@ sub failure_status ( $self, $result ) {
         return $status;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub invalid_request ( $, $errors ) {

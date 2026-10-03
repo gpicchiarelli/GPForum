@@ -79,8 +79,7 @@ sub find {
 
     push @{ $self->schema->find_attrs }, $attrs;
     my $column = $ID_COLUMN{ $self->name };
-    my $undefined;
-    return $undefined if !$column;
+    return undef if !$column;
 
     return $self->search( { $column => $id } )->single;
 }

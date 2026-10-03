@@ -26,18 +26,15 @@ sub open_file_descriptors ($self) {
         return $count if defined $count;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub file_descriptor_limit ($self) {
-    my $undefined;
-
     my $code = POSIX->can(OPEN_MAX_CONSTANT);
-    return $undefined if !$code;
+    return undef if !$code;
 
     my $limit = eval { return sysconf( $code->() ); };
-    return $undefined if !$limit || $limit < 1;
+    return undef if !$limit || $limit < 1;
 
     return $limit;
 }
@@ -53,21 +50,19 @@ sub swap_pressure ($self) {
 }
 
 sub _linux_swap_pressure {
-    my $undefined;
-
     my $path = '/proc/meminfo';
-    return $undefined if !-r $path;
+    return undef if !-r $path;
 
-    open my $handle, '<', $path or return $undefined;
+    open my $handle, '<', $path or return undef;
     my %values;
     while ( my $line = <$handle> ) {
         if ( $line =~ /\A (SwapTotal|SwapFree): \s+ ([0-9]+) /msx ) {
             $values{$1} = int $2;
         }
     }
-    close $handle or return $undefined;
+    close $handle or return undef;
 
-    return $undefined if !$values{SwapTotal};
+    return undef if !$values{SwapTotal};
 
     my $used_ratio =
       ( $values{SwapTotal} - ( $values{SwapFree} || 0 ) ) / $values{SwapTotal};
@@ -91,11 +86,9 @@ sub _fd_paths {
 }
 
 sub _count_directory_entries ($path) {
-    my $undefined;
-
-    opendir my $directory, $path or return $undefined;
+    opendir my $directory, $path or return undef;
     my @entries = grep { _is_real_entry($_) } readdir $directory;
-    closedir $directory or return $undefined;
+    closedir $directory or return undef;
 
     return scalar @entries;
 }

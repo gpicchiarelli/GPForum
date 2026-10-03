@@ -69,8 +69,6 @@ sub _generation_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _generation_after_id_conflict ( $self, $input ) {
@@ -92,8 +90,6 @@ sub _retry_generation_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_generation_row ( $self, $input, $error ) {
@@ -156,8 +152,7 @@ sub _first_generation ($search) {
         return $search->single;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _skipped_generation ($existing) {

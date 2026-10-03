@@ -275,8 +275,7 @@ sub _optional_controller_helper ( $controller, $helper ) {
       if $error !~
       /Can't [ ] locate [ ] object [ ] method [ ] "\Q$helper\E"/msx;
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _configure_db_query_observer {
@@ -417,8 +416,7 @@ sub _query_budget_endpoint ($controller) {
 }
 
 sub _record_query_budget_observation ( $stats, $request_stats ) {
-    my $undefined;
-    return $undefined if !$request_stats || !$request_stats->{endpoint_name};
+    return undef if !$request_stats || !$request_stats->{endpoint_name};
 
     my $observation = GPForum::Service::Operations::QueryBudget->new->observe(
         $request_stats->{endpoint_name},

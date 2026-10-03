@@ -258,8 +258,7 @@ sub _record_identity_audit ( $self, $method, $input ) {
       eval { return $self->gp_identity_security_audit->$method($input); };
     if ( !$result ) {
         $self->_warn_eval('identity audit degraded');
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $result;

@@ -19,8 +19,7 @@ has raced => undef;
 sub find {
     my ( $self, @arguments ) = @_;
 
-    my $undefined;
-    return $undefined if $self->raced->take_miss( $self->name );
+    return undef if $self->raced->take_miss( $self->name );
 
     return $self->inner->find(@arguments);
 }

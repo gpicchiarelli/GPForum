@@ -198,16 +198,14 @@ sub default_redirect {
 }
 
 sub write_flash_key ( $, $status ) {
-    my $undefined;
-
     if ( !defined $status ) {
-        return $undefined;
+        return undef;
     }
     if ( exists $WRITE_FLASH{$status} ) {
         return $WRITE_FLASH{$status};
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub write_flash_type ( $, $status ) {
@@ -232,8 +230,7 @@ sub failure_status ( $self, $result ) {
         return $status;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub invalid_request ( $, $errors ) {

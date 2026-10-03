@@ -70,8 +70,7 @@ sub log_denial ( $self, $controller, $user_id, $permission ) {
 }
 
 sub _scope ($value) {
-    my $undefined;
-    return defined $value && length $value ? $value : $undefined;
+    return defined $value && length $value ? $value : undef;
 }
 
 sub forbidden ( $self, $controller, $input = undef ) {

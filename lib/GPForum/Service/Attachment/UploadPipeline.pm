@@ -104,14 +104,12 @@ sub _scan_at_upload ( $self, $attachment_id, $content ) {
 sub _verdict_reason ($verdict) {
     return "malware: $verdict->{signature}" if $verdict->{status} eq 'infected';
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _link_target ( $self, $input, $attachment_id ) {
-    my $undefined;
-    return $undefined if !_has_text( $input->{target_type} );
-    return $undefined if !_has_text( $input->{target_id} );
+    return undef if !_has_text( $input->{target_type} );
+    return undef if !_has_text( $input->{target_id} );
 
     return $self->store->link_attachment(
         {
@@ -126,8 +124,7 @@ sub _upload_content ($input) {
     return $input->{content} if defined $input->{content};
 
     my $upload = $input->{upload};
-    my $undefined;
-    return $undefined            if !$upload;
+    return undef                 if !$upload;
     return $upload->asset->slurp if $upload->can('asset') && $upload->asset;
     return $upload->slurp        if $upload->can('slurp');
 
@@ -135,15 +132,14 @@ sub _upload_content ($input) {
 }
 
 sub _client_media_type ($input) {
-    my $undefined;
     return $input->{media_type} if defined $input->{media_type};
 
     my $upload = $input->{upload};
-    return $undefined if !$upload;
+    return undef if !$upload;
     return $upload->headers->content_type
       if $upload->can('headers') && $upload->headers;
 
-    return $undefined;
+    return undef;
 }
 
 sub _original_filename ($input) {
@@ -153,8 +149,7 @@ sub _original_filename ($input) {
     my $upload = $input->{upload};
     return $upload->filename if $upload && $upload->can('filename');
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _has_text ($value) {

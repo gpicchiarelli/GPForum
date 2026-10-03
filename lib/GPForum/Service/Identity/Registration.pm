@@ -127,8 +127,7 @@ sub _username_shape_error ($values) {
     }
     ## use critic
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _display_name_error ($values) {
@@ -145,8 +144,7 @@ sub _email_error ($values) {
         return 'email format is invalid';
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _password_error ($values) {

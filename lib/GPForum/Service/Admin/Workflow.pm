@@ -405,8 +405,7 @@ sub _invalid_category ( $self, $command, $required ) {
 
 sub _invalid_visibility ( $, $command ) {
     if ( _visibility_ok( $command->{visibility} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _result(
@@ -462,8 +461,7 @@ sub _idempotent_write ( $self, $job ) {
 
 sub _missing_command_id ( $, $input ) {
     if ( length _trim( $input->{command_id} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _result(
@@ -493,8 +491,7 @@ sub _missing_fields ( $, $input, $names ) {
         );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _run_store ( $self, $not_found, $code ) {

@@ -30,13 +30,11 @@ sub classify ( $self, $exception ) {
 }
 
 sub declared ( $, $exception ) {
-    my $undefined;
-
     if ( !ref $exception ) {
-        return $undefined;
+        return undef;
     }
     if ( !$exception->can('failure_type') ) {
-        return $undefined;
+        return undef;
     }
 
     return $exception->failure_type;

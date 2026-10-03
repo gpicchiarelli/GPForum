@@ -34,8 +34,7 @@ sub template {
 
 sub page_payload ( $self, $page, $canonical = undef ) {
     if ( !$self->known_page($page) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {

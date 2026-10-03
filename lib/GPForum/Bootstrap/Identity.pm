@@ -111,11 +111,9 @@ sub _configure_session_guard {
 }
 
 sub _validate_server_session ($controller) {
-    my $undefined;
-
     my $cookies = GPForum::Web::CookieSession->new;
     if ( !$cookies->has_server_session($controller) ) {
-        return $undefined;
+        return undef;
     }
 
     my $validation = eval {
@@ -139,7 +137,7 @@ sub _validate_server_session ($controller) {
         return GPForum::Web::Guard->new->service_unavailable($controller);
     }
     if ( $validation && $validation->{ok} ) {
-        return $undefined;
+        return undef;
     }
 
     return _invalidate_session( $controller, $cookies, $validation );

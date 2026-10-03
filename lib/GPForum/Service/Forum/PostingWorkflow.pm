@@ -228,11 +228,9 @@ sub _thread_move_blocked ( $self, $input ) {
 }
 
 sub _missing_move_category ( $self, $input ) {
-    my $undefined;
-
     my $category_id = _trim( $input->{category_id} );
     if ( !length $category_id ) {
-        return $undefined;
+        return undef;
     }
     if ( !$self->category_reader->find_category( $category_id, _viewer($input) )
       )
@@ -240,7 +238,7 @@ sub _missing_move_category ( $self, $input ) {
         return _result( status => 'not_found', error => 'category not found' );
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _prepare_move ( $self, $input ) {
@@ -385,8 +383,7 @@ sub _missing_edit_thread ($thread) {
         return _result( status => 'not_found', error => 'thread not found' );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _missing_restore_thread ($thread) {
@@ -394,8 +391,7 @@ sub _missing_restore_thread ($thread) {
         return _result( status => 'not_found', error => 'thread not found' );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _live_thread ($thread) {
@@ -434,8 +430,7 @@ sub _forbidden_thread_edit ( $thread, $input ) {
         return _result( status => 'forbidden', error => 'thread is locked' );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _same_thread_author ( $thread, $input ) {
@@ -609,8 +604,7 @@ sub _restore_blocked ( $self, $input ) {
 }
 
 sub _thread_for_post ( $self, $post, $input ) {
-    my $undefined;
-    return $undefined if !$post;
+    return undef if !$post;
 
     return $self->thread_detail_reader->find_thread(
         _column( $post, 'thread_id' ),
@@ -623,8 +617,7 @@ sub _missing_edit_target ( $post, $thread ) {
     return _result( status => 'not_found', error => 'thread not found' )
       if !$thread;
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _missing_restore_target ( $post, $thread ) {
@@ -633,8 +626,7 @@ sub _missing_restore_target ( $post, $thread ) {
     return _result( status => 'not_found', error => 'thread not found' )
       if !$thread;
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _live_post ($post) {
@@ -658,8 +650,7 @@ sub _forbidden_edit ( $post, $input, $thread ) {
     return _result( status => 'forbidden', error => 'thread is locked' )
       if defined _column( $thread, 'locked_at' );
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _same_author ( $post, $input ) {
@@ -872,8 +863,7 @@ sub _record_post_mentions ( $self, $stored, $command ) {
 
     if ($EVAL_ERROR) {
         $self->_log_warning("mention recording degraded: $EVAL_ERROR");
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $result;
@@ -883,8 +873,7 @@ sub _record_post_mentions ( $self, $stored, $command ) {
 # from the columns of the category or thread it goes in. No category (the
 # composer rejects that) sets no floor.
 sub _effective_visibility ( $row, @columns ) {
-    my $undefined;
-    return $undefined if !$row;
+    return undef if !$row;
 
     return GPForum::Service::Forum::Visibility->effective(
         map { _column( $row, $_ ) } @columns );

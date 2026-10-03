@@ -54,8 +54,7 @@ sub _row_column ( $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _copied_row ($row) {

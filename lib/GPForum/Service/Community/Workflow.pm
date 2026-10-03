@@ -178,8 +178,7 @@ sub _idempotent_write ( $self, $job ) {
 
 sub _missing_command_id ( $, $input ) {
     if ( length _trim( $input->{command_id} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _result(
@@ -226,7 +225,6 @@ sub _public_report ($stored) {
 }
 
 sub _report_value ( $stored, $name ) {
-    my $undefined;
     if ( ref $stored eq 'HASH' ) {
         return $stored->{$name};
     }
@@ -234,7 +232,7 @@ sub _report_value ( $stored, $name ) {
         return $stored->get_column($name);
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _public_bookmark ($stored) {
@@ -324,8 +322,7 @@ sub _report_fields ( $, $input ) {
         );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _report_field_errors ($input) {

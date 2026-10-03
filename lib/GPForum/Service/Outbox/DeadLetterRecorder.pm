@@ -61,8 +61,6 @@ sub _letter_after_unique ( $self, $message, $failure, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _letter_after_id_conflict ( $self, $message, $failure ) {
@@ -84,8 +82,6 @@ sub _retry_letter_id ( $self, $message, $failure ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_letter_row ( $self, $message, $error ) {

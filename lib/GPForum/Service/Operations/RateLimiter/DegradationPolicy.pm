@@ -57,11 +57,10 @@ sub permissive ($self) {
 }
 
 sub _configured_mode ($config) {
-    my $undefined;
-    return $undefined if !$config->can($CONFIG_ACCESSOR);
+    return undef if !$config->can($CONFIG_ACCESSOR);
 
     my $mode = $config->$CONFIG_ACCESSOR;
-    return $undefined if !defined $mode || $mode eq q{};
+    return undef if !defined $mode || $mode eq q{};
 
     return $mode;
 }

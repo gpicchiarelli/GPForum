@@ -29,8 +29,7 @@ has schema => undef;
 sub find_thread ( $self, $thread_id, $viewer = undef ) {
     my $row = $self->find_thread_row($thread_id);
 
-    my $undefined;
-    return $undefined
+    return undef
       if !_thread_is_visible( $row,
         GPForum::Service::Forum::Viewer->from($viewer) );
 
@@ -38,8 +37,7 @@ sub find_thread ( $self, $thread_id, $viewer = undef ) {
 }
 
 sub find_thread_row ( $self, $thread_id ) {
-    my $undefined;
-    return $undefined if !defined $thread_id || !length $thread_id;
+    return undef if !defined $thread_id || !length $thread_id;
 
     return $self->schema->resultset('Thread')->find(
         $thread_id,

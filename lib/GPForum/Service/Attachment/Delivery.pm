@@ -40,12 +40,11 @@ sub _body ( $self, $object_key ) {
 # hazard is not theoretical here.
 sub _object_path ( $self, $object_key ) {
     my $storage = $self->storage;
-    my $undefined;
     ## no critic (BuiltinFunctions::ProhibitUniversalCan)
     # Deliberate: the point is to bypass an overridden can(). The search
     # permission engine defines its own can($actor, $action, ...), and
     # $object->can('method') called that instead of asking about methods.
-    return $undefined if !UNIVERSAL::can( $storage, 'path_for' );
+    return undef if !UNIVERSAL::can( $storage, 'path_for' );
     ## use critic
 
     return $storage->path_for($object_key);

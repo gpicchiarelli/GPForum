@@ -136,8 +136,7 @@ sub _index_aggregate ( $self, $event ) {
         return $self->indexer->index_post( $event->{aggregate_id} );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _index_thread_event ( $self, $event ) {
@@ -237,13 +236,11 @@ sub _remove_indexed ( $self, $event ) {
 }
 
 sub _index_reversal ( $self, $event ) {
-    my $undefined;
-
     my $payload     = _payload($event);
     my $target_type = $payload->{target_type} || $event->{aggregate_type};
     my $target_id   = $payload->{target_id};
 
-    return $undefined if !$target_id;
+    return undef if !$target_id;
 
     if ( $target_type eq 'thread' ) {
         return $self->_reindex_thread( $target_id, $event );
@@ -252,7 +249,7 @@ sub _index_reversal ( $self, $event ) {
         return $self->indexer->index_post($target_id);
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _action_for ($event) {

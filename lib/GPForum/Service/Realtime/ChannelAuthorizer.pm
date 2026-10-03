@@ -36,9 +36,8 @@ sub authorize ( $self, $actor, $channel, $context ) {
 }
 
 sub parse_channel ($channel) {
-    my $undefined;
-    return $undefined if !defined $channel || ref $channel;
-    return $undefined
+    return undef if !defined $channel || ref $channel;
+    return undef
       if $channel !~ /\A ([a-z][a-z0-9_]*) [:] ([A-Za-z0-9_.-]+) \z/msx;
 
     my ( $type, $resource_id ) = ( $1, $2 );
@@ -88,8 +87,7 @@ sub _normalize_policy_decision ($decision) {
 }
 
 sub _user_id ($actor) {
-    my $undefined;
-    return $undefined        if !defined $actor;
+    return undef             if !defined $actor;
     return $actor->{user_id} if ref $actor eq 'HASH';
 
     return $actor;

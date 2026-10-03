@@ -83,8 +83,7 @@ sub _run_idempotent ( $self, $key, $code, $event_id ) {
 
 sub _notify_realtime ( $self, $payload ) {
     if ( !$self->realtime_notifier ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $key = $self->_realtime_key($payload);
@@ -110,8 +109,7 @@ sub _realtime_key ( $self, $payload ) {
 sub _dispatch_realtime ( $self, $payload ) {
     my @events = $self->realtime_mapper->events_for_payload($payload);
     if ( !@events ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my @results;

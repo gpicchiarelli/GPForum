@@ -36,8 +36,7 @@ sub list_categories ( $self, $request ) {
 # The category, if it exists and the viewer can read it; otherwise nothing,
 # so the caller answers 404 and existence is not confirmed.
 sub find_category ( $self, $category_id, $viewer = undef ) {
-    my $undefined;
-    return $undefined if !defined $category_id || !length $category_id;
+    return undef if !defined $category_id || !length $category_id;
 
     my $row = $self->schema->resultset('Category')->find(
         $category_id,
@@ -47,9 +46,9 @@ sub find_category ( $self, $category_id, $viewer = undef ) {
             '+as'     => ['space_visibility'],
         }
     );
-    return $undefined if !$row;
-    return $undefined if defined $row->get_column('deleted_at');
-    return $undefined if !_readable_category( $row, $viewer );
+    return undef if !$row;
+    return undef if defined $row->get_column('deleted_at');
+    return undef if !_readable_category( $row, $viewer );
 
     return $row;
 }

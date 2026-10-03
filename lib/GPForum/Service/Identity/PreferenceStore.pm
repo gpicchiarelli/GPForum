@@ -140,8 +140,7 @@ sub _same_preference ( $held, $incoming ) {
 
 sub _find_user_by_id ( $self, $user_id ) {
     if ( !$self->support->has_text($user_id) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('User')->find( { id => $user_id } );

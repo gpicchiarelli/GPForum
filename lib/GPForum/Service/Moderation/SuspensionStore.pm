@@ -51,8 +51,7 @@ sub create_suspension ( $self, $input ) {
 sub _create_or_reuse ( $self, $input ) {
     my $user = $self->schema->resultset('User')->find( $input->{user_id} );
     if ( !$user ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $active = $self->active_for_user( $input->{user_id} );
@@ -158,8 +157,6 @@ sub _retry_suspension_id ( $self, $input, $user ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub revoke_suspension ( $self, $suspension_id, $actor_user_id, $reason ) {
@@ -180,8 +177,7 @@ sub _revoke_in_txn ( $self, $input ) {
     my $suspension =
       $self->schema->resultset('Suspension')->find( $input->{suspension_id} );
     if ( !$suspension ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( defined _column( $suspension, 'revoked_at' ) ) {
         return $self->_already_revoked($suspension);
@@ -248,8 +244,7 @@ sub _suspension_revoke_hash ($suspension) {
 }
 
 sub active_for_user ( $self, $user_id ) {
-    my $undefined;
-    return $undefined if !defined $user_id || !length $user_id;
+    return undef if !defined $user_id || !length $user_id;
 
     my $search = $self->schema->resultset('Suspension')->search_rs(
         {
@@ -267,7 +262,7 @@ sub active_for_user ( $self, $user_id ) {
         return $row if $self->_suspension_is_active($row);
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub can_participate ( $self, $user_id ) {
@@ -304,13 +299,11 @@ sub _restore_user_if_needed ( $self, $user_id, $timestamp ) {
 }
 
 sub _user_to_restore ( $self, $user_id ) {
-    my $undefined;
-
     if ( !defined $user_id ) {
-        return $undefined;
+        return undef;
     }
     if ( !length $user_id ) {
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('User')->find($user_id);

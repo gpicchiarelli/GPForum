@@ -211,8 +211,6 @@ sub _retry_session_id ( $self, $row ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reissued_session_id ( $self, $row ) {
@@ -233,8 +231,6 @@ sub _retry_session_once ( $self, $row ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _create_session_row ( $self, $row ) {

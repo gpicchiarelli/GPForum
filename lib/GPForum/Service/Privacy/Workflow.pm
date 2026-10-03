@@ -24,8 +24,7 @@ has erased_exports => sub {
     my ($self) = @_;
     my $builder = $self->export_builder;
     if ( !$builder || !$builder->can('schema') || !$builder->schema ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return GPForum::Service::Privacy::ErasedExports->new(
@@ -112,8 +111,7 @@ sub run_erasure_job ( $self, $input ) {
 sub _create_hold ( $self, $command ) {
     my $request = $self->reviewer->deletion_request( $command->{request_id} );
     if ( !$request ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $hold = $self->hold_store->create_hold(
@@ -186,8 +184,7 @@ sub _complete_export ( $self, $user_id ) {
     return $guard->schema->txn_do(
         sub {
             if ( !$guard->may_export($user_id) ) {
-                my $undefined;
-                return $undefined;
+                return undef;
             }
 
             return $self->_build_export($user_id);
@@ -209,8 +206,7 @@ sub _build_export ( $self, $user_id ) {
 
 sub _missing_field ( $, $input, $name ) {
     if ( length _trim( $input->{$name} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _result(
@@ -289,8 +285,7 @@ sub _is_blocked ($value) {
 
 sub _column ( $row, $name ) {
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( ref $row eq 'HASH' ) {
         return $row->{$name};
@@ -304,8 +299,7 @@ sub _object_column ( $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _result (%input) {

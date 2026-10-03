@@ -230,8 +230,7 @@ sub _apply_action_once ( $self, $input ) {
       $self->schema->resultset( $input->{resultset} )
       ->find( $input->{target_id} );
     if ( !$target ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_target_change( $target, $input );
@@ -248,8 +247,7 @@ sub _record_target_change ( $self, $target, $input ) {
 
 sub _applied_target_change ( $self, $target, $input ) {
     if ( !_already_applied( $target, $input ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_replayed_target_action($input);
@@ -332,8 +330,7 @@ sub _shown_state ($thread) {
 sub _replayed_target_action ( $self, $input ) {
     my $existing = $self->_latest_target_action($input);
     if ( !$existing ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -360,16 +357,14 @@ sub _latest_target_action ( $self, $input ) {
 }
 
 sub _replayed_command ( $self, $input ) {
-    my $undefined;
-
     my $command_id = $input->{command_id};
     if ( !_has_text($command_id) ) {
-        return $undefined;
+        return undef;
     }
 
     my $existing = $self->_find_command_action($command_id);
     if ( !$existing ) {
-        return $undefined;
+        return undef;
     }
 
     return $self->_finish_leftover_action( $existing, $input );
@@ -377,8 +372,7 @@ sub _replayed_command ( $self, $input ) {
 
 sub _find_command_action ( $self, $command_id ) {
     if ( !_has_text($command_id) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('ModerationAction')
@@ -478,8 +472,6 @@ sub _action_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _action_after_id_conflict ( $self, $input ) {
@@ -501,8 +493,6 @@ sub _retry_action_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _replay_command_action ( $self, $input, $error ) {
@@ -570,8 +560,7 @@ sub _has_text ($value) {
 sub _schema_dbh ($schema) {
     my $storage = eval { return $schema->storage; };
     if ( !$storage || !$storage->can('dbh') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $dbh = eval { return $storage->dbh; };

@@ -219,8 +219,7 @@ sub _required_error ( $values, $field ) {
 }
 
 sub _position_error ($values) {
-    my $undefined;
-    return $undefined if $values->{allocate_position};
+    return undef if $values->{allocate_position};
 
     return $values->{position} > 0 ? undef : 'position is invalid';
 }
@@ -238,8 +237,7 @@ sub _visibility_error ($values) {
       if GPForum::Service::Forum::Visibility->broader( $values->{visibility},
         $values->{visibility_floor} );
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 # ADR 0102: a reply left without a visibility inherits its thread's effective

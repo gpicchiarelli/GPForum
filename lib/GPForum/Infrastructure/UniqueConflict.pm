@@ -97,9 +97,8 @@ sub attempt ( $, $schema, $code ) {
 # so with one shared name a later svp_release matches an inner leftover rather
 # than its own savepoint and the stack stays skewed for the whole transaction.
 sub _begin_savepoint ($storage) {
-    my $undefined;
     if ( !$storage ) {
-        return $undefined;
+        return undef;
     }
 
     $storage->svp_begin;
@@ -134,21 +133,17 @@ sub _quietly ( $storage, $method, $savepoint ) {
 }
 
 sub _savepoint_storage ($schema) {
-    my $undefined;
-
     my $storage = _schema_storage($schema);
     if ( !$storage || !_storage_supports_savepoint($storage) ) {
-        return $undefined;
+        return undef;
     }
 
     return $storage;
 }
 
 sub _schema_storage ($schema) {
-    my $undefined;
-
     if ( !$schema || !$schema->can('storage') ) {
-        return $undefined;
+        return undef;
     }
 
     return eval { return $schema->storage };
@@ -177,17 +172,15 @@ sub _partition_indexes ( $schema, $constraint ) {
 }
 
 sub _catalog_dbh ($schema) {
-    my $undefined;
-
     my $storage = _schema_storage($schema);
     if ( !$storage || !$storage->can('dbh') ) {
-        return $undefined;
+        return undef;
     }
 
     my $dbh  = eval { return $storage->dbh };
     my $dbms = eval { return $dbh->get_info($SQL_DBMS_NAME) } // q{};
     if ( $dbms ne 'PostgreSQL' ) {
-        return $undefined;
+        return undef;
     }
 
     return $dbh;

@@ -139,8 +139,6 @@ sub _retry_token_id ( $self, $issued ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reissued_token_id ( $self, $issued ) {
@@ -177,8 +175,6 @@ sub _retry_token_hash ( $self, $issued ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _rehashed_issued ( $self, $issued ) {
@@ -206,8 +202,7 @@ sub _hash_key_conflict ($error) {
 
 sub _unused_token ( $self, $input ) {
     if ( !$self->support->has_text( $input->{user_id} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_tokens->search_rs(
@@ -329,8 +324,7 @@ sub _token_expired ( $self, $row ) {
 sub _lock_token_hash ( $self, $token_hash ) {
     my $dbh = $self->_schema_dbh;
     if ( !$dbh ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $locked = $dbh->selectrow_array(
@@ -344,8 +338,7 @@ sub _lock_token_hash ( $self, $token_hash ) {
 sub _schema_dbh ($self) {
     my $storage = eval { return $self->schema->storage };
     if ( !$storage || !$storage->can('dbh') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $dbh = eval { return $storage->dbh };

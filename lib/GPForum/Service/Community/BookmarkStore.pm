@@ -72,8 +72,6 @@ sub _bookmark_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _bookmark_after_id_conflict ( $self, $input ) {
@@ -95,8 +93,6 @@ sub _retry_bookmark_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_bookmark_row ( $self, $input, $error ) {

@@ -45,24 +45,21 @@ sub _deliver ( $self, $event, $task ) {
 sub _mail ( $self, $event ) {
     my $mail = $event->{mail};
     if ( ref $mail ne 'HASH' ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_complete_mail($mail);
 }
 
 sub _complete_mail ( $, $mail ) {
-    my $undefined;
-
     if ( !_has_text( $mail->{kind} ) ) {
-        return $undefined;
+        return undef;
     }
     if ( !_has_text( $mail->{to} ) ) {
-        return $undefined;
+        return undef;
     }
     if ( !_has_text( $mail->{token} ) ) {
-        return $undefined;
+        return undef;
     }
 
     return $mail;
@@ -91,8 +88,7 @@ sub _send ( $self, $mail, $task ) {
 
 sub _send_method ( $, $kind ) {
     if ( !exists $SEND_METHOD{$kind} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $SEND_METHOD{$kind};

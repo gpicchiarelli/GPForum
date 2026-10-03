@@ -407,12 +407,11 @@ sub _is_uuid ($value) {
 # written> left the reply out. An RFC 3339 time is bound as _instant renders
 # it, not as it was typed.
 sub _date_bounds ($value) {
-    my $undefined;
-    return $undefined if !defined $value;
+    return undef if !defined $value;
 
     if ( my ( $year, $month, $day ) = $value =~ $DAY_FILTER ) {
         my $start = _day_start( $year, $month, $day );
-        return $undefined if !defined $start;
+        return undef if !defined $start;
 
         return {
             from => { q{>=} => $value },
@@ -421,12 +420,12 @@ sub _date_bounds ($value) {
     }
 
     my ( $instant_year, $fraction, $zone ) = $value =~ $INSTANT_FILTER;
-    return $undefined if !defined $instant_year || $instant_year < $EPOCH_YEAR;
+    return undef if !defined $instant_year || $instant_year < $EPOCH_YEAR;
 
     # Parsed without its fraction, so the epoch is whole seconds (_instant).
     ( my $whole_seconds = $value ) =~ s/[.][[:digit:]]+//amsx;
     my $epoch = Mojo::Date->new($whole_seconds)->epoch;
-    return $undefined if !defined $epoch;
+    return undef if !defined $epoch;
 
     my $instant = _instant( $epoch, $fraction, $zone );
 
@@ -463,8 +462,7 @@ sub _instant ( $epoch, $fraction, $zone ) {
 # The day's first second as an epoch, or undef for a day the calendar does
 # not have -- timegm_modern dies on those. PostgreSQL has no year 0.
 sub _day_start ( $year, $month, $day ) {
-    my $undefined;
-    return $undefined if $year < 1;
+    return undef if $year < 1;
 
     return eval { timegm_modern( 0, 0, 0, $day, $month - 1, $year ) };
 }
@@ -658,8 +656,7 @@ sub _column ( $row, $name ) {
 }
 
 sub _profile_label ($username) {
-    my $undefined;
-    return $undefined if !defined $username || !length $username;
+    return undef if !defined $username || !length $username;
 
     return q{@} . $username;
 }

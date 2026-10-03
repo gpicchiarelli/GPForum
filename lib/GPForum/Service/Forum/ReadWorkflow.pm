@@ -86,8 +86,7 @@ sub _eval_store ( $self, $input ) {
 
 sub _missing_command_id ( $, $input ) {
     if ( length _trim( $input->{command_id} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _result(

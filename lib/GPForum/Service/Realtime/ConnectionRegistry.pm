@@ -22,8 +22,7 @@ has max_connections_per_user         => 8;
 has max_subscriptions_per_connection => 32;
 
 sub register ( $self, $connection_id, $actor, $connection ) {
-    my $undefined;
-    return $undefined if !$self->can_register($actor);
+    return undef if !$self->can_register($actor);
 
     my $row = {
         connection_id => $connection_id,
@@ -111,8 +110,7 @@ sub can_register ( $self, $actor ) {
 }
 
 sub _user_id ($actor) {
-    my $undefined;
-    return $undefined        if !defined $actor;
+    return undef             if !defined $actor;
     return $actor->{user_id} if ref $actor eq 'HASH';
 
     return $actor;

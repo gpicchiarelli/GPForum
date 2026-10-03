@@ -698,8 +698,7 @@ sub _password_matches ( $self, $user, $password ) {
 
 sub _find_user_by_id ( $self, $user_id ) {
     if ( !$self->support->has_text($user_id) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('User')->find( { id => $user_id } );
@@ -707,8 +706,7 @@ sub _find_user_by_id ( $self, $user_id ) {
 
 sub _find_login_user ( $self, $identifier ) {
     if ( !length $identifier ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_lookup_login_user($identifier);
@@ -760,8 +758,7 @@ sub _email_error ( $, $email ) {
         return 'email_invalid';
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _password_error ( $, $password ) {
@@ -772,8 +769,7 @@ sub _password_error ( $, $password ) {
         return 'password_too_short';
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 1;

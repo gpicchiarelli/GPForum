@@ -40,8 +40,7 @@ $application->helper(
     gp_mention_store => sub { return GPForum::Test::MentionStore->new(); } );
 $application->helper(
     gp_command_idempotency => sub {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 );
 $application->helper( gp_realtime_pg_notifier =>

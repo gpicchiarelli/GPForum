@@ -107,10 +107,9 @@ sub _is_current ( $self, %input ) {
 # file, and a 304 with a year's lifetime keeps the browser's copy as long as
 # a 200 would.
 sub _served_path ( $controller, $name ) {
-    my $undefined;
     my $asset = $controller->app->static->file($name);
 
-    return $asset && $asset->is_file ? $asset->path : $undefined;
+    return $asset && $asset->is_file ? $asset->path : undef;
 }
 
 # The roots are searched in order and the first file found under a name is

@@ -244,8 +244,7 @@ sub _retention_days ( $self, $input ) {
 
 sub _profile_value ( $self, $field ) {
     my $profile = $self->profile;
-    my $undefined;
-    return $undefined if !$profile;
+    return undef if !$profile;
 
     return $profile->{$field};
 }
@@ -261,8 +260,7 @@ sub _registry_rows ($self) {
 }
 
 sub _registry_resultset ($self) {
-    my $undefined;
-    return $undefined if !$self->schema;
+    return undef if !$self->schema;
 
     return $self->schema->resultset('PartitionRegistry');
 }
@@ -291,8 +289,7 @@ sub _column ( $, $row, $name ) {
 sub _profile_for ( $, $controller ) {
     my $config = $controller->gp_config;
     if ( !$config ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return GPForum::Service::Operations::Profile->new->get(

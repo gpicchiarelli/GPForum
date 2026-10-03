@@ -79,8 +79,6 @@ sub _role_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _role_after_id_conflict ( $self, $input ) {
@@ -102,8 +100,6 @@ sub _retry_role_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_role_row ( $self, $input, $error ) {
@@ -200,8 +196,6 @@ sub _permission_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _permission_after_id_conflict ( $self, $input ) {
@@ -223,8 +217,6 @@ sub _retry_permission_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_permission_row ( $self, $input, $error ) {
@@ -452,8 +444,7 @@ sub _finish_leftover_attachment ( $self, $existing, $input ) {
 
 sub _ensure_catalog_audit ( $self, $job ) {
     if ( $self->_catalog_audit_exists($job) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_admin_audit(

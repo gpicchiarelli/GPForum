@@ -71,8 +71,7 @@ sub get_or_set ( $self, $key, $producer, $options = undef ) {
 sub ticket ( $self, $tags, $options = undef ) {
     $self->_require_layers;
     if ( !$self->l2->can('ticket') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->l2->ticket( $tags, $options );
@@ -98,8 +97,7 @@ sub invalidate_tag ( $self, $tag ) {
     $self->stats->{invalidations} += $removed;
     $self->_publish( { tags => [$tag] } );
     if ( !defined $shared ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $removed;
@@ -194,8 +192,7 @@ sub _fill_from_shared ( $self, $key ) {
     my $fill    = $payload ? $self->_fill_options($payload) : undef;
     if ( !$fill ) {
         $self->stats->{misses} += 1;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $self->l1->put( $key, $payload->{value}, $fill );
@@ -218,8 +215,7 @@ sub _fill_options ( $self, $payload ) {
 
     my $remaining = $expires - $self->l1->clock->now_epoch;
     if ( $remaining <= 0 ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $options->{ttl_seconds} = $remaining;

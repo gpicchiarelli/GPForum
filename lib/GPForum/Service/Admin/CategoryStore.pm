@@ -71,8 +71,7 @@ sub _txn ( $self, $code ) {
 sub _create_once ( $self, $input ) {
     my $space = $self->_ensure_space($input);
     if ( !$space ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_insert_or_reuse(
@@ -122,8 +121,6 @@ sub _category_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _category_after_id_conflict ( $self, $input ) {
@@ -145,8 +142,6 @@ sub _retry_category_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 # The slug key holds every row, soft-deleted ones too, while the store looks
@@ -201,8 +196,7 @@ sub _create_category_row ( $self, $input ) {
 sub _update_once ( $self, $input ) {
     my $row = $self->_visible_category( $input->{category_id} );
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $updates = $self->_update_fields( $input, $row );
@@ -236,16 +230,13 @@ sub _write_update ( $self, $row, $updates ) {
         sub { return $row->update($updates); },
       );
     if ( !$error ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( $self->_category_slug_conflict($error) ) {
         return _slug_taken();
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _unchanged_category ( $row, $updates ) {
@@ -302,8 +293,7 @@ sub _ensure_space ( $self, $input ) {
 # it as a uuid parameter, which would answer 503 for what is a 404.
 sub _space_by_id ( $self, $space_id ) {
     if ( !GPForum::Infrastructure::Id->is_uuid($space_id) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _row_hash( $self->schema->resultset('Space')->find($space_id),
@@ -360,8 +350,6 @@ sub _space_after_unique ( $self, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _space_after_id_conflict ($self) {
@@ -383,8 +371,6 @@ sub _retry_space_id ($self) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_space_row ( $self, $error ) {
@@ -455,17 +441,16 @@ sub _existing_category ( $self, $input ) {
 }
 
 sub _visible_category ( $self, $category_id ) {
-    my $undefined;
     if ( !GPForum::Infrastructure::Id->is_uuid($category_id) ) {
-        return $undefined;
+        return undef;
     }
 
     my $row = $self->schema->resultset('Category')->find($category_id);
     if ( !$row ) {
-        return $undefined;
+        return undef;
     }
     if ( defined _column( $row, 'deleted_at' ) ) {
-        return $undefined;
+        return undef;
     }
 
     return $row;
@@ -514,8 +499,7 @@ sub _finish_leftover_category ( $self, $existing, $input ) {
 
 sub _ensure_category_write ( $self, $existing, $input ) {
     if ( $self->_category_event_exists($existing) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_write(
@@ -625,8 +609,7 @@ sub _single ($search) {
         return $search->rows->[0];
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _list_rows ($search) {
@@ -642,8 +625,7 @@ sub _list_rows ($search) {
 
 sub _row_hash ( $row, @columns ) {
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my %hash = map { $_ => _column( $row, $_ ) } @columns;

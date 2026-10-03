@@ -180,19 +180,18 @@ sub _readable_post ( $self, $viewer, $id_column ) {
 }
 
 sub _placement ( $self, $source_type, $source_id ) {
-    my $undefined;
 
     # exists first: the table is a Const::Fast restricted hash, and reading an
     # unknown key from it dies rather than answering undef.
     my $type = $source_type // q{};
     my $sql  = exists $PLACEMENT_SQL->{$type} ? $PLACEMENT_SQL->{$type} : undef;
-    return $undefined
+    return undef
       if !$sql || !GPForum::Infrastructure::Id->is_uuid($source_id);
 
     my $place =
       GPForum::Infrastructure::CountedQuery->select_row( $self->schema,
         $sql, $source_id );
-    return $undefined if !$place || !_live($place);
+    return undef if !$place || !_live($place);
 
     return {
         map  { $_ => $place->{$_} }

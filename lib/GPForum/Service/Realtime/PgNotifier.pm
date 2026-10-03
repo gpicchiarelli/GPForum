@@ -75,8 +75,7 @@ sub snapshot ($self) {
 }
 
 sub _dbh ($self) {
-    my $undefined;
-    return $undefined if !$self->schema;
+    return undef if !$self->schema;
 
     return eval { return $self->schema->storage->dbh; };
 }

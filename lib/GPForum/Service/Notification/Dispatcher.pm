@@ -639,7 +639,6 @@ sub _notify_badge ( $self, $user_id, $count ) {
 # every write's badge fails the same way, and a warning per request buried
 # the first one under the flood.
 sub _badge_failed ( $self, $error ) {
-    my $undefined;
     my $message = _badge_error_text($error);
 
     $self->stats->{badge_failures} += 1;
@@ -647,7 +646,7 @@ sub _badge_failed ( $self, $error ) {
       { at => $self->clock->now_iso8601, message => $message };
     $self->_log_badge_failure($message);
 
-    return $undefined;
+    return undef;
 }
 
 # A badge that goes out does not re-arm the warning: under load some counts

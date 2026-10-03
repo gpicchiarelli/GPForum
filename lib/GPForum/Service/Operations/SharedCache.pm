@@ -107,8 +107,7 @@ sub lookup ( $self, $key ) {
     my $payload = $self->_read_payload($key);
     if ( !$payload ) {
         $self->stats->{misses} += 1;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $self->stats->{hits} += 1;
@@ -118,8 +117,7 @@ sub lookup ( $self, $key ) {
 sub get ( $self, $key ) {
     my $payload = $self->lookup($key);
     if ( !$payload ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $payload->{value};
@@ -129,8 +127,7 @@ sub put ( $self, $key, $value, $options = undef ) {
     $options ||= {};
     $self->_validate_key($key);
     if ( !$self->_store_value( $key, $value, $options ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $self->stats->{writes} += 1;
@@ -290,8 +287,7 @@ sub _unix_endpoint ($url) {
         };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _tcp_endpoint ($url) {
@@ -304,26 +300,23 @@ sub _tcp_endpoint ($url) {
         };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _read_payload ( $self, $key ) {
-    my $undefined;
-
     my $store_key = $self->_entry_store_key($key);
     my ( $status, $raw ) = $self->_client_get($store_key);
     if ( $status ne 'found' ) {
-        return $undefined;
+        return undef;
     }
 
     my $payload = $self->_decode_payload($raw);
     if ( $self->_payload_expired($payload) ) {
         $self->_erase_store_key($store_key);
-        return $undefined;
+        return undef;
     }
     if ( !$self->_tokens_current($payload) ) {
-        return $undefined;
+        return undef;
     }
 
     return $payload;
@@ -387,8 +380,7 @@ sub _tag_tokens ( $self, $tags ) {
     for my $tag ( @{$tags} ) {
         my $token = $self->_tag_token($tag);
         if ( !defined $token ) {
-            my $undefined;
-            return $undefined;
+            return undef;
         }
         $tokens{$tag} = $token;
     }
@@ -400,11 +392,9 @@ sub _tag_tokens ( $self, $tags ) {
 # read them or lacks one. A tag it found without a token gets one now, for the
 # next value, but this value is not stored (see ticket).
 sub _ticketed_tokens ( $self, $ticket, $tags ) {
-    my $undefined;
-
     my $held = $ticket->{tokens};
     if ( $ticket->{failed} || ref $held ne 'HASH' ) {
-        return $undefined;
+        return undef;
     }
 
     my %tokens;
@@ -418,7 +408,7 @@ sub _ticketed_tokens ( $self, $ticket, $tags ) {
         $tokens{$tag} = $held->{$tag};
     }
 
-    return $complete ? \%tokens : $undefined;
+    return $complete ? \%tokens : undef;
 }
 
 # The tag's token, minted when the tag has none. An existing token is never
@@ -429,8 +419,6 @@ sub _ticketed_tokens ( $self, $ticket, $tags ) {
 # A value that is not a token (the member list this key held before tokens)
 # is replaced.
 sub _tag_token ( $self, $tag ) {
-    my $undefined;
-
     my $token = $self->_current_tag_token($tag);
     if ( !defined $token || length $token ) {
         return $token;
@@ -444,7 +432,7 @@ sub _tag_token ( $self, $tag ) {
         )
       )
     {
-        return $undefined;
+        return undef;
     }
 
     return $minted;
@@ -455,8 +443,7 @@ sub _tag_token ( $self, $tag ) {
 sub _current_tag_token ( $self, $tag ) {
     my ( $status, $value ) = $self->_client_get( $self->_tag_store_key($tag) );
     if ( $status eq 'failed' ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _is_token( $status, $value ) ? $value : q{};
@@ -510,11 +497,9 @@ sub _client_put ( $self, $store_key, $bytes, $expire_at_ns ) {
 # 1 when the key was erased, 0 when it was absent, nothing when L2 was paused
 # or failed: the key may still be there.
 sub _erase_store_key ( $self, $store_key ) {
-    my $undefined;
-
     my $client = $self->_active_client;
     if ( !$client ) {
-        return $undefined;
+        return undef;
     }
 
     my $result   = eval { return $client->erase($store_key); };
@@ -532,7 +517,7 @@ sub _erase_store_key ( $self, $store_key ) {
     }
 
     $self->_record_failed_call($category);
-    return $undefined;
+    return undef;
 }
 
 # The one gate every call passes, invalidations and ping included. A skipped
@@ -544,8 +529,7 @@ sub _erase_store_key ( $self, $store_key ) {
 sub _active_client ($self) {
     if ( $self->_paused ) {
         $self->stats->{skipped} += 1;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( $self->client ) {
         return $self->client;
@@ -575,8 +559,7 @@ sub _reconnect ($self) {
     if ( !$client ) {
         $self->_record_failure;
         $self->_pause;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $self->client($client);
@@ -612,8 +595,7 @@ sub _decode_payload ( $self, $raw ) {
     my $payload = eval { return $self->codec->decode($raw); };
     if ( ref $payload ne 'HASH' ) {
         $self->_record_failure;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $payload;
@@ -623,8 +605,7 @@ sub _encode_payload ( $self, $payload ) {
     my $bytes = eval { return $self->codec->encode($payload); };
     if ( !defined $bytes ) {
         $self->_record_failure;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $bytes;

@@ -296,8 +296,7 @@ sub _endpoint_name ($route) {
         return $ROUTE_ENDPOINT{$route};
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _query_budget_text ($budget) {
@@ -318,14 +317,12 @@ sub _db_query_text ($summary) {
 }
 
 sub _last_query_stats ($test) {
-    my $undefined;
-
     my $stats =
       eval { return $test->app->build_controller->gp_db_query_stats; };
-    return $undefined if !$stats || !$stats->can('last_request');
+    return undef if !$stats || !$stats->can('last_request');
 
     my $last = $stats->last_request;
-    return $undefined if !$last || !$last->{attached};
+    return undef if !$last || !$last->{attached};
 
     return $last;
 }
@@ -728,15 +725,13 @@ sub _average (@values) {
 }
 
 sub _resident_set_kb {
-    my $undefined;
-
     open my $process, q{-|}, q{ps}, q{-o}, q{rss=}, q{-p}, $PROCESS_ID
-      or return $undefined;
+      or return undef;
 
     my $rss = <$process>;
-    close $process or return $undefined;
+    close $process or return undef;
 
-    return $undefined if !defined $rss;
+    return undef if !defined $rss;
     $rss =~ s/\A \s+//msx;
     $rss =~ s/\s+ \z//msx;
 

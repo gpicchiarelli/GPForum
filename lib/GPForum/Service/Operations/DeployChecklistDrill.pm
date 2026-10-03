@@ -389,8 +389,7 @@ sub _which ($name) {
         return $candidate if -x $candidate;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _detect_repo_root {

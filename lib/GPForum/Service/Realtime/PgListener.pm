@@ -346,8 +346,7 @@ sub _start_outbox_polling ( $self, $reason ) {
 }
 
 sub _outbox_available ($self) {
-    my $undefined;
-    return $undefined if !$self->schema || !$self->schema->can('resultset');
+    return undef if !$self->schema || !$self->schema->can('resultset');
 
     my $resultset = eval { return $self->schema->resultset('OutboxMessage'); };
 

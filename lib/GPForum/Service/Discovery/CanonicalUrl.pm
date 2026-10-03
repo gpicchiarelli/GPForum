@@ -33,8 +33,7 @@ sub thread_url ( $self, $thread ) {
 sub legal_url ( $self, $page ) {
     my $path = _legal_path($page);
     if ( !$path ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_absolute($path);
@@ -49,13 +48,11 @@ sub legacy_redirect ( $self, $legacy_mapping ) {
 }
 
 sub _legal_path ($page) {
-    my $undefined;
-
     if ( !defined $page ) {
-        return $undefined;
+        return undef;
     }
     if ( !exists $LEGAL_PATH{$page} ) {
-        return $undefined;
+        return undef;
     }
 
     return $LEGAL_PATH{$page};

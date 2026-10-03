@@ -40,13 +40,11 @@ sub set_theme ($self) {
 }
 
 sub _require_preference_command ($self) {
-    my $undefined;
-
     if ( !$self->current_user_id ) {
-        return $undefined;
+        return undef;
     }
     if ( length $self->command_id_param ) {
-        return $undefined;
+        return undef;
     }
 
     return $self->identity_bad_request;
@@ -137,8 +135,7 @@ sub _settings_write_guard ($self) {
         return $self->_rate_limited;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _save_settings ($self) {
@@ -160,8 +157,7 @@ sub _persist_settings ($self) {
     $self->_apply_preference_update( $self->requested_locale,
         $self->requested_theme );
     $self->persist_timezone_preference( $self->requested_timezone );
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _notification_preference_result ($self) {
@@ -198,8 +194,7 @@ sub _settings_payload ( $self, $user_id ) {
     my $store       = $self->gp_notification_preference_store;
     my $preferences = eval { return $store->preferences_for_user($user_id); };
     if ( !$preferences ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->gp_identity_view_model->settings_page(

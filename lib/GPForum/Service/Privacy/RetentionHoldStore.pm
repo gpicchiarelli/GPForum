@@ -84,8 +84,6 @@ sub _hold_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _hold_after_id_conflict ( $self, $input ) {
@@ -107,8 +105,6 @@ sub _retry_hold_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_hold_row ( $self, $input, $error ) {
@@ -140,8 +136,7 @@ sub _active_hold_hash ( $self, $input ) {
     my $holds = $self->active_holds_for( $input->{resource_type},
         $input->{resource_id}, 1 );
     if ( !@{$holds} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_hold_hash( $holds->[0] );
@@ -203,8 +198,7 @@ sub _finish_leftover_hold ( $self, $existing, $input ) {
 
 sub _ensure_hold_write ( $self, $existing, $input ) {
     if ( $self->_hold_event_exists($existing) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_event_and_audit( $existing, $input->{created_by} );

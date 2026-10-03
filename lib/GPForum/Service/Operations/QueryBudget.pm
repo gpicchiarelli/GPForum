@@ -126,9 +126,8 @@ sub catalog ($self) {
 }
 
 sub budget_for ( $self, $endpoint_name ) {
-    my $undefined;
-    return $undefined if !defined $endpoint_name;
-    return $undefined if !exists $self->budgets->{$endpoint_name};
+    return undef if !defined $endpoint_name;
+    return undef if !exists $self->budgets->{$endpoint_name};
 
     return { %{ $self->budgets->{$endpoint_name} } };
 }

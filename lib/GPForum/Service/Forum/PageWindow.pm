@@ -63,8 +63,7 @@ sub _bounded_limit ($requested) {
 }
 
 sub _encode_cursor ( $row, $columns ) {
-    my $undefined;
-    return $undefined if !$row;
+    return undef if !$row;
 
     return encode_base64url( join q{|},
         map { $row->get_column($_) } @{$columns} );
@@ -82,15 +81,14 @@ sub acceptable_cursor ( $class, $sort_value, $id ) {
 }
 
 sub _decode_cursor ($cursor) {
-    my $undefined;
-    return $undefined if !defined $cursor || !length $cursor;
+    return undef if !defined $cursor || !length $cursor;
 
     my $decoded = eval { decode_base64url($cursor) };
-    return $undefined if $EVAL_ERROR || !defined $decoded;
+    return undef if $EVAL_ERROR || !defined $decoded;
 
     my @parts = split /[|]/msx, $decoded, $CURSOR_PARTS;
-    return $undefined if @parts != $CURSOR_PARTS;
-    return $undefined if !__PACKAGE__->acceptable_cursor(@parts);
+    return undef if @parts != $CURSOR_PARTS;
+    return undef if !__PACKAGE__->acceptable_cursor(@parts);
 
     return {
         sort_value => $parts[0],

@@ -254,8 +254,7 @@ sub enabled_channels ( $self, $user_id ) {
 # input, before anything is written.
 sub _refused_channel ($channel) {
     if ( _is_channel($channel) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $message = 'channel must be one of ' . join q{, }, @CHANNELS;

@@ -68,8 +68,7 @@ sub _stream_limit_denied ( $self, $user_id ) {
         return $self->_connect_rate_limited;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _accept_stream ($self) {
@@ -131,8 +130,7 @@ sub _message_error ( $self, $input ) {
 
 sub _oversized_error ( $self, $message ) {
     if ( !$self->realtime_access->payload_too_large($message) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $self->_telemetry(
@@ -161,8 +159,7 @@ sub _subscribe_precheck ( $self, $input ) {
         return 'rate_limited';
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _subscribe ( $self, $input ) {

@@ -199,8 +199,7 @@ sub observe_lag ( $self, $projection_name ) {
     my $row =
       $self->schema->resultset('ProjectionOffset')->find($projection_name);
 
-    my $undefined;
-    return $undefined if !$row;
+    return undef if !$row;
 
     return {
         projection_name => $row->get_column('projection_name'),

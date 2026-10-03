@@ -135,8 +135,7 @@ sub readable_condition ( $class, $viewer, $columns ) {
 # named. The owner of a private thread reads the replies in it, as _authors
 # says for one row.
 sub _thread_owner ( $level, $columns ) {
-    my $undefined;
-    return $undefined
+    return undef
       if $level ne 'post'
       || !defined $columns->{thread}
       || !defined $columns->{thread_author};

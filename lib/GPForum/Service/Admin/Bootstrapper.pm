@@ -234,8 +234,7 @@ sub _single_row ( $self, $resultset_name, $query ) {
 
     return $search->rows->[0] if $search->can('rows');
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _role_catalog ($self) {
@@ -263,8 +262,7 @@ sub _permission ( $resource_type, $action ) {
 }
 
 sub _row_hash ( $row, @columns ) {
-    my $undefined;
-    return $undefined if !$row;
+    return undef if !$row;
 
     my %hash = map { $_ => _row_value( $row, $_ ) } @columns;
 

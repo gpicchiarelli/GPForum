@@ -62,8 +62,7 @@ sub handle ( $self, $event ) {
 }
 
 sub _record ( $self, $event, $policy ) {
-    my $undefined;
-    return $undefined if !$self->ledger;
+    return undef if !$self->ledger;
 
     my $user_id = $self->_subject_user_id($event);
     return { ok => 0, skipped => 1, reason => 'missing_subject' }
@@ -92,13 +91,11 @@ sub _subject_user_id ( $self, $event ) {
 }
 
 sub _schema_author ( $self, $event ) {
-    my $undefined;
-
     my $name = _author_resultset($event);
-    return $undefined if !$self->schema || !$name;
+    return undef if !$self->schema || !$name;
 
     my $row = $self->schema->resultset($name)->find( $event->{aggregate_id} );
-    return $undefined if !$row;
+    return undef if !$row;
 
     return $row->get_column('author_user_id');
 }
@@ -123,9 +120,8 @@ sub _task ( $event, $policy ) {
 }
 
 sub _policy ($event_type) {
-    my $undefined;
-    return $undefined if !defined $event_type;
-    return $undefined if !exists $POLICY{$event_type};
+    return undef if !defined $event_type;
+    return undef if !exists $POLICY{$event_type};
 
     return $POLICY{$event_type};
 }
@@ -151,8 +147,7 @@ sub _author_resultset ($event) {
     return 'Post'   if $type eq 'post';
     return 'Thread' if $type eq 'thread';
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _event_value ( $event, $name ) {
@@ -171,8 +166,7 @@ sub _source_id ($event) {
         return $event->{event_id};
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _has_text ($value) {

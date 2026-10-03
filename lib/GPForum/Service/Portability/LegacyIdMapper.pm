@@ -60,8 +60,6 @@ sub _mapping_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _mapping_after_id_conflict ( $self, $input ) {
@@ -83,8 +81,6 @@ sub _retry_mapping_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_mapping_row ( $self, $input, $error ) {
@@ -155,8 +151,7 @@ sub _first_row ($search) {
         return $search->single;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _skipped_mapping ($mapping) {

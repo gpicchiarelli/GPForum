@@ -161,8 +161,6 @@ sub _deletion_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _deletion_after_id_conflict ( $self, $input ) {
@@ -184,8 +182,6 @@ sub _retry_deletion_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_deletion_row ( $self, $input, $error ) {
@@ -246,8 +242,7 @@ sub _finish_leftover_deletion ( $self, $existing ) {
 
 sub _ensure_deletion_write ( $self, $existing ) {
     if ( $self->_deletion_event_exists($existing) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_privacy_event_and_audit(
@@ -270,8 +265,7 @@ sub _approve_in_txn ( $self, $input ) {
     my $request =
       $self->schema->resultset('DeletionRequest')->find( $input->{request_id} );
     if ( !$request ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $input->{request}   = $request;
@@ -413,8 +407,6 @@ sub _job_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _job_after_id_conflict ( $self, $input ) {
@@ -436,8 +428,6 @@ sub _retry_erasure_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_erasure_job ( $self, $input, $error ) {
@@ -469,8 +459,7 @@ sub _complete_in_txn ( $self, $input ) {
     my $job =
       $self->schema->resultset('ErasureJob')->find( $input->{erasure_job_id} );
     if ( !$job ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( $self->completion->job_done($job) ) {
         return $self->_already_completed( $input, $job );
@@ -512,8 +501,7 @@ sub _complete_with_request ( $self, $input, $job ) {
     my $request =
       $self->schema->resultset('DeletionRequest')->find($request_id);
     if ( !$request ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $input->{job}       = $job;
@@ -542,8 +530,7 @@ sub _block_or_replay ( $self, $input ) {
 
 sub _already_blocked ( $self, $input ) {
     if ( !$self->_already_held( $input->{request} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_job_has_block_error( $input->{job} );
@@ -661,8 +648,7 @@ sub _hold_in_txn ( $self, $input ) {
     my $request =
       $self->schema->resultset('DeletionRequest')->find( $input->{request_id} );
     if ( !$request ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $held = $self->_hold_request(
@@ -716,8 +702,7 @@ sub _open_deletion_hash ( $self, $input ) {
     my $row = $self->_latest_row( 'DeletionRequest',
         $self->_open_deletion_query($input), 'created_at', );
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->record->request_hash($row);
@@ -782,8 +767,6 @@ sub _retry_deletion_action_id ( $self, $request_id, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _deletion_action_id_conflict ($error) {
@@ -949,8 +932,7 @@ sub _anonymize_request_subject ( $self, $request, $timestamp ) {
 
 sub _erasure_user ( $self, $request ) {
     if ( !$self->erasure->is_user_resource($request) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset('User')
@@ -969,11 +951,9 @@ sub _erase_user ( $self, $user, $user_id, $timestamp ) {
 }
 
 sub _revoke_user_rows ( $self, $resultset_name, $user_id, $timestamp ) {
-    my $undefined;
-
     my $resultset = eval { return $self->schema->resultset($resultset_name); };
     if ( !$resultset ) {
-        return $undefined;
+        return undef;
     }
 
     my $search = $resultset->search_rs(
@@ -984,7 +964,7 @@ sub _revoke_user_rows ( $self, $resultset_name, $user_id, $timestamp ) {
     );
     $self->_revoke_rows( $search, $timestamp );
 
-    return $undefined;
+    return undef;
 }
 
 sub _revoke_rows ( $self, $search, $timestamp ) {
@@ -1016,8 +996,7 @@ sub _record_privacy_event_and_audit ( $self, $input ) {
 sub _schema_dbh ($self) {
     my $storage = eval { return $self->schema->storage; };
     if ( !$storage || !$storage->can('dbh') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $dbh = eval { return $storage->dbh; };

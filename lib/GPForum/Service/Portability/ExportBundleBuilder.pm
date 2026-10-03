@@ -108,8 +108,6 @@ sub _export_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _export_after_id_conflict ( $self, $input ) {
@@ -131,8 +129,6 @@ sub _retry_export_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_export_row ( $self, $input, $error ) {
@@ -177,8 +173,7 @@ sub _pending_request ( $self, $input ) {
     );
     my $row = $search->single;
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _request_hash($row);
@@ -235,8 +230,7 @@ sub _complete_request ( $self, $export_request_id, $parts ) {
     my $request =
       $self->schema->resultset('ExportRequest')->find($export_request_id);
     if ( !$request ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( ( _column( $request, 'status' ) || q{} ) eq $STATUS_COMPLETED ) {
         return _request_hash($request);
@@ -461,8 +455,7 @@ sub _finish_leftover_export ( $self, $existing ) {
 
 sub _ensure_export_write ( $self, $existing ) {
     if ( $self->_export_event_exists($existing) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_event_and_audit(

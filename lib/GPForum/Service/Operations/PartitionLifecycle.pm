@@ -418,8 +418,7 @@ sub _iso_date ($epoch) {
 
 sub next_state ( $, $state ) {
     if ( !$state || !exists $NEXT_STATE{$state} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $NEXT_STATE{$state};
@@ -457,8 +456,7 @@ sub _ensure_partition ( $self, $handle, $plan, $result ) {
           { %{ $self->_evidence($plan) }, error => _reason($EVAL_ERROR) };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _ensure_one ( $self, $handle, $plan, $result ) {
@@ -484,8 +482,7 @@ sub _create_partition ( $self, $handle, $plan, $result ) {
     my $statement = $self->create_statement($plan);
     if ( !$result->{applied} ) {
         push @{ $result->{planned} }, $self->_evidence( $plan, $statement );
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     my $failure = $self->_create_with_retries( $handle, $plan );
     if ( defined $failure ) {
@@ -549,8 +546,7 @@ sub _transaction ( $handle, @statements ) {
         $handle->commit;
         return 1;
     };
-    my $undefined;
-    return $undefined if $done;
+    return undef if $done;
 
     my $failure = _reason($EVAL_ERROR);
     my $state   = $handle->can('state') ? $handle->state : undef;
@@ -577,15 +573,13 @@ sub _record_failure ( $self, $plan, $failure, $result ) {
 }
 
 sub _default_conflict ( $self, $handle, $plan ) {
-    my $undefined;
-
     my $default = $self->default_partition_name( $plan->{table_name} );
     if ( !_relation_exists( $handle, $default ) ) {
-        return $undefined;
+        return undef;
     }
     my $rows = $self->_default_rows( $handle, $default, $plan );
     if ( !$rows ) {
-        return $undefined;
+        return undef;
     }
 
     return $self->conflict_report( $plan, $rows );
@@ -689,8 +683,7 @@ sub _require_dbh ( $self, $input ) {
 # redacts it (GPForum::Command::Usage->failure).
 sub _schema_dbh ($self) {
     my $schema = $self->schema;
-    my $undefined;
-    return $undefined if !$schema;
+    return undef if !$schema;
 
     my $handle = eval { return $schema->storage->dbh; };
     return $handle if $handle;
@@ -699,7 +692,7 @@ sub _schema_dbh ($self) {
     croak "partition lifecycle: cannot connect to the database: $reason"
       if length $reason;
 
-    return $undefined;
+    return undef;
 }
 
 sub _lookahead ( $self, $input ) {
@@ -852,8 +845,7 @@ sub _relation_exists ( $handle, $name ) {
 sub _execute ( $handle, $statement, @bind ) {
     my $done = eval { return _dispatch( $handle, $statement, \@bind ); };
     if ($done) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _reason($EVAL_ERROR);

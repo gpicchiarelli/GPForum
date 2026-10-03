@@ -78,8 +78,7 @@ sub _database ( $class, $minion ) {
 
 sub _callable ( $, $object, $method ) {
     if ( !$object || !$object->can($method) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $object->$method;

@@ -269,8 +269,7 @@ sub _title_error ($values) {
       if !_length_between( $values->{title}, $MINIMUM_TITLE_LENGTH,
         $MAXIMUM_TITLE_LENGTH );
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _body_error ($values) {
@@ -286,8 +285,7 @@ sub _visibility_error ($values) {
       if GPForum::Service::Forum::Visibility->broader( $values->{visibility},
         $values->{visibility_floor} );
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _length_between ( $value, $minimum, $maximum ) {

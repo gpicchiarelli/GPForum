@@ -494,8 +494,7 @@ sub _missing_field ( $, $input, $field ) {
         );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _run_store ( $self, $not_found, $code ) {

@@ -71,8 +71,7 @@ sub record_hash ( $self, $audit ) {
 
 sub column ( $self, $row, $name ) {
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_row_column( $row, $name );
@@ -98,8 +97,7 @@ sub _row_column ( $, $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _audit_id ( $self, $input ) {

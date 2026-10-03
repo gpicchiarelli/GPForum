@@ -131,8 +131,7 @@ sub _plain_message ( $self, $locale, $key ) {
     }
 
     $self->_log_missing_key( $normalized || $FALLBACK_LOCALE, $key, 'missing' );
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _usable_plain ( $self, $locale, $key ) {
@@ -145,10 +144,8 @@ sub _usable_plain ( $self, $locale, $key ) {
 }
 
 sub _fallback_plain ( $self, $locale, $key ) {
-    my $undefined;
-
     if ( $locale eq $FALLBACK_LOCALE ) {
-        return $undefined;
+        return undef;
     }
 
     $self->_log_missing_key( $locale, $key, 'fallback' );
@@ -157,7 +154,7 @@ sub _fallback_plain ( $self, $locale, $key ) {
         return $message;
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _counted_message ( $self, $locale, $key, $count ) {
@@ -168,8 +165,7 @@ sub _counted_message ( $self, $locale, $key, $count ) {
     }
 
     $self->_log_missing_key( $normalized || $FALLBACK_LOCALE, $key, 'missing' );
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _usable_counted ( $self, $locale, $key, $count ) {
@@ -183,8 +179,7 @@ sub _usable_counted ( $self, $locale, $key, $count ) {
 
 sub _fallback_counted ( $self, $locale, $key, $count ) {
     if ( $locale eq $FALLBACK_LOCALE ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     $self->_log_missing_key( $locale, $key, 'fallback' );

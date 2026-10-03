@@ -425,8 +425,7 @@ sub resultset ( $self, $name ) {
     return $self->outbox_resultset      if $name eq 'OutboxMessage';
     return $self->dead_letter_resultset if $name eq 'DeadLetter';
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub txn_do ( $self, $code ) {

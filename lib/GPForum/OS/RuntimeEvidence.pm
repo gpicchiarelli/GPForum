@@ -259,15 +259,14 @@ sub _filesystem_report ($self) {
 }
 
 sub _dbh ($self) {
-    my $undefined;
     return $self->dbh if $self->dbh;
 
     my $schema =
       eval { return GPForum::Schema->connect_from_config( $self->_config ); };
-    return $undefined if !$schema;
+    return undef if !$schema;
 
     my $dbh = eval { return $schema->storage->dbh; };
-    return $undefined if !$dbh;
+    return undef if !$dbh;
 
     $self->dbh($dbh);
 
@@ -400,8 +399,7 @@ sub _failed_socket_option ( $name, $reason ) {
 
 sub _socket_constant ($name) {
     my $code = Socket->can($name);
-    my $undefined;
-    return $undefined if !$code;
+    return undef if !$code;
 
     return $code->();
 }

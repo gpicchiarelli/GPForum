@@ -33,8 +33,7 @@ sub skip_reason ( $self, $request, $user ) {
         return 'user_not_found';
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub already_deleted ( $self, $user ) {

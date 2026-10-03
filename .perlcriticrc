@@ -76,3 +76,18 @@ max_mccabe = 12
 # quality program use. Its only alternative, `use 5.040`, says the same thing
 # less readably.
 [-ValuesAndExpressions::ProhibitVersionStrings]
+
+# A sub that has nothing to return says `return undef;` (ADR 0117). The policy
+# wants a bare `return;`, which gives an empty list in list context, and in
+# this tree that would be wrong: hundreds of call sites put the result in a
+# hash (`visibility_floor => _effective_visibility(...)`) or an argument list,
+# where an empty list shifts every pair after it. script/architecture-check's
+# column-reader guard exists because that happened once. `return undef`
+# returns exactly what the `my $undefined; return $undefined;` idiom it
+# replaces returned, without the extra lexical.
+[-Subroutines::ProhibitExplicitReturnUndef]
+
+# UniqueConflict->throw and ->rethrow always croak, so a sub may end in one
+# without a dead `return` after it.
+[Subroutines::RequireFinalReturn]
+terminal_methods = rethrow throw

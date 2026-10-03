@@ -395,8 +395,7 @@ sub _remove_post_batch ( $self, $thread_id, $post_ids ) {
     return $self->schema->txn_do(
         sub {
             $self->_lock_documents( 'post', $post_ids );
-            my $undefined;
-            return $undefined if $self->_thread_is_live($thread_id);
+            return undef if $self->_thread_is_live($thread_id);
 
             my $documents = $self->schema->resultset('SearchDocument');
             my $deleted   = $documents->search_rs(
@@ -460,8 +459,7 @@ sub _thread_post_batch ( $self, $thread_id, $after ) {
 # Where the next batch starts, or nothing when this one was the last: a
 # batch shorter than the batch size has run out of posts.
 sub _next_position ( $posts, $batch_size ) {
-    my $undefined;
-    return $undefined if @{$posts} < $batch_size;
+    return undef if @{$posts} < $batch_size;
 
     return $posts->[-1]{position};
 }

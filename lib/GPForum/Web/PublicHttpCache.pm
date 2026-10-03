@@ -138,12 +138,11 @@ sub _serve_entry ( $self, $controller, $entry, $options ) {
 # the request's path is another. Compared segment by segment, decoded, so a
 # slug spelled with escapes in either case, or none, is the same slug.
 sub _canonical_elsewhere ( $controller, $entry, $options ) {
-    my $undefined;
     my $canonical = $entry->{canonical_path};
-    return $undefined if !$options->{canonical_only} || !defined $canonical;
+    return undef if !$options->{canonical_only} || !defined $canonical;
 
     my $requested = _segments( $controller->req->url->path );
-    return $undefined if $requested eq _segments( Mojo::Path->new($canonical) );
+    return undef if $requested eq _segments( Mojo::Path->new($canonical) );
 
     return $canonical;
 }
@@ -176,8 +175,7 @@ sub _store_and_render ( $self, $input ) {
 sub _current_entry ( $self, $key ) {
     my $entry = $self->cache->get($key);
     if ( !$entry || ( $entry->{encoding} // q{} ) ne $BODY_ENCODING ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $entry;

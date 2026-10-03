@@ -82,8 +82,6 @@ sub _report_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _report_after_id_conflict ( $self, $input ) {
@@ -105,8 +103,6 @@ sub _retry_report_id ( $self, $input ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _reuse_report_row ( $self, $input, $error ) {
@@ -383,8 +379,7 @@ sub _lock_report ( $self, $report_id ) {
 sub _schema_dbh ($schema) {
     my $storage = eval { return $schema->storage; };
     if ( !$storage || !$storage->can('dbh') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $dbh = eval { return $storage->dbh; };

@@ -690,8 +690,7 @@ sub _missing_fields ( $, $input, $names ) {
         );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _eval_store ( $self, $code ) {

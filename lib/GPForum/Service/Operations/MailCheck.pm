@@ -364,8 +364,7 @@ sub _config_error ( $, $summary ) {
     return 'smtp_host must be non-empty for smtp transport'
       if $transport eq 'smtp' && !_has_text( $summary->{smtp}{host} );
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _fail ( $, $error, $options ) {
@@ -434,8 +433,7 @@ sub _sendmail_from_path {
         return $candidate if -x $candidate;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _has_text ($value) {

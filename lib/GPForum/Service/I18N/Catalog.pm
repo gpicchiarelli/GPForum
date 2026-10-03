@@ -97,8 +97,7 @@ sub has_key ( $self, $locale, $key ) {
 sub message ( $self, $locale, $key ) {
     my $catalog = $self->_locale_catalog($locale);
     if ( !%{$catalog} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $catalog->{$key};
@@ -137,8 +136,7 @@ sub _locale_catalog ( $self, $locale ) {
 
 sub _scalar_form ( $message, $category ) {
     if ( !defined $message ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( ref $message eq q{} ) {
         return $message;
@@ -149,8 +147,7 @@ sub _scalar_form ( $message, $category ) {
 
 sub _hash_form ( $message, $category ) {
     if ( ref $message ne 'HASH' ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( exists $message->{$category} ) {
         return $message->{$category};

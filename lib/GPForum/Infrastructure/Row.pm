@@ -27,8 +27,7 @@ our $VERSION = '0.001';
 # This returns undef, in scalar and list context alike, so a missing row
 # produces a missing value rather than a corrupted hash.
 sub column ( $, $row, $name ) {
-    my $undefined;
-    return $undefined    if !defined $row;
+    return undef         if !defined $row;
     return $row->{$name} if ref $row eq 'HASH';
 
     # UNIVERSAL::can by name: a row double is free to define its own can(),
@@ -38,7 +37,7 @@ sub column ( $, $row, $name ) {
       if UNIVERSAL::can( $row, 'get_column' );
     ## use critic
 
-    return $undefined;
+    return undef;
 }
 
 1;

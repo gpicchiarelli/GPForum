@@ -85,8 +85,7 @@ sub snapshot ($self) {
 }
 
 sub _check_primary ( $self, $input ) {
-    my $undefined;
-    return $undefined if !$self->primary_store;
+    return undef if !$self->primary_store;
 
     my $decision = eval { return $self->primary_store->check($input); };
     if ( !$decision ) {
@@ -100,7 +99,7 @@ sub _check_primary ( $self, $input ) {
                 store    => 'postgresql',
             },
         );
-        return $undefined;
+        return undef;
     }
 
     return $decision;
@@ -189,9 +188,8 @@ sub _record_block_stats ( $self, $decision ) {
 }
 
 sub _record_block_audit ( $self, $input, $decision ) {
-    my $undefined;
-    return $undefined if !$self->schema;
-    return $undefined if _store_unavailable($decision);
+    return undef if !$self->schema;
+    return undef if _store_unavailable($decision);
 
     my $created = eval {
         return $self->recorder->record_audit(
@@ -219,7 +217,7 @@ sub _record_block_audit ( $self, $input, $decision ) {
         $self->stats->{audit_failures} += 1;
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _store_snapshot ($self) {
@@ -243,8 +241,7 @@ sub _store_snapshot ($self) {
 }
 
 sub _telemetry ( $self, $event_type, $metadata ) {
-    my $undefined;
-    return $undefined if !$self->security_telemetry;
+    return undef if !$self->security_telemetry;
 
     return $self->security_telemetry->record( $event_type, $metadata );
 }

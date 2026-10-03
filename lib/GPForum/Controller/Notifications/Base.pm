@@ -27,8 +27,7 @@ sub member_user_id ($self) {
     my $user_id = $self->_current_user_id;
     if ( !$user_id ) {
         $self->_unauthorized;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $user_id;
@@ -37,8 +36,7 @@ sub member_user_id ($self) {
 sub write_user_id ( $self, $action ) {
     if ( GPForum::Web::Access->new->csrf_invalid($self) ) {
         $self->_csrf_failure;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_rate_limited_user_id($action);
@@ -86,15 +84,13 @@ sub write_failure ( $self, $result ) {
 }
 
 sub _rate_limited_user_id ( $self, $action ) {
-    my $undefined;
-
     my $user_id = $self->member_user_id;
     if ( !$user_id ) {
-        return $undefined;
+        return undef;
     }
     if ( !$self->_allowed( $user_id, $action ) ) {
         $self->_rate_limited;
-        return $undefined;
+        return undef;
     }
 
     return $user_id;
@@ -133,8 +129,7 @@ sub _mapped_failure ( $self, $result ) {
         return $self->_not_found( $result->{error} );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _allowed ( $self, $user_id, $action ) {

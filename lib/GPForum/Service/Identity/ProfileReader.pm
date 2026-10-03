@@ -45,14 +45,12 @@ sub public_profile ( $self, $username, $options ) {
 }
 
 sub _find_public_user ( $self, $username ) {
-    my $undefined;
-
     my $user = $self->schema->resultset('User')
       ->find( { username => _normalize_username($username) } );
 
-    return $undefined if !$user;
-    return $undefined if defined _column( $user, 'deleted_at' );
-    return $undefined if ( _column( $user, 'status' ) || q{} ) eq 'suspended';
+    return undef if !$user;
+    return undef if defined _column( $user, 'deleted_at' );
+    return undef if ( _column( $user, 'status' ) || q{} ) eq 'suspended';
 
     return $user;
 }

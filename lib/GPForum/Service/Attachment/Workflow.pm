@@ -60,8 +60,7 @@ sub _upload_once ( $self, $input ) {
     my $post = $self->post_reader->find_visible_post( $input->{post_id},
         $input->{viewer} );
     if ( !$post ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( !_same_author( $post, $input->{actor_user_id} ) ) {
         return {
@@ -137,8 +136,7 @@ sub _idempotent_write ( $self, $job ) {
 
 sub _missing_command_id ( $, $input ) {
     if ( length _trim( $input->{command_id} ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _result(
@@ -170,8 +168,7 @@ sub _public_stored ($stored) {
 
 sub _public_attachment ($attachment) {
     if ( !$attachment ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -186,8 +183,7 @@ sub _public_attachment ($attachment) {
 
 sub _public_link ($link) {
     if ( !$link ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -200,8 +196,7 @@ sub _public_link ($link) {
 
 sub _public_post ($post) {
     if ( !$post ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {
@@ -231,8 +226,7 @@ sub _delete_once ( $self, $input ) {
     my $post = $self->post_reader->find_visible_post( $input->{post_id},
         $input->{viewer} );
     if ( !$post ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( !_same_author( $post, $input->{actor_user_id} ) ) {
         return {
@@ -266,8 +260,7 @@ sub _download_once ( $self, $input ) {
 
 sub _linked_upload ( $uploaded, $post ) {
     if ( !$uploaded ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( !$uploaded->{ok} ) {
         return {
@@ -281,8 +274,7 @@ sub _linked_upload ( $uploaded, $post ) {
 
 sub _linked_delete ( $deleted, $post ) {
     if ( !$deleted ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( !$deleted->{ok} ) {
         return $deleted;
@@ -363,8 +355,7 @@ sub _tagged_denial ($value) {
         );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _store_denial ($value) {
@@ -381,8 +372,7 @@ sub _store_denial ($value) {
         );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _is_missing ($value) {
@@ -411,8 +401,7 @@ sub _has_ok ($value) {
 
 sub _column ( $row, $name ) {
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( ref $row eq 'HASH' ) {
         return $row->{$name};
@@ -426,8 +415,7 @@ sub _object_column ( $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _result (%input) {

@@ -147,8 +147,7 @@ sub resend_badge_snapshots ($self) {
 
 # Undef when there is no counter or it failed.
 sub _unread_count ( $self, $user_id ) {
-    my $undefined;
-    return $undefined if !$self->badge_counter;
+    return undef if !$self->badge_counter;
 
     return
       eval { return $self->badge_counter->unread_count_for_user($user_id); };
@@ -180,8 +179,7 @@ sub broadcast_event ( $self, $event ) {
 
 sub _event_rejection ( $self, $event ) {
     my $validation = $self->event_contract->validate($event);
-    my $undefined;
-    return $undefined if $validation->{ok};
+    return undef if $validation->{ok};
 
     $self->stats->{malformed}        += 1;
     $self->stats->{malformed_events} += 1;
@@ -273,8 +271,7 @@ sub _user_id ($actor) {
 }
 
 sub _send_json ( $connection, $payload ) {
-    my $undefined;
-    return $undefined if !$connection;
+    return undef if !$connection;
 
     return eval { return $connection->send( { json => $payload } ); };
 }

@@ -151,8 +151,7 @@ sub report_reason_error ( $, $reason ) {
         return 'reason is too long';
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub is_unavailable ( $, $result ) {
@@ -293,16 +292,14 @@ sub reported_status {
 }
 
 sub write_flash_key ( $, $status ) {
-    my $undefined;
-
     if ( !defined $status ) {
-        return $undefined;
+        return undef;
     }
     if ( exists $WRITE_FLASH{$status} ) {
         return $WRITE_FLASH{$status};
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub search_page_limit ( $self, $requested ) {

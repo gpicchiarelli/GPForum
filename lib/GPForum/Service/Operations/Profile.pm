@@ -93,8 +93,7 @@ sub names {
 sub name_for_environment ( $, $environment ) {
     my $key = $environment || q{};
     if ( !exists $ENV_TO_PROFILE{$key} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $ENV_TO_PROFILE{$key};
@@ -102,8 +101,7 @@ sub name_for_environment ( $, $environment ) {
 
 sub get ( $, $name ) {
     if ( !$name || !exists $PROFILES{$name} ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return { %{ $PROFILES{$name} } };

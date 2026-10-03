@@ -64,21 +64,18 @@ sub _first_limit ( $self, $limits ) {
         }
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _probe ( $self, $source ) {
-    my $undefined;
-
     my $probe = $PROBE_FOR{ $source->{type} || q{} };
     if ( !$probe ) {
-        return $undefined;
+        return undef;
     }
 
     my $count = eval { return $probe->( $self, $source ); };
     if ( !$count ) {
-        return $undefined;
+        return undef;
     }
 
     return _positive($count);
@@ -87,8 +84,7 @@ sub _probe ( $self, $source ) {
 sub _probe_command ( $self, $source ) {
     my $output = $self->command_runner->( @{ $source->{command} || [] } );
     if ( !defined $output ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my ($count) = $output =~ $INTEGER_VALUE;
@@ -97,18 +93,16 @@ sub _probe_command ( $self, $source ) {
 }
 
 sub _probe_cpu_list ( $self, $source ) {
-    my $undefined;
-
     my $content = $self->file_reader->( $source->{path} );
     if ( !defined $content ) {
-        return $undefined;
+        return undef;
     }
 
     my $count = 0;
     for my $range ( split /,/msx, _trim($content) ) {
         my $size = _range_size($range);
         if ( !$size ) {
-            return $undefined;
+            return undef;
         }
         $count += $size;
     }
@@ -119,8 +113,7 @@ sub _probe_cpu_list ( $self, $source ) {
 sub _probe_cpuinfo ( $self, $source ) {
     my $content = $self->file_reader->( $source->{path} );
     if ( !defined $content ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my @processors = grep { $_ =~ $CPUINFO_LINE } split /\n/msx, $content;
@@ -137,46 +130,40 @@ sub _probe_sysconf ( $self, $ ) {
 }
 
 sub _cgroup_quota ( $self, $limit ) {
-    my $undefined;
-
     my $content = $self->file_reader->( $limit->{path} );
     if ( !defined $content ) {
-        return $undefined;
+        return undef;
     }
 
     my ( $quota, $period ) = $content =~ $CGROUP_QUOTA;
     if ( !$quota || !$period ) {
-        return $undefined;
+        return undef;
     }
 
     return ceil( $quota / $period );
 }
 
 sub _range_size ($range) {
-    my $undefined;
-
     my ( $from, $to ) = $range =~ $CPU_RANGE;
     if ( !defined $from ) {
-        return $undefined;
+        return undef;
     }
     if ( !defined $to ) {
         return 1;
     }
     if ( $to < $from ) {
-        return $undefined;
+        return undef;
     }
 
     return $to - $from + 1;
 }
 
 sub _positive ($value) {
-    my $undefined;
-
     if ( !defined $value || $value !~ $INTEGER_VALUE ) {
-        return $undefined;
+        return undef;
     }
     if ( $value < $FALLBACK_COUNT ) {
-        return $undefined;
+        return undef;
     }
 
     return int $value;
@@ -190,43 +177,37 @@ sub _trim ($value) {
 }
 
 sub _run_command (@command) {
-    my $undefined;
-
     if ( !@command || !-x $command[0] ) {
-        return $undefined;
+        return undef;
     }
 
     my $text = eval { return _capture_command(@command); };
     if ( !defined $text ) {
-        return $undefined;
+        return undef;
     }
 
     return $text;
 }
 
 sub _capture_command (@command) {
-    my $undefined;
-
     delete local @ENV{@OPENMP_OVERRIDES};
     my $pid = open3( my $input, my $output, undef, @command );
-    close $input or return $undefined;
+    close $input or return undef;
     my $text = do { local $INPUT_RECORD_SEPARATOR = undef; <$output> };
-    close $output or return $undefined;
+    close $output or return undef;
     waitpid $pid, 0;
 
     return $CHILD_ERROR == 0 ? $text : undef;
 }
 
 sub _read_file ($path) {
-    my $undefined;
-
     if ( !defined $path || !-r $path ) {
-        return $undefined;
+        return undef;
     }
 
-    open my $handle, '<', $path or return $undefined;
+    open my $handle, '<', $path or return undef;
     my $content = do { local $INPUT_RECORD_SEPARATOR = undef; <$handle> };
-    close $handle or return $undefined;
+    close $handle or return undef;
 
     return $content;
 }
@@ -234,8 +215,7 @@ sub _read_file ($path) {
 sub _sysconf_processors {
     my $code = POSIX->can($NPROCESSORS_CONSTANT);
     if ( !$code ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return sysconf( $code->() );

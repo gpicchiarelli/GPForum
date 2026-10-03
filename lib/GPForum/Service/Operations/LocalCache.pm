@@ -55,8 +55,7 @@ sub lookup ( $self, $key ) {
     my $entry = $self->entries->{$key};
     if ( !$entry || $self->_is_expired($entry) ) {
         my ( $found, undef ) = $self->_lookup($key);
-        my $undefined;
-        return $undefined if !$found;
+        return undef if !$found;
         $entry = $self->entries->{$key};
     }
 

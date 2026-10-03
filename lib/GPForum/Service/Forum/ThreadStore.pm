@@ -252,8 +252,6 @@ sub _retry_opening_body_id ( $self, $ctx ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_body_id ( $self, $command ) {
@@ -305,8 +303,6 @@ sub _retry_opening_revision_id ( $self, $ctx ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_revision_id ( $self, $command ) {
@@ -470,8 +466,6 @@ sub _retry_opening_post_id ( $self, $command, $thread ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_post_id ( $self, $command ) {
@@ -565,8 +559,6 @@ sub _retry_thread_id ( $self, $command ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_with_new_thread_id ( $self, $command ) {
@@ -622,8 +614,7 @@ sub _update_thread ( $self, $command ) {
 sub _thread_refusal ( $self, $thread_id, $needs_deleted ) {
     my $dbh = _schema_dbh( $self->schema );
     if ( !$dbh ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return _thread_store_block(
@@ -647,8 +638,7 @@ sub _thread_store_block ( $thread, $needs_deleted ) {
         return { ok => 0, error => 'thread is locked' };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _deleted_flag ($thread) {
@@ -732,8 +722,7 @@ sub _delete_store_block ($existing) {
         return { ok => 0, error => 'thread not found' };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _restore_store_block ($existing) {
@@ -744,8 +733,7 @@ sub _restore_store_block ($existing) {
         return { ok => 0, error => 'thread not found' };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _apply_delete_markers ( $self, $thread, $command ) {
@@ -846,8 +834,7 @@ sub _update_row ( $row, $changes ) {
 sub _schema_dbh ($schema) {
     my $storage = eval { return $schema->storage; };
     if ( !$storage || !$storage->can('dbh') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     my $dbh = eval { return $storage->dbh; };

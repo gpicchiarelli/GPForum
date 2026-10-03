@@ -9,8 +9,7 @@ use v5.40;
 our $VERSION = '0.001';
 
 sub namespace_for ( $self, $key ) {
-    my $undefined;
-    return $undefined if !$self->valid_key($key);
+    return undef if !$self->valid_key($key);
 
     my ($namespace) = split /[.]/msx, $key, 2;
     return $namespace;

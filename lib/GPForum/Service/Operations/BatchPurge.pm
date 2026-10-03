@@ -53,8 +53,7 @@ sub delete_rows ( $self, $rows ) {
 }
 
 sub delete_row ( $self, $row ) {
-    my $undefined;
-    return $undefined if !$row;
+    return undef if !$row;
     if ( ref $row eq 'HASH' ) {
         return $self->_delete_hash($row);
     }

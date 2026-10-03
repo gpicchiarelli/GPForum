@@ -96,8 +96,7 @@ sub _actor_account_status ( $self, $actor ) {
 }
 
 sub _user_id ($actor) {
-    my $undefined;
-    return $undefined        if !defined $actor;
+    return undef             if !defined $actor;
     return $actor->{user_id} if ref $actor eq 'HASH';
 
     return $actor;

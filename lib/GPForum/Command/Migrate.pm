@@ -345,8 +345,7 @@ sub _allow_long_migration_statements ( $self, $schema ) {
 sub _schema_dbh ( $self, $schema ) {
     my $storage = eval { return $schema->storage; };
     if ( !$storage || !$storage->can('dbh') ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return eval { return $storage->dbh; };

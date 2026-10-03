@@ -104,8 +104,7 @@ sub latest ($self) {
     my $row =
       GPForum::Infrastructure::CountedQuery->select_row( $self->schema,
         $LATEST_SQL, $AGGREGATE, $AGGREGATE );
-    my $undefined;
-    return $undefined if !$row;
+    return undef if !$row;
 
     my $payload = $self->recorder->json->decode( $row->{payload} // '{}' );
 

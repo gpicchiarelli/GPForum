@@ -35,8 +35,7 @@ sub _local_cache ($config) {
 
 sub _shared_cache ($config) {
     if ( !_has_text( $config->glifistore_url ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return GPForum::Service::Operations::SharedCache->connect_required(

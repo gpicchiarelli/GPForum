@@ -177,8 +177,6 @@ sub _command_after_unique ( $self, $job, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _retry_or_reuse_command ( $self, $job ) {
@@ -210,8 +208,7 @@ sub _reuse_command ( $self, $job, $stored ) {
 sub _replay_if_complete ( $self, $job, $stored ) {
     my $payload = _payload_hash( _column( $stored, 'payload' ) );
     if ( !_has_response($payload) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_existing_result( $stored, $job->{request_hash} );
@@ -241,8 +238,6 @@ sub _retry_command_id ( $self, $job ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _command_id_conflict ($error) {
@@ -410,15 +405,14 @@ sub _update_hash_row ( $row, $values ) {
 }
 
 sub _column ( $row, $name ) {
-    my $undefined;
-    return $undefined    if !$row;
+    return undef         if !$row;
     return $row->{$name} if ref $row eq 'HASH';
     if ( $row->can($name) ) {
         return $row->$name;
     }
     return $row->get_column($name) if $row->can('get_column');
 
-    return $undefined;
+    return undef;
 }
 
 sub _trim ($value) {

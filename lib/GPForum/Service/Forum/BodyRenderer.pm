@@ -127,8 +127,6 @@ sub _take_fence ($state) {
 }
 
 sub _closing_fence ( $state, $from ) {
-    my $undefined;
-
     my $pos = $from;
     while ( $pos <= length $state->{text} ) {
         my $line = _line_from( $state, $pos );
@@ -141,12 +139,12 @@ sub _closing_fence ( $state, $from ) {
         }
         my $next = _next_line_start( $state, $pos );
         if ( !defined $next ) {
-            return $undefined;
+            return undef;
         }
         $pos = $next;
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _fence_body ( $state, $start, $end ) {
@@ -200,8 +198,7 @@ sub _line_from ( $state, $pos ) {
 sub _next_line_start ( $state, $pos ) {
     my $nl = index $state->{text}, "\n", $pos;
     if ( $nl == $INDEX_MISS ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $nl + 1;
@@ -376,8 +373,7 @@ sub _quote_text ($line) {
     my $stripped = $line;
     $stripped =~ s/\A [ ]{0,3} > [ ]?//msx;
     if ( $stripped eq $line ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $stripped;
@@ -418,20 +414,18 @@ sub _emit_link_or_skip ( $state, $open ) {
 }
 
 sub _parse_link ( $text, $open ) {
-    my $undefined;
-
     if ( _is_image_marker( $text, $open ) ) {
-        return $undefined;
+        return undef;
     }
 
     my $mid = index $text, $LINK_CLOSE, $open + 1;
     if ( $mid == $INDEX_MISS ) {
-        return $undefined;
+        return undef;
     }
 
     my $link_end = index $text, ')', $mid + length $LINK_CLOSE;
     if ( $link_end == $INDEX_MISS ) {
-        return $undefined;
+        return undef;
     }
 
     return _link_from_span( $text, $open, $mid, $link_end );
@@ -453,8 +447,7 @@ sub _link_from_span ( $text, $open, $mid, $link_end ) {
     my $url   = substr $text, $mid + length $LINK_CLOSE,
       $link_end - $mid - length $LINK_CLOSE;
     if ( !_safe_url($url) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {

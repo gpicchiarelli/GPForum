@@ -163,8 +163,7 @@ sub _upgrade_skip_reason ($options) {
         };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _upgrade_boundary ($plan) {
@@ -285,13 +284,11 @@ sub _apply_runner_through ( $runner, $max_version ) {
 }
 
 sub _clear_statement_timeout ($schema) {
-    my $undefined;
-
     my $dbh = eval { return $schema->storage->dbh; };
-    return $undefined if !$dbh;
+    return undef if !$dbh;
     $dbh->do('SET statement_timeout = 0');
 
-    return $undefined;
+    return undef;
 }
 
 sub _create_throwaway ( $self, $options, $suffix ) {
@@ -570,8 +567,7 @@ sub _pg_tool_from_env ($name) {
     return $ENV{$env_key}
       if _has_text( $ENV{$env_key} ) && -x $ENV{$env_key};
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _pg_tool_from_candidates ($name) {
@@ -579,8 +575,7 @@ sub _pg_tool_from_candidates ($name) {
         return $candidate if -x $candidate;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _which ($name) {
@@ -589,8 +584,7 @@ sub _which ($name) {
         return $path if -x $path;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _pg_tool_candidates ($name) {

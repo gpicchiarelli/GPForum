@@ -83,8 +83,6 @@ sub _binding_after_unique ( $self, $input, $error ) {
     }
 
     GPForum::Infrastructure::UniqueConflict->rethrow($error);
-    my $undefined;
-    return $undefined;
 }
 
 sub _binding_after_id_conflict ( $self, $input ) {
@@ -177,8 +175,7 @@ sub revoke_binding ( $self, $binding_id, $actor_user_id ) {
 
 sub _revoke_binding_once ( $self, $binding_id, $actor_user_id ) {
     my $binding = $self->_locked_binding($binding_id);
-    my $undefined;
-    return $undefined if !$binding;
+    return undef if !$binding;
 
     # Checked under the row lock, so a revocation that committed while this
     # one waited is reported here rather than stamped and audited again.
@@ -244,13 +241,11 @@ sub _active_binding ( $self, $input ) {
 
     return $search->rows->[0] if $search->can('rows');
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _binding_hash ($binding) {
-    my $undefined;
-    return $undefined if !$binding;
+    return undef if !$binding;
 
     return {
         binding_id         => _column( $binding, 'binding_id' ),
@@ -277,8 +272,7 @@ sub _finish_leftover_binding ( $self, $existing, $input ) {
 
 sub _ensure_binding_audit ( $self, $existing, $input ) {
     if ( $self->_binding_audit_exists($existing) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_record_audit(
@@ -305,8 +299,7 @@ sub _binding_audit_exists ( $self, $existing ) {
         return $search->single;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _record_audit ( $self, $input ) {

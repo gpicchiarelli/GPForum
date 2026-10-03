@@ -163,15 +163,13 @@ sub _claim_ready_batch_resultset ( $self, $limit ) {
 }
 
 sub _supports_postgresql_claim ($self) {
-    my $undefined;
-
     if ( !$self->schema->can('txn_do') ) {
-        return $undefined;
+        return undef;
     }
 
     my $dbh = _schema_dbh($self);
     if ( !$dbh || !$dbh->can('selectall_arrayref') ) {
-        return $undefined;
+        return undef;
     }
 
     return _dbh_driver_name($dbh) eq 'Pg';

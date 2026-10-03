@@ -35,8 +35,7 @@ sub visible_thread ($self) {
 
     if ( !$thread ) {
         $self->_not_found('thread not found');
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $thread;
@@ -406,8 +405,7 @@ sub render_payload ( $, $input ) {
 # /c/ID/ and /c/ID with a letter written as an escape as /c/ID, and each
 # spelling minted an entry of its own.
 sub public_cache_options ( $self, $name, $tags, $options = {} ) {
-    my $undefined;
-    return $undefined if length( $self->param('after') // q{} );
+    return undef if length( $self->param('after') // q{} );
 
     my $path = $options->{path} // $self->url_for->path->to_string;
     return $self->forum_access->public_cache_options(
@@ -587,21 +585,19 @@ sub read_allowed ( $self, $action ) {
 }
 
 sub write_user_id ( $self, $action ) {
-    my $undefined;
-
     if ( $self->_reject_bad_csrf ) {
-        return $undefined;
+        return undef;
     }
 
     my $user_id = $self->_current_user_id;
     if ( $self->_reject_unauthenticated($user_id) ) {
-        return $undefined;
+        return undef;
     }
     if ( $self->_reject_rate_limited( $user_id, $action ) ) {
-        return $undefined;
+        return undef;
     }
     if ( $self->_reject_suspended( $user_id, $action ) ) {
-        return $undefined;
+        return undef;
     }
 
     return $user_id;

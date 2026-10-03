@@ -44,8 +44,7 @@ sub validate_upload ( $self, $input ) {
 }
 
 sub sniff_media_type ( $self, $content ) {
-    my $undefined;
-    return $undefined   if !defined $content;
+    return undef        if !defined $content;
     return 'image/png'  if $content =~ /\A \x89 PNG \x0d \x0a \x1a \x0a/msx;
     return 'image/jpeg' if $content =~ /\A \xff \xd8 \xff/msx;
     return 'image/gif'  if $content =~ /\A GIF (?: 87a | 89a )/msx;

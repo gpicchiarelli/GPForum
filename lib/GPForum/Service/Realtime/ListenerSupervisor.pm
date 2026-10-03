@@ -290,8 +290,6 @@ sub _schedule_reconnect ($self) {
 }
 
 sub _reconnect_now ($self) {
-    my $undefined;
-
     $self->stats->{reconnects} += 1;
     my $result = eval { return $self->listener->reconnect; };
 
@@ -299,14 +297,14 @@ sub _reconnect_now ($self) {
         $self->_record_failure( 'reconnect', $result, $EVAL_ERROR );
         $self->running(0);
         $self->_schedule_reconnect;
-        return $undefined;
+        return undef;
     }
 
     $self->running(1);
     $self->status('running');
     $self->_schedule_timers;
 
-    return $undefined;
+    return undef;
 }
 
 sub _heartbeat ($self) {

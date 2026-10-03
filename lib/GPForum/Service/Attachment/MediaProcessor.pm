@@ -48,8 +48,7 @@ sub _skipped_attachment ($attachment) {
         return { ok => 1, skipped => 'not_image' };
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _not_available ($attachment) {

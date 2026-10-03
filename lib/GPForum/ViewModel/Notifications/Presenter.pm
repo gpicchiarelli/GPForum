@@ -114,8 +114,7 @@ sub mention ( $self, $row, %input ) {
 sub _related_notification ( $self, $row ) {
     return $row
       if ref $row eq 'HASH' && exists $row->{notification_type};
-    my $undefined;
-    return $undefined
+    return undef
       if !$row || ref $row eq 'HASH' || !$row->can('notification');
 
     return $row->notification;

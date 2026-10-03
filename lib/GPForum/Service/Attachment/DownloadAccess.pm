@@ -34,8 +34,7 @@ sub unavailable ( $self, $attachment ) {
         return $self->not_found;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub not_found {
@@ -72,8 +71,7 @@ sub payload ( $self, $attachment ) {
 
 sub owner_payload ( $self, $attachment, $viewer_user_id ) {
     if ( !$self->is_owner( $attachment, $viewer_user_id ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->payload($attachment);

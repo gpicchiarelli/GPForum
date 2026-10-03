@@ -45,8 +45,7 @@ sub failure_status ( $self, $result ) {
         return $status;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub marked_read_status {
@@ -58,16 +57,14 @@ sub marked_all_read_status {
 }
 
 sub write_flash_key ( $, $status ) {
-    my $undefined;
-
     if ( !defined $status ) {
-        return $undefined;
+        return undef;
     }
     if ( exists $WRITE_FLASH{$status} ) {
         return $WRITE_FLASH{$status};
     }
 
-    return $undefined;
+    return undef;
 }
 
 sub _status ( $, $result ) {

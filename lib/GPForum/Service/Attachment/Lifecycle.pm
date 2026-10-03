@@ -76,8 +76,7 @@ sub scanned_replay ( $self, $attachment ) {
 
 sub replayed_scan ( $self, $existing, $input ) {
     if ( !$self->scan_matches( $existing, $input ) ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return {

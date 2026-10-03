@@ -25,8 +25,7 @@ sub attachment_access {
 sub write_user_id ($self) {
     if ( GPForum::Web::Access->new->csrf_invalid($self) ) {
         $self->_csrf_failure;
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->_rate_limited_user_id;
@@ -42,8 +41,7 @@ sub wants_json ($self) {
 
 sub column ( $self, $row, $name ) {
     if ( !$row ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
     if ( ref $row eq 'HASH' ) {
         return $row->{$name};
@@ -138,9 +136,8 @@ sub render_download ( $self, $stored ) {
 # that does not understand the header would send it to the client.
 sub _delegated_download ( $self, $stored ) {
     my $prefix = $self->_accel_prefix;
-    my $undefined;
-    return $undefined if !length $prefix;
-    return $undefined if !defined $stored->{object_key};
+    return undef if !length $prefix;
+    return undef if !defined $stored->{object_key};
 
     # The key reaches a response header, so it is checked here rather than
     # trusted. FilesystemStorage::path_for already refuses anything outside
@@ -149,7 +146,7 @@ sub _delegated_download ( $self, $stored ) {
     ## no critic (RegularExpressions::ProhibitEnumeratedClasses)
     # The enumeration is the point: this is a whitelist of what may
     # appear in a header value, and \w would admit more than that.
-    return $undefined if $stored->{object_key} =~ m{[^A-Za-z0-9._/\-]}msx;
+    return undef if $stored->{object_key} =~ m{[^A-Za-z0-9._/\-]}msx;
     ## use critic
 
     $self->res->headers->header(
@@ -177,8 +174,7 @@ sub download_rate_failure ($self) {
     );
     return $self->_rate_limited if !$decision->{ok};
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub download_actor_key ($self) {
@@ -189,16 +185,14 @@ sub download_actor_key ($self) {
 }
 
 sub _rate_limited_user_id ($self) {
-    my $undefined;
-
     my $user_id = $self->current_user_id;
     if ( !$user_id ) {
         $self->_unauthorized;
-        return $undefined;
+        return undef;
     }
     if ( !$self->_upload_allowed($user_id) ) {
         $self->_rate_limited;
-        return $undefined;
+        return undef;
     }
 
     return $user_id;
@@ -280,8 +274,7 @@ sub _mapped_failure ( $self, $result ) {
         return $self->_forbidden( $result->{error} );
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _object_column ( $self, $row, $name ) {
@@ -289,8 +282,7 @@ sub _object_column ( $self, $row, $name ) {
         return $row->get_column($name);
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _bad_request ( $self, $errors ) {

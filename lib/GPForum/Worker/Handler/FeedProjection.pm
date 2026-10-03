@@ -86,8 +86,7 @@ sub _apply ( $self, $event, $task ) {
 }
 
 sub _project ( $self, $event, $task ) {
-    my $undefined;
-    return $undefined if !$self->projector;
+    return undef if !$self->projector;
 
     return $self->projector->project_item(
         {
@@ -100,8 +99,7 @@ sub _project ( $self, $event, $task ) {
 }
 
 sub _remove ( $self, $task ) {
-    my $undefined;
-    return $undefined if !$self->projector;
+    return undef if !$self->projector;
     if ( $task->{item_type} eq $THREAD_TARGET ) {
         return $self->_remove_thread($task);
     }
@@ -143,11 +141,10 @@ sub _author_id ( $self, $event ) {
 }
 
 sub _subscriber_ids ( $self, $event ) {
-    my $undefined;
-    return $undefined if !$self->subscription_store;
+    return undef if !$self->subscription_store;
 
     my $thread_id = $self->_thread_id($event);
-    return $undefined if !_has_text($thread_id);
+    return undef if !_has_text($thread_id);
 
     return $self->subscription_store->subscribers_for( $THREAD_TARGET,
         $thread_id );
@@ -165,15 +162,13 @@ sub _thread_id ( $self, $event ) {
 }
 
 sub _schema_column ( $self, $event, $name ) {
-    my $undefined;
-
     if ( !$self->schema ) {
-        return $undefined;
+        return undef;
     }
 
     my $row = $self->_schema_row($event);
     if ( !$row ) {
-        return $undefined;
+        return undef;
     }
 
     return $row->get_column($name);
@@ -182,8 +177,7 @@ sub _schema_column ( $self, $event, $name ) {
 sub _schema_row ( $self, $event ) {
     my $name = _schema_resultset($event);
     if ( !$name ) {
-        my $undefined;
-        return $undefined;
+        return undef;
     }
 
     return $self->schema->resultset($name)->find( $event->{aggregate_id} );

@@ -362,8 +362,7 @@ sub _first_unread_post ( $posts, $last_read_position ) {
         return $post if _post_position($post) > $last_read_position;
     }
 
-    my $undefined;
-    return $undefined;
+    return undef;
 }
 
 sub _unread_count ( $posts, $last_read_position ) {
@@ -391,15 +390,13 @@ sub _last_visible_position ($posts) {
 
 sub _post_anchor ($post) {
     my $post_id = _post_id($post);
-    my $undefined;
-    return $undefined if !defined $post_id;
+    return undef if !defined $post_id;
 
     return 'post-' . $post_id;
 }
 
 sub _post_id ($post) {
-    my $undefined;
-    return $undefined if !$post;
+    return undef if !$post;
 
     return _column( $post, 'post_id' );
 }
