@@ -174,7 +174,9 @@ DEFAULT partition holds rows, and reports:
 It is degraded, never failed: writes still land, and taking the node out of
 service would not create a partition. Point the readiness alerting at
 `degraded` on this check. The report names each table, its horizon and the
-days left.
+days left; it goes only to a request carrying the metrics token, and an
+anonymous probe sees the overall status alone
+([DEPLOYMENT.md](../DEPLOYMENT.md#health-endpoints)).
 
 ## Scheduling
 

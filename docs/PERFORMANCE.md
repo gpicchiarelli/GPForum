@@ -616,7 +616,10 @@ services and no database, so it measures routing and rendering only. With no
 `--route` it runs the eight routes above plus `/health`. In fixture mode
 `/health/ready` answers 503 (there is no database) and fails its route, so
 the default set exits 1 there: run the fixture gate with explicit routes, as
-CI does. `script/bench-hotpaths` is `benchmark-http --fixture --check` with
+CI does. In configured or production mode an anonymous `/health` answers
+the status alone, without the OS, socket and process snapshots, so `/health`
+figures measured since 2026-10-03 time that fast path and do not compare with
+older ones; fixture runs without a token still time the full summary. `script/bench-hotpaths` is `benchmark-http --fixture --check` with
 your arguments. Thresholds by endpoint:
 
 | Endpoint | p95 | p99 | Minimum req/s |

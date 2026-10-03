@@ -271,8 +271,10 @@ Preview the static project page with `python3 -m http.server 8000`, then open
 - **Host posture** is validated at config load through `GPFORUM_OS_REUSEPORT`,
   `GPFORUM_OS_SENDFILE`, `GPFORUM_OS_AFFINITY`,
   `GPFORUM_OS_MIN_RECOMMENDED_WORKERS`, and
-  `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS`, and reported by `/health/ready`,
-  `/metrics`, and `script/system-preflight`.
+  `GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS`, and reported by `/health/ready`
+  (full report with the metrics token, see
+  [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#health-endpoints)), `/metrics`, and
+  `script/system-preflight`.
 - **Query budgets** for hot paths are exposed in metrics and managed with
   `script/gpforum-carton exec bin/gpforum-query-budget --print|--sync|--check`.
 - **Deploy gate:** `script/gpforum-carton exec bin/gpforum-platform-check --local|--strict-local|--with-db|--strict-with-db`

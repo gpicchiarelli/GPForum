@@ -337,6 +337,40 @@ For static assets and attachments, prefer web-server file transfer with cache
 headers and sendfile support. GPForum can authorize access, but Perl should not
 be the ordinary large-file transfer path.
 
+## Health endpoints
+
+`/health/live` answers `status`, `check` and `time` to anyone and depends on
+nothing: point process supervisors and liveness probes at it.
+
+`/health/ready` answers 200 while the node can serve (`ok` or `degraded`)
+and 503 when it cannot (`fail`). Load balancers and probes act on that code
+alone. Without the metrics token the body is the overall status only,
+`{"check":"ready","status":"degraded"}`; the full report -- every check, its
+error, the replication slots and partitions it names, the runtime -- goes
+only to a request carrying the same token `/metrics` takes, as
+`Authorization: Bearer <token>` or `X-GPForum-Metrics-Token: <token>`, the
+current `GPFORUM_METRICS_TOKEN` or one of `GPFORUM_METRICS_TOKENS` during a
+rotation:
+
+```sh
+curl -sS -H "X-GPForum-Metrics-Token: $GPFORUM_METRICS_TOKEN" \
+  http://127.0.0.1:8080/health/ready | jq '.checks[] | select(.status != "ok")'
+```
+
+A wrong or stale token gets the status alone, not a 401 as on `/metrics`:
+the code must not change with the token, or a probe left with an old token
+after a rotation would take every node out of service. `GET /health`, the
+config/runtime/OS summary, answers `{"status":"ok"}` without the token and
+the full summary with it. Development and test, where no token has to be
+configured, serve the full reports to anyone, as they serve `/metrics`;
+staging and production refuse to start without one. Both token-dependent
+endpoints answer `Cache-Control: no-store`, so no shared cache replays a full
+report to an anonymous client. Unlike `/metrics`, which the shipped nginx
+configurations also restrict to `127.0.0.1`, the health endpoints stay
+reachable from outside because load balancers need the code: the full reports
+rest on the token alone, so keep it out of probe configurations that only need
+the status.
+
 ## UNIX Socket Mode
 
 UNIX socket mode is optional:

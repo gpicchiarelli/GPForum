@@ -172,7 +172,10 @@ Uploads are then checked for format only, recorded as
   ```
 - `/health/ready` reports the `antivirus` check as `degraded` — never `fail`,
   because the rest of the forum works and taking the node out of service
-  would not help.
+  would not help. The check itself is in the full report, which needs the
+  metrics token
+  ([../DEPLOYMENT.md#health-endpoints](../DEPLOYMENT.md#health-endpoints));
+  without it the body says only `degraded`.
 
 ## Files uploaded before scanning was enabled
 

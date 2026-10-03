@@ -116,10 +116,20 @@ which reads the settings only a superuser should -- on a standby,
 
 `/health/ready` carries a `replication_slots` check. It turns `degraded` --
 the node keeps serving -- when an inactive slot keeps more than 1 GiB of WAL
-or a slot is `lost`, and names the slot in `report.problems`. An inactive
-slot with growing `retained_bytes` is a standby that has stopped following,
-and a slot whose standby is gone for good keeps the primary's WAL until its
-disk fills:
+or a slot is `lost`, and names the slot in `report.problems`. Only a
+request carrying the metrics token reads the checks; without it the body is
+the overall status alone
+([../DEPLOYMENT.md#health-endpoints](../DEPLOYMENT.md#health-endpoints)):
+
+```sh
+curl -sS -H "X-GPForum-Metrics-Token: $GPFORUM_METRICS_TOKEN" \
+  http://127.0.0.1:8080/health/ready \
+  | jq '.checks[] | select(.name == "replication_slots")'
+```
+
+An inactive slot with growing `retained_bytes` is a standby that has stopped
+following, and a slot whose standby is gone for good keeps the primary's WAL
+until its disk fills:
 
 1. Find out whether the standby is coming back. If it is, bring it up: it
    catches up through the slot, and the check clears once the slot is active.

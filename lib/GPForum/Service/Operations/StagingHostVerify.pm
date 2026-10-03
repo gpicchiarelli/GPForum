@@ -744,7 +744,9 @@ contract, TCP or Unix socket.
 
 C<base_url>: C<GET /health/live> and C<GET /health/ready>, and C</metrics>
 with the C<X-GPForum-Metrics-Token> header when C<metrics_token> is given. A
-status from 200 to 399 passes. C<timeout> sets the connect and request
+status from 200 to 399 passes. Only the code is read: C</health/ready>
+answers the same code with or without the token, and its body is the status
+alone without one. C<timeout> sets the connect and request
 timeouts (5 seconds by default).
 
 =item tls

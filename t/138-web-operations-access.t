@@ -12,6 +12,7 @@ use lib 't/lib';
 use Const::Fast;
 use GPForum::Config;
 use GPForum::Web::OperationsAccess;
+use Mojo::Headers;
 use Test::Exception;
 use Test::More;
 
@@ -149,6 +150,53 @@ is_deeply(
         status => $HTTP_UNAUTHORIZED,
     },
     'unauthorized_payload keeps the metrics 401 contract'
+);
+
+# The headers and config the controllers pass in: /metrics, /health and
+# /health/ready read the token from the same two headers and rotation list.
+my $rotating = GPForum::Config->new(
+    metrics_token           => $TOKEN,
+    previous_metrics_tokens => [$PREVIOUS_TOKEN],
+);
+is_deeply(
+    $access->metrics_input( Mojo::Headers->new, $rotating ),
+    {
+        authorization    => q{},
+        configured_token => $TOKEN,
+        accepted_tokens  => [ $TOKEN, $PREVIOUS_TOKEN ],
+        metrics_header   => q{},
+    },
+    'metrics_input reads absent headers as empty strings'
+);
+ok(
+    !$access->request_authorized( Mojo::Headers->new, $rotating ),
+    'request_authorized rejects a request without a token'
+);
+ok(
+    $access->request_authorized(
+        Mojo::Headers->new->authorization("Bearer $TOKEN"), $rotating
+    ),
+    'request_authorized accepts the Bearer token'
+);
+ok(
+    $access->request_authorized(
+        Mojo::Headers->new->header(
+            'X-GPForum-Metrics-Token' => $PREVIOUS_TOKEN
+        ),
+        $rotating
+    ),
+    'request_authorized accepts a previous token in the metrics header'
+);
+ok(
+    !$access->request_authorized(
+        Mojo::Headers->new->header( 'X-GPForum-Metrics-Token' => $OTHER_TOKEN ),
+        $rotating
+    ),
+    'request_authorized rejects a wrong token'
+);
+ok(
+    $access->request_authorized( Mojo::Headers->new, GPForum::Config->new ),
+    'request_authorized is open when no token is configured'
 );
 
 done_testing();

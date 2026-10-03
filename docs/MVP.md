@@ -153,9 +153,9 @@ otherwise.
 
 ### Operations
 
-* `GET /health` returns a config/runtime health summary as JSON.
+* `GET /health` returns a config/runtime health summary as JSON with the metrics token, and only `{"status":"ok"}` without it.
 * `GET /health/live` returns liveness as JSON, with no dependency checks.
-* `GET /health/ready` returns readiness as JSON and a non-`200` status when a dependency check fails.
+* `GET /health/ready` returns readiness as JSON and a non-`200` status when a dependency check fails; the per-check report needs the metrics token, and without it the body is the overall status alone under the same code.
 * `GET /metrics` returns the metrics snapshot, gated by an application-level token.
 
 Read endpoints render semantic SSR by default. They also return JSON when the

@@ -25,6 +25,20 @@ sub metrics_token_header {
     return $METRICS_TOKEN_HEADER;
 }
 
+sub metrics_input ( $self, $headers, $config ) {
+    return {
+        authorization    => $headers->header('Authorization') || q{},
+        configured_token => $config->metrics_token,
+        accepted_tokens  => $config->accepted_metrics_tokens,
+        metrics_header   => $headers->header($METRICS_TOKEN_HEADER) || q{},
+    };
+}
+
+sub request_authorized ( $self, $headers, $config ) {
+    return $self->metrics_authorized(
+        $self->metrics_input( $headers, $config ) );
+}
+
 sub metrics_authorized ( $self, $input ) {
     if ( !$self->access->has_text( $input->{configured_token} ) ) {
         return 1;
@@ -144,12 +158,20 @@ Version 0.001.
         }
     );
 
+    my $full_report =
+      $access->request_authorized( $c->req->headers, $c->gp_config );
+
 =head1 DESCRIPTION
 
 Owns C</metrics> token presence, Bearer and C<X-GPForum-Metrics-Token>
 comparison, and the unauthorized JSON payload. It does not render HTTP
-responses or collect snapshots. L<GPForum::Controller::Operations> still
-reads request headers and renders JSON.
+responses or collect snapshots. L<GPForum::Controller::Operations> and
+L<GPForum::Controller::Health> pass it the request headers and render JSON.
+
+The same token, headers and rotation list decide whether C</health> and
+C</health/ready> answer their full report or the status alone, so one
+operator secret guards every operations body and rotating it changes all of
+them at once.
 
 =head1 SUBROUTINES/METHODS
 
@@ -157,16 +179,30 @@ reads request headers and renders JSON.
 
 Returns C<X-GPForum-Metrics-Token>.
 
+=head2 metrics_input
+
+Takes a L<Mojo::Headers> and a L<GPForum::Config>. Returns the hash
+reference C<metrics_authorized> takes: the C<Authorization> header, the
+C<X-GPForum-Metrics-Token> header (each an empty string when absent), the
+configured C<metrics_token> and C<accepted_metrics_tokens>.
+
+=head2 request_authorized
+
+Takes a L<Mojo::Headers> and a L<GPForum::Config>. True when
+C<metrics_authorized> accepts the request's headers against the config's
+tokens.
+
 =head2 metrics_authorized
 
 True when the Bearer or metrics header matches the current token or a
 previous token in C<accepted_tokens> in constant time.
 
 It is also true when C<configured_token> is empty, which leaves C</metrics>
-open. That branch exists for development and test only: L<GPForum::Config>
-requires a non-empty C<GPFORUM_METRICS_TOKEN> in the same environments that
-require a rotated session secret (staging and every production profile), so
-a deployed application cannot reach this branch.
+and the full C</health> and C</health/ready> reports open. That branch
+exists for development and test only: L<GPForum::Config> requires a
+non-empty C<GPFORUM_METRICS_TOKEN> in the same environments that require a
+rotated session secret (staging and every production profile), so a
+deployed application cannot reach this branch.
 
 =head2 unauthorized_payload
 

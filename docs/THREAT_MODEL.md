@@ -64,6 +64,7 @@ decides.
 | Cross-site request forgery | every state-changing form carries a CSRF token checked before the action; session cookies are `SameSite=Lax` | `t/06-identity-web.t`, `t/50-security-hardening.t` |
 | Junk query strings filling the page cache | the cache key names only locale, theme, path and page size | `t/integration/postgres-public-cache.t` |
 | A malformed cursor reaching SQL | cursors are a position or timestamp plus a uuid, or the first page | `t/21-forum-pagination.t` |
+| Anonymous clients reading the deployment's internals from the health endpoints (failing checks and their errors, replication slot names, environment, process counts, sockets, OS limits) | `/health/ready` and `/health` render their full report only with the `/metrics` token (Bearer or `X-GPForum-Metrics-Token`, rotation list included); anyone else, a wrong token included, reads the status alone, and the readiness code stays 200/503 either way; `/health/live` holds status, check and time | `t/300-health-report-access.t`, `t/integration/postgres-health-access.t`, `t/138-web-operations-access.t` |
 
 ### Identity and sessions
 

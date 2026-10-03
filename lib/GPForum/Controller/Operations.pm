@@ -16,7 +16,10 @@ has operations_access => sub { return GPForum::Web::OperationsAccess->new; };
 
 sub metrics ($self) {
     if (
-        !$self->operations_access->metrics_authorized( $self->_metrics_input ) )
+        !$self->operations_access->request_authorized(
+            $self->req->headers, $self->gp_config
+        )
+      )
     {
         return $self->_unauthorized_metrics;
     }
@@ -26,18 +29,6 @@ sub metrics ($self) {
             snapshot => $self->gp_metrics_snapshot->collect,
         ),
     );
-}
-
-sub _metrics_input ($self) {
-    return {
-        authorization    => $self->req->headers->header('Authorization') || q{},
-        configured_token => $self->gp_config->metrics_token,
-        accepted_tokens  => $self->gp_config->accepted_metrics_tokens,
-        metrics_header   => $self->req->headers->header(
-            $self->operations_access->metrics_token_header
-          )
-          || q{},
-    };
 }
 
 sub _unauthorized_metrics ($self) {

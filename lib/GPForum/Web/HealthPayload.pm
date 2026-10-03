@@ -27,6 +27,17 @@ sub live ( $, %input ) {
     };
 }
 
+sub ready_anonymous ( $, $readiness ) {
+    return {
+        status => $readiness->{status},
+        check  => 'ready',
+    };
+}
+
+sub summary_anonymous ($class) {
+    return { status => 'ok' };
+}
+
 sub ready_status_code ( $, $status ) {
     return $STATUS_CODE_FOR{$status}
       if exists $STATUS_CODE_FOR{$status};
@@ -77,6 +88,15 @@ Version 0.001.
         ),
     );
 
+    # Without a valid metrics token: the status, and the same code.
+    $c->render(
+        json   => GPForum::Web::HealthPayload->ready_anonymous($readiness),
+        status => GPForum::Web::HealthPayload->ready_status_code(
+            $readiness->{status}
+        ),
+    );
+    $c->render( json => GPForum::Web::HealthPayload->summary_anonymous );
+
     $c->render(
         json => GPForum::Web::HealthPayload->summary(
             config  => $config,
@@ -93,6 +113,14 @@ status maps to an HTTP code here: C<ok> and C<degraded> answer 200, C<fail>
 and any status the map does not know answer 503, so a load balancer takes a
 node out only when it cannot serve.
 
+The full readiness report and the summary name every check, its error text,
+replication slot names, the environment, process counts, sockets and OS
+limits. L<GPForum::Controller::Health> renders them only to a request that
+carries a valid metrics token; any other request gets C<ready_anonymous> or
+C<summary_anonymous>, which hold the status alone. The readiness code does
+not depend on the token: a load balancer reads the same 200 or 503 either
+way.
+
 =head1 SUBROUTINES/METHODS
 
 =head2 live
@@ -100,6 +128,18 @@ node out only when it cannot serve.
 Class method. Takes key/value pairs with C<clock> (an object with
 C<now_iso8601>, such as L<GPForum::Service::Clock>). Returns
 C<< { status => 'ok', check => 'live', time => ... } >>.
+
+=head2 ready_anonymous
+
+Class method. Takes a readiness report (the hash reference
+L<GPForum::Service::Operations::Readiness/check> returns) and returns
+C<< { status => ..., check => 'ready' } >> with the report's overall status
+and nothing else: no checks, errors, runtime, environment or timestamps.
+
+=head2 summary_anonymous
+
+Class method. Returns C<< { status => 'ok' } >>, the summary without the
+environment, runtime and OS snapshots.
 
 =head2 ready_status_code
 

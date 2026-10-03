@@ -16,7 +16,7 @@ HTTP health endpoints answer.
 | systemd units | `gpforum` / `gpforum-outbox` / `gpforum-scheduled-jobs.timer` report active | `--systemd` |
 | Installed unit files | Deploy contract (User / EnvironmentFile / ExecStart) for web, outbox, scheduled-jobs | `--unit-dir` |
 | Installed nginx site | Deploy contract (tcp or unix-socket template) | `--nginx-conf` |
-| HTTP health | `/health/live`, `/health/ready` (optional `/metrics`) | `--base-url` |
+| HTTP health | `/health/live`, `/health/ready` by HTTP code (optional `/metrics`) | `--base-url` |
 | TLS observe | `https` scheme recorded (pair with health probe) | `--base-url https://…` |
 | DB migrate / dump | Throwaway or staging DB path | `script/staging-drill` |
 | Attachments + templates | Filesystem restore + static/host nginx/systemd samples | `script/staging-drill-attachments` |

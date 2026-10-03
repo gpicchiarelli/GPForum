@@ -37,6 +37,25 @@ is( GPForum::Web::HealthPayload->ready_status_code('unknown'),
     503, 'unknown readiness maps to HTTP 503' );
 
 is_deeply(
+    GPForum::Web::HealthPayload->ready_anonymous(
+        {
+            status      => 'degraded',
+            check       => 'ready',
+            checks      => [ { name => 'replication_slots', error => 'x' } ],
+            environment => 'production',
+            runtime     => { web_processes => 4 },
+        }
+    ),
+    { status => 'degraded', check => 'ready' },
+    'anonymous readiness keeps the status and drops the report'
+);
+is_deeply(
+    GPForum::Web::HealthPayload->summary_anonymous,
+    { status => 'ok' },
+    'anonymous summary is the status alone'
+);
+
+is_deeply(
     GPForum::Web::HealthPayload->summary(
         config  => GPForum::Test::WebPayloadConfig->new,
         runtime => GPForum::Test::WebPayloadRuntime->new,

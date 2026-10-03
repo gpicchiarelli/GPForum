@@ -168,7 +168,9 @@ still served.
 
 `/health/ready` carries a `replication_slots` check: `degraded`, never
 `fail`, when an inactive slot keeps more than 1 GiB of WAL or a slot is
-`lost`, with the slots and the problems in its `report`. A slot nobody reads
+`lost`, with the slots and the problems in its `report` -- which only a
+request carrying the metrics token sees; anonymous clients get the overall
+status ([DEPLOYMENT.md](DEPLOYMENT.md#health-endpoints)). A slot nobody reads
 costs the primary disk, not service. The runbook --
 [ops/standby-and-failover.md](ops/standby-and-failover.md#watch-the-lag) --
 says which fields to read together and when to drop a slot.

@@ -15,6 +15,10 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Operator action required
 
+- Alerting or scripts that read the readiness checks (`report.problems`,
+  `partition_horizon`, `replication_slots`) must send the metrics token; see
+  `docs/DEPLOYMENT.md#health-endpoints`.
+
 - Enable the new daily `gpforum-partition-maintenance` timer on every node
   (systemd `gpforum-partition-maintenance.timer`, launchd
   `com.gpforum.partition-maintenance.plist`, or the FreeBSD crontab line in
@@ -99,6 +103,17 @@ CI, evidence and internal refactors with no change in behaviour.
   `GPFORUM_GLIFISTORE_URL` is missing, while PostgreSQL stays authoritative.
 
 ### Security
+
+- `GET /health/ready` no longer shows its full report to anonymous clients:
+  without a valid metrics token it answers only
+  `{"status":...,"check":"ready"}`. The report -- every check, its error text,
+  replication slot names, `report.problems`, the runtime -- needs the same
+  token as `/metrics` (`Authorization: Bearer` or `X-GPForum-Metrics-Token`,
+  previous tokens accepted during a rotation). The status code is unchanged in
+  every case, and a wrong token gets the status, not a 401, so a stale probe
+  token cannot take nodes out of service. `GET /health` answers
+  `{"status":"ok"}` without the token. Both send `Cache-Control: no-store`.
+  Development and test without a configured token still show the full reports.
 
 - Erasing a member also deletes all their export requests, whatever their
   status, and removes the bundle from their stored `privacy.export` answers in
