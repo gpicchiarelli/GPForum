@@ -102,9 +102,11 @@ it, which also makes RequireFinalReturn misfire on a sub ending in
   modules are built for one Perl. The CHANGELOG says so under "Operator
   action required".
 - The conversion was mechanical and reproducible: the preamble went into
-  every Perl file, all 440 `my $undefined;` declarations, 546 returns and 4
-  ternaries became `undef`, and the 63 dead returns after a sub's final, unconditional
-  `rethrow` went. No call site changed meaning.
+  every Perl file and all 440 `my $undefined;` declarations went. Of the 546
+  `return $undefined`, 482 became `return undef`, the 63 dead ones after a
+  sub's final, unconditional `rethrow` were deleted, and one went with the
+  Try::Tiny block it sat in; the 4 `: $undefined` ternaries became
+  `: undef`. No call site changed meaning.
 - PPI now parses signatures as signatures in every file. ProhibitManyArgs no
   longer counts signature parameters, which the profile records; its
   fourteen baseline entries stay until a signature-arity check replaces it.
