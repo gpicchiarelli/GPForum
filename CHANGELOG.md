@@ -1442,6 +1442,14 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- The privacy data-rights stores are tested on PostgreSQL: export bundles,
+  deletion requests, approval and its row lock, legal holds (including one that
+  ends) and erasure jobs (including one whose audit write fails and rolls back
+  completely). `t/29-privacy-rights.t` is gone. Two known defects are pinned as
+  TODO: the privacy page fails for a member with an export request because the
+  manifest is read as raw JSON, and erasure leaves the member's e-mail in stored
+  export bundles and in the export response kept in the command log.
+
 - The identity stores are tested on PostgreSQL instead of a fake ORM:
   registration, login and logout, sessions, password reset and change, e-mail
   change and verification, and preferences, including races between two

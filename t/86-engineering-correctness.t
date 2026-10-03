@@ -42,7 +42,7 @@ const my @INVARIANT_TEST_FILES => (
     't/11-forum-thread.t',
     't/12-forum-post.t',
     't/25-moderation-review.t',
-    't/29-privacy-rights.t',
+    't/integration/postgres-privacy.t',
     't/41-thread-read-state.t',
     't/84-outbox-concurrent-dispatcher.t',
     't/85-realtime-outbox-multiprocess.t',
@@ -983,7 +983,7 @@ sub _assert_invariant_files_exist {
 sub _assert_invariant_files_cover_expected_rules {
     like( _slurp('t/25-moderation-review.t'),
         qr/idempotent/msx, 'moderation tests verify idempotent transitions' );
-    like( _slurp('t/29-privacy-rights.t'),
+    like( _slurp('t/integration/postgres-privacy.t'),
         qr/idempotent/msx, 'privacy tests verify idempotent erasure/retry' );
     like(
         _slurp('t/41-thread-read-state.t'),
