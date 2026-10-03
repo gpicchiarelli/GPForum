@@ -37,7 +37,7 @@ the command, or says `none`.
 | `bin/gpforum-outbox-dispatch` | none | The worker processes dispatch the outbox continuously; a web request is not a worker. `/admin/jobs` shows the outbox and its dead letters. |
 | `bin/gpforum-partition-maintenance` | none | DDL on the partitioned tables, run by its daily timer or crontab and, through its lifecycle, by `gpforum-migrate --apply` (ADR 0113). It needs locks and time a web request does not have. |
 | `bin/gpforum-platform-check` | none | Checks the host's Perl, modules and database prerequisites. Developer and operator tooling. |
-| `bin/gpforum-query-budget` | `admin_status` | `/admin/status` shows the query budgets and their drift (`--print`, `--check`). `--sync` rewrites the catalog from observed plans and stays on the shell. |
+| `bin/gpforum-query-budget` | `admin_status` | `/admin/status` shows the query budgets and their drift (`--print`, `--check`). `--sync` makes the `endpoint_query_budgets` table match the catalog in the code -- it inserts, updates, and deletes the rows of endpoints the catalog dropped -- and stays on the shell. |
 | `bin/gpforum-query-plan-evidence` | none | Evidence tooling: EXPLAIN on a seeded database. Developer tooling. |
 | `bin/gpforum-scheduled-jobs` | none | Run by its timer (`gpforum-scheduled-jobs.service`). Running a pass from a web request would race the timer. |
 | `bin/gpforum-search-rebuild` | `admin_jobs` `admin_search_rebuild` | **Rebuild search index** on `/admin/jobs` rebuilds through the outbox and audits the request (`admin.search_rebuild_requested`). |
@@ -91,7 +91,7 @@ by default and their lines with `--human`.
 | `gpforum-platform-check --json` | `mode`, `strict`, `checks`: each `{name, status, report}`, `report` being the check's own (`os-preflight --json` for `os_preflight`). `status` is the worst check's, `fail` when the exit code is 1. |
 | `gpforum-query-budget --print --json` | `endpoints`: the catalog, keyed by endpoint name. |
 | `gpforum-query-budget --check --json` | `missing`, `extra`, `mismatched`: endpoint names. |
-| `gpforum-query-budget --sync --json` | `synced`: the number the line prints, every endpoint in the catalog, whether its row was written or already matched. |
+| `gpforum-query-budget --sync --json` | `synced`: the number the line prints, every endpoint in the catalog, whether its row was written or already matched; `removed`: the endpoints whose rows were deleted because the catalog no longer has them. |
 | `gpforum-scheduled-jobs --json` | `jobs`: each `{name, count}` and, when there are any, `ok`, `skipped`, `error`, `errors` (`scheduled-jobs.md`). |
 | `gpforum-outbox-dispatch --json` | One object per batch: `selected`, `dispatched`, `failed`, `dead_lettered` (`dead-letters.md`). |
 | `gpforum-dead-letter-replay --list --json` | `dead_letters`, as `/admin/jobs` lists them (`dead-letters.md`). With `--id` instead, `outcomes`: each `{dead_letter_id, status}`, with `outbox_id` when replayed or `error` when refused. |

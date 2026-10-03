@@ -274,7 +274,7 @@ Security test gate:
 
 ```sh
 script/gpforum-carton exec prove -lr t/06-identity-web.t \
-  t/08-identity-store.t \
+  t/integration/postgres-identity-stores.t \
   t/48-browser-security.t \
   t/50-security-hardening.t \
   t/55-security-abuse-hardening.t
