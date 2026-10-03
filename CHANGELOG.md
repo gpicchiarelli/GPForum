@@ -1442,6 +1442,16 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- The identity stores are tested on PostgreSQL instead of a fake ORM:
+  registration, login and logout, sessions, password reset and change, e-mail
+  change and verification, and preferences, including races between two
+  connections. Logins for unknown, deleted and password-less accounts are each
+  pinned to one verification against the decoy hash, and a pending account
+  with a wrong password gets the same answer as any wrong password. Two known
+  defects are pinned as TODO: a session is looked up by its id alone, and a new
+  credential takes its creation time from the database clock but its
+  revocation time from the application's.
+
 - The permission gate tests on PostgreSQL fail if a binding that names only a
   space, or only a resource, is treated as a global grant; an empty scope is
   tested to mean no scope, and a category created without a space is tested to
