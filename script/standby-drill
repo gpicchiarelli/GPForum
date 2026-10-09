@@ -12,42 +12,85 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
 
-primary_port=${GPFORUM_STANDBY_PRIMARY_PORT:-55445}
-standby_port=${GPFORUM_STANDBY_PORT:-55446}
-workdir=${GPFORUM_STANDBY_DIR:-${TMPDIR:-/tmp}/gpforum-standby.$$}
+primary_port=55445
+standby_port=55446
+workdir=
 socket=/tmp/gpfsb.$$
 keep=0
 
-for argument in "$@"; do
-    case "$argument" in
+usage() {
+    echo "Usage: script/standby-drill [--primary-port N] [--standby-port N] [--dir PATH] [--keep]" >&2
+    exit 2
+}
+
+# GPFORUM_STANDBY_PRIMARY_PORT, GPFORUM_STANDBY_PORT and GPFORUM_STANDBY_DIR
+# were this drill's settings; they are flags now, as every other command's
+# (audit D4'), read until v0.3.0 with a note naming the flag.
+if [ -n "${GPFORUM_STANDBY_PRIMARY_PORT:-}" ]; then
+    echo "standby-drill: GPFORUM_STANDBY_PRIMARY_PORT is deprecated; use --primary-port $GPFORUM_STANDBY_PRIMARY_PORT" >&2
+    primary_port=$GPFORUM_STANDBY_PRIMARY_PORT
+fi
+if [ -n "${GPFORUM_STANDBY_PORT:-}" ]; then
+    echo "standby-drill: GPFORUM_STANDBY_PORT is deprecated; use --standby-port $GPFORUM_STANDBY_PORT" >&2
+    standby_port=$GPFORUM_STANDBY_PORT
+fi
+if [ -n "${GPFORUM_STANDBY_DIR:-}" ]; then
+    echo "standby-drill: GPFORUM_STANDBY_DIR is deprecated; use --dir $GPFORUM_STANDBY_DIR" >&2
+    workdir=$GPFORUM_STANDBY_DIR
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
         --keep) keep=1 ;;
+        --primary-port)
+            [ $# -ge 2 ] || usage
+            primary_port=$2
+            shift
+            ;;
+        --standby-port)
+            [ $# -ge 2 ] || usage
+            standby_port=$2
+            shift
+            ;;
+        --dir)
+            [ $# -ge 2 ] || usage
+            workdir=$2
+            shift
+            ;;
         --help|-h)
             cat <<'USAGE'
-Usage: script/standby-drill [--keep]
+Usage: script/standby-drill [--primary-port N] [--standby-port N] [--dir PATH] [--keep]
 
 Rehearses a streaming standby and a failover against two throwaway
 PostgreSQL clusters, and reports whether the application's driver reached
 the promoted standby through a multi-host DSN.
 
-  --keep   leave the clusters behind for inspection
-  --help   show this help
-
-Environment:
-  GPFORUM_STANDBY_PRIMARY_PORT  port for the primary (default 55445)
-  GPFORUM_STANDBY_PORT          port for the standby (default 55446)
-  GPFORUM_STANDBY_DIR           working directory (default a temporary one)
+  --primary-port N  port for the primary (default 55445)
+  --standby-port N  port for the standby (default 55446)
+  --dir PATH        working directory (default a temporary one)
+  --keep            leave the clusters behind for inspection
+  --help            show this help
 
 Exit status: 0 the failover worked, 1 it did not, 2 usage error.
 USAGE
             exit 0
             ;;
         *)
-            echo "unknown option $argument" >&2
-            echo "Usage: script/standby-drill [--keep]" >&2
+            echo "unknown option $1" >&2
+            usage
+            ;;
+    esac
+    shift
+done
+for value in "$primary_port" "$standby_port"; do
+    case "$value" in
+        ''|*[!0-9]*)
+            echo "standby-drill: a port is a number, not '$value'" >&2
             exit 2
             ;;
     esac
 done
+workdir=${workdir:-${TMPDIR:-/tmp}/gpforum-standby.$$}
 
 if ! command -v initdb >/dev/null 2>&1; then
     eval "$(script/gpforum-homebrew-env 2>/dev/null || true)"

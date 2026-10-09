@@ -20,39 +20,71 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
 
-port=${GPFORUM_PITR_PORT:-55444}
-workdir=${GPFORUM_PITR_DIR:-${TMPDIR:-/tmp}/gpforum-pitr.$$}
+port=55444
+workdir=
 socket=/tmp/gpfpitr.$$
 keep=0
 
-for argument in "$@"; do
-    case "$argument" in
+usage() {
+    echo "Usage: script/pitr-drill [--port N] [--dir PATH] [--keep]" >&2
+    exit 2
+}
+
+# GPFORUM_PITR_PORT and GPFORUM_PITR_DIR were this drill's settings; they are
+# flags now, as every other command's (audit D4'), read until v0.3.0 with a
+# note naming the flag.
+if [ -n "${GPFORUM_PITR_PORT:-}" ]; then
+    echo "pitr-drill: GPFORUM_PITR_PORT is deprecated; use --port $GPFORUM_PITR_PORT" >&2
+    port=$GPFORUM_PITR_PORT
+fi
+if [ -n "${GPFORUM_PITR_DIR:-}" ]; then
+    echo "pitr-drill: GPFORUM_PITR_DIR is deprecated; use --dir $GPFORUM_PITR_DIR" >&2
+    workdir=$GPFORUM_PITR_DIR
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
         --keep) keep=1 ;;
+        --port)
+            [ $# -ge 2 ] || usage
+            port=$2
+            shift
+            ;;
+        --dir)
+            [ $# -ge 2 ] || usage
+            workdir=$2
+            shift
+            ;;
         --help|-h)
             cat <<'USAGE'
-Usage: script/pitr-drill [--keep]
+Usage: script/pitr-drill [--port N] [--dir PATH] [--keep]
 
 Rehearses point-in-time recovery against a throwaway PostgreSQL cluster and
 reports whether the restore landed on the requested instant.
 
-  --keep   leave the cluster and the archive behind for inspection
-  --help   show this help
-
-Environment:
-  GPFORUM_PITR_PORT   port for the throwaway cluster (default 55444)
-  GPFORUM_PITR_DIR    working directory (default a temporary one)
+  --port N    port for the throwaway cluster (default 55444)
+  --dir PATH  working directory (default a temporary one)
+  --keep      leave the cluster and the archive behind for inspection
+  --help      show this help
 
 Exit status: 0 the restore landed on the target, 1 it did not, 2 usage error.
 USAGE
             exit 0
             ;;
         *)
-            echo "unknown option $argument" >&2
-            echo "Usage: script/pitr-drill [--keep]" >&2
-            exit 2
+            echo "unknown option $1" >&2
+            usage
             ;;
     esac
+    shift
 done
+case "$port" in
+    ''|*[!0-9]*)
+        echo "pitr-drill: --port takes a number, not '$port'" >&2
+        exit 2
+        ;;
+esac
+workdir=${workdir:-${TMPDIR:-/tmp}/gpforum-pitr.$$}
 
 if ! command -v initdb >/dev/null 2>&1; then
     eval "$(script/gpforum-homebrew-env 2>/dev/null || true)"

@@ -13,43 +13,76 @@ cd "$root"
 usage() {
     cat <<'EOF'
 Usage: script/gpforum-evidence-live [--commands|--status|--help]
+                                    [--env-file PATH] [--out DIR]
 
-  --commands  print live verify + stress evidence commands (default)
-  --status    print whether entrypoints exist
-  --help      show this help
+  --commands       print live verify + stress evidence commands (default)
+  --status         print whether entrypoints exist
+  --env-file PATH  the env file the printed verify reads (never commit it;
+                   default /tmp/gpforum-evidence.env)
+  --out DIR        where the printed commands write their JSON
+                   (default /tmp/gpforum-evidence-live)
+  --help           show this help
 
 Does not start Hypnotoad, write env files, or claim private beta is ready.
 Requires an already-running app URL and (for verify) an env-file path.
 See docs/ops/staging-host.md and docs/ops/stress-load.md.
 
 Environment used by the printed commands (operator-supplied):
-  STAGING_BASE_URL   e.g. http://127.0.0.1:8080 or https://staging.example
-  GPFORUM_EVIDENCE_ENV_FILE  path to env file (never commit)
-  GPFORUM_METRICS_TOKEN      optional metrics probe token
-  GPFORUM_EVIDENCE_DIR       output directory (default /tmp/gpforum-evidence-live)
+  STAGING_BASE_URL       e.g. http://127.0.0.1:8080 or https://staging.example
+  GPFORUM_METRICS_TOKEN  optional metrics probe token
 EOF
 }
 
 mode=commands
-for argument in "$@"; do
-    case "$argument" in
+env_file=/tmp/gpforum-evidence.env
+out=/tmp/gpforum-evidence-live
+
+# GPFORUM_EVIDENCE_ENV_FILE and GPFORUM_EVIDENCE_DIR were read by the printed
+# commands; they are flags now (audit D4'), read until v0.3.0 with a note
+# naming the flag.
+if [ -n "${GPFORUM_EVIDENCE_ENV_FILE:-}" ]; then
+    echo "gpforum-evidence-live: GPFORUM_EVIDENCE_ENV_FILE is deprecated; use --env-file $GPFORUM_EVIDENCE_ENV_FILE" >&2
+    env_file=$GPFORUM_EVIDENCE_ENV_FILE
+fi
+if [ -n "${GPFORUM_EVIDENCE_DIR:-}" ]; then
+    echo "gpforum-evidence-live: GPFORUM_EVIDENCE_DIR is deprecated; use --out $GPFORUM_EVIDENCE_DIR" >&2
+    out=$GPFORUM_EVIDENCE_DIR
+fi
+
+while [ $# -gt 0 ]; do
+    case "$1" in
         --commands)
             mode=commands
             ;;
         --status)
             mode=status
             ;;
+        --env-file|--out)
+            if [ $# -lt 2 ]; then
+                echo "gpforum-evidence-live: $1 needs a value" >&2
+                usage >&2
+                exit 1
+            fi
+            if [ "$1" = --out ]; then out=$2; else env_file=$2; fi
+            shift
+            ;;
         --help|-h)
             usage
             exit 0
             ;;
         *)
-            echo "gpforum-evidence-live: unknown option: $argument" >&2
+            echo "gpforum-evidence-live: unknown option: $1" >&2
             usage >&2
             exit 1
             ;;
     esac
+    shift
 done
+
+# A value as one shell word, for the printed commands to paste.
+quoted() {
+    printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"
+}
 
 print_banner() {
     printf '%s\n' \
@@ -61,67 +94,67 @@ print_banner() {
 
 print_commands() {
     print_banner
+    printf 'evidence_env_file=%s\nevidence_dir=%s\n' \
+        "$(quoted "$env_file")" "$(quoted "$out")"
     cat <<'EOF'
 # Prerequisites (operator): Carton local/ OK, app listening, env file ready
 # script/bootstrap-deps --postgres --rebuild-local
 # script/gpforum-carton exec perl -MConst::Fast -e 1
 
 export STAGING_BASE_URL="${STAGING_BASE_URL:-http://127.0.0.1:8080}"
-export GPFORUM_EVIDENCE_ENV_FILE="${GPFORUM_EVIDENCE_ENV_FILE:-/tmp/gpforum-evidence.env}"
-export GPFORUM_EVIDENCE_DIR="${GPFORUM_EVIDENCE_DIR:-/tmp/gpforum-evidence-live}"
-mkdir -p "$GPFORUM_EVIDENCE_DIR"
+mkdir -p "$evidence_dir"
 
 # 1) Live staging-host-verify (values in env file are never printed by the tool)
 # Prefer https://… so the TLS observe phase records scheme with the health probe.
 script/staging-host-verify --json \
-  --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
+  --env-file "$evidence_env_file" \
   --base-url "$STAGING_BASE_URL" \
   ${GPFORUM_METRICS_TOKEN:+--metrics-token "$GPFORUM_METRICS_TOKEN"} \
-  > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-live.json"
+  > "$evidence_dir/staging-host-verify-live.json"
 
 # Staging TLS + systemd target (operator host with units installed):
 # export STAGING_BASE_URL='https://staging.example'
-# script/staging-host-verify --json --env-file "$GPFORUM_EVIDENCE_ENV_FILE" \
+# script/staging-host-verify --json --env-file "$evidence_env_file" \
 #   --unit-dir /etc/systemd/system --nginx-conf /etc/nginx/sites-enabled/gpforum \
 #   --systemd --base-url "$STAGING_BASE_URL" \
 #   ${GPFORUM_METRICS_TOKEN:+--metrics-token "$GPFORUM_METRICS_TOKEN"} \
-#   > "$GPFORUM_EVIDENCE_DIR/staging-host-verify-tls-systemd.json"
+#   > "$evidence_dir/staging-host-verify-tls-systemd.json"
 
 # 2) Stress profiles (raise GPFORUM_FORUM_READ_RATE_LIMIT for single-IP capacity windows)
 script/stress-load --json --profile smoke --base-url "$STAGING_BASE_URL" \
-  > "$GPFORUM_EVIDENCE_DIR/stress-smoke.json"
+  > "$evidence_dir/stress-smoke.json"
 script/stress-load --json --profile 100 --base-url "$STAGING_BASE_URL" \
-  > "$GPFORUM_EVIDENCE_DIR/stress-100.json"
+  > "$evidence_dir/stress-100.json"
 # Profiles 100/500 archived on Cloud Agent VM; 1000 optional (p95 residual on 4 vCPU):
 script/stress-load --json --profile 500 --base-url "$STAGING_BASE_URL" \
-  > "$GPFORUM_EVIDENCE_DIR/stress-500.json"
+  > "$evidence_dir/stress-500.json"
 script/stress-load --json --profile 1000 --base-url "$STAGING_BASE_URL" \
-  > "$GPFORUM_EVIDENCE_DIR/stress-1000.json"
+  > "$evidence_dir/stress-1000.json"
 
 # 3) Mail (dry-run always; --send only on a mailbox you control on staging SMTP)
 script/mail-check --json --dry-run \
-  > "$GPFORUM_EVIDENCE_DIR/mail-check-dry.json"
+  > "$evidence_dir/mail-check-dry.json"
 # Staging SMTP/sendmail controlled send (never commit secrets; JSON is redacted):
 # script/mail-check --json --send --to you@example.test \
-#   > "$GPFORUM_EVIDENCE_DIR/mail-check-send.json"
+#   > "$evidence_dir/mail-check-send.json"
 # Confirm evidence: secrets_redacted=true and no password/token plaintext.
 
 # 3b) Identity mail lifecycle (test transport; not a substitute for SMTP --send)
 script/mail-lifecycle-check --json --simulate \
-  > "$GPFORUM_EVIDENCE_DIR/mail-lifecycle-simulate.json"
+  > "$evidence_dir/mail-lifecycle-simulate.json"
 
 # 3c) Dead-letter staging check (in-memory Dispatcher path; live /admin/jobs still open)
 script/dead-letter-check --json --simulate \
-  > "$GPFORUM_EVIDENCE_DIR/dead-letter-simulate.json"
+  > "$evidence_dir/dead-letter-simulate.json"
 
 # Copy JSON into docs/ops/evidence/<date>-*/ only after redacting secrets.
 # Validate before archiving:
 # script/evidence-validate --strict --json \
-#   "$GPFORUM_EVIDENCE_DIR"/staging-host-verify-live.json \
-#   "$GPFORUM_EVIDENCE_DIR"/stress-100.json \
-#   "$GPFORUM_EVIDENCE_DIR"/mail-check-dry.json \
-#   "$GPFORUM_EVIDENCE_DIR"/mail-lifecycle-simulate.json \
-#   "$GPFORUM_EVIDENCE_DIR"/dead-letter-simulate.json
+#   "$evidence_dir"/staging-host-verify-live.json \
+#   "$evidence_dir"/stress-100.json \
+#   "$evidence_dir"/mail-check-dry.json \
+#   "$evidence_dir"/mail-lifecycle-simulate.json \
+#   "$evidence_dir"/dead-letter-simulate.json
 # PRIVATE BETA remains NOT YET until staging TLS + SMTP send + target install exist.
 EOF
 }
