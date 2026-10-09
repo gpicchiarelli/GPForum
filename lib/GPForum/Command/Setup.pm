@@ -393,7 +393,8 @@ sub _given ( $self, $state, $name ) {
 # Returns the plan, or the exit status when the operator stopped.
 sub _answers ( $self, $options, $state ) {
     my $environment = $options->{environment}
-      // $self->_given( $state, 'GPFORUM_ENV' ) // 'production';
+      // _current_value( 'GPFORUM_ENV', $self->_given( $state, 'GPFORUM_ENV' ) )
+      // 'production';
     $state->{environment} = $environment;
     $state->{deployed}    = $environment =~ $DEPLOYED ? 1 : 0;
 
@@ -752,15 +753,30 @@ sub _conflicts ( $self, $options, $state, $plan ) {
 }
 
 # The names the file sets to something else than the answers would; the
-# secrets setup makes only where the file has none.
+# secrets setup makes only where the file has none. An old value is the
+# one it is now called: GPFORUM_ENV=production-medium is production, which
+# setup writes under its new name without asking (ADR 0125).
 sub _conflicting ( $self, $state, $plan ) {
     return grep {
-        my $given = $self->_given( $state, $_ );
+        my $given = _current_value( $_, $self->_given( $state, $_ ) );
         ( !exists $SECRET{$_} || $_ eq 'GPFORUM_SMTP_PASSWORD' )
           && defined $given
           && defined $plan->{$_}
           && $given ne $plan->{$_}
     } sort keys %{$plan};
+}
+
+# The value an old one now stands for, as the settings table's aliases say;
+# any other value as it is.
+sub _current_value ( $name, $value ) {
+    return $value if !defined $value;
+
+    my $setting = first { $_->{env} eq $name } @{ GPForum::Config->settings };
+    my $alias =
+      $setting && first { exists $_->{value} && $_->{value} eq $value }
+      @{ $setting->{aliases} };
+
+    return $alias ? $alias->{as} : $value;
 }
 
 sub _conflict ( $self, $state, $plan, $name ) {

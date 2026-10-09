@@ -183,6 +183,20 @@ subtest 'a setting the file has is replaced only with --force' => sub {
     );
 };
 
+subtest 'an old value is written under the name it now has' => sub {
+    my $file = "$directory/old-name.env";
+    path($file)
+      ->spew( path("$directory/fresh.env")->slurp =~
+          s/^GPFORUM_ENV=production$/GPFORUM_ENV=production-medium/mrsx );
+    my $run = _setup( { file => $file, database => _database(1) },
+        '--yes', '--environment', 'production' );
+    is( $run->{status}, 0, 'production-medium is production: no --force' )
+      or diag $run->{errors};
+    my %values = _values($file);
+    is( $values{GPFORUM_ENV}, 'production', 'and the file says production' );
+    _has( $run->{output}, "$OK$file: GPFORUM_ENV set, ", 'which setup names' );
+};
+
 subtest 'answers setup cannot use are refused, saying why' => sub {
     for my $case (
         [
