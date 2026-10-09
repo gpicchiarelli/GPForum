@@ -21,10 +21,11 @@ use GPForum::Config::Report;
 
 our $VERSION = '0.001';
 
-# deploy/gpforum.env.example is the environment file an operator copies
-# (walkthrough step 9: no template shipped, the keys were in prose). It is
-# generated from the settings table, so a setting added, renamed or retired
-# there fails here until the file is regenerated.
+# deploy/gpforum.env.example is every setting, for the operator who needs one
+# more than gpforum setup wrote (walkthrough step 9: no template shipped, the
+# keys were in prose). It is generated from the settings table, so a setting
+# added, renamed or retired there fails here until the file is regenerated.
+# The file setup writes holds the decisions alone: t/612.
 
 const my $EXAMPLE      => 'deploy/gpforum.env.example';
 const my $SECRET       => 'f' x 64;
@@ -40,7 +41,7 @@ const my @DECISIONS => qw(
 my $shipped  = path($EXAMPLE)->slurp;
 my $settings = GPForum::Config->settings;
 
-is( $shipped, GPForum::Config::EnvironmentFile->render,
+is( $shipped, GPForum::Config::EnvironmentFile->render_reference,
         "$EXAMPLE is what the settings table renders; regenerate it as its"
       . ' header says' );
 

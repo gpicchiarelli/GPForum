@@ -62,8 +62,9 @@ const my @SECRET_VALUES => qw(
 # renamed setting's old name is read too, and listed under the new one.
 my $config_source = path('lib/GPForum/Config.pm')->slurp;
 $config_source =~ s/^__END__$ .*//msx;
-my %old_name = map { $_->{renamed_from}{env} => 1 }
-  grep { $_->{renamed_from} } @{ GPForum::Config->settings };
+my %old_name = map { $_->{env} => 1 }
+  grep { exists $_->{env} }
+  map { @{ $_->{aliases} } } @{ GPForum::Config->settings };
 my %read_by_config =
   map  { $_ => 1 }
   grep { !$old_name{$_} }

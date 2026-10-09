@@ -39,6 +39,8 @@ const my $DAY     => 86_400;
 const my $DAYS    => 259_200;
 const my $FDS     => 65_536;
 const my $WEB     => 4;
+const my $CACHE   => 4_096;
+const my $MEMORY  => 2 * 1_024**3;
 const my $SECRET  => '0123456789abcdef' x 3;
 const my %PRODUCTION => (
     GPFORUM_ENV             => 'production',
@@ -62,6 +64,8 @@ subtest 'a healthy development checkout is check marks only' => sub {
         $text,
         join( "\n",
 "\N{CHECK MARK} settings: development, from the shell's environment",
+            "\N{CHECK MARK} sized for 2 CPUs, 2 GB: 4 web processes, 4096"
+              . ' cache entries a process',
             "\N{CHECK MARK} host: Linux with epoll, 2 CPUs",
             "\N{CHECK MARK} web processes: 4 for 2 CPUs",
             "\N{CHECK MARK} open files: up to 65536",
@@ -325,6 +329,14 @@ sub _doctor ( $environment, %replace ) {
             };
         },
         schema => sub { return { latest => '051', pending => [] } },
+        sizing => sub {
+            return {
+                cpus         => 2,
+                memory_bytes => $MEMORY,
+                sizes        =>
+                  { web_processes => $WEB, local_cache_max_entries => $CACHE },
+            };
+        },
         %replace,
     );
 

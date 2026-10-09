@@ -36,7 +36,7 @@ const my $REPLICATION_CHECK_INDEX     => 13;
 const my $RUNTIME_ENFORCEMENT_INDEX   => 3;
 const my $READINESS_PROBES            => 3;
 const my $SMALL_CACHE                 => 2_048;
-const my $SMALL_WEB                   => 4;
+const my $SMALL_WEB                   => 2;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -160,19 +160,18 @@ is( $connected->{checks}[$SHARED_CACHE_CHECK_INDEX]{mode},
 
 my $undersized = GPForum::Service::Operations::Readiness->new(
     config => GPForum::Config->new(
-        environment             => 'production-medium',
+        environment             => 'production',
         local_cache_max_entries => $SMALL_CACHE,
-        realtime_processes      => 1,
+        runtime_max_web_per_cpu => 64,
         session_secret          => 'rotated-production-secret',
         web_processes           => $SMALL_WEB,
-        worker_processes        => 2,
     ),
-    environment => 'production-medium',
+    environment => 'production',
     runtime     => GPForum::Test::ReadinessRuntime->new,
     schema      => GPForum::Test::ReadinessSchema->new,
 )->check;
 is( $undersized->{status}, 'fail',
-    'readiness fails below the production-medium floor' );
+    'readiness fails below the production floor' );
 is( $undersized->{checks}[$PROFILE_CHECK_INDEX]{status},
     'fail', 'operational profile check reports the floor miss' );
 

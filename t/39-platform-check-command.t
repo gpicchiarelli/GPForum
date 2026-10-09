@@ -29,7 +29,7 @@ const my $EXIT_USAGE => 2;
 const my $EXPECTED_TESTS => 12;
 const my $FAIL_STATUS    => 1;
 const my $SMALL_CACHE    => 2_048;
-const my $SMALL_WEB      => 4;
+const my $SMALL_WEB      => 2;
 
 plan tests => $EXPECTED_TESTS;
 
@@ -106,12 +106,11 @@ like(
 
 my $profile_command = GPForum::Command::PlatformCheck->new(
     config => GPForum::Config->new(
-        environment             => 'production-medium',
+        environment             => 'production',
         local_cache_max_entries => $SMALL_CACHE,
-        realtime_processes      => 1,
+        runtime_max_web_per_cpu => 64,
         session_secret          => 'rotated-production-secret',
         web_processes           => $SMALL_WEB,
-        worker_processes        => 2,
     ),
     runtime => GPForum::Test::ReadinessRuntime->new,
 );
@@ -121,7 +120,7 @@ my $profile = _capture_stdout_status(
     }
 );
 is( $profile->{status}, $FAIL_STATUS,
-    'local platform check fails below the production-medium floor' );
+    'local platform check fails below the production floor' );
 like(
     $profile->{output},
     qr/operational_profile [ ] status=fail/msx,

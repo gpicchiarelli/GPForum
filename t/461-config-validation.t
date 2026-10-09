@@ -46,7 +46,7 @@ subtest 'GPFORUM_ENV is one of the environments, and a typo is answered' =>
         is(
             GPForum::Config::Report->sentence($problem),
             'GPFORUM_ENV must be one of development, test, staging,'
-              . " production, production-small, production-medium, not '$value'.",
+              . " production, not '$value'.",
             "$value is not an environment"
         );
         is( $problem->{suggestion},

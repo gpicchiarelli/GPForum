@@ -94,22 +94,13 @@ sub register ( $class, %input ) {
     return;
 }
 
-# The sentence for one old name: the variable, its new name and the line to
-# write instead, such as GPFORUM_SMTP_TLS=starttls.
+# The sentence for one old name or old value: the variable, what it is now
+# called and the line to write instead, such as GPFORUM_SMTP_TLS=starttls or
+# GPFORUM_ENV=production.
 sub renamed_warning ( $class, $renamed, $catalog = undef ) {
     $catalog //= GPForum::Service::I18N::CliCatalog->new;
 
-    return $catalog->text(
-        'config.renamed',
-        {
-            variable    => $renamed->{variable},
-            replacement => $renamed->{replacement},
-            assignment  => GPForum::Config::Report->assignment(
-                $renamed->{replacement},
-                $renamed->{value} // q{}
-            ),
-        }
-    );
+    return $catalog->text( @{ GPForum::Config::Report->renamed($renamed) } );
 }
 
 1;
@@ -175,9 +166,10 @@ L</renamed_warning>, for each of its C<renamed_settings>.
 =head2 renamed_warning
 
 Class method. Takes one of the configuration's C<renamed_settings> (a hash
-reference with C<variable>, C<replacement> and C<value>) and an optional
-catalog, and returns the sentence that names the old variable, its new name
-and the line to write in its place, in the operator's language.
+reference with C<variable>, C<replacement> and C<value>, and C<old> for an
+old value) and an optional catalog, and returns the sentence that names the
+old variable or value, what it is now called and the line to write in its
+place, in the operator's language (L<GPForum::Config::Report/renamed>).
 
 =head1 DIAGNOSTICS
 

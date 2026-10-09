@@ -1625,6 +1625,15 @@ msgstr ""
 "environment file in its place."
 
 #, python-brace-format
+msgctxt "config.renamed_value"
+msgid ""
+"{variable}={old} is now called {value}; write {assignment} in the "
+"environment file in its place."
+msgstr ""
+"{variable}={old} is now called {value}; write {assignment} in the "
+"environment file in its place."
+
+#, python-brace-format
 msgctxt "config.required"
 msgid "{variable} is required."
 msgstr "{variable} is required."
@@ -2038,6 +2047,40 @@ msgstr "settings: every account on this host can read {file}, secrets included"
 msgctxt "doctor.settings_shell"
 msgid "settings: {environment}, from the shell's environment"
 msgstr "settings: {environment}, from the shell's environment"
+
+#, python-brace-format
+msgctxt "doctor.size_cache"
+msgid "{count} cache entries a process"
+msgstr "{count} cache entries a process"
+
+#, python-brace-format
+msgctxt "doctor.size_web"
+msgid "{count} web processes"
+msgstr "{count} web processes"
+
+msgctxt "doctor.size_web_one"
+msgid "1 web process"
+msgstr "1 web process"
+
+#, python-brace-format
+msgctxt "doctor.sized"
+msgid "sized for {cpus} CPUs, {memory}: {sizes}"
+msgstr "sized for {cpus} CPUs, {memory}: {sizes}"
+
+#, python-brace-format
+msgctxt "doctor.sized_cpus_only"
+msgid "sized for {cpus} CPUs: {sizes}"
+msgstr "sized for {cpus} CPUs: {sizes}"
+
+#, python-brace-format
+msgctxt "doctor.sized_one_cpu"
+msgid "sized for 1 CPU, {memory}: {sizes}"
+msgstr "sized for 1 CPU, {memory}: {sizes}"
+
+#, python-brace-format
+msgctxt "doctor.sized_one_cpu_cpus_only"
+msgid "sized for 1 CPU: {sizes}"
+msgstr "sized for 1 CPU: {sizes}"
 
 #, python-brace-format
 msgctxt "doctor.timer_failed"

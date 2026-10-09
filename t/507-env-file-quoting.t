@@ -58,7 +58,7 @@ subtest 'what the rule writes, every reader reads back' => sub {
 };
 
 subtest q{the template's example reads as it says} => sub {
-    my ($line) = GPForum::Config::EnvironmentFile->render =~
+    my ($line) = GPForum::Config::EnvironmentFile->render_reference =~
       /^ [#] \s+ (GPFORUM_DATABASE_PASSWORD="[^\n]+) $/msx;
     ok( defined $line, 'the header shows a quoted password' );
     my $expected = { GPFORUM_DATABASE_PASSWORD => 'my $ecret "pass" word' };

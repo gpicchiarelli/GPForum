@@ -39,7 +39,7 @@ const my %PRODUCTION_ENV => (
     GPFORUM_SESSION_SECRET  => $PRODUCTION_SECRET,
 );
 
-const my $EXPECTED_TESTS             => 323;
+const my $EXPECTED_TESTS             => 325;
 const my $DEFAULT_LOG_LEVEL          => 'info';
 const my $DEFAULT_RUNTIME_LISTEN     => 'http://127.0.0.1:8080';
 const my $DEFAULT_RUNTIME_BACKLOG    => 256;
@@ -51,7 +51,6 @@ const my $DEFAULT_RUNTIME_HEARTBEAT  => 5;
 const my $DEFAULT_RUNTIME_UPGRADE    => 60;
 const my $DEFAULT_MIN_OS_WORKERS     => 2;
 const my $DEFAULT_MAX_OPEN_FDS       => 65_536;
-const my $DEFAULT_CACHE_MAX_ENTRIES  => 4_096;
 const my $DEFAULT_CATEGORY_CACHE_TTL => 60;
 const my $CUSTOM_WEB_PROCESSES       => 8;
 const my $CUSTOM_WORKER_PROCESSES    => 3;
@@ -306,8 +305,11 @@ is( $default_config->os_min_recommended_workers,
 is( $default_config->os_max_open_file_descriptors,
     $DEFAULT_MAX_OPEN_FDS,
     'OS file descriptor default matches production floor' );
-is( $default_config->local_cache_max_entries,
-    $DEFAULT_CACHE_MAX_ENTRIES, 'local cache default is production-sized' );
+is(
+    $default_config->local_cache_max_entries,
+    $default_config->automatic_local_cache_max_entries,
+    q{local cache default is sized from the host's memory}
+);
 is( $default_config->category_cache_ttl_seconds,
     $DEFAULT_CATEGORY_CACHE_TTL,
     'category cache TTL default is production-sized' );
@@ -586,7 +588,9 @@ lives_ok {
 }
 'staging starts without GlifiStore';
 
+# production-medium is an old name of production, and refused as production.
 for my $environment (qw(production staging production-medium)) {
+    my $named = $environment =~ s/-medium \z//rmsx;
     like(
         _refusal(
             sub {
@@ -601,7 +605,7 @@ for my $environment (qw(production staging production-medium)) {
             }
         ),
         qr{^GPFORUM_SESSION_SECRET [ ] is [ ] required [ ] in [ ]
-          \Q$environment\E [.] $}msx,
+          \Q$named\E [.] $}msx,
         "$environment rejects the default session secret",
     );
 }
@@ -833,8 +837,9 @@ is_deeply(
 # the default, and together they make one valid configuration. A fifth value
 # is the default read from an empty environment -- development -- when it is
 # not the one new gives.
-my $automatic_web = GPForum::Config->new->automatic_web_processes;
-my @every_setting = (
+my $automatic_web   = GPForum::Config->new->automatic_web_processes;
+my $automatic_cache = GPForum::Config->new->automatic_local_cache_max_entries;
+my @every_setting   = (
     [ environment => 'GPFORUM_ENV',       'development', 'test' ],
     [ log_level   => 'GPFORUM_LOG_LEVEL', 'info',        'debug' ],
     [ log_path    => 'GPFORUM_LOG_PATH',  q{}, '/var/log/gpforum.log' ],
@@ -955,7 +960,7 @@ my @every_setting = (
     ],
     [
         local_cache_max_entries => 'GPFORUM_LOCAL_CACHE_MAX_ENTRIES',
-        '4096', '100'
+        $automatic_cache, '100'
     ],
     [
         category_cache_ttl_seconds => 'GPFORUM_CATEGORY_CACHE_TTL_SECONDS',
@@ -982,7 +987,8 @@ my @every_setting = (
     ],
     [ minion_enabled => 'GPFORUM_MINION_ENABLED', '0', '1' ],
     [ minion_pg_url  => 'GPFORUM_MINION_PG_URL',  q{}, 'postgresql://minion' ],
-    [ metrics_token  => 'GPFORUM_METRICS_TOKEN',  q{}, 'read-token' ],
+    [ event_retention_days => 'GPFORUM_EVENT_RETENTION_DAYS', '365', '730' ],
+    [ metrics_token        => 'GPFORUM_METRICS_TOKEN', q{}, 'read-token' ],
     [
         glifistore_url => 'GPFORUM_GLIFISTORE_URL',
         q{}, 'unix:///run/glifistore.sock'

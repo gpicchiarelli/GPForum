@@ -11,7 +11,6 @@ use GPForum::Infrastructure::Row;
 use GPForum::Service::Attachment::Scanner;
 use GPForum::Service::Clock;
 use GPForum::Service::Operations::PartitionLifecycle;
-use GPForum::Service::Operations::Profile;
 use GPForum::Service::Operations::RetentionStore;
 
 our $VERSION = '0.001';
@@ -203,7 +202,7 @@ sub partition_evidence ( $self, $input ) {
             {
                 horizon_months => ( $input && $input->{horizon_months} )
                   || $self->_profile_value('partition_horizon_months')
-                  || 1,
+                  || $lifecycle->lookahead_months,
                 now_epoch => $self->clock->now_epoch,
             }
         ),
@@ -246,17 +245,15 @@ sub _registry_rows ($self) {
     return \@registry;
 }
 
+# The event retention GPFORUM_EVENT_RETENTION_DAYS sets; the horizon is the
+# lookahead the partition timer keeps (ADR 0125).
 sub _profile_for ( $, $controller ) {
     my $config = $controller->gp_config;
     if ( !$config ) {
         return undef;
     }
 
-    return GPForum::Service::Operations::Profile->new->get(
-        GPForum::Service::Operations::Profile->new->name_for_environment(
-            $config->environment
-        )
-    );
+    return { event_retention_days => $config->event_retention_days };
 }
 
 sub _first_line ($error) {
@@ -366,14 +363,13 @@ skipped rather than thrown.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Horizon and event retention days come from L<GPForum::Service::Operations::Profile>
-when a controller is available.
+Event retention days come from C<GPFORUM_EVENT_RETENTION_DAYS> (365) when a
+controller is available; the horizon is the partition lifecycle's lookahead.
 
 =head1 DEPENDENCIES
 
 Uses L<Const::Fast>, L<GPForum::Service::Clock>,
 L<GPForum::Service::Operations::PartitionLifecycle>,
-L<GPForum::Service::Operations::Profile>,
 L<GPForum::Service::Operations::RetentionStore>, and L<Mojo::Base>.
 
 =head1 INCOMPATIBILITIES

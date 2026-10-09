@@ -90,8 +90,8 @@ subtest 'a fresh host, answered with options' => sub {
         like( $values{$secret}, qr/\A secret-\d+-x+ \z/msx, "$secret made" );
     }
     is( ( stat $file )[$STAT_MODE] & $MODE_BITS, $FILE_MODE, 'mode 0640' );
-    _has( path($file)->slurp, "\n#GPFORUM_LOG_LEVEL=info\n",
-        q{the template's rows, the advanced ones commented out} );
+    is( path($file)->slurp =~ /GPFORUM_LOG_LEVEL/msx ? 1 : 0,
+        0, 'the decisions alone, with no advanced row (ADR 0125)' );
     is(
         $run->{database}->made->[0]{password},
         $values{GPFORUM_DATABASE_PASSWORD},

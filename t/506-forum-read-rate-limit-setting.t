@@ -97,7 +97,7 @@ subtest 'the settings page and the template list it' => sub {
       . ' test from one address.',
       '#GPFORUM_FORUM_READ_RATE_LIMIT=60', q{};
     like(
-        GPForum::Config::EnvironmentFile->render,
+        GPForum::Config::EnvironmentFile->render_reference,
         qr/^\Q$offered\E/msx,
         'the template offers it, commented out at its default'
     );

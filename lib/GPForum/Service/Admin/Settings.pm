@@ -14,10 +14,16 @@ our $VERSION = '0.001';
 
 const my $REDACTED => '[redacted]';
 
-# The name each renamed setting had, by its new one: an environment that
-# still sets the old one gave the value the page shows.
-const my %OLD_NAME => map { $_->{env} => $_->{renamed_from}{env} }
-  grep { $_->{renamed_from} } @{ GPForum::Config->settings };
+# The old names of each renamed setting, by its new one: an environment that
+# still sets an old one gave the value the page shows.
+const my %OLD_NAMES => map { $_->[0] => $_->[1] }
+  grep { @{ $_->[1] } }
+  map {
+    [
+        $_->{env},
+        [ map { exists $_->{env} ? $_->{env} : () } @{ $_->{aliases} } ]
+    ]
+  } @{ GPForum::Config->settings };
 
 # Where an operator changes what this page shows. Configuration lives in the
 # service's environment by design (GPForum::Config); the console reads it and
@@ -203,8 +209,9 @@ const my @SECTIONS => (
     {
         name     => 'jobs',
         settings => [
-            [ GPFORUM_MINION_ENABLED => 'minion_enabled' ],
-            [ GPFORUM_MINION_PG_URL  => 'minion_pg_url' ],
+            [ GPFORUM_MINION_ENABLED       => 'minion_enabled' ],
+            [ GPFORUM_MINION_PG_URL        => 'minion_pg_url' ],
+            [ GPFORUM_EVENT_RETENTION_DAYS => 'event_retention_days' ],
         ],
     },
 );
@@ -332,8 +339,10 @@ sub _setting ( $self, $env_name, $attribute, $secrets ) {
 # Config takes a variable when it is present and not empty, as here, and a
 # renamed setting's old name when the new one is not.
 sub _source ( $self, $env_name ) {
-    my @names =
-      ( $env_name, exists $OLD_NAME{$env_name} ? $OLD_NAME{$env_name} : () );
+    my @names = (
+        $env_name,
+        exists $OLD_NAMES{$env_name} ? @{ $OLD_NAMES{$env_name} } : ()
+    );
     for my $name (@names) {
         my $raw = $self->environment->{$name};
         return 'environment' if defined $raw && length $raw;

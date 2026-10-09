@@ -33,14 +33,20 @@ const my %DEPLOYED => (
 # profile without GlifiStore, which nothing could reach since GlifiStore
 # became optional everywhere (D2).
 
+# The default is auto now, sized from the host's memory (ADR 0125); a floor
+# above what the host is sized for gives way to it.
 subtest 'the default cache meets every profile' => sub {
-    is( GPForum::Config->new->local_cache_max_entries,
-        $LARGEST_FLOOR, 'GPFORUM_LOCAL_CACHE_MAX_ENTRIES defaults to 4096' );
+    my $built = GPForum::Config->new;
+    is(
+        $built->local_cache_max_entries,
+        $built->automatic_local_cache_max_entries,
+        'GPFORUM_LOCAL_CACHE_MAX_ENTRIES defaults to auto'
+    );
     my $profiles = GPForum::Service::Operations::Profile->new;
-    my $default  = GPForum::Config->new->local_cache_max_entries;
     for my $name ( @{ $profiles->names } ) {
         cmp_ok( $profiles->get($name)->{local_cache_max_entries},
-            '<=', $default, "$name: the cache floor is at most the default" );
+            '<=', $LARGEST_FLOOR,
+            "$name: the cache floor is at most the unmeasured default" );
     }
 
     for my $environment (

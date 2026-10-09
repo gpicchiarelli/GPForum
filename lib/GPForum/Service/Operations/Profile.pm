@@ -10,80 +10,52 @@ use v5.40;
 
 our $VERSION = '0.001';
 
-const my $PROFILE_VERSION    => 1;
+# Version 2: three environments, sized from the host (ADR 0125). A profile is
+# what an environment requires -- a rotated session secret, restore evidence
+# -- and the least a node may run at, never its size: web processes and the
+# cache come from the host's CPUs and memory (GPForum::Config's automatic
+# sizes), and the floors give way to what a small host carries.
+const my $PROFILE_VERSION    => 2;
 const my $DEVELOPMENT_SECRET => 'gpforum-development-secret-change-me';
+
+# production-small and production-medium are old names of production, read
+# as it until GPForum::Config stops reading them; a configuration built with
+# new may still carry one.
 const my %ENV_TO_PROFILE => (
     development         => 'development',
     test                => 'development',
     staging             => 'staging',
-    production          => 'production-small',
-    'production-small'  => 'production-small',
-    'production-medium' => 'production-medium',
+    production          => 'production',
+    'production-small'  => 'production',
+    'production-medium' => 'production',
 );
 const my %PROFILES => (
     development => {
-        category_cache_ttl_seconds      => 15,
-        event_retention_days            => 30,
         local_cache_max_entries         => 256,
-        log_level                       => 'debug',
         name                            => 'development',
-        notification_retention_days     => 14,
-        partition_horizon_months        => 1,
-        realtime_processes              => 1,
         requires_glifistore             => 0,
         requires_rotated_session_secret => 0,
         restore_evidence_required       => 0,
         version                         => $PROFILE_VERSION,
         web_processes                   => 1,
-        worker_processes                => 1,
     },
     staging => {
-        category_cache_ttl_seconds      => 30,
-        event_retention_days            => 90,
         local_cache_max_entries         => 512,
-        log_level                       => 'info',
         name                            => 'staging',
-        notification_retention_days     => 30,
-        partition_horizon_months        => 2,
-        realtime_processes              => 1,
         requires_glifistore             => 0,
         requires_rotated_session_secret => 1,
         restore_evidence_required       => 1,
         version                         => $PROFILE_VERSION,
         web_processes                   => 2,
-        worker_processes                => 1,
     },
-    'production-small' => {
-        category_cache_ttl_seconds      => 60,
-        event_retention_days            => 365,
+    production => {
         local_cache_max_entries         => 2_048,
-        log_level                       => 'info',
-        name                            => 'production-small',
-        notification_retention_days     => 90,
-        partition_horizon_months        => 3,
-        realtime_processes              => 1,
+        name                            => 'production',
         requires_glifistore             => 0,
         requires_rotated_session_secret => 1,
         restore_evidence_required       => 1,
         version                         => $PROFILE_VERSION,
         web_processes                   => 4,
-        worker_processes                => 2,
-    },
-    'production-medium' => {
-        category_cache_ttl_seconds      => 60,
-        event_retention_days            => 730,
-        local_cache_max_entries         => 4_096,
-        log_level                       => 'info',
-        name                            => 'production-medium',
-        notification_retention_days     => 180,
-        partition_horizon_months        => 6,
-        realtime_processes              => 2,
-        requires_glifistore             => 0,
-        requires_rotated_session_secret => 1,
-        restore_evidence_required       => 1,
-        version                         => $PROFILE_VERSION,
-        web_processes                   => 8,
-        worker_processes                => 4,
     },
 );
 
@@ -129,22 +101,18 @@ sub _compare ( $self, $profile, $config ) {
         {
             actual => $config->web_processes,
             field  => 'web_processes',
-            floor  => _web_floor( $profile, $config ),
+            floor  => _floor_on_this_host( $profile, $config, 'web_processes' ),
         }
     );
 
-    # The worker and realtime counts are not held to the profile's floors:
-    # nothing starts processes from GPFORUM_WORKER_PROCESSES or
-    # GPFORUM_REALTIME_PROCESSES, which are retired. Held to them, a
-    # production-medium host failed readiness unless it kept setting the very
-    # variables the start tells it to remove. GPFORUM_LOCAL_CACHE_MAX_ENTRIES
-    # defaults to the largest floor, 4096, for the same reason.
     $self->_require_floor(
         $errors,
         {
             actual => $config->local_cache_max_entries,
             field  => 'local_cache_max_entries',
-            floor  => $profile->{local_cache_max_entries},
+            floor  => _floor_on_this_host(
+                $profile, $config, 'local_cache_max_entries'
+            ),
         }
     );
     $self->_require_secret( $errors, $profile, $config );
@@ -156,15 +124,16 @@ sub _compare ( $self, $profile, $config ) {
     };
 }
 
-# The profile's web floor, or what this host can carry when that is less:
-# GPFORUM_WEB_PROCESSES=auto sizes to the CPUs, and a floor above them would
-# fail every small host the profile otherwise suits. A configuration that
-# cannot say what the host carries keeps the profile's floor.
-sub _web_floor ( $profile, $config ) {
-    my $floor = $profile->{web_processes};
-    return $floor if !$config->can('automatic_web_processes');
+# The profile's floor, or what this host is sized for when that is less: the
+# web processes and the cache are sized from the CPUs and the memory, and a
+# floor above them would fail every small host the profile otherwise suits.
+# A configuration that cannot say what the host carries keeps the floor.
+sub _floor_on_this_host ( $profile, $config, $field ) {
+    my $floor   = $profile->{$field};
+    my $builder = "automatic_$field";
+    return $floor if !$config->can($builder);
 
-    return min( $floor, $config->automatic_web_processes );
+    return min( $floor, $config->$builder );
 }
 
 sub _require_floor ( $, $errors, $input ) {
@@ -206,22 +175,25 @@ Version 0.001.
 
 =head1 DESCRIPTION
 
-Defines explicit C<development>, C<staging>, C<production-small>, and
-C<production-medium> runtime floors plus retention policy. C<production> maps
-to C<production-small>. C<test> maps to C<development>. No profile requires
-a GlifiStore URL: without one each process keeps its own cache, which a
-single host needs no more than; C<requires_glifistore> stays in each profile,
-always 0, for the reports that print it. The local cache floor of every
-profile is at most C<GPFORUM_LOCAL_CACHE_MAX_ENTRIES>'s default, 4096. The web process floor is the profile's, or
-what the host can carry (L<GPForum::Config/automatic_web_processes>) when
-that is less. The profiles' C<worker_processes> and C<realtime_processes>
-are reported, not compared: the settings they once held up are retired.
+Defines what the C<development>, C<staging> and C<production> environments
+require, version 2 (ADR 0125): a rotated session secret where it is
+deployed, restore evidence, and the least a node may run at -- web processes
+and cache entries a process. C<test> maps to C<development>;
+C<production-small> and C<production-medium>, the old size profiles, map to
+C<production>. A profile no longer sizes a node: the web processes and the
+cache are sized from the host's CPUs and memory
+(L<GPForum::Config/automatic_web_processes>,
+L<GPForum::Config/automatic_local_cache_max_entries>), and each floor is the
+profile's or what the host is sized for, when that is less. Retention is a
+setting of its own, C<GPFORUM_EVENT_RETENTION_DAYS>. No profile requires a
+GlifiStore URL; C<requires_glifistore> stays in each, always 0, for the
+reports that print it.
 
 =head1 SUBROUTINES/METHODS
 
 =head2 names
 
-Returns the canonical profile names.
+Returns the profile names: C<development>, C<production> and C<staging>.
 
 =head2 name_for_environment
 
@@ -241,8 +213,8 @@ Returns C<ok> plus field errors instead of throwing.
 
 =head1 CONFIGURATION AND ENVIRONMENT
 
-Reads the web process count, cache size and session secret from
-L<GPForum::Config>.
+Reads the web process count, the cache size, what the host is sized for and
+the session secret from L<GPForum::Config>.
 
 =head1 DEPENDENCIES
 

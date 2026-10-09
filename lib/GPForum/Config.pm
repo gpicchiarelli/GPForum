@@ -12,6 +12,7 @@ use Mojo::File qw(path);
 
 use GPForum::Config::Report;
 use GPForum::OS;
+use GPForum::OS::Memory;
 use GPForum::X::Config;
 
 our $VERSION = '0.001';
@@ -30,6 +31,21 @@ const my $SECRET_GENERATOR          => 'openssl rand -hex 32';
 # 100. A larger host is one whose operator chooses the number.
 const my $MAXIMUM_AUTOMATIC_WEB_PROCESSES => 16;
 const my $AUTOMATIC                       => 'auto';
+
+# GPFORUM_LOCAL_CACHE_MAX_ENTRIES=auto gives each web process an equal part
+# of an eighth of the host's memory, at about 16 KiB an entry -- a rendered
+# fragment, a category list -- rounded down to a power of two between 1024
+# and 16384: 4096, the old fixed default, on a 1 GB host with two web
+# processes. A host whose memory cannot be measured keeps 4096.
+const my $CACHE_MEMORY_SHARE      => 8;
+const my $CACHE_ENTRY_BYTES       => 16 * 1_024;
+const my $MINIMUM_AUTOMATIC_CACHE => 1_024;
+const my $MAXIMUM_AUTOMATIC_CACHE => 16_384;
+const my $UNMEASURED_CACHE        => 4_096;
+
+# The release in which the old names of a setting, and its old values, stop
+# being read (audit 5.6); docs/DEPLOYMENT.md's "Renamed settings" lists them.
+const my $ALIASES_UNTIL => 'v0.3.0';
 
 # A resident clamd answers in well under a second. clamscan, run per file,
 # loads its whole signature database first, which alone can take most of 30
@@ -78,14 +94,19 @@ const my $LOCAL_SENDER =>
 const my $LANGUAGE_TAG =>
   qr{\A [[:lower:]]{2,8} (?: - [[:lower:][:digit:]]{1,8} )* \z}msx;
 
-const my @ENVIRONMENTS =>
-  qw(development test staging production production-small production-medium);
-const my @LOG_LEVELS => qw(trace debug info warn error fatal);
+# Where a node runs. test is the suite's own. The size of a node is not one
+# of them: it comes from the host (automatic_web_processes,
+# automatic_local_cache_max_entries), so production-small and
+# production-medium are old names of production, read until $ALIASES_UNTIL.
+const my @ENVIRONMENTS => qw(development test staging production);
+const my @LOG_LEVELS   => qw(trace debug info warn error fatal);
 
-# The deployed profiles. They need a rotated session secret, a metrics token
-# and Secure cookies, they refuse the log mail transport, and they default to
-# the system's clamd and sendmail. Production, on top, needs an https address,
-# a sender mail servers accept and a long session secret.
+# The deployed environments. They need a rotated session secret, a metrics
+# token and Secure cookies, they refuse the log mail transport, and they
+# default to the system's clamd and sendmail. Production, on top, needs an
+# https address, a sender mail servers accept and a long session secret. The
+# old names stay here for a configuration built with new, which reads no
+# alias.
 const my @DEPLOYED => qw(
   production
   production-medium
@@ -144,8 +165,12 @@ const my $SET_SEARCH_SIMILARITY => q{SET pg_trgm.similarity_threshold = 0.18};
 #
 #   section  where it belongs, as the settings page groups them
 #   summary  one line an operator reads in the environment file template
-#   operator 1 for the few settings every installation decides; the template
-#            lists them first, uncommented
+#   operator 1 for the few settings every installation decides; the file
+#            gpforum setup writes holds them, and the template lists them
+#            first, uncommented
+#   operator_when  [ setting, value ]: a decision only when that setting
+#            holds that value, as the SMTP server when mail leaves by smtp;
+#            the file setup writes offers it commented out
 #   example  a value shown when the setting is wrong, and in the template
 #   generate the command that makes a value, for a secret
 #   retired  1 for a setting that no longer has any effect: still read, never
@@ -165,27 +190,34 @@ const my $SET_SEARCH_SIMILARITY => q{SET pg_trgm.similarity_threshold = 0.18};
 #            from_environment uses when a setting read before this one holds
 #            one of the values; a configuration built with new keeps the plain
 #            default
-#   renamed_from  { env => OLD, values => { old word => value }, refusal =>
-#            key }: the variable this setting had before it was renamed. It
-#            is read when the new one is not set, its words turned into this
-#            setting's values -- any other is refused with the refusal's
-#            sentence, under the old name -- and named, with the line that
-#            replaces it, in a warning when set (audit 5.6)
+#   aliases  the names and values this setting had before, each read until
+#            $ALIASES_UNTIL (audit 5.6) and named, with the line that
+#            replaces it, in a warning when set:
+#            { env => OLD, values => { old word => value }, refusal => key }
+#              an old variable, read when the new one is not set, its words
+#              turned into this setting's values -- any other is refused with
+#              the refusal's sentence, under the old name;
+#            { value => OLD, as => NEW }
+#              an old value, read as the new one
 const my @SETTINGS => map {
     +{
-        type         => 'text',
-        default      => undef,
-        check        => undef,
-        one_of       => undef,
-        within       => undef,
-        default_when => undef,
-        renamed_from => undef,
-        operator     => 0,
-        retired      => 0,
-        automatic    => 0,
-        example      => undef,
-        generate     => undef,
+        type          => 'text',
+        default       => undef,
+        check         => undef,
+        one_of        => undef,
+        within        => undef,
+        default_when  => undef,
+        operator      => 0,
+        operator_when => undef,
+        retired       => 0,
+        automatic     => 0,
+        example       => undef,
+        generate      => undef,
         %{$_},
+        aliases => [
+            map { +{ read_until => $ALIASES_UNTIL, %{$_} } }
+              @{ $_->{aliases} // [] }
+        ],
     }
 } (
     {
@@ -194,9 +226,12 @@ const my @SETTINGS => map {
         default => 'development',
         check   => 'required',
         one_of  => \@ENVIRONMENTS,
-        section => 'application',
-        summary =>
-          'Where this node runs: development, test, staging or production.',
+        aliases => [
+            map { +{ value => $_, as => 'production' } }
+              qw(production-small production-medium)
+        ],
+        section  => 'application',
+        summary  => 'Where this node runs: development, staging or production.',
         operator => 1,
         example  => 'production',
     },
@@ -629,14 +664,19 @@ const my @SETTINGS => map {
         section => 'operating_system',
         summary => 'The open-file limit the host preflight expects.',
     },
+
+    # auto, the default, is sized from the host's memory by
+    # automatic_local_cache_max_entries.
     {
-        name    => 'local_cache_max_entries',
-        env     => 'GPFORUM_LOCAL_CACHE_MAX_ENTRIES',
-        default => 4_096,
-        type    => 'integer',
-        check   => 'positive',
-        section => 'cache',
-        summary => 'Entries each process keeps in its own cache.',
+        name      => 'local_cache_max_entries',
+        env       => 'GPFORUM_LOCAL_CACHE_MAX_ENTRIES',
+        default   => $AUTOMATIC,
+        type      => 'integer',
+        automatic => 1,
+        check     => 'positive',
+        section   => 'cache',
+        summary   => 'Entries each web process keeps in its own cache; auto'
+          . q{ sizes them from the host's memory.},
     },
     {
         name    => 'category_cache_ttl_seconds',
@@ -712,6 +752,21 @@ const my @SETTINGS => map {
         section => 'jobs',
         summary => q{Minion's PostgreSQL URL, required while Minion is on.},
         example => 'postgresql://gpforum@/gpforum',
+    },
+
+    # How long the event log is kept: the partitions job lists each monthly
+    # partition older than this as due to detach. It was the size profile's
+    # (365 days in production-small, 730 in production-medium); it is one
+    # setting now, at production-small's value.
+    {
+        name    => 'event_retention_days',
+        env     => 'GPFORUM_EVENT_RETENTION_DAYS',
+        default => 365,
+        type    => 'integer',
+        check   => 'positive',
+        section => 'jobs',
+        summary => 'Days the event log is kept before its monthly partitions'
+          . ' are listed as due to detach.',
     },
     {
         name    => 'metrics_token',
@@ -801,36 +856,40 @@ const my @SETTINGS => map {
         example  => 'forum@forum.example.com',
     },
     {
-        name    => 'smtp_host',
-        env     => 'GPFORUM_SMTP_HOST',
-        default => q{},
-        check   => 'smtp_host',
-        section => 'mail',
-        summary => 'The SMTP server, when mail leaves by smtp.',
-        example => 'smtp.example.com',
+        name          => 'smtp_host',
+        env           => 'GPFORUM_SMTP_HOST',
+        default       => q{},
+        check         => 'smtp_host',
+        section       => 'mail',
+        summary       => 'The SMTP server, when mail leaves by smtp.',
+        example       => 'smtp.example.com',
+        operator_when => [ mail_transport => 'smtp' ],
     },
     {
-        name    => 'smtp_port',
-        env     => 'GPFORUM_SMTP_PORT',
-        default => 587,
-        type    => 'integer',
-        check   => 'positive',
-        section => 'mail',
-        summary => 'The SMTP port; 587 is the submission port.',
+        name          => 'smtp_port',
+        env           => 'GPFORUM_SMTP_PORT',
+        default       => 587,
+        type          => 'integer',
+        check         => 'positive',
+        section       => 'mail',
+        summary       => 'The SMTP port; 587 is the submission port.',
+        operator_when => [ mail_transport => 'smtp' ],
     },
     {
-        name    => 'smtp_username',
-        env     => 'GPFORUM_SMTP_USERNAME',
-        default => q{},
-        section => 'mail',
-        summary => 'The SMTP login, when the server asks for one.',
+        name          => 'smtp_username',
+        env           => 'GPFORUM_SMTP_USERNAME',
+        default       => q{},
+        section       => 'mail',
+        summary       => 'The SMTP login, when the server asks for one.',
+        operator_when => [ mail_transport => 'smtp' ],
     },
     {
-        name    => 'smtp_password',
-        env     => 'GPFORUM_SMTP_PASSWORD',
-        default => q{},
-        section => 'mail',
-        summary => 'The SMTP password.',
+        name          => 'smtp_password',
+        env           => 'GPFORUM_SMTP_PASSWORD',
+        default       => q{},
+        section       => 'mail',
+        summary       => 'The SMTP password.',
+        operator_when => [ mail_transport => 'smtp' ],
     },
 
     # TLS follows the port unless the operator says otherwise: STARTTLS on
@@ -843,14 +902,16 @@ const my @SETTINGS => map {
         default      => 'starttls',
         one_of       => [qw(starttls implicit off)],
         default_when => [ [ smtp_port => [$IMPLICIT_TLS_PORT], 'implicit' ] ],
-        renamed_from => {
-            env     => 'GPFORUM_SMTP_SSL',
-            refusal => 'config.not_boolean',
-            values  => {
-                ( map { $_ => 'starttls' } qw(1 yes true on) ),
-                ( map { $_ => 'off' } qw(0 no false off) ),
-            },
-        },
+        aliases      => [
+            {
+                env     => 'GPFORUM_SMTP_SSL',
+                refusal => 'config.not_boolean',
+                values  => {
+                    ( map { $_ => 'starttls' } qw(1 yes true on) ),
+                    ( map { $_ => 'off' } qw(0 no false off) ),
+                },
+            }
+        ],
         section => 'mail',
         summary => 'TLS to the SMTP server: starttls, implicit or off; it'
           . ' follows the port, starttls on 587 and implicit on 465.',
@@ -934,20 +995,25 @@ my %RULE = (
 # automatic setting's is worked out when first read.
 for my $setting (@SETTINGS) {
     my $name = $setting->{name};
-    next if $setting->{automatic};
+    if ( $setting->{automatic} ) {
+        my $builder = "automatic_$name";
+        has $name => sub ($self) { return $self->$builder; };
+        next;
+    }
 
     my $is_list = $setting->{type} eq 'list' || $setting->{type} eq 'words';
     has $name => $is_list ? sub { return [] } : $setting->{default};
 }
-has web_processes => sub ($self) { return $self->automatic_web_processes; };
 
 # The variables of retired settings the environment set, for the warning the
 # start-up logs (Bootstrap::Config).
 has retired_settings => sub { return [] };
 
-# The old names the environment still set, each as { variable, replacement,
-# value }: the old variable, the new one and the value it now holds, for the
-# warning the start-up logs.
+# The old names the environment still set, each as { setting, variable,
+# replacement, value }: the old variable, the new one and the value it now
+# holds, for the warning the start-up logs. An old value (GPFORUM_ENV=
+# production-small) is named under its own variable, with old, the value
+# the environment wrote.
 has renamed_settings => sub { return [] };
 
 sub from_environment ( $class, $environment = undef ) {
@@ -959,6 +1025,7 @@ sub from_environment ( $class, $environment = undef ) {
           _renamed( $environment, $setting, \@renamed, \%read );
         my ( $value, $problem ) = _read( $source, $setting, \%read );
         $problem //= $misread;
+        $value = _old_value( $setting, $value, \@renamed );
 
         # A retired setting never stops a start, whatever an old environment
         # file holds: a value that does not parse keeps the default, and the
@@ -1096,10 +1163,78 @@ sub smtp_can_tls ($invocant) {
 # does not gain any while GPForum runs, and counting them can mean running
 # sysctl.
 sub automatic_web_processes ($self) {
+    return min(
+        $MAXIMUM_AUTOMATIC_WEB_PROCESSES,
+        max(
+            1,
+            ( $self->host_worker_cpus || 1 ) * $self->runtime_max_web_per_cpu
+        )
+    );
+}
+
+# Each web process's own cache, sized from the host's memory: an equal part,
+# for each web process, of an eighth of it, at about 16 KiB an entry, rounded
+# down to a power of two between 1024 and 16384; 4096 when the memory cannot
+# be measured.
+sub automatic_local_cache_max_entries ($self) {
+    my $bytes = $self->host_memory_bytes;
+    return $UNMEASURED_CACHE if !$bytes;
+
+    my $entries =
+      $bytes / $CACHE_MEMORY_SHARE /
+      max( 1, $self->web_processes ) /
+      $CACHE_ENTRY_BYTES;
+    my $power = $MINIMUM_AUTOMATIC_CACHE;
+    while ( $power * 2 <= $entries && $power < $MAXIMUM_AUTOMATIC_CACHE ) {
+        $power *= 2;
+    }
+
+    return $power;
+}
+
+# What the host gives GPForum, each asked once per process: a host does not
+# gain CPUs or memory while GPForum runs, and asking can mean running sysctl.
+# The CPUs a worker counts (OS::Base::worker_cpu_count: all of them, or fewer
+# where some cores are worth less), every logical CPU, and the memory in
+# bytes (undef when it cannot be measured).
+sub host_worker_cpus ($self) {
     state $cpus = GPForum::OS->detect->worker_cpu_count;
 
-    return min( $MAXIMUM_AUTOMATIC_WEB_PROCESSES,
-        max( 1, ( $cpus || 1 ) * $self->runtime_max_web_per_cpu ) );
+    return $cpus;
+}
+
+sub host_cpus ($self) {
+    state $cpus = GPForum::OS->detect->cpu_count;
+
+    return $cpus;
+}
+
+sub host_memory_bytes ($self) {
+    state $bytes =
+      GPForum::OS::Memory->new->detect( GPForum::OS->detect->name )->{bytes};
+
+    return $bytes;
+}
+
+# How this node is sized, for gpforum doctor: the host's CPUs and memory,
+# and each size worked out from them that the node runs with -- a size the
+# operator set to something else is theirs, not the host's (audit D1').
+sub sizing ($self) {
+    my %sizes;
+    for my $setting ( grep { $_->{automatic} } @SETTINGS ) {
+        my $name    = $setting->{name};
+        my $builder = "automatic_$name";
+        my $value   = $self->$name;
+        if ( $value == $self->$builder ) {
+            $sizes{$name} = $value;
+        }
+    }
+
+    return {
+        cpus         => $self->host_cpus,
+        memory_bytes => $self->host_memory_bytes,
+        sizes        => \%sizes,
+    };
 }
 
 sub os_feature_settings ($self) {
@@ -1245,9 +1380,10 @@ sub _read_integer ( $setting, $value, $read ) {
 # the setting keeps its default. A setting never renamed, or whose old name
 # is not set, reads the environment as it is.
 sub _renamed ( $environment, $setting, $renamed, $read ) {
-    my $old = $setting->{renamed_from};
+    my ($old) =
+      grep { exists $_->{env} && _is_set( $environment, $_ ) }
+      @{ $setting->{aliases} };
     return ($environment) if !$old;
-    return ($environment) if !_is_set( $environment, $old );
 
     push @{$renamed},
       {
@@ -1271,6 +1407,27 @@ sub _renamed ( $environment, $setting, $renamed, $read ) {
             suggestion => "$setting->{env}=" . _default( $setting, $read ),
         }
     );
+}
+
+# The value an old one stands for, noted for the warning: GPFORUM_ENV=
+# production-medium reads as production. Any other value is left as it is.
+sub _old_value ( $setting, $value, $renamed ) {
+    return $value if !defined $value || ref $value;
+
+    my ($old) =
+      grep { exists $_->{value} && $_->{value} eq $value }
+      @{ $setting->{aliases} };
+    return $value if !$old;
+
+    push @{$renamed},
+      {
+        setting     => $setting->{name},
+        variable    => $setting->{env},
+        replacement => $setting->{env},
+        old         => $value,
+      };
+
+    return $old->{as};
 }
 
 sub _is_set ( $environment, $setting ) {
@@ -1316,8 +1473,13 @@ sub _problem ( $self, $setting ) {
         return $problem;
     }
 
+    # An old value -- production-small, in a configuration built with new --
+    # is one of them, under the name it now has; the refusal lists only the
+    # current ones.
     my $choices = $setting->{one_of};
-    if ( $choices && !any { $_ eq ( $value // q{} ) } @{$choices} ) {
+    my @old =
+      map { exists $_->{value} ? $_->{value} : () } @{ $setting->{aliases} };
+    if ( $choices && !any { $_ eq ( $value // q{} ) } @{$choices}, @old ) {
         return _choice_problem( $setting, $value, $choices );
     }
 
@@ -1778,8 +1940,10 @@ C<generate> or C<suggestion>. L<GPForum::Config::Report> renders them.
 
 Class method. A copy of the settings table, one hash reference per setting
 with C<name>, C<env>, C<default>, C<type>, C<section>, C<summary>,
-C<operator>, C<example>, C<generate>, C<retired> and C<renamed_from> (the
-old variable's C<env> and its C<values>, or undef), in table order.
+C<operator>, C<operator_when>, C<example>, C<generate>, C<retired> and
+C<aliases>, in table order. Each alias is an old variable (C<env>, with the C<values> its words
+read as) or an old value (C<value>, read C<as> the current one), with
+C<read_until>, the release that stops reading it.
 
 =head2 requires_glifistore
 
@@ -1793,8 +1957,9 @@ rotated session secret, Secure cookies, and HSTS.
 
 =head2 is_production
 
-True for production, production-small and production-medium: the
-environments that also require an https address, a sender mail servers
+True for production (and its old names production-small and
+production-medium, in a configuration built with C<new>): the environment
+that also requires an https address, a sender mail servers
 accept and a long session secret, and that never send the benchmark query
 headers.
 
@@ -1845,8 +2010,39 @@ with IO::Socket::SSL installed), else 0. Asked once per process.
 =head2 automatic_web_processes
 
 The web process count C<GPFORUM_WEB_PROCESSES=auto> stands for: the CPUs
-times C<GPFORUM_RUNTIME_MAX_WEB_PER_CPU>, at least 1 and at most 16. It is
-the default, and C<web_processes> reads it unless a number is set.
+(L</host_worker_cpus>) times C<GPFORUM_RUNTIME_MAX_WEB_PER_CPU>, at least 1
+and at most 16. It is the default, and C<web_processes> reads it unless a
+number is set.
+
+=head2 automatic_local_cache_max_entries
+
+The cache size C<GPFORUM_LOCAL_CACHE_MAX_ENTRIES=auto> stands for: each web
+process's equal part of an eighth of L</host_memory_bytes>, at 16 KiB an
+entry, rounded down to a power of two from 1024 to 16384, or 4096 when the
+memory cannot be measured. It is the default, and C<local_cache_max_entries>
+reads it unless a number is set.
+
+=head2 host_worker_cpus
+
+The CPUs a web worker counts on this host (L<GPForum::OS::Base/worker_cpu_count>),
+asked once per process.
+
+=head2 host_cpus
+
+Every logical CPU of this host, asked once per process.
+
+=head2 host_memory_bytes
+
+This host's memory in bytes, or a container's limit when it is less
+(L<GPForum::OS::Memory>); undef when it cannot be measured. Asked once per
+process.
+
+=head2 sizing
+
+How the node is sized, for C<gpforum doctor>: C<cpus>, C<memory_bytes>, and
+C<sizes>, each automatic setting (C<web_processes>,
+C<local_cache_max_entries>) the node runs at the host's size, by name. One the
+operator set to another number is left out.
 
 =head2 os_feature_settings
 
@@ -1911,9 +2107,14 @@ development session secret in both the current secret and
 C<GPFORUM_SESSION_SECRETS>, and require a non-empty C<GPFORUM_METRICS_TOKEN>
 so the C</metrics> scrape endpoint is never left unauthenticated.
 
-C<GPFORUM_ENV> is one of development, test, staging, production,
-production-small and production-medium, and a mistyped one is answered with
-the nearest (C<prod>: production). Production also requires an C<https://>
+C<GPFORUM_ENV> is one of development, staging and production (and test, the
+suite's own), and a mistyped one is answered with the nearest (C<prod>:
+production). The size of a node is not an environment: web processes and
+the cache are sized from the host. C<production-small> and
+C<production-medium> are old names of production, read as it until v0.3.0;
+L</from_environment> notes each in C<renamed_settings>, with C<old>, the
+value written. C<GPFORUM_EVENT_RETENTION_DAYS> (365) is how long the event
+log is kept, which the size profiles used to set. Production also requires an C<https://>
 C<GPFORUM_PUBLIC_BASE_URL>, a C<GPFORUM_MAIL_FROM> that is not at
 localhost and a session secret of at least 32 characters. Booleans read
 C<on>/C<off>, C<yes>/C<no>, C<true>/C<false> or C<1>/C<0>.
@@ -1955,8 +2156,8 @@ below 1.
 =head1 DEPENDENCIES
 
 Uses L<Const::Fast>, L<DateTime::TimeZone>, L<List::Util>, L<Mojo::Base>,
-L<Mojo::File>, L<GPForum::Config::Report>, L<GPForum::OS> and
-L<GPForum::X::Config>; L<Net::SMTP>, loaded by L</smtp_can_tls>.
+L<Mojo::File>, L<GPForum::Config::Report>, L<GPForum::OS>,
+L<GPForum::OS::Memory> and L<GPForum::X::Config>; L<Net::SMTP>, loaded by L</smtp_can_tls>.
 
 =head1 INCOMPATIBILITIES
 

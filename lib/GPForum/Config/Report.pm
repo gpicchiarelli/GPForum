@@ -78,6 +78,8 @@ q{{variable} must be an IANA time zone such as Europe/Rome, not '{value}'.},
       . ' remove it from the environment file.',
     'config.renamed' => '{variable} is now called {replacement};'
       . ' write {assignment} in the environment file in its place.',
+    'config.renamed_value' => '{variable}={old} is now called {value};'
+      . ' write {assignment} in the environment file in its place.',
 );
 
 # A problem's own lines are indented under the header, and what helps fix it
@@ -173,6 +175,35 @@ sub _block ( $class, $problem, $translate ) {
     return join "\n", @lines;
 }
 
+# The warning for one old name a configuration still read (GPForum::Config's
+# renamed_settings), as [ key, parameters ]: an old variable, or an old value
+# of a variable, with the line to write in its place -- GPFORUM_SMTP_TLS=
+# starttls, GPFORUM_ENV=production. The start-up logs it and doctor lists it
+# with these words.
+sub renamed ( $class, $renamed ) {
+    my $assignment =
+      $class->assignment( $renamed->{replacement}, $renamed->{value} // q{} );
+    return [
+        'config.renamed_value',
+        {
+            variable   => $renamed->{variable},
+            old        => $renamed->{old},
+            value      => $renamed->{value} // q{},
+            assignment => $assignment,
+        }
+      ]
+      if defined $renamed->{old};
+
+    return [
+        'config.renamed',
+        {
+            variable    => $renamed->{variable},
+            replacement => $renamed->{replacement},
+            assignment  => $assignment,
+        }
+    ];
+}
+
 # Text with each password a value carries in it replaced by [redacted].
 sub without_passwords ( $class, $text ) {
     return $text if !defined $text;
@@ -248,6 +279,14 @@ Class method. Takes a variable and a value and returns C<VARIABLE=value> as
 an environment file holds it: the value bare when it is a plain word,
 double-quoted otherwise (a space, a C<;>), so systemd's C<EnvironmentFile=>
 and a shell sourcing the file both read it whole.
+
+=head2 renamed
+
+Class method. Takes one of L<GPForum::Config>'s C<renamed_settings> and
+returns its warning as C<[ key, parameters ]>: C<config.renamed> for an old
+variable, C<config.renamed_value> for an old value (one with C<old>), each
+with C<assignment>, the line to write in its place. L</text> turns it into
+words.
 
 =head2 without_passwords
 

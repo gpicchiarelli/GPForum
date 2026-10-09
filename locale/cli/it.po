@@ -1661,6 +1661,15 @@ msgstr ""
 "d'ambiente al suo posto."
 
 #, python-brace-format
+msgctxt "config.renamed_value"
+msgid ""
+"{variable}={old} is now called {value}; write {assignment} in the "
+"environment file in its place."
+msgstr ""
+"{variable}={old} ora si chiama {value}; scrivi {assignment} nel file "
+"d'ambiente al suo posto."
+
+#, python-brace-format
 msgctxt "config.required"
 msgid "{variable} is required."
 msgstr "{variable} è obbligatoria."
@@ -2081,6 +2090,40 @@ msgstr "impostazioni: ogni account di questo host può leggere {file}, segreti c
 msgctxt "doctor.settings_shell"
 msgid "settings: {environment}, from the shell's environment"
 msgstr "impostazioni: {environment}, dall'ambiente della shell"
+
+#, python-brace-format
+msgctxt "doctor.size_cache"
+msgid "{count} cache entries a process"
+msgstr "{count} voci di cache per processo"
+
+#, python-brace-format
+msgctxt "doctor.size_web"
+msgid "{count} web processes"
+msgstr "{count} processi web"
+
+msgctxt "doctor.size_web_one"
+msgid "1 web process"
+msgstr "1 processo web"
+
+#, python-brace-format
+msgctxt "doctor.sized"
+msgid "sized for {cpus} CPUs, {memory}: {sizes}"
+msgstr "dimensionato per {cpus} CPU, {memory}: {sizes}"
+
+#, python-brace-format
+msgctxt "doctor.sized_cpus_only"
+msgid "sized for {cpus} CPUs: {sizes}"
+msgstr "dimensionato per {cpus} CPU: {sizes}"
+
+#, python-brace-format
+msgctxt "doctor.sized_one_cpu"
+msgid "sized for 1 CPU, {memory}: {sizes}"
+msgstr "dimensionato per 1 CPU, {memory}: {sizes}"
+
+#, python-brace-format
+msgctxt "doctor.sized_one_cpu_cpus_only"
+msgid "sized for 1 CPU: {sizes}"
+msgstr "dimensionato per 1 CPU: {sizes}"
 
 #, python-brace-format
 msgctxt "doctor.timer_failed"

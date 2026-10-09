@@ -119,6 +119,13 @@ const my @UPGRADE_CHECKS => qw(dependencies database services);
 # The account the service files run GPForum as.
 const my $ACCOUNT => 'gpforum';
 
+# Memory in the units an operator reads it in: tenths of a gigabyte below
+# ten, whole ones above, megabytes below one.
+const my $MEGABYTE        => 1_024**2;
+const my $GIGABYTE        => 1_024**3;
+const my $WHOLE_GIGABYTES => 10;
+const my $HALF            => 0.5;
+
 # What each check asks of the host, by name. A test replaces any of them
 # through probes.
 const my %PROBE => (
@@ -133,6 +140,7 @@ const my %PROBE => (
     preflight    => \&_probe_preflight,
     readiness    => \&_probe_readiness,
     schema       => \&_probe_schema,
+    sizing       => \&_probe_sizing,
     tls          => \&_probe_tls,
 );
 
@@ -258,6 +266,7 @@ sub settings ( $self, $environment, $findings ) {
           ]
         : [ 'doctor.settings_shell', { environment => $config->environment } ],
     );
+    $self->_sizing( $findings, $config );
     $self->_open_file( $findings, $host );
     for my $variable ( @{ $config->retired_settings } ) {
         $findings->add(
@@ -284,39 +293,95 @@ sub settings ( $self, $environment, $findings ) {
 
 # A setting the environment still names by its old name is read, and the
 # start logs the line that replaces it (Bootstrap::Config); doctor says the
-# same, with the old line to remove, as it does for a retired setting.
+# same, with the old line to remove, as it does for a retired setting. An
+# old value -- GPFORUM_ENV=production-medium -- is fixed by the line that
+# replaces it, where it is set.
 sub _renamed ( $self, $findings, $config, $host ) {
     for my $renamed ( @{ $config->renamed_settings } ) {
         my $variable = $renamed->{variable};
+        my $message  = GPForum::Config::Report->renamed($renamed);
+        my $fix =
+          defined $renamed->{old}
+          ? $self->_set_fix( $host, $variable, $message )
+          : $self->_from_shell($variable) ? "unset $variable"
+          : [
+            'doctor.fix_remove',
+            {
+                variable => $variable,
+                file     => $self->file // $host->settings_file
+            }
+          ];
         $findings->add(
             name    => 'settings',
             status  => 'degraded',
-            message => [
-                'config.renamed',
-                {
-                    variable    => $variable,
-                    replacement => $renamed->{replacement},
-                    assignment  => GPForum::Config::Report->assignment(
-                        $renamed->{replacement},
-                        $renamed->{value} // q{}
-                    ),
-                }
-            ],
-            fixes => [
-                $self->_from_shell($variable)
-                ? "unset $variable"
-                : [
-                    'doctor.fix_remove',
-                    {
-                        variable => $variable,
-                        file     => $self->file // $host->settings_file
-                    }
-                ]
-            ],
+            message => $message,
+            fixes   => [$fix],
         );
     }
 
     return;
+}
+
+sub _set_fix ( $self, $host, $variable, $message ) {
+    return [
+        'doctor.fix_set',
+        {
+            assignment => $message->[1]{assignment},
+            where      => $self->_where( $host, $variable ),
+        }
+    ];
+}
+
+# How the node is sized for this host: its CPUs and memory, and the web
+# processes and cache it runs at their size (audit D1'). Nothing when the
+# operator set both.
+sub _sizing ( $self, $findings, $config ) {
+    my $sizing = $self->_probe( 'sizing', $config );
+    my $sizes  = $sizing->{sizes};
+    my @parts;
+    if ( defined( my $web = $sizes->{web_processes} ) ) {
+        push @parts,
+          $self->catalog->text(
+            $web == 1 ? 'doctor.size_web_one' : 'doctor.size_web',
+            { count => $web } );
+    }
+    if ( defined( my $cache = $sizes->{local_cache_max_entries} ) ) {
+        push @parts,
+          $self->catalog->text( 'doctor.size_cache', { count => $cache } );
+    }
+    return if !@parts;
+
+    my $cpus = $sizing->{cpus} || 1;
+    my $key =
+        'doctor.sized'
+      . ( $cpus == 1                      ? '_one_cpu' : q{} )
+      . ( defined $sizing->{memory_bytes} ? q{}        : '_cpus_only' );
+    $findings->add(
+        name    => 'settings',
+        status  => 'ok',
+        message => [
+            $key,
+            {
+                cpus   => $cpus,
+                memory => _memory( $sizing->{memory_bytes} ),
+                sizes  => join( q{, }, @parts ),
+            }
+        ],
+    );
+
+    return;
+}
+
+# Memory as an operator reads it: 512 MB, 3.8 GB, 64 GB.
+sub _memory ($bytes) {
+    return q{} if !defined $bytes;
+
+    my $gigabytes = $bytes / $GIGABYTE;
+    return sprintf '%d MB', $bytes / $MEGABYTE if $gigabytes < 1;
+    return sprintf( '%.1f', $gigabytes ) =~ s/[.]0 \z//rmsx . ' GB'
+      if $gigabytes < $WHOLE_GIGABYTES;
+
+    return sprintf '%d GB', $gigabytes + $HALF;
 }
 
 # A deployed host's environment file holds its secrets, so every account on
@@ -907,6 +972,10 @@ sub _probe_preflight ( $self, $config ) {
     )->report;
 }
 
+sub _probe_sizing ( $self, $config ) {
+    return $config->sizing;
+}
+
 sub _probe_database ( $self, $config ) {
     my $schema = GPForum::Schema->connect_from_config($config);
     my ($version) =
@@ -1117,9 +1186,10 @@ L<GPForum::Service::Operations::Findings>:
 
 Every problem the service would refuse to start with, each with the
 variable, the file and what to set or run (C<gpforum secret rotate> for a
-missing secret); a retired setting as a warning, and, deployed, an
-environment file every account on the host can read. With a problem here
-the other checks wait.
+missing secret); a retired setting, or an old name or value, as a warning
+with the line to write; what the host's CPUs and memory size the node for;
+and, deployed, an environment file every account on the host can read.
+With a problem here the other checks wait.
 
 =item the host
 
@@ -1216,7 +1286,8 @@ The L<GPForum::OS> the fixes are written for; this host's by default.
 A hash reference of code references that replace what a check asks of the
 host -- C<database>, C<schema>, C<budgets>, C<readiness>, C<preflight>,
 C<outbox>, C<mail>, C<antivirus>, C<address>, C<dependencies>, C<tls>
-(whether this Perl can speak TLS to an SMTP server) -- and C<now>, the
+(whether this Perl can speak TLS to an SMTP server), C<sizing> (the
+configuration's L<GPForum::Config/sizing>) -- and C<now>, the
 clock; each is given the doctor and what the check
 passes it. For tests.
 
@@ -1228,9 +1299,12 @@ Runs the checks. Returns C<{ findings, config, waiting }>.
 
 Takes an environment hash reference and a findings list; adds the settings'
 findings -- each problem the service's start would refuse, TLS to an SMTP
-server this Perl cannot speak among them, and a warning for each retired
-setting and each old name still set -- and returns the configuration, or
-undef when it cannot be used.
+server this Perl cannot speak among them; a warning for each retired
+setting and each old name or old value still set, with the line that
+replaces it; and, when they are fine, what the node is sized for on this
+host ("sized for 2 CPUs, 2 GB: 4 web processes, 4096 cache entries a
+process") -- and returns the configuration, or undef when it cannot be
+used.
 
 =head2 settings_problems
 
