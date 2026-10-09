@@ -1,0 +1,13 @@
+% my $dialog_id = stash('dialog_id') || 'dialog';
+% my $heading_id = stash('heading_id') || $dialog_id . '-heading';
+% my $component_title = stash('component_title') || q{};
+% my $description = stash('description') || q{};
+
+<section id="<%= $dialog_id %>" class="ui-dialog" role="dialog" aria-modal="true" aria-labelledby="<%= $heading_id %>" hidden>
+  <div class="ui-dialog__panel">
+    <h2 id="<%= $heading_id %>"><%= $component_title %></h2>
+    % if (length $description) {
+      <p><%= $description %></p>
+    % }
+  </div>
+</section>

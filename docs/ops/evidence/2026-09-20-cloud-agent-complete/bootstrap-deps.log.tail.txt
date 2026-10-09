@@ -1,0 +1,152 @@
+bootstrap-deps: system perl -> /usr/bin/perl
+bootstrap-deps: using pg_config -> /usr/bin/pg_config
+bootstrap-deps: PERL_CARTON_MIRROR=https://cpan.metacpan.org/
+bootstrap-deps: running carton install --deployment
+Installing modules using /workspace/cpanfile (deployment mode)
+Successfully installed Exporter-Tiny-1.006003
+Successfully installed Type-Tiny-2.010001
+Successfully installed Module-Build-0.4234
+Successfully installed Try-Tiny-0.32
+Successfully installed Module-Runtime-0.018
+Successfully installed Module-Implementation-0.09
+Successfully installed List-SomeUtils-XS-0.59
+Successfully installed List-SomeUtils-0.59
+Successfully installed B-Keywords-1.29
+Successfully installed File-ShareDir-Install-0.14
+Successfully installed Term-Table-0.028
+Successfully installed Test-Simple-1.302225 (upgraded from 1.302194)
+Successfully installed Lingua-EN-Inflect-1.905
+Successfully installed Class-Inspector-1.36
+Successfully installed File-ShareDir-1.118
+Successfully installed Class-Tiny-1.008
+Successfully installed Pod-Spell-1.27
+Successfully installed Pod-Parser-1.67
+Successfully installed Params-Util-1.102
+Successfully installed Clone-0.50
+Successfully installed YAML-PP-v0.41.0
+Successfully installed Safe-Isa-1.000010
+Successfully installed Task-Weaken-1.06
+Successfully installed PPI-1.291
+Successfully installed Config-Tiny-2.30
+Successfully installed PPIx-Regexp-0.092
+Successfully installed ExtUtils-Helpers-0.028
+Successfully installed ExtUtils-Config-0.010
+Successfully installed ExtUtils-InstallPaths-0.015
+Successfully installed Module-Build-Tiny-0.053
+Successfully installed Readonly-2.05
+Successfully installed String-Format-1.18
+Successfully installed PPIx-Utils-0.004
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.lastuseddate#PS'
+Successfully installed Class-Data-Inheritable-0.10
+Successfully installed Devel-StackTrace-2.05
+Successfully installed Exception-Class-1.45
+Successfully installed Perl-Tidy-20260826
+Successfully installed File-Which-1.27
+Successfully installed Module-Pluggable-6.4
+Successfully installed PPIx-QuoteLike-0.024
+Successfully installed Perl-Critic-1.156
+Successfully installed Log-Any-1.720
+Successfully installed Cpanel-JSON-XS-4.52
+Successfully installed YAML-LibYAML-v0.910.0
+Successfully installed Mojolicious-9.49
+Successfully installed Minion-12.0
+Successfully installed Email-Date-Format-1.008
+Successfully installed Email-Simple-2.218
+Successfully installed MRO-Compat-0.15
+Successfully installed Email-Abstract-3.010
+Successfully installed Email-Address-XS-1.05
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+/usr/bin/tar: Ignoring unknown extended header keyword 'LIBARCHIVE.xattr.com.apple.provenance'
+Successfully installed Params-SomeUtil-1.11
+Successfully installed Sub-Install-0.929
+Successfully installed Data-OptList-0.115
+Successfully installed Sub-Exporter-0.992
+Successfully installed MooX-Types-MooseLike-0.29
+Successfully installed Sub-Quote-2.006009
+Successfully installed Role-Tiny-2.002005
+Successfully installed Class-Method-Modifiers-2.15
+Successfully installed Moo-2.005005
+Successfully installed Throwable-1.001
+Successfully installed Email-Sender-2.601
+Successfully installed MIME-Base32-1.303
+Successfully installed URI-5.37
+Successfully installed IO-HTML-1.004
+Successfully installed LWP-MediaTypes-6.05
+Successfully installed TimeDate-2.35
+Successfully installed HTTP-Date-6.08
+Successfully installed Encode-Locale-1.05
+Successfully installed HTTP-Message-7.04
+Successfully installed HTML-Tagset-3.24
+Successfully installed HTML-Parser-3.85
+Successfully installed Devel-Cover-1.52
+Successfully installed DBI-1.653
+Successfully installed DBD-Pg-3.21.2
+Successfully installed Mojo-SQL-0.02
+Successfully installed Clone-Choose-0.010
+Successfully installed Hash-Merge-0.302
+Successfully installed Test-Deep-1.205
+Successfully installed SQL-Abstract-2.000001
+Successfully installed SQL-Abstract-Pg-1.0
+Successfully installed Mojo-Pg-5.0
+Successfully installed JSON-MaybeXS-1.004008
+Successfully installed Carp-Assert-More-v2.9.0
+Successfully installed Test-LongString-0.17
+Successfully installed WWW-RobotRules-6.03
+Successfully installed HTTP-Negotiate-6.01
+Successfully installed File-Listing-6.16
+Successfully installed HTTP-Cookies-6.12
+Successfully installed Net-HTTP-6.24
+Successfully installed libwww-perl-6.83
+Successfully installed HTML-Form-6.13
+Successfully installed Test-Fatal-0.019
+Successfully installed HTML-Tree-5.07
+Successfully installed WWW-Mechanize-2.22
+Successfully installed Test-WWW-Mechanize-1.60
+Successfully installed Module-Find-0.17
+Successfully installed Config-Any-0.33
+Successfully installed Dist-CheckConflicts-0.11
+Successfully installed Package-Stash-XS-0.30
+Successfully installed Package-Stash-0.40
+Successfully installed Algorithm-C3-0.11
+Successfully installed Class-C3-0.35
+Successfully installed Class-C3-Componentised-1.001002
+Successfully installed Sub-Name-0.28
+Successfully installed DBD-SQLite-1.78

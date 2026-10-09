@@ -1,0 +1,16 @@
+[Unit]
+Description=Daily GPForum partition window run
+
+[Timer]
+# Daily against a lookahead of three months: a month of missed runs still
+# leaves two ahead, where /health/ready's partition_horizon check warns at 45 days.
+OnCalendar=daily
+# A host that was down at midnight runs it at boot.
+Persistent=true
+# Nodes sharing the database do not all ask for the advisory lock at once.
+RandomizedDelaySec=1h
+AccuracySec=1min
+Unit=gpforum-partition-maintenance.service
+
+[Install]
+WantedBy=timers.target

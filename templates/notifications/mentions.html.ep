@@ -1,0 +1,48 @@
+% layout 'default';
+% title t('nav.mentions') . ' - ' . t('app.name');
+
+<section aria-labelledby="mentions-heading">
+  <%= include 'components/page_header', heading_id => 'mentions-heading', component_title => t('nav.mentions') %>
+  % if (@{$mentions}) {
+    <ol class="ui-card-list" aria-label="<%= t('mentions.list_label') %>">
+      % for my $mention (@{$mentions}) {
+        % my $presentation = $mention->{presentation} || {};
+        % my $is_thread = ($mention->{source_type} || q{}) eq 'thread';
+        % my $thread_id = $is_thread ? $mention->{source_id} : $mention->{thread_id};
+        <li class="ui-card-list__item ui-row">
+          <article aria-labelledby="mention-<%= $mention->{mention_id} %>-heading">
+            <h2 class="ui-row__title" id="mention-<%= $mention->{mention_id} %>-heading">
+              % if ($thread_id) {
+                <a href="<%= ui_path('thread', thread_id => $thread_id) %><%= $is_thread ? q{} : '#post-' . $mention->{source_id} %>"><%= $mention->{thread_title} // $presentation->{action_label} || t('mentions.open_discussion') %></a>
+              % } else {
+                <%= t('mentions.source') %> <%= $mention->{source_type} %> <%= $mention->{source_id} %>
+              % }
+            </h2>
+            % if (!defined $mention->{thread_title} && $presentation->{summary}) {
+              <p><%= $presentation->{summary} %></p>
+            % }
+            <p class="ui-meta">
+              <span>
+                <%= $presentation->{by_label} || t('mentions.by') %>
+                % if ($mention->{actor_username}) {
+                  <a href="<%= ui_path('profile', username => $mention->{actor_username}) %>"><%= $mention->{actor_display_name} || $mention->{actor_profile_label} %></a>
+                % } else {
+                  <%= $mention->{actor_id} %>
+                % }
+              </span>
+              <span>
+                <%= t('mentions.mentioned_at') %>
+                <%= include 'components/timestamp', at => $mention->{created_at} %>
+              </span>
+            </p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state', heading_id => 'mentions-empty-heading', component_title => t('mentions.empty') %>
+  % }
+  % if ($next_cursor) {
+    <%= include 'components/pagination', label => t('mentions.pagination'), items => ui_next_page(href => url_for('mentions')->query(after => $next_cursor), label => t('mentions.older')) %>
+  % }
+</section>

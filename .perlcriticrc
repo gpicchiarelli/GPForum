@@ -1,0 +1,104 @@
+# GPForum Perl::Critic profile.
+#
+# Intent: be deliberately severe. This profile is meant to make architecture
+# drift, clever Perl, unsafe shortcuts, and unreviewed complexity painful early.
+
+severity = brutal
+
+# force = 1 told Perl::Critic to ignore every "## no critic" marker. The tree
+# carries ten of them, each naming one policy, and none had any effect: the
+# only way to accept a violation was the free-form baseline, which records no
+# reason and cannot be reviewed. A reviewed, annotated exemption at the site of
+# the code is strictly better evidence than a line in a list.
+force = 0
+allow-unsafe = 0
+profile-strictness = fatal
+verbose = [%p] %m at %f line %l, column %c. Severity: %s. %e. %r\n
+
+# Measured across the 3,333 subroutines in lib/ before this limit was changed:
+# median 2, mean 2.88, p90 4, p95 5, p99 9, max 17.
+#
+# The previous limit of 5 sat exactly on the 95th percentile, so it did not
+# mark exceptional complexity -- it marked the ordinary tail of a distribution
+# the limit itself had produced. What it bought was not simple code but
+# shredded code: PostStore.pm is 1,348 lines and 96 subroutines, 92 of them
+# private and 64 called from exactly one place, and the same shape is repeated
+# across 36 modules. It also manufactured 442 `my $undefined` declarations,
+# whose only purpose is to return undef from a sub too small to say so.
+#
+# 12 leaves 7 subroutines flagged (0.21%), each a genuine dispatch or
+# classification function worth a second look, and gives a guard-clause chain
+# room to stay in one place. Perl::Critic's own default for this policy is 20.
+[Subroutines::ProhibitExcessComplexity]
+max_mccabe = 12
+
+# Under `use v5.40` (ADR 0117) PPI parses a signature as a signature, and this
+# policy then counts only arguments unpacked from @_: a signature with five
+# parameters no longer trips it, and nothing checks a signature's arity yet.
+# The fourteen subs with five or more signature parameters it had recorded
+# stopped firing and were pruned from the baseline on 2026-10-04; the two
+# entries left are subs that unpack @_.
+[Subroutines::ProhibitManyArgs]
+max_arguments = 4
+
+# Only ever fired on .t files, whose main code is sequential setup by nature.
+[Modules::ProhibitExcessMainComplexity]
+max_mccabe = 12
+
+# PPI 1.291 has no signature support: it tokenizes `sub f ($self, $x)` as a
+# PPI::Token::Prototype, so every one of the 4,678 signatures in lib/ reads as
+# a subroutine prototype and, being prototype-shaped, as a string that "may
+# require interpolation". Neither policy can tell the two apart, and neither
+# offers a way to exempt signatures.
+#
+# Disabling ProhibitSubroutinePrototypes would give up a severity-5 check, so
+# it is replaced rather than dropped: script/architecture-check bans real
+# prototypes directly, and can be precise because a prototype contains only
+# sigil characters while every signature here names at least one variable. The
+# tree contains no real prototypes today and the guard fails if one appears.
+#
+# Since every file declares `use v5.40` (ADR 0117), PPI recognises the
+# signatures feature and stops reading signatures as prototypes, and
+# ProhibitSubroutinePrototypes reports nothing anywhere in the tree. It stays
+# off all the same: under the signatures feature `sub f ($$)` does not
+# compile, so a prototype can only be written as `:prototype($$)`, which the
+# policy does not read.
+# RequireInterpolationOfMetachars still finds 43 genuine strings (SQL $$
+# bodies, Argon2 hashes) and stays off.
+[-Subroutines::ProhibitSubroutinePrototypes]
+[-ValuesAndExpressions::RequireInterpolationOfMetachars]
+
+[Modules::RequireVersionVar]
+
+[TestingAndDebugging::RequireUseStrict]
+
+[TestingAndDebugging::RequireUseWarnings]
+
+# Every file declares `use v5.40;` (ADR 0117). The policy exists to keep code
+# loadable by perls older than 5.8.1, which cannot parse a v-string version;
+# the supported floor is 5.40, and `use v5.40` is the spelling perldoc and the
+# quality program use. Its only alternative, `use 5.040`, says the same thing
+# less readably.
+[-ValuesAndExpressions::ProhibitVersionStrings]
+
+# A sub that has nothing to return says `return undef;` (ADR 0117). The policy
+# wants a bare `return;`, which gives an empty list in list context, and in
+# this tree that would be wrong: hundreds of call sites put the result in a
+# hash (`visibility_floor => _effective_visibility(...)`) or an argument list,
+# where an empty list shifts every pair after it. script/architecture-check's
+# column-reader guard exists because that happened once. `return undef`
+# returns exactly what the `my $undefined; return $undefined;` idiom it
+# replaces returned, without the extra lexical.
+[-Subroutines::ProhibitExplicitReturnUndef]
+
+# UniqueConflict->throw and ->rethrow always croak, so a sub may end in one
+# without a dead `return` after it.
+[Subroutines::RequireFinalReturn]
+terminal_methods = rethrow throw
+
+# DBIx::Class exposes ->all on resultsets. Newer system Perls also recognize
+# a builtin with this name, so a local no-critic annotation is useful there
+# but considered useless on 5.40. Accept the API name on every supported Perl;
+# other builtin homonyms and ineffective annotations are still checked.
+[Subroutines::ProhibitBuiltinHomonyms]
+allow = all

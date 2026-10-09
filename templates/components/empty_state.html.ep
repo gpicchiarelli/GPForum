@@ -1,0 +1,10 @@
+% my $heading_id = stash('heading_id') || 'empty-state-heading';
+% my $component_title = stash('component_title') || t('ui.empty_state');
+% my $description = stash('description') || q{};
+
+<section class="ui-empty-state" aria-labelledby="<%= $heading_id %>">
+  <h2 id="<%= $heading_id %>"><%= $component_title %></h2>
+  % if (length $description) {
+    <p><%= $description %></p>
+  % }
+</section>

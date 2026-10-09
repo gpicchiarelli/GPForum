@@ -1,0 +1,381 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Operations::DeadLetterCheck;
+
+use Const::Fast;
+use GPForum::X::Argument;
+use JSON::MaybeXS qw(encode_json);
+use Mojo::Base -base, -signatures;
+use v5.40;
+
+use GPForum::Service::Operations::DeadLetterCheck::ProbeClock;
+use GPForum::Service::Operations::DeadLetterCheck::ProbeId;
+use GPForum::Service::Operations::DeadLetterCheck::ProbeLetters;
+use GPForum::Service::Operations::DeadLetterCheck::ProbeOutbox;
+use GPForum::Service::Operations::DeadLetterCheck::ProbeRow;
+use GPForum::Service::Operations::DeadLetterCheck::ProbeSchema;
+use GPForum::Service::Operations::DeadLetterCheck::ProbeTransport;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
+use GPForum::Service::Outbox::Dispatcher;
+
+our $VERSION = '0.001';
+
+const my $EXIT_FAILURE    => 1;
+const my $STATUS_PASS     => 'pass';
+const my $STATUS_FAIL     => 'fail';
+const my $PROBE_OUTBOX_ID => 'dead-letter-check-probe';
+const my $PROBE_EVENT_ID  => 'dead-letter-check-event';
+const my $RESIDUAL_BETA =>
+  'This dead-letter check does not claim private-beta readiness by itself.';
+const my $RESIDUAL_LIVE =>
+'Live staging still needs operator confirmation that /admin/jobs shows the review row and that SMTP/TLS/deploy residuals remain separate.';
+const my $RESIDUAL_SIM =>
+'Simulate mode uses an in-memory outbox stack; archive a --live run against staging PostgreSQL before treating dead-letter ops as closed.';
+const my %VALID_MODE => map { $_ => 1 } qw(dry_run simulate);
+
+has dispatcher_factory => undef;    # optional: a test's double
+
+sub run ( $self, $options ) {
+    $options ||= {};
+    my $mode = $options->{mode} // 'simulate';
+    if ( !exists $VALID_MODE{$mode} ) {
+        GPForum::X::Argument->throw(
+            message => "Unsupported dead-letter-check mode: $mode" );
+    }
+
+    my ( $evidence, $failure );
+    try {
+        $evidence = $self->_run_mode( $mode, $options );
+    }
+    catch ($error) {
+        $failure = $error;
+    };
+    if ( !$evidence ) {
+        return evidence_finalize(
+            {
+                check         => 'dead_letter_check',
+                status        => $STATUS_FAIL,
+                mode          => $mode,
+                error         => _trim( $failure // q{} ),
+                residual_gaps =>
+                  [ $RESIDUAL_BETA, $RESIDUAL_LIVE, $RESIDUAL_SIM ],
+            }
+        );
+    }
+
+    return evidence_finalize($evidence);
+}
+
+sub format_evidence ( $self, $evidence, $format ) {
+    $evidence = evidence_finalize( $evidence // {} );
+    $format ||= 'json';
+    return $self->human_text($evidence) if $format eq 'human';
+
+    return encode_json($evidence) . "\n";
+}
+
+sub human_text ( $self, $evidence ) {
+    my @lines = (
+        'dead-letter-check status=' . ( $evidence->{status} // 'fail' ),
+        'mode=' .                     ( $evidence->{mode}   // 'unknown' ),
+    );
+    for my $step ( @{ $evidence->{steps} // [] } ) {
+        push @lines, "step $step->{name}=$step->{status}";
+    }
+    if ( _has_text( $evidence->{error} ) ) {
+        push @lines, 'error=' . $evidence->{error};
+    }
+    for my $gap ( @{ $evidence->{residual_gaps} // [] } ) {
+        push @lines, "residual: $gap";
+    }
+
+    return join( "\n", @lines ) . "\n";
+}
+
+sub exit_status ( $self, $evidence ) {
+    return 0 if ( $evidence->{status} // q{} ) eq $STATUS_PASS;
+
+    return $EXIT_FAILURE;
+}
+
+sub _run_mode ( $self, $mode, $options ) {
+    return $self->_dry_run_evidence if $mode eq 'dry_run';
+
+    return $self->_simulate($options);
+}
+
+sub _dry_run_evidence {
+    return {
+        check  => 'dead_letter_check',
+        status => $STATUS_PASS,
+        mode   => 'dry_run',
+        plan   => {
+            steps => [
+                'force_permanent_failure',
+                'assert_dead_letter_and_cancelled',
+                'redispatch_selected_zero',
+                'fresh_row_survives_retention_cutoff',
+            ],
+        },
+        residual_gaps => [ $RESIDUAL_BETA, $RESIDUAL_LIVE, $RESIDUAL_SIM ],
+    };
+}
+
+sub _simulate ( $self, $options ) {
+    my $stack         = $self->_simulate_stack($options);
+    my $first         = $stack->{dispatcher}->dispatch_pending(1);
+    my $letter_count  = scalar @{ $stack->{dead_letters}->created };
+    my $outbox_status = $stack->{message}->get_column('status') // q{};
+    my $failure_type =
+      ( $stack->{dead_letters}->created->[0]{failure_type} // q{} );
+
+    my @steps = (
+        {
+            name   => 'force_permanent_failure',
+            status => (
+                     ( $first->{dead_lettered} // 0 ) == 1
+                  && ( $first->{failed} // 0 ) == 0
+            ) ? $STATUS_PASS : $STATUS_FAIL,
+            summary => $first,
+        },
+        {
+            name   => 'assert_dead_letter_and_cancelled',
+            status => (
+                     $letter_count == 1
+                  && $outbox_status eq 'cancelled'
+                  && $failure_type eq 'permanent'
+            ) ? $STATUS_PASS : $STATUS_FAIL,
+            dead_letters  => $letter_count,
+            outbox_status => $outbox_status,
+            failure_type  => $failure_type,
+        },
+    );
+
+    my $redispatch = $stack->{dispatcher}->dispatch_pending(1);
+    push @steps,
+      {
+        name   => 'redispatch_selected_zero',
+        status =>
+          ( defined $redispatch->{selected} && $redispatch->{selected} == 0 )
+        ? $STATUS_PASS
+        : $STATUS_FAIL,
+        summary => $redispatch,
+      };
+
+    my $purged =
+      $stack->{dead_letters}->purge_older_than('2020-01-01T00:00:00Z');
+    my $remaining = scalar @{ $stack->{dead_letters}->created };
+    push @steps,
+      {
+        name   => 'fresh_row_survives_retention_cutoff',
+        status => ( $purged == 0 && $remaining == 1 )
+        ? $STATUS_PASS
+        : $STATUS_FAIL,
+        purged    => $purged,
+        remaining => $remaining,
+        note      =>
+'Cutoff in the past must not delete a fresh dead-letter (retention hold).',
+      };
+
+    my $status =
+      ( grep { $_->{status} ne $STATUS_PASS } @steps )
+      ? $STATUS_FAIL
+      : $STATUS_PASS;
+
+    return {
+        check         => 'dead_letter_check',
+        status        => $status,
+        mode          => 'simulate',
+        steps         => \@steps,
+        residual_gaps => [ $RESIDUAL_BETA, $RESIDUAL_LIVE, $RESIDUAL_SIM ],
+    };
+}
+
+sub _simulate_stack ( $self, $options ) {
+    if ( $self->dispatcher_factory ) {
+        return $self->dispatcher_factory->($options);
+    }
+
+    my $message = GPForum::Service::Operations::DeadLetterCheck::ProbeRow->new(
+        data => {
+            outbox_id       => $PROBE_OUTBOX_ID,
+            attempt_count   => 0,
+            status          => 'pending',
+            next_attempt_at => '0000-01-01T00:00:00Z',
+            created_at      => '0000-01-01T00:00:00Z',
+            payload         => { event_id => $PROBE_EVENT_ID },
+        }
+    );
+    my $outbox =
+      GPForum::Service::Operations::DeadLetterCheck::ProbeOutbox->new(
+        rows => [$message], );
+    my $letters =
+      GPForum::Service::Operations::DeadLetterCheck::ProbeLetters->new;
+    my $schema =
+      GPForum::Service::Operations::DeadLetterCheck::ProbeSchema->new(
+        outbox_resultset      => $outbox,
+        dead_letter_resultset => $letters,
+      );
+    my $transport =
+      GPForum::Service::Operations::DeadLetterCheck::ProbeTransport->new(
+        fail_ids   => { $PROBE_OUTBOX_ID => 1 },
+        fail_types => { $PROBE_OUTBOX_ID => 'permanent' },
+      );
+    my $dispatcher = GPForum::Service::Outbox::Dispatcher->new(
+        schema    => $schema,
+        transport => $transport,
+        clock => GPForum::Service::Operations::DeadLetterCheck::ProbeClock->new,
+        id_service =>
+          GPForum::Service::Operations::DeadLetterCheck::ProbeId->new,
+        worker_id    => 'dead-letter-check',
+        max_attempts => 5,
+    );
+
+    return {
+        dispatcher   => $dispatcher,
+        dead_letters => $letters,
+        message      => $message,
+    };
+}
+
+sub _trim ($error) {
+    $error = "$error";
+    $error =~ s/\s+\z//msx;
+
+    return $error;
+}
+
+sub _has_text ($value) {
+    return defined $value && length $value;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::DeadLetterCheck - Operator dead-letter staging check.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $report = GPForum::Service::Operations::DeadLetterCheck->new->run(
+        { mode => 'simulate' }
+    );
+
+=head1 DESCRIPTION
+
+Automates the staging check in F<docs/ops/dead-letters.md> against an
+in-memory dispatcher stack (C<simulate>) or prints the plan (C<dry_run>).
+Emits EvidenceMeta JSON. Does not claim private-beta readiness. This module
+has no live mode: a C<--live> run against staging PostgreSQL remains a
+residual gap.
+
+The C<simulate> stack runs the real L<GPForum::Service::Outbox::Dispatcher>
+against in-memory stand-ins, each its own module under
+C<GPForum::Service::Operations::DeadLetterCheck::>: C<ProbeTransport>,
+C<ProbeRow>, C<ProbeOutbox>, C<ProbeLetters>, C<ProbeSchema>, C<ProbeClock>
+and C<ProbeId>. The transport fails the probe row with a L<GPForum::X>
+declaring the failure type C<permanent>.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes C<< { mode => $mode } >>: C<simulate> (the default) or C<dry_run>.
+C<dry_run> returns C<pass> with the plan of four steps. C<simulate> builds
+the stack -- from C<dispatcher_factory> when set, otherwise one pending
+outbox row whose delivery fails permanently, behind a dispatcher allowed five
+attempts -- and runs the steps:
+
+=over 4
+
+=item force_permanent_failure
+
+The first C<dispatch_pending(1)> dead-letters the row and reports no plain
+failure.
+
+=item assert_dead_letter_and_cancelled
+
+There is exactly one dead letter, of failure type C<permanent>, and the
+outbox row is C<cancelled>.
+
+=item redispatch_selected_zero
+
+A second dispatch selects nothing.
+
+=item fresh_row_survives_retention_cutoff
+
+Purging with a cutoff in the past deletes nothing: the fresh dead letter is
+kept.
+
+=back
+
+The status is C<pass> when every step passes, otherwise C<fail>; an
+exception during the run gives C<fail> with its message in C<error>. The
+result goes through C<evidence_finalize> from
+L<GPForum::Service::Operations::EvidenceMeta>, which marks it redacted, sets
+C<private_beta_claimed> to 0 and de-duplicates C<residual_gaps>.
+
+C<dispatcher_factory>, when given, is called with the options and must return
+C<< { dispatcher, dead_letters, message } >>: a dispatcher with
+C<dispatch_pending>, a dead-letter store with C<created> and
+C<purge_older_than>, and the outbox row with C<get_column>.
+
+=head2 format_evidence
+
+Takes the evidence and a format, finalizes the evidence again, and returns
+L</human_text> for C<human> and one line of JSON for anything else (C<json>
+is the default).
+
+=head2 human_text
+
+Returns the evidence as text: the status, the mode, a line per step, the
+error when there is one, and a line per residual gap.
+
+=head2 exit_status
+
+Returns 0 when the status is C<pass>, otherwise 1.
+
+=head1 DIAGNOSTICS
+
+L</run> throws L<GPForum::X::Argument> C<Unsupported dead-letter-check mode:
+$mode> for any mode other than C<simulate> and C<dry_run>. Any other error during a run is
+reported as C<fail> evidence with an C<error>, not thrown.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. Simulate mode runs in memory and touches no database.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Outbox::Dispatcher>,
+L<GPForum::Service::Operations::EvidenceMeta>,
+L<JSON::MaybeXS>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+Simulate mode runs the real dispatcher against stand-ins, not PostgreSQL:
+the dispatcher takes its portable claim path rather than the PostgreSQL one,
+and the retention step exercises the probe's own C<purge_older_than>. There
+is no live mode.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

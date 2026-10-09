@@ -1,0 +1,2924 @@
+# GPForum messages.
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# Each message's msgctxt is the key the code asks for and its msgid is the
+# English text; msgstr is what a reader of this locale sees.
+# docs/i18n.md describes how to change, check or add a translation.
+msgid ""
+msgstr ""
+"Project-Id-Version: GPForum\n"
+"PO-Revision-Date: 2026-10-03 00:00+0000\n"
+"Last-Translator: Giacomo Picchiarelli\n"
+"Language-Team: Italian\n"
+"Language: it\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "admin.action"
+msgid "Action"
+msgstr "Azione"
+
+# Same as English.
+msgctxt "admin.admin"
+msgid "Admin"
+msgstr "Admin"
+
+# Same as English.
+msgctxt "admin.antivirus"
+msgid "Antivirus"
+msgstr "Antivirus"
+
+msgctxt "admin.antivirus_check_disabled"
+msgid "Upload scanning is off: there was nothing to check."
+msgstr ""
+"L’analisi dei caricamenti è disattivata: non c’era nulla da verificare."
+
+#, python-brace-format
+msgctxt "admin.antivirus_check_hint"
+msgid ""
+"Check the {engine} scanner: the EICAR test file must be detected, and an "
+"ordinary file and one as large as the upload limit must pass."
+msgstr ""
+"Verifica lo scanner {engine}: il file di test EICAR deve essere rilevato, "
+"mentre un file normale e uno grande quanto il limite di caricamento devono "
+"passare."
+
+msgctxt "admin.antivirus_check_last"
+msgid "Last check"
+msgstr "Ultima verifica"
+
+msgctxt "admin.antivirus_check_never"
+msgid "The antivirus has not been checked from the console."
+msgstr "L’antivirus non è ancora stato verificato dalla console."
+
+msgctxt "admin.antivirus_check_passed"
+msgid "Antivirus check passed."
+msgstr "Verifica antivirus superata."
+
+msgctxt "admin.antivirus_check_problem"
+msgid "The antivirus check did not pass. The report is shown under Antivirus."
+msgstr ""
+"La verifica antivirus non è stata superata. Il resoconto è sotto Antivirus."
+
+msgctxt "admin.antivirus_check_shell_only"
+msgid ""
+"This server scans with a command (GPFORUM_ANTIVIRUS=command), which loads "
+"its signatures for every file and takes longer than a web request may. Run "
+"bin/gpforum-antivirus-check on the server instead."
+msgstr ""
+"Questo server analizza i file con un comando (GPFORUM_ANTIVIRUS=command), "
+"che carica le firme per ogni file e impiega più di quanto una richiesta web "
+"possa attendere. Esegui bin/gpforum-antivirus-check sul server."
+
+msgctxt "admin.antivirus_clean"
+msgid "Passed"
+msgstr "Passato"
+
+msgctxt "admin.antivirus_detected"
+msgid "Detected"
+msgstr "Rilevato"
+
+msgctxt "admin.antivirus_disabled"
+msgid ""
+"Upload scanning is off (GPFORUM_ANTIVIRUS=none): uploads are checked for "
+"format only."
+msgstr ""
+"L’analisi dei caricamenti è disattivata (GPFORUM_ANTIVIRUS=none): dei file "
+"si controlla solo il formato."
+
+msgctxt "admin.antivirus_eicar"
+msgid "EICAR test file"
+msgstr "File di test EICAR"
+
+msgctxt "admin.antivirus_engine"
+msgid "Engine"
+msgstr "Motore"
+
+msgctxt "admin.antivirus_health"
+msgid "Health"
+msgstr "Stato"
+
+msgctxt "admin.antivirus_largest"
+msgid "File at the upload limit"
+msgstr "File al limite di caricamento"
+
+msgctxt "admin.antivirus_not_clean"
+msgid "Did not pass"
+msgstr "Non passato"
+
+msgctxt "admin.antivirus_not_detected"
+msgid "Not detected"
+msgstr "Non rilevato"
+
+msgctxt "admin.antivirus_ordinary"
+msgid "Ordinary file"
+msgstr "File normale"
+
+msgctxt "admin.antivirus_problems"
+msgid "Problems"
+msgstr "Problemi"
+
+msgctxt "admin.async_jobs"
+msgid "Async jobs"
+msgstr "Job asincroni"
+
+msgctxt "admin.attach_permission"
+msgid "Attach permission"
+msgstr "Collega permesso"
+
+# Same as English.
+msgctxt "admin.audit"
+msgid "Audit"
+msgstr "Audit"
+
+msgctxt "admin.audit_clear_filters"
+msgid "Clear filters"
+msgstr "Azzera filtri"
+
+msgctxt "admin.audit_filters"
+msgid "Audit filters"
+msgstr "Filtri audit"
+
+msgctxt "admin.audit_from"
+msgid "From (UTC day)"
+msgstr "Dal (giorno UTC)"
+
+msgctxt "admin.audit_invalid_filter"
+msgid "Not a valid value for"
+msgstr "Valore non valido per"
+
+msgctxt "admin.audit_log"
+msgid "Admin audit log"
+msgstr "Log audit admin"
+
+# Same as English.
+msgctxt "admin.audit_metadata"
+msgid "Metadata"
+msgstr "Metadata"
+
+msgctxt "admin.audit_metadata_label"
+msgid "Audit metadata"
+msgstr "Metadata audit"
+
+msgctxt "admin.audit_older"
+msgid "Older entries"
+msgstr "Voci più vecchie"
+
+msgctxt "admin.audit_summary"
+msgid "Admin audit summary"
+msgstr "Riepilogo audit admin"
+
+msgctxt "admin.audit_until"
+msgid "Until (UTC day)"
+msgstr "Al (giorno UTC)"
+
+msgctxt "admin.benchmark_evidence"
+msgid "Benchmark evidence"
+msgstr "Evidenza benchmark"
+
+msgctxt "admin.benchmark_status"
+msgid "Benchmark status"
+msgstr "Stato benchmark"
+
+msgctxt "admin.bind_role"
+msgid "Bind role"
+msgstr "Associa ruolo"
+
+msgctxt "admin.cache_purge_hint"
+msgid ""
+"Drop every cached public page. Each is rendered again on its next visit; "
+"nothing is lost."
+msgstr ""
+"Scarta ogni pagina pubblica in cache. Ciascuna viene ricreata alla visita "
+"successiva; non si perde nulla."
+
+msgctxt "admin.cache_purged"
+msgid "Public page cache purged."
+msgstr "Cache delle pagine pubbliche svuotata."
+
+#, python-brace-format
+msgctxt "admin.cache_purged_locally"
+msgid ""
+"Public page cache purged in the web processes only: the shared cache was "
+"unreachable, so its entries expire within their TTL. Not reached: {tags}."
+msgstr ""
+"Cache delle pagine pubbliche svuotata solo nei processi web: la cache "
+"condivisa non era raggiungibile, le sue voci scadono entro il loro TTL. Non "
+"raggiunti: {tags}."
+
+msgctxt "admin.categories"
+msgid "Categories"
+msgstr "Categorie"
+
+msgctxt "admin.category_created"
+msgid "Category created"
+msgstr "Categoria creata"
+
+msgctxt "admin.category_list"
+msgid "Admin category list"
+msgstr "Elenco categorie admin"
+
+msgctxt "admin.category_updated"
+msgid "Category updated"
+msgstr "Categoria aggiornata"
+
+msgctxt "admin.configuration"
+msgid "Configuration"
+msgstr "Configurazione"
+
+msgctxt "admin.configured_command"
+msgid "Configured command"
+msgstr "Comando configurato"
+
+msgctxt "admin.create_category"
+msgid "Create category"
+msgstr "Crea categoria"
+
+msgctxt "admin.create_permission"
+msgid "Create permission"
+msgstr "Crea permesso"
+
+msgctxt "admin.create_role"
+msgid "Create role"
+msgstr "Crea ruolo"
+
+msgctxt "admin.dead_letter_list"
+msgid "Admin dead-letter list"
+msgstr "Elenco dead-letter admin"
+
+msgctxt "admin.dead_letter_replay_hint"
+msgid ""
+"Once the cause is fixed, queue the work again as a new message. The failed "
+"message and this record stay as they are."
+msgstr ""
+"Risolta la causa, rimetti in coda il lavoro come nuovo messaggio. Il "
+"messaggio fallito e questo record restano come sono."
+
+# Same as English.
+msgctxt "admin.dead_letter_replay_status"
+msgid "Replay"
+msgstr "Replay"
+
+msgctxt "admin.dead_letter_replayed"
+msgid "Dead letter replayed: its work is queued again."
+msgstr "Dead letter rimessa in coda: il lavoro è di nuovo in coda."
+
+msgctxt "admin.dead_letters"
+msgid "Dead letters"
+msgstr "Dead letter"
+
+msgctxt "admin.description"
+msgid "Description"
+msgstr "Descrizione"
+
+msgctxt "admin.diagnostics_unavailable"
+msgid "The mail and antivirus status is unavailable."
+msgstr "Lo stato di posta e antivirus non è disponibile."
+
+msgctxt "admin.display_name"
+msgid "Display name"
+msgstr "Nome pubblico"
+
+# Same as English.
+msgctxt "admin.email"
+msgid "Email"
+msgstr "Email"
+
+# Same as English.
+msgctxt "admin.endpoint"
+msgid "Endpoint"
+msgstr "Endpoint"
+
+msgctxt "admin.error"
+msgid "Error"
+msgstr "Errore"
+
+msgctxt "admin.failure_type"
+msgid "Failure type"
+msgstr "Tipo di errore"
+
+msgctxt "admin.fixture_command"
+msgid "Fixture command"
+msgstr "Comando fixture"
+
+msgctxt "admin.health_runtime"
+msgid "Health and runtime"
+msgstr "Salute e runtime"
+
+msgctxt "admin.jobs_nav"
+msgid "Admin jobs"
+msgstr "Job admin"
+
+msgctxt "admin.last_error"
+msgid "Last error"
+msgstr "Ultimo errore"
+
+msgctxt "admin.last_failed"
+msgid "Last failed"
+msgstr "Ultimo fallimento"
+
+msgctxt "admin.mail"
+msgid "Mail"
+msgstr "Posta"
+
+msgctxt "admin.mail_test_failed"
+msgid "The test message could not be sent. The error is shown under Mail."
+msgstr ""
+"Non è stato possibile inviare il messaggio di prova. L’errore è indicato "
+"sotto Posta."
+
+#, python-brace-format
+msgctxt "admin.mail_test_hint"
+msgid ""
+"Send one test message to your own address, {address}, through the "
+"{transport} transport. It is never sent to any other address."
+msgstr ""
+"Invia un messaggio di prova al tuo indirizzo, {address}, con il trasporto "
+"{transport}. Non viene mai inviato ad altri indirizzi."
+
+msgctxt "admin.mail_test_last"
+msgid "Last test message"
+msgstr "Ultimo messaggio di prova"
+
+msgctxt "admin.mail_test_never"
+msgid "No test message has been sent from the console."
+msgstr "Dalla console non è ancora stato inviato alcun messaggio di prova."
+
+msgctxt "admin.mail_test_no_address"
+msgid ""
+"Your account has no email address, so there is nowhere to send a test "
+"message."
+msgstr ""
+"Il tuo account non ha un indirizzo email, quindi non c’è dove inviare un "
+"messaggio di prova."
+
+msgctxt "admin.mail_test_sent"
+msgid "Test message sent to your address."
+msgstr "Messaggio di prova inviato al tuo indirizzo."
+
+msgctxt "admin.mail_test_transport_note"
+msgid ""
+"The test transport keeps messages in memory: a test reports success, but "
+"nothing leaves this server."
+msgstr ""
+"Il trasporto di test tiene i messaggi in memoria: la prova riesce, ma nulla "
+"esce da questo server."
+
+msgctxt "admin.mail_transport"
+msgid "Transport"
+msgstr "Trasporto"
+
+msgctxt "admin.maintenance"
+msgid "Maintenance"
+msgstr "Manutenzione"
+
+msgctxt "admin.mode"
+msgid "Mode"
+msgstr "Modo"
+
+msgctxt "admin.moderation_summary"
+msgid "Admin moderation summary"
+msgstr "Riepilogo moderazione admin"
+
+msgctxt "admin.name"
+msgid "Name"
+msgstr "Nome"
+
+msgctxt "admin.next_attempt"
+msgid "Next attempt"
+msgstr "Prossimo tentativo"
+
+msgctxt "admin.no_audit_rows"
+msgid "No audit rows are available."
+msgstr "Nessuna riga audit disponibile."
+
+msgctxt "admin.no_audit_rows_match"
+msgid "No audit rows match this view."
+msgstr "Nessuna riga audit corrisponde alla vista."
+
+msgctxt "admin.no_categories"
+msgid "No categories have been defined."
+msgstr "Nessuna categoria definita."
+
+msgctxt "admin.no_dead_letters"
+msgid "No dead letters are available."
+msgstr "Nessuna dead letter disponibile."
+
+msgctxt "admin.no_open_reports"
+msgid "No open moderation reports."
+msgstr "Nessuna segnalazione aperta."
+
+msgctxt "admin.no_outbox"
+msgid "No outbox messages match this view."
+msgstr "Nessun messaggio outbox corrisponde a questa vista."
+
+msgctxt "admin.no_permissions"
+msgid "No permissions have been defined."
+msgstr "Nessun permesso definito."
+
+msgctxt "admin.no_query_budget"
+msgid "No query budget catalog is available."
+msgstr "Nessun catalogo query budget disponibile."
+
+msgctxt "admin.no_role_bindings"
+msgid "No active role bindings for this user."
+msgstr "Nessuna associazione ruolo attiva per questo utente."
+
+msgctxt "admin.no_roles"
+msgid "No roles have been defined."
+msgstr "Nessun ruolo definito."
+
+msgctxt "admin.no_users"
+msgid "No users match this view."
+msgstr "Nessun utente corrisponde alla vista."
+
+msgctxt "admin.observed_requests"
+msgid "Observed requests"
+msgstr "Richieste osservate"
+
+# Same as English.
+msgctxt "admin.outbox"
+msgid "Outbox"
+msgstr "Outbox"
+
+msgctxt "admin.outbox_list"
+msgid "Admin outbox list"
+msgstr "Elenco outbox admin"
+
+msgctxt "admin.outbox_pending"
+msgid "Outbox pending"
+msgstr "Outbox in attesa"
+
+msgctxt "admin.outbox_rows"
+msgid "Outbox rows"
+msgstr "Righe outbox"
+
+msgctxt "admin.outbox_status"
+msgid "Outbox status"
+msgstr "Stato outbox"
+
+msgctxt "admin.permission_created"
+msgid "Permission created"
+msgstr "Permesso creato"
+
+msgctxt "admin.permission_list"
+msgid "Admin permission list"
+msgstr "Elenco permessi admin"
+
+msgctxt "admin.permissions"
+msgid "Permissions"
+msgstr "Permessi"
+
+msgctxt "admin.position"
+msgid "Position"
+msgstr "Posizione"
+
+msgctxt "admin.privacy_review"
+msgid "Privacy review"
+msgstr "Revisione privacy"
+
+msgctxt "admin.purge_cache"
+msgid "Purge page cache"
+msgstr "Svuota la cache delle pagine"
+
+#, python-brace-format
+msgctxt "admin.queries"
+msgid "{count} queries"
+msgstr "{count} query"
+
+# Same as English.
+msgctxt "admin.query_budget"
+msgid "Query budget"
+msgstr "Query budget"
+
+msgctxt "admin.query_budget_drift"
+msgid "Query budget drift"
+msgstr "Drift query budget"
+
+msgctxt "admin.query_budget_list"
+msgid "Admin query budget list"
+msgstr "Elenco query budget admin"
+
+msgctxt "admin.query_budgets"
+msgid "Query budgets"
+msgstr "Query budget"
+
+msgctxt "admin.queue"
+msgid "Queue"
+msgstr "Coda"
+
+# Same as English.
+msgctxt "admin.readiness"
+msgid "Readiness"
+msgstr "Readiness"
+
+msgctxt "admin.readiness_checks"
+msgid "Admin readiness checks"
+msgstr "Controlli readiness admin"
+
+msgctxt "admin.rebuild_search"
+msgid "Rebuild search index"
+msgstr "Ricostruisci l’indice di ricerca"
+
+msgctxt "admin.replay_dead_letter"
+msgid "Replay"
+msgstr "Rimetti in coda"
+
+msgctxt "admin.resource_id"
+msgid "Resource id"
+msgstr "ID risorsa"
+
+msgctxt "admin.resource_type"
+msgid "Resource type"
+msgstr "Tipo risorsa"
+
+msgctxt "admin.retries"
+msgid "Retries"
+msgstr "Retry"
+
+msgctxt "admin.revoke_binding_consequence"
+msgid "The user loses this role's permissions immediately."
+msgstr "L’utente perde subito i permessi di questo ruolo."
+
+msgctxt "admin.revoke_role_binding"
+msgid "Revoke role binding"
+msgstr "Revoca associazione ruolo"
+
+msgctxt "admin.revoked"
+msgid "Revoked"
+msgstr "Revocato"
+
+msgctxt "admin.role"
+msgid "Role"
+msgstr "Ruolo"
+
+msgctxt "admin.role_binding_revoked"
+msgid "Role binding revoked"
+msgstr "Assegnazione ruolo revocata"
+
+msgctxt "admin.role_bound"
+msgid "Role bound"
+msgstr "Ruolo assegnato"
+
+msgctxt "admin.role_created"
+msgid "Role created"
+msgstr "Ruolo creato"
+
+msgctxt "admin.role_id"
+msgid "Role id"
+msgstr "ID ruolo"
+
+msgctxt "admin.role_list"
+msgid "Admin role list"
+msgstr "Elenco ruoli admin"
+
+msgctxt "admin.role_permission_attached"
+msgid "Permission attached to role"
+msgstr "Permesso collegato al ruolo"
+
+msgctxt "admin.role_summary"
+msgid "Admin role summary"
+msgstr "Riepilogo ruoli admin"
+
+msgctxt "admin.roles"
+msgid "Roles"
+msgstr "Ruoli"
+
+msgctxt "admin.run_antivirus_check"
+msgid "Run antivirus check"
+msgstr "Esegui la verifica antivirus"
+
+# Same as English.
+msgctxt "admin.runtime"
+msgid "Runtime"
+msgstr "Runtime"
+
+msgctxt "admin.save_category"
+msgid "Save category"
+msgstr "Salva categoria"
+
+msgctxt "admin.scope"
+msgid "Scope"
+msgstr "Ambito"
+
+msgctxt "admin.search_index"
+msgid "Search index"
+msgstr "Indice di ricerca"
+
+msgctxt "admin.search_last_rebuild"
+msgid "Last rebuild"
+msgstr "Ultima ricostruzione"
+
+msgctxt "admin.search_never_rebuilt"
+msgid "Never rebuilt from the console"
+msgstr "Mai ricostruito dalla console"
+
+msgctxt "admin.search_oldest_pending"
+msgid "Waiting since"
+msgstr "In attesa da"
+
+#, python-brace-format
+msgctxt "admin.search_pending"
+msgid "{count} event waiting"
+msgid_plural "{count} events waiting"
+msgstr[0] "{count} evento in attesa"
+msgstr[1] "{count} eventi in attesa"
+
+msgctxt "admin.search_rebuild_hint"
+msgid ""
+"Index every thread and post again, in the background, and remove documents "
+"whose source is gone. Safe while the forum serves."
+msgstr ""
+"Indicizza di nuovo ogni discussione e post, in background, e rimuove i "
+"documenti la cui origine non c’è più. Sicuro con il forum in funzione."
+
+msgctxt "admin.search_rebuild_requested"
+msgid "Search rebuild started: it runs in the background."
+msgstr "Ricostruzione della ricerca avviata: procede in background."
+
+#, python-brace-format
+msgctxt "admin.search_rebuild_totals"
+msgid "{indexed} indexed, {unchanged} unchanged, {pruned} removed"
+msgstr "{indexed} indicizzati, {unchanged} invariati, {pruned} rimossi"
+
+msgctxt "admin.search_status_unavailable"
+msgid "The search status is unavailable."
+msgstr "Lo stato della ricerca non è disponibile."
+
+msgctxt "admin.send_test_mail"
+msgid "Send test message"
+msgstr "Invia messaggio di prova"
+
+msgctxt "admin.setting"
+msgid "Variable"
+msgstr "Variabile"
+
+msgctxt "admin.setting_empty"
+msgid "(empty)"
+msgstr "(vuoto)"
+
+#, python-brace-format
+msgctxt "admin.setting_secret_count"
+msgid "{count} set (hidden)"
+msgid_plural "{count} set (hidden)"
+msgstr[0] "{count} impostato (nascosto)"
+msgstr[1] "{count} impostati (nascosti)"
+
+msgctxt "admin.setting_secret_set"
+msgid "Set (hidden)"
+msgstr "Impostato (nascosto)"
+
+msgctxt "admin.setting_secret_unset"
+msgid "Not set"
+msgstr "Non impostato"
+
+msgctxt "admin.setting_source"
+msgid "Source"
+msgstr "Origine"
+
+msgctxt "admin.setting_source_default"
+msgid "Default"
+msgstr "Predefinito"
+
+msgctxt "admin.setting_source_environment"
+msgid "Environment"
+msgstr "Ambiente"
+
+msgctxt "admin.setting_value"
+msgid "Value"
+msgstr "Valore"
+
+msgctxt "admin.settings"
+msgid "Settings and diagnostics"
+msgstr "Impostazioni e diagnostica"
+
+#, python-brace-format
+msgctxt "admin.settings_change"
+msgid ""
+"To change a setting, edit {file} (on FreeBSD, {freebsd_file}) and restart "
+"the service with {restart}. This page then shows the new value."
+msgstr ""
+"Per cambiare un’impostazione modifica {file} (su FreeBSD, {freebsd_file}) e "
+"riavvia il servizio con {restart}. La pagina mostrerà poi il nuovo valore."
+
+msgctxt "admin.settings_intro"
+msgid ""
+"The configuration this process is running with. It comes from the service "
+"environment, not from the database, so it is read-only here."
+msgstr ""
+"La configurazione con cui gira questo processo. Viene dall’ambiente del "
+"servizio, non dal database, perciò qui è in sola lettura."
+
+msgctxt "admin.settings_nav"
+msgid "Settings sections"
+msgstr "Sezioni delle impostazioni"
+
+msgctxt "admin.settings_secret_note"
+msgid "Secrets are never shown, not even in part: only whether they are set."
+msgstr ""
+"I segreti non sono mai mostrati, nemmeno in parte: solo se sono impostati."
+
+# Same as English.
+msgctxt "admin.settings_section_antivirus"
+msgid "Antivirus"
+msgstr "Antivirus"
+
+msgctxt "admin.settings_section_application"
+msgid "Application"
+msgstr "Applicazione"
+
+# Same as English.
+msgctxt "admin.settings_section_cache"
+msgid "Cache"
+msgstr "Cache"
+
+# Same as English.
+msgctxt "admin.settings_section_database"
+msgid "Database"
+msgstr "Database"
+
+msgctxt "admin.settings_section_jobs"
+msgid "Background jobs"
+msgstr "Job in background"
+
+msgctxt "admin.settings_section_mail"
+msgid "Mail"
+msgstr "Posta"
+
+msgctxt "admin.settings_section_operating_system"
+msgid "Operating system"
+msgstr "Sistema operativo"
+
+msgctxt "admin.settings_section_processes"
+msgid "Processes and runtime"
+msgstr "Processi e runtime"
+
+msgctxt "admin.settings_section_realtime"
+msgid "Realtime"
+msgstr "Tempo reale"
+
+msgctxt "admin.settings_section_search"
+msgid "Search"
+msgstr "Ricerca"
+
+msgctxt "admin.settings_section_security"
+msgid "Sessions and tokens"
+msgstr "Sessioni e token"
+
+# Same as English.
+msgctxt "admin.slug"
+msgid "Slug"
+msgstr "Slug"
+
+msgctxt "admin.source"
+msgid "Source"
+msgstr "Sorgente"
+
+msgctxt "admin.space_id"
+msgid "Space id"
+msgstr "ID spazio"
+
+msgctxt "admin.status"
+msgid "Status"
+msgstr "Stato"
+
+msgctxt "admin.trust_level"
+msgid "Trust level"
+msgstr "Livello trust"
+
+msgctxt "admin.user_list"
+msgid "Admin user list"
+msgstr "Elenco utenti admin"
+
+msgctxt "admin.user_role_bindings"
+msgid "User role bindings"
+msgstr "Associazioni ruoli utente"
+
+msgctxt "admin.user_roles"
+msgid "User roles"
+msgstr "Ruoli utente"
+
+msgctxt "admin.user_summary"
+msgid "Admin user summary"
+msgstr "Riepilogo utenti admin"
+
+msgctxt "admin.users"
+msgid "Users"
+msgstr "Utenti"
+
+# Same as English.
+msgctxt "app.name"
+msgid "GPForum"
+msgstr "GPForum"
+
+msgctxt "app.unavailable_title"
+msgid "GPForum unavailable"
+msgstr "GPForum non disponibile"
+
+msgctxt "auth.create_account"
+msgid "Create account"
+msgstr "Crea account"
+
+msgctxt "auth.current_password"
+msgid "Current password"
+msgstr "Password attuale"
+
+msgctxt "auth.display_name"
+msgid "Display name"
+msgstr "Nome pubblico"
+
+# Same as English.
+msgctxt "auth.email"
+msgid "Email"
+msgstr "Email"
+
+msgctxt "auth.email_confirm_submit"
+msgid "Confirm email"
+msgstr "Conferma email"
+
+msgctxt "auth.email_confirm_title"
+msgid "Confirm email change"
+msgstr "Conferma cambio email"
+
+msgctxt "auth.email_confirmed_status"
+msgid "Your email is confirmed."
+msgstr "La tua email è confermata."
+
+msgctxt "auth.email_confirmed_title"
+msgid "Email confirmed"
+msgstr "Email confermata"
+
+msgctxt "auth.email_verified_status"
+msgid "Your email is verified."
+msgstr "La tua email è verificata."
+
+msgctxt "auth.email_verified_title"
+msgid "Email verified"
+msgstr "Email verificata"
+
+msgctxt "auth.email_verify_request_submit"
+msgid "Send verification email"
+msgstr "Invia email di verifica"
+
+msgctxt "auth.email_verify_request_title"
+msgid "Resend verification email"
+msgstr "Reinvia email di verifica"
+
+msgctxt "auth.email_verify_requested_status"
+msgid ""
+"If the account exists and still needs verification, a message has been sent."
+msgstr ""
+"Se l’account esiste e deve ancora essere verificato, è stato inviato un "
+"messaggio."
+
+msgctxt "auth.email_verify_requested_title"
+msgid "Verification email requested"
+msgstr "Email di verifica richiesta"
+
+msgctxt "auth.email_verify_submit"
+msgid "Verify email"
+msgstr "Verifica email"
+
+msgctxt "auth.email_verify_title"
+msgid "Verify email"
+msgstr "Verifica email"
+
+msgctxt "auth.forgot_password"
+msgid "Forgot password?"
+msgstr "Password dimenticata?"
+
+msgctxt "auth.login"
+msgid "Login"
+msgstr "Accedi"
+
+msgctxt "auth.login_accepted_title"
+msgid "You are signed in"
+msgstr "Hai effettuato l’accesso"
+
+msgctxt "auth.login_again"
+msgid "Login again"
+msgstr "Accedi di nuovo"
+
+msgctxt "auth.login_next_steps"
+msgid "Login next steps"
+msgstr "Passi successivi accesso"
+
+msgctxt "auth.login_title"
+msgid "Login"
+msgstr "Accesso"
+
+msgctxt "auth.login_unverified"
+msgid "Verify your email before signing in."
+msgstr "Verifica l’email prima di accedere."
+
+msgctxt "auth.logout"
+msgid "Logout"
+msgstr "Esci"
+
+msgctxt "auth.logout_accepted_title"
+msgid "You are signed out"
+msgstr "Sei uscito"
+
+msgctxt "auth.logout_aria"
+msgid "Logout"
+msgstr "Esci"
+
+msgctxt "auth.logout_next_steps"
+msgid "Logout next steps"
+msgstr "Passi successivi uscita"
+
+msgctxt "auth.new_password"
+msgid "New password"
+msgstr "Nuova password"
+
+# Same as English.
+msgctxt "auth.password"
+msgid "Password"
+msgstr "Password"
+
+msgctxt "auth.password_reset_complete"
+msgid "Reset password"
+msgstr "Reimposta password"
+
+msgctxt "auth.password_reset_completed_status"
+msgid "Your password has been changed."
+msgstr "La tua password è stata cambiata."
+
+msgctxt "auth.password_reset_completed_title"
+msgid "Password changed"
+msgstr "Password cambiata"
+
+msgctxt "auth.password_reset_requested_status"
+msgid "If the account exists, a reset token has been issued for delivery."
+msgstr "Se l’account esiste, è stato emesso un token di reset per la consegna."
+
+msgctxt "auth.password_reset_requested_title"
+msgid "Password reset requested"
+msgstr "Reset password richiesto"
+
+msgctxt "auth.password_reset_submit"
+msgid "Request reset"
+msgstr "Richiedi reset"
+
+msgctxt "auth.password_reset_title"
+msgid "Reset password"
+msgstr "Reimposta password"
+
+msgctxt "auth.register"
+msgid "Register"
+msgstr "Registrati"
+
+msgctxt "auth.register_title"
+msgid "Create account"
+msgstr "Crea account"
+
+msgctxt "auth.registration_accepted_title"
+msgid "Check your email"
+msgstr "Controlla la tua email"
+
+msgctxt "auth.registration_next_steps"
+msgid "Registration next steps"
+msgstr "Passi successivi registrazione"
+
+#, python-brace-format
+msgctxt "auth.registration_ready"
+msgid ""
+"Account {username} was created. Check your email to verify before signing in."
+msgstr ""
+"Account {username} creato. Controlla l’email per verificare prima di "
+"accedere."
+
+#, python-brace-format
+msgctxt "auth.signed_in_as"
+msgid "Signed in as {user_id}"
+msgstr "Accesso come {user_id}"
+
+msgctxt "auth.username"
+msgid "Username"
+msgstr "Nome utente"
+
+msgctxt "auth.username_or_email"
+msgid "Username or email"
+msgstr "Nome utente o email"
+
+msgctxt "common.actor"
+msgid "Actor"
+msgstr "Attore"
+
+msgctxt "common.any"
+msgid "Any"
+msgstr "Qualsiasi"
+
+msgctxt "common.correlation"
+msgid "Correlation"
+msgstr "Correlazione"
+
+msgctxt "common.created"
+msgid "Created"
+msgstr "Creato"
+
+msgctxt "common.details"
+msgid "Details"
+msgstr "Dettagli"
+
+msgctxt "common.filter"
+msgid "Filter"
+msgstr "Filtra"
+
+# Same as English.
+msgctxt "common.no"
+msgid "No"
+msgstr "No"
+
+msgctxt "common.none"
+msgid "None"
+msgstr "Nessuno"
+
+msgctxt "common.reason"
+msgid "Reason"
+msgstr "Motivo"
+
+msgctxt "common.system"
+msgid "system"
+msgstr "sistema"
+
+# Same as English.
+msgctxt "common.target"
+msgid "Target"
+msgstr "Target"
+
+msgctxt "common.target_id"
+msgid "Target id"
+msgstr "ID target"
+
+msgctxt "common.target_type"
+msgid "Target type"
+msgstr "Tipo target"
+
+#. One of Formatter::relative_datetime's phrases for a recent time.
+#, python-brace-format
+msgctxt "common.time_days_ago"
+msgid "a day ago"
+msgid_plural "{count} days ago"
+msgstr[0] "un giorno fa"
+msgstr[1] "{count} giorni fa"
+
+#. One of Formatter::relative_datetime's phrases for a recent time.
+#, python-brace-format
+msgctxt "common.time_hours_ago"
+msgid "an hour ago"
+msgid_plural "{count} hours ago"
+msgstr[0] "un’ora fa"
+msgstr[1] "{count} ore fa"
+
+#. One of Formatter::relative_datetime's phrases for a recent time.
+#, python-brace-format
+msgctxt "common.time_minutes_ago"
+msgid "a minute ago"
+msgid_plural "{count} minutes ago"
+msgstr[0] "un minuto fa"
+msgstr[1] "{count} minuti fa"
+
+#. One of Formatter::relative_datetime's phrases for a recent time.
+msgctxt "common.time_now"
+msgid "just now"
+msgstr "adesso"
+
+msgctxt "common.unassigned"
+msgid "Unassigned"
+msgstr "Non assegnato"
+
+msgctxt "common.user"
+msgid "User"
+msgstr "Utente"
+
+msgctxt "community.added"
+msgid "Added"
+msgstr "Aggiunto"
+
+msgctxt "community.added_at"
+msgid "Added at"
+msgstr "Aggiunto alle"
+
+msgctxt "community.bookmark_note"
+msgid "Bookmark note"
+msgstr "Nota segnalibro"
+
+msgctxt "community.bookmark_pagination"
+msgid "Bookmark pagination"
+msgstr "Paginazione segnalibri"
+
+msgctxt "community.bookmarks"
+msgid "Bookmarks"
+msgstr "Segnalibri"
+
+msgctxt "community.bookmarks_empty"
+msgid "No bookmarks saved yet."
+msgstr "Nessun segnalibro salvato."
+
+# Same as English.
+msgctxt "community.feed"
+msgid "Feed"
+msgstr "Feed"
+
+msgctxt "community.feed_empty"
+msgid "No feed items yet."
+msgstr "Nessun elemento nel feed."
+
+msgctxt "community.feed_pagination"
+msgid "Feed pagination"
+msgstr "Paginazione feed"
+
+msgctxt "community.follow_thread"
+msgid "Follow thread"
+msgstr "Segui discussione"
+
+msgctxt "community.item"
+msgid "item"
+msgstr "elemento"
+
+msgctxt "community.jump_to_first_unread"
+msgid "Jump to first unread post"
+msgstr "Vai al primo post non letto"
+
+msgctxt "community.mute_notifications"
+msgid "Mute notifications"
+msgstr "Silenzia notifiche"
+
+msgctxt "community.older_bookmarks"
+msgid "Older bookmarks"
+msgstr "Segnalibri precedenti"
+
+msgctxt "community.older_feed_items"
+msgid "Older feed items"
+msgstr "Elementi feed precedenti"
+
+msgctxt "community.personal_feed"
+msgid "Personal feed"
+msgstr "Feed personale"
+
+msgctxt "community.remove_bookmark"
+msgid "Remove bookmark"
+msgstr "Rimuovi segnalibro"
+
+msgctxt "community.save_bookmark"
+msgid "Save bookmark"
+msgstr "Salva segnalibro"
+
+msgctxt "community.saved"
+msgid "Saved"
+msgstr "Salvato"
+
+msgctxt "community.saved_at"
+msgid "Saved at"
+msgstr "Salvato alle"
+
+msgctxt "community.unfollow_thread"
+msgid "Unfollow thread"
+msgstr "Smetti di seguire"
+
+msgctxt "data.attachments"
+msgid "attachments"
+msgstr "allegati"
+
+msgctxt "data.notifications"
+msgid "notifications"
+msgstr "notifiche"
+
+msgctxt "data.posts"
+msgid "Posts"
+msgstr "Post"
+
+msgctxt "data.subscriptions"
+msgid "subscriptions"
+msgstr "sottoscrizioni"
+
+msgctxt "form.attach_file"
+msgid "Attach file"
+msgstr "Allega file"
+
+msgctxt "form.confirm_understood"
+msgid "I understand what this does"
+msgstr "Ho capito cosa comporta"
+
+msgctxt "form.error_summary"
+msgid "Please review the fields below."
+msgstr "Controlla i campi qui sotto."
+
+msgctxt "form.upload_attachment"
+msgid "Upload attachment"
+msgstr "Carica allegato"
+
+msgctxt "forum.attachment_deleted"
+msgid "Attachment deleted"
+msgstr "Allegato rimosso"
+
+msgctxt "forum.attachment_uploaded"
+msgid "Attachment uploaded"
+msgstr "Allegato caricato"
+
+msgctxt "forum.back_to_categories"
+msgid "Back to categories"
+msgstr "Torna alle categorie"
+
+msgctxt "forum.back_to_category"
+msgid "Back to category"
+msgstr "Torna alla categoria"
+
+msgctxt "forum.bookmark_removed"
+msgid "Bookmark removed"
+msgstr "Segnalibro rimosso"
+
+msgctxt "forum.bookmarked"
+msgid "Thread bookmarked"
+msgstr "Discussione salvata"
+
+msgctxt "forum.browse_categories"
+msgid "Browse categories"
+msgstr "Sfoglia categorie"
+
+msgctxt "forum.categories_empty"
+msgid "No categories are visible yet."
+msgstr "Nessuna categoria visibile."
+
+msgctxt "forum.category_actions"
+msgid "Category actions"
+msgstr "Azioni categoria"
+
+msgctxt "forum.create_account"
+msgid "Create an account"
+msgstr "Crea un account"
+
+msgctxt "forum.create_thread"
+msgid "Create thread"
+msgstr "Crea discussione"
+
+msgctxt "forum.delete_attachment"
+msgid "Delete attachment"
+msgstr "Rimuovi allegato"
+
+msgctxt "forum.delete_post"
+msgid "Delete post"
+msgstr "Elimina post"
+
+msgctxt "forum.delete_post_consequence"
+msgid "The post will be hidden from everyone else. You can restore it later."
+msgstr "Il post sarà nascosto a tutti gli altri. Potrai ripristinarlo in seguito."
+
+msgctxt "forum.delete_thread"
+msgid "Delete thread"
+msgstr "Elimina discussione"
+
+msgctxt "forum.delete_thread_consequence"
+msgid "The thread will be hidden from everyone else. You can restore it later."
+msgstr "La discussione sarà nascosta a tutti gli altri. Potrai ripristinarla in seguito."
+
+msgctxt "forum.edit_body"
+msgid "Post body"
+msgstr "Corpo del post"
+
+msgctxt "forum.edit_post"
+msgid "Edit post"
+msgstr "Modifica post"
+
+msgctxt "forum.edit_title"
+msgid "Edit title"
+msgstr "Modifica titolo"
+
+msgctxt "forum.error_conflict_message"
+msgid ""
+"The request conflicts with what is there now. Reload the page and try again."
+msgstr ""
+"La richiesta è in conflitto con lo stato attuale. Ricarica la pagina e "
+"riprova."
+
+msgctxt "forum.error_conflict_title"
+msgid "Conflict"
+msgstr "Conflitto"
+
+msgctxt "forum.error_csrf_message"
+msgid ""
+"The form was open too long or came from another page. Reload it and submit "
+"again."
+msgstr ""
+"Il modulo è rimasto aperto troppo a lungo o proviene da un'altra pagina. "
+"Ricaricalo e invialo di nuovo."
+
+msgctxt "forum.error_csrf_title"
+msgid "Form expired"
+msgstr "Modulo scaduto"
+
+msgctxt "forum.error_default"
+msgid "The request could not be completed."
+msgstr "La richiesta non può essere completata."
+
+msgctxt "forum.error_detail"
+msgid "Details"
+msgstr "Dettagli"
+
+msgctxt "forum.error_forbidden_message"
+msgid "Your account does not have permission to do this."
+msgstr "Il tuo account non ha i permessi per questa operazione."
+
+msgctxt "forum.error_forbidden_title"
+msgid "Access denied"
+msgstr "Accesso negato"
+
+msgctxt "forum.error_internal_message"
+msgid "The request failed on our side. Try again in a moment."
+msgstr ""
+"La richiesta non è riuscita per un problema del server. Riprova tra poco."
+
+msgctxt "forum.error_internal_title"
+msgid "Something went wrong"
+msgstr "Si è verificato un errore"
+
+msgctxt "forum.error_invalid_message"
+msgid ""
+"The request could not be accepted. Check what you entered and try again."
+msgstr ""
+"La richiesta non è stata accettata. Controlla i dati inseriti e riprova."
+
+msgctxt "forum.error_invalid_title"
+msgid "Invalid request"
+msgstr "Richiesta non valida"
+
+msgctxt "forum.error_not_found_message"
+msgid "What you asked for does not exist, or is not visible to you."
+msgstr "Ciò che hai richiesto non esiste o non è visibile per te."
+
+msgctxt "forum.error_not_found_title"
+msgid "Not found"
+msgstr "Non trovato"
+
+msgctxt "forum.error_rate_limited_message"
+msgid "Too many requests in a short time. Wait a moment, then try again."
+msgstr "Troppe richieste in poco tempo. Attendi un momento e riprova."
+
+msgctxt "forum.error_rate_limited_title"
+msgid "Too many requests"
+msgstr "Troppe richieste"
+
+msgctxt "forum.error_title"
+msgid "Forum error"
+msgstr "Errore forum"
+
+msgctxt "forum.error_unauthorized_message"
+msgid "This page is for signed-in members."
+msgstr "Questa pagina è riservata agli utenti che hanno effettuato l'accesso."
+
+msgctxt "forum.error_unauthorized_title"
+msgid "Sign in required"
+msgstr "Accesso richiesto"
+
+msgctxt "forum.error_unavailable_message"
+msgid "The service cannot complete this right now. Try again in a moment."
+msgstr ""
+"Il servizio non può completare l'operazione in questo momento. Riprova tra "
+"poco."
+
+msgctxt "forum.error_unavailable_title"
+msgid "Temporarily unavailable"
+msgstr "Servizio temporaneamente non disponibile"
+
+msgctxt "forum.forum_actions"
+msgid "Forum actions"
+msgstr "Azioni forum"
+
+msgctxt "forum.forum_categories"
+msgid "Forum categories"
+msgstr "Categorie forum"
+
+msgctxt "forum.index_tagline"
+msgid "Independent discussion index."
+msgstr "Indice discussioni indipendente."
+
+msgctxt "forum.index_unavailable"
+msgid "The forum index is temporarily unavailable."
+msgstr "L’indice forum è temporaneamente non disponibile."
+
+msgctxt "forum.last_activity"
+msgid "Last activity"
+msgstr "Ultima attività"
+
+msgctxt "forum.latest_discussion_pagination"
+msgid "Latest discussion pagination"
+msgstr "Paginazione discussioni recenti"
+
+msgctxt "forum.latest_public_discussions"
+msgid "Latest public discussions"
+msgstr "Discussioni pubbliche recenti"
+
+msgctxt "forum.login_to_continue"
+msgid "Login to continue"
+msgstr "Accedi per continuare"
+
+msgctxt "forum.mark_visible_posts_read"
+msgid "Mark visible posts as read"
+msgstr "Segna i post visibili come letti"
+
+msgctxt "forum.move_thread"
+msgid "Move thread"
+msgstr "Sposta discussione"
+
+msgctxt "forum.new_thread_error_summary"
+msgid "Please fix the highlighted fields before creating the thread."
+msgstr "Correggi i campi evidenziati prima di creare la discussione."
+
+msgctxt "forum.new_thread_title"
+msgid "Start a thread"
+msgstr "Avvia una discussione"
+
+msgctxt "forum.next_posts"
+msgid "Next posts"
+msgstr "Post successivi"
+
+msgctxt "forum.next_threads"
+msgid "Next threads"
+msgstr "Discussioni successive"
+
+msgctxt "forum.no_public_discussions"
+msgid "No public discussions are visible yet."
+msgstr "Nessuna discussione pubblica visibile."
+
+msgctxt "forum.no_visible_posts"
+msgid "No visible posts are available."
+msgstr "Nessun post visibile è disponibile."
+
+msgctxt "forum.no_visible_threads"
+msgid "No visible threads are in this category yet."
+msgstr "Nessuna discussione visibile in questa categoria."
+
+msgctxt "forum.older_discussions"
+msgid "Older discussions"
+msgstr "Discussioni precedenti"
+
+# Same as English.
+msgctxt "forum.permalink"
+msgid "Permalink"
+msgstr "Permalink"
+
+msgctxt "forum.post_attachments"
+msgid "Post attachments"
+msgstr "Allegati post"
+
+msgctxt "forum.post_deleted"
+msgid "Post deleted"
+msgstr "Post eliminato"
+
+msgctxt "forum.post_deleted_notice"
+msgid "This post is hidden. Only you can see it until you restore it."
+msgstr "Questo post è nascosto. Solo tu puoi vederlo finché non lo ripristini."
+
+# Same as English.
+#, python-brace-format
+msgctxt "forum.post_number"
+msgid "Post {position}"
+msgstr "Post {position}"
+
+msgctxt "forum.post_pagination"
+msgid "Post pagination"
+msgstr "Paginazione post"
+
+msgctxt "forum.post_reply"
+msgid "Post reply"
+msgstr "Pubblica risposta"
+
+msgctxt "forum.post_restored"
+msgid "Post restored"
+msgstr "Post ripristinato"
+
+msgctxt "forum.post_updated"
+msgid "Post updated"
+msgstr "Post aggiornato"
+
+msgctxt "forum.posts"
+msgid "Posts"
+msgstr "Post"
+
+msgctxt "forum.posts_marked_read"
+msgid "Visible posts marked as read"
+msgstr "Post visibili segnati come letti"
+
+msgctxt "forum.reading_caught_up"
+msgid "You are caught up on this page."
+msgstr "Sei allineato con questa pagina."
+
+msgctxt "forum.reading_progress"
+msgid "Reading progress"
+msgstr "Avanzamento lettura"
+
+msgctxt "forum.reply"
+msgid "Reply"
+msgstr "Risposta"
+
+msgctxt "forum.reply_body"
+msgid "Reply body"
+msgstr "Corpo risposta"
+
+#, python-brace-format
+msgctxt "forum.reply_count"
+msgid "{count} reply"
+msgid_plural "{count} replies"
+msgstr[0] "{count} risposta"
+msgstr[1] "{count} risposte"
+
+msgctxt "forum.reply_posted"
+msgid "Reply posted"
+msgstr "Risposta pubblicata"
+
+msgctxt "forum.reported"
+msgid "Report submitted"
+msgstr "Segnalazione inviata"
+
+msgctxt "forum.restore_post"
+msgid "Restore post"
+msgstr "Ripristina post"
+
+msgctxt "forum.restore_thread"
+msgid "Restore thread"
+msgstr "Ripristina discussione"
+
+msgctxt "forum.save_edit"
+msgid "Save edit"
+msgstr "Salva modifica"
+
+msgctxt "forum.save_title"
+msgid "Save title"
+msgstr "Salva titolo"
+
+msgctxt "forum.started_by"
+msgid "Started by"
+msgstr "Avviata da"
+
+msgctxt "forum.subscribed"
+msgid "Thread subscribed"
+msgstr "Iscrizione alla discussione attivata"
+
+msgctxt "forum.subscription_muted"
+msgid "Subscription muted"
+msgstr "Iscrizione silenziata"
+
+msgctxt "forum.thread"
+msgid "Thread"
+msgstr "Discussione"
+
+msgctxt "forum.thread_body"
+msgid "Body"
+msgstr "Corpo"
+
+msgctxt "forum.thread_created"
+msgid "Thread created"
+msgstr "Discussione creata"
+
+msgctxt "forum.thread_deleted"
+msgid "Thread deleted"
+msgstr "Discussione eliminata"
+
+msgctxt "forum.thread_deleted_notice"
+msgid "This thread is hidden. Only you can see it until you restore it."
+msgstr ""
+"Questa discussione è nascosta. Solo tu puoi vederla finché non la ripristini."
+
+msgctxt "forum.thread_locked"
+msgid "This thread is locked."
+msgstr "Questa discussione è bloccata."
+
+msgctxt "forum.thread_moved"
+msgid "Thread moved"
+msgstr "Discussione spostata"
+
+msgctxt "forum.thread_pagination"
+msgid "Thread pagination"
+msgstr "Paginazione discussioni"
+
+msgctxt "forum.thread_restored"
+msgid "Thread restored"
+msgstr "Discussione ripristinata"
+
+msgctxt "forum.thread_title"
+msgid "Title"
+msgstr "Titolo"
+
+msgctxt "forum.thread_tools"
+msgid "Thread tools"
+msgstr "Strumenti discussione"
+
+msgctxt "forum.thread_updated"
+msgid "Thread title saved"
+msgstr "Titolo della discussione salvato"
+
+msgctxt "forum.unsubscribed"
+msgid "Thread unsubscribed"
+msgstr "Iscrizione alla discussione revocata"
+
+msgctxt "forum.validation_errors"
+msgid "Validation errors"
+msgstr "Errori di validazione"
+
+msgctxt "forum.visibility"
+msgid "Visibility"
+msgstr "Visibilità"
+
+msgctxt "forum.visibility_inherit"
+msgid "Same as the category"
+msgstr "Come la categoria"
+
+msgctxt "forum.visibility_members"
+msgid "Members"
+msgstr "Membri"
+
+msgctxt "forum.visibility_private"
+msgid "Private"
+msgstr "Privata"
+
+msgctxt "forum.visibility_public"
+msgid "Public"
+msgstr "Pubblica"
+
+msgctxt "layout.flash_messages"
+msgid "Messages"
+msgstr "Messaggi"
+
+msgctxt "layout.footer_cookies"
+msgid "Cookies"
+msgstr "Cookie"
+
+msgctxt "layout.footer_help"
+msgid "Help"
+msgstr "Aiuto"
+
+msgctxt "layout.footer_label"
+msgid "Product footer"
+msgstr "Footer prodotto"
+
+msgctxt "layout.footer_license"
+msgid "BSD-3 licensed foundation"
+msgstr "Fondazione con licenza BSD-3"
+
+# Same as English.
+msgctxt "layout.footer_privacy"
+msgid "Privacy"
+msgstr "Privacy"
+
+msgctxt "layout.footer_tagline"
+msgid "Independent community infrastructure"
+msgstr "Infrastruttura indipendente per comunità"
+
+msgctxt "layout.footer_terms"
+msgid "Terms"
+msgstr "Termini"
+
+msgctxt "layout.preferences"
+msgid "Preferences"
+msgstr "Preferenze"
+
+msgctxt "legal.cookies"
+msgid "Cookie notice"
+msgstr "Informativa cookie"
+
+msgctxt "legal.cookies.intro"
+msgid "This notice describes cookies used by the GPForum software."
+msgstr "Questa pagina descrive i cookie usati dal software GPForum."
+
+msgctxt "legal.cookies.operator"
+msgid ""
+"Operators replace this page with instance-specific cookie policy before "
+"production."
+msgstr ""
+"Gli operatori sostituiscono questa pagina con l'informativa cookie "
+"dell'istanza prima della produzione."
+
+msgctxt "legal.cookies.preferences"
+msgid ""
+"Locale and theme preference cookies remember presentation choices on this "
+"browser."
+msgstr ""
+"I cookie di lingua e tema ricordano le scelte di presentazione su questo "
+"browser."
+
+msgctxt "legal.cookies.session"
+msgid ""
+"A session cookie is set after login so the server can recognize the member."
+msgstr ""
+"Dopo l'accesso viene impostato un cookie di sessione perché il server "
+"riconosca il membro."
+
+msgctxt "legal.privacy"
+msgid "Privacy notice"
+msgstr "Informativa privacy"
+
+msgctxt "legal.privacy.data"
+msgid ""
+"Accounts store username, email, credentials, and sessions. Posts, reports, "
+"moderation actions, and privacy requests are stored in PostgreSQL."
+msgstr ""
+"Gli account conservano username, email, credenziali e sessioni. Post, "
+"segnalazioni, azioni di moderazione e richieste privacy restano su "
+"PostgreSQL."
+
+msgctxt "legal.privacy.holds"
+msgid "Staff legal holds can delay erasure until the hold ends."
+msgstr ""
+"I legal hold dello staff possono ritardare la cancellazione finché il hold è "
+"attivo."
+
+msgctxt "legal.privacy.intro"
+msgid ""
+"This notice describes data this software stores. It is not legal advice."
+msgstr ""
+"Questa pagina descrive i dati che il software conserva. Non è consulenza "
+"legale."
+
+msgctxt "legal.privacy.operator"
+msgid ""
+"Operators replace this page with counsel-reviewed policy before production."
+msgstr ""
+"Gli operatori sostituiscono questa pagina con un'informativa rivista da un "
+"legale prima della produzione."
+
+msgctxt "legal.privacy.rights"
+msgid ""
+"Members can request an export or account deletion from the privacy dashboard."
+msgstr ""
+"I membri possono chiedere un export o la cancellazione dell'account dalla "
+"dashboard privacy."
+
+msgctxt "legal.terms"
+msgid "Terms of use"
+msgstr "Termini di utilizzo"
+
+msgctxt "legal.terms.accounts"
+msgid ""
+"Members are responsible for the content they publish and for keeping "
+"credentials private."
+msgstr ""
+"I membri sono responsabili dei contenuti che pubblicano e della riservatezza "
+"delle credenziali."
+
+msgctxt "legal.terms.conduct"
+msgid ""
+"Use the forum in good faith. Harassment, spam, and illegal content may be "
+"hidden or removed."
+msgstr ""
+"Usare il forum in buona fede. Molestie, spam e contenuti illegali possono "
+"essere nascosti o rimossi."
+
+msgctxt "legal.terms.intro"
+msgid ""
+"These terms describe how this GPForum instance is operated in software. They "
+"are not legal advice."
+msgstr ""
+"Questi termini descrivono come questa istanza GPForum è operata nel "
+"software. Non sono consulenza legale."
+
+msgctxt "legal.terms.moderation"
+msgid ""
+"Moderators may hide or restore posts and threads, lock threads, reverse "
+"actions, and suspend accounts."
+msgstr ""
+"I moderatori possono nascondere o ripristinare post e discussioni, bloccare "
+"discussioni, annullare azioni e sospendere account."
+
+msgctxt "legal.terms.operator"
+msgid ""
+"Operators replace this page with instance-specific terms before production. "
+"The software is BSD-3 licensed."
+msgstr ""
+"Gli operatori sostituiscono questa pagina con i termini dell'istanza prima "
+"della produzione. Il software è con licenza BSD-3."
+
+msgctxt "locale.choose"
+msgid "Language"
+msgstr "Lingua"
+
+msgctxt "locale.selector_label"
+msgid "Language selector"
+msgstr "Selettore lingua"
+
+msgctxt "locale.updated"
+msgid "Language updated"
+msgstr "Lingua aggiornata"
+
+msgctxt "mentions.by"
+msgid "Mention by"
+msgstr "Menzione da"
+
+#, python-brace-format
+msgctxt "mentions.email_body"
+msgid "Open GPForum to review the mention from {actor}."
+msgstr "Apri GPForum per controllare la menzione da {actor}."
+
+#, python-brace-format
+msgctxt "mentions.email_subject"
+msgid "{actor} mentioned you on GPForum"
+msgstr "{actor} ti ha menzionato su GPForum"
+
+msgctxt "mentions.empty"
+msgid "No mentions yet."
+msgstr "Nessuna menzione."
+
+msgctxt "mentions.list_label"
+msgid "Mention list"
+msgstr "Elenco menzioni"
+
+msgctxt "mentions.mentioned_at"
+msgid "Mentioned at"
+msgstr "Menzionata alle"
+
+msgctxt "mentions.older"
+msgid "Older mentions"
+msgstr "Menzioni precedenti"
+
+msgctxt "mentions.open_discussion"
+msgid "Open discussion"
+msgstr "Apri discussione"
+
+msgctxt "mentions.pagination"
+msgid "Mention pagination"
+msgstr "Paginazione menzioni"
+
+msgctxt "mentions.source"
+msgid "Source"
+msgstr "Sorgente"
+
+#, python-brace-format
+msgctxt "mentions.summary"
+msgid "This mention is linked to {source_type} {source_id}."
+msgstr "Questa menzione è collegata a {source_type} {source_id}."
+
+msgctxt "mentions.title"
+msgid "Mention"
+msgstr "Menzione"
+
+msgctxt "moderation.action.post_hidden"
+msgid "Post hidden"
+msgstr "Post nascosto"
+
+msgctxt "moderation.action.post_restored"
+msgid "Post restored"
+msgstr "Post ripristinato"
+
+msgctxt "moderation.action.thread_hidden"
+msgid "Thread hidden"
+msgstr "Discussione nascosta"
+
+msgctxt "moderation.action.thread_locked"
+msgid "Thread locked"
+msgstr "Discussione bloccata"
+
+msgctxt "moderation.action.thread_restored"
+msgid "Thread restored"
+msgstr "Discussione ripristinata"
+
+msgctxt "moderation.action.thread_unlocked"
+msgid "Thread unlocked"
+msgstr "Discussione sbloccata"
+
+msgctxt "moderation.action_history"
+msgid "Moderation action history"
+msgstr "Storico azioni moderazione"
+
+msgctxt "moderation.actions"
+msgid "Moderation actions"
+msgstr "Azioni moderazione"
+
+msgctxt "moderation.active_suspension_list"
+msgid "Active suspension list"
+msgstr "Elenco sospensioni attive"
+
+msgctxt "moderation.assign_to_me"
+msgid "Assign to me"
+msgstr "Assegna a me"
+
+msgctxt "moderation.assigned"
+msgid "Report assigned"
+msgstr "Segnalazione assegnata"
+
+msgctxt "moderation.hide_post"
+msgid "Hide post"
+msgstr "Nascondi post"
+
+msgctxt "moderation.hide_thread"
+msgid "Hide thread"
+msgstr "Nascondi discussione"
+
+msgctxt "moderation.lock_thread"
+msgid "Lock thread"
+msgstr "Blocca discussione"
+
+msgctxt "moderation.next_actions"
+msgid "Next actions"
+msgstr "Azioni successive"
+
+msgctxt "moderation.next_suspensions"
+msgid "Next suspensions"
+msgstr "Sospensioni successive"
+
+msgctxt "moderation.no_actions_match"
+msgid "No moderation actions match this view."
+msgstr "Nessuna azione moderativa corrisponde alla vista."
+
+msgctxt "moderation.no_reports_match"
+msgid "No reports match this queue."
+msgstr "Nessuna segnalazione corrisponde alla coda."
+
+msgctxt "moderation.no_suspensions_match"
+msgid "No suspensions match this view."
+msgstr "Nessuna sospensione corrisponde alla vista."
+
+msgctxt "moderation.queue"
+msgid "Moderation queue"
+msgstr "Coda moderazione"
+
+msgctxt "moderation.reason.abuse"
+msgid "Abuse"
+msgstr "Abuso"
+
+msgctxt "moderation.reason.other"
+msgid "Other"
+msgstr "Altro"
+
+# Same as English.
+msgctxt "moderation.reason.privacy"
+msgid "Privacy"
+msgstr "Privacy"
+
+# Same as English.
+msgctxt "moderation.reason.spam"
+msgid "Spam"
+msgstr "Spam"
+
+msgctxt "moderation.release_claim"
+msgid "Release claim"
+msgstr "Rilascia claim"
+
+msgctxt "moderation.released"
+msgid "Report released"
+msgstr "Segnalazione rilasciata"
+
+msgctxt "moderation.report_post"
+msgid "Report post"
+msgstr "Segnala post"
+
+msgctxt "moderation.report_profile"
+msgid "Report profile"
+msgstr "Segnala profilo"
+
+msgctxt "moderation.report_queue"
+msgid "Moderation report queue"
+msgstr "Coda segnalazioni moderazione"
+
+msgctxt "moderation.report_thread"
+msgid "Report thread"
+msgstr "Segnala discussione"
+
+msgctxt "moderation.reports"
+msgid "Moderation reports"
+msgstr "Segnalazioni moderazione"
+
+msgctxt "moderation.resolution"
+msgid "Resolution"
+msgstr "Risoluzione"
+
+msgctxt "moderation.resolution.content_hidden"
+msgid "Content hidden"
+msgstr "Contenuto nascosto"
+
+msgctxt "moderation.resolution.escalated"
+msgid "Escalated"
+msgstr "Escalato"
+
+msgctxt "moderation.resolution.no_action"
+msgid "No action"
+msgstr "Nessuna azione"
+
+msgctxt "moderation.resolution.user_warned"
+msgid "User warned"
+msgstr "Utente avvisato"
+
+msgctxt "moderation.resolve_report"
+msgid "Resolve report"
+msgstr "Risolvi segnalazione"
+
+msgctxt "moderation.resolved"
+msgid "Report resolved"
+msgstr "Segnalazione risolta"
+
+msgctxt "moderation.restore_post"
+msgid "Restore post"
+msgstr "Ripristina post"
+
+msgctxt "moderation.restore_thread"
+msgid "Restore thread"
+msgstr "Ripristina discussione"
+
+msgctxt "moderation.reverse_action"
+msgid "Reverse action"
+msgstr "Annulla azione"
+
+msgctxt "moderation.reversed"
+msgid "Reversed"
+msgstr "Annullata"
+
+msgctxt "moderation.revoke_suspension"
+msgid "Revoke suspension"
+msgstr "Revoca sospensione"
+
+msgctxt "moderation.staff_reason"
+msgid "Your reason (recorded in the audit log)"
+msgstr "La tua motivazione (registrata nel log di audit)"
+
+msgctxt "moderation.submit_report"
+msgid "Submit report"
+msgstr "Invia segnalazione"
+
+msgctxt "moderation.suspend_consequence"
+msgid ""
+"The user cannot sign in or post until the suspension ends or is revoked."
+msgstr ""
+"L’utente non può accedere né pubblicare finché la sospensione non scade o "
+"viene revocata."
+
+msgctxt "moderation.suspend_user"
+msgid "Suspend user"
+msgstr "Sospendi utente"
+
+msgctxt "moderation.suspension_revoked"
+msgid "Suspension revoked"
+msgstr "Sospensione revocata"
+
+msgctxt "moderation.suspensions"
+msgid "Suspensions"
+msgstr "Sospensioni"
+
+msgctxt "moderation.unlock_thread"
+msgid "Unlock thread"
+msgstr "Sblocca discussione"
+
+msgctxt "moderation.user_id"
+msgid "User id"
+msgstr "ID utente"
+
+msgctxt "moderation.user_suspended"
+msgid "User suspended"
+msgstr "Utente sospeso"
+
+msgctxt "moderation.valid_from"
+msgid "Valid from"
+msgstr "Valida da"
+
+msgctxt "moderation.valid_to"
+msgid "Valid until"
+msgstr "Valida fino a"
+
+# Same as English.
+msgctxt "nav.admin"
+msgid "Admin"
+msgstr "Admin"
+
+msgctxt "nav.bookmarks"
+msgid "Bookmarks"
+msgstr "Segnalibri"
+
+msgctxt "nav.breadcrumbs"
+msgid "Breadcrumbs"
+msgstr "Percorso"
+
+msgctxt "nav.categories"
+msgid "Categories"
+msgstr "Categorie"
+
+# Same as English.
+msgctxt "nav.feed"
+msgid "Feed"
+msgstr "Feed"
+
+# Same as English.
+msgctxt "nav.home"
+msgid "Home"
+msgstr "Home"
+
+msgctxt "nav.identity"
+msgid "Identity"
+msgstr "Identità"
+
+msgctxt "nav.mentions"
+msgid "Mentions"
+msgstr "Menzioni"
+
+msgctxt "nav.moderation"
+msgid "Moderation"
+msgstr "Moderazione"
+
+msgctxt "nav.notifications"
+msgid "Notifications"
+msgstr "Notifiche"
+
+msgctxt "nav.primary"
+msgid "Primary"
+msgstr "Principale"
+
+# Same as English.
+msgctxt "nav.privacy"
+msgid "Privacy"
+msgstr "Privacy"
+
+msgctxt "nav.profile"
+msgid "Profile"
+msgstr "Profilo"
+
+msgctxt "nav.search"
+msgid "Search"
+msgstr "Cerca"
+
+msgctxt "nav.settings"
+msgid "Settings"
+msgstr "Impostazioni"
+
+msgctxt "nav.skip_to_content"
+msgid "Skip to content"
+msgstr "Vai al contenuto"
+
+msgctxt "nav.start_thread"
+msgid "Start a thread"
+msgstr "Avvia una discussione"
+
+msgctxt "nav.your_data"
+msgid "Your data"
+msgstr "I tuoi dati"
+
+msgctxt "notifications.body.follow"
+msgid "A followed thread has new activity."
+msgstr "Una discussione seguita ha nuova attività."
+
+msgctxt "notifications.body.mention"
+msgid "You were mentioned in a discussion."
+msgstr "Sei stato menzionato in una discussione."
+
+msgctxt "notifications.body.notification"
+msgid "You have a new notification."
+msgstr "Hai una nuova notifica."
+
+msgctxt "notifications.body.reply"
+msgid "A followed thread has a new reply."
+msgstr "Una discussione seguita ha una nuova risposta."
+
+msgctxt "notifications.channel.digest"
+msgid "Digest"
+msgstr "Riepilogo"
+
+# Same as English.
+msgctxt "notifications.channel.email"
+msgid "Email"
+msgstr "Email"
+
+msgctxt "notifications.channel.in_app"
+msgid "In-app"
+msgstr "Nel prodotto"
+
+msgctxt "notifications.digest_frequency"
+msgid "Digest frequency"
+msgstr "Frequenza riepilogo"
+
+msgctxt "notifications.digest_frequency.daily"
+msgid "Daily"
+msgstr "Giornaliera"
+
+msgctxt "notifications.digest_frequency.immediate"
+msgid "Immediate"
+msgstr "Immediata"
+
+msgctxt "notifications.digest_frequency.never"
+msgid "Never"
+msgstr "Mai"
+
+msgctxt "notifications.digest_frequency.weekly"
+msgid "Weekly"
+msgstr "Settimanale"
+
+msgctxt "notifications.email_body.follow"
+msgid "Open GPForum to review new activity in a thread you follow."
+msgstr ""
+"Apri GPForum per controllare la nuova attività in una discussione seguita."
+
+msgctxt "notifications.email_body.mention"
+msgid "Open GPForum to review the discussion where you were mentioned."
+msgstr ""
+"Apri GPForum per controllare la discussione in cui sei stato menzionato."
+
+msgctxt "notifications.email_body.notification"
+msgid "Open GPForum to review your notification."
+msgstr "Apri GPForum per controllare la notifica."
+
+msgctxt "notifications.email_body.reply"
+msgid "Open GPForum to read the new reply in a thread you follow."
+msgstr "Apri GPForum per leggere la nuova risposta in una discussione seguita."
+
+msgctxt "notifications.email_subject.follow"
+msgid "New activity in a followed thread"
+msgstr "Nuova attività in una discussione seguita"
+
+msgctxt "notifications.email_subject.mention"
+msgid "You were mentioned on GPForum"
+msgstr "Sei stato menzionato su GPForum"
+
+msgctxt "notifications.email_subject.notification"
+msgid "New notification on GPForum"
+msgstr "Nuova notifica su GPForum"
+
+msgctxt "notifications.email_subject.reply"
+msgid "New reply in a followed thread"
+msgstr "Nuova risposta in una discussione seguita"
+
+msgctxt "notifications.empty"
+msgid "No notifications yet."
+msgstr "Nessuna notifica."
+
+msgctxt "notifications.inbox_label"
+msgid "Notification inbox"
+msgstr "Inbox notifiche"
+
+msgctxt "notifications.mark_all_read"
+msgid "Mark all as read"
+msgstr "Segna tutte come lette"
+
+msgctxt "notifications.mark_read"
+msgid "Mark notification as read"
+msgstr "Segna notifica come letta"
+
+msgctxt "notifications.marked_all_read"
+msgid "Notifications marked as read"
+msgstr "Notifiche segnate come lette"
+
+msgctxt "notifications.marked_read"
+msgid "Notification marked as read"
+msgstr "Notifica segnata come letta"
+
+msgctxt "notifications.older"
+msgid "Older notifications"
+msgstr "Notifiche precedenti"
+
+msgctxt "notifications.open_discussion"
+msgid "Open discussion"
+msgstr "Apri discussione"
+
+msgctxt "notifications.pagination"
+msgid "Notification pagination"
+msgstr "Paginazione notifiche"
+
+msgctxt "notifications.preference.digest.description"
+msgid "Receive periodic summaries when digest delivery is enabled."
+msgstr "Ricevi riepiloghi periodici quando il digest è attivo."
+
+msgctxt "notifications.preference.email.description"
+msgid "Allow email delivery for account and community notifications."
+msgstr "Consenti l’invio email per notifiche account e community."
+
+msgctxt "notifications.preference.in_app.description"
+msgid "Show notifications inside your GPForum inbox."
+msgstr "Mostra notifiche nella inbox di GPForum."
+
+msgctxt "notifications.read"
+msgid "Read"
+msgstr "Letta"
+
+msgctxt "notifications.received"
+msgid "Received"
+msgstr "Ricevuta"
+
+msgctxt "notifications.received_at"
+msgid "Received at"
+msgstr "Ricevuta alle"
+
+msgctxt "notifications.title.follow"
+msgid "New activity in a followed thread"
+msgstr "Nuova attività in una discussione seguita"
+
+msgctxt "notifications.title.mention"
+msgid "You were mentioned"
+msgstr "Sei stato menzionato"
+
+msgctxt "notifications.title.notification"
+msgid "Notification"
+msgstr "Notifica"
+
+msgctxt "notifications.title.reply"
+msgid "New reply in a followed thread"
+msgstr "Nuova risposta in una discussione seguita"
+
+msgctxt "notifications.type.follow"
+msgid "Follow"
+msgstr "Seguito"
+
+msgctxt "notifications.type.mention"
+msgid "Mention"
+msgstr "Menzione"
+
+msgctxt "notifications.type.notification"
+msgid "Notification"
+msgstr "Notifica"
+
+msgctxt "notifications.type.reply"
+msgid "Reply"
+msgstr "Risposta"
+
+#, python-brace-format
+msgctxt "notifications.unread_count"
+msgid "{count} unread"
+msgid_plural "{count} unread"
+msgstr[0] "{count} non letta"
+msgstr[1] "{count} non lette"
+
+msgctxt "notifications.unread_many"
+msgid "More than 99 unread"
+msgstr "Più di 99 non lette"
+
+msgctxt "permission.admin_console_view"
+msgid "View admin console"
+msgstr "Vedi console admin"
+
+msgctxt "privacy.account_deletion"
+msgid "Account deletion"
+msgstr "Cancellazione account"
+
+msgctxt "privacy.account_deletion_requests"
+msgid "Account deletion requests"
+msgstr "Richieste cancellazione account"
+
+msgctxt "privacy.active_holds"
+msgid "Active holds"
+msgstr "Hold attivi"
+
+msgctxt "privacy.active_legal_holds"
+msgid "Active legal holds"
+msgstr "Legal hold attivi"
+
+msgctxt "privacy.active_retention_holds"
+msgid "Active retention holds"
+msgstr "Retention hold attivi"
+
+msgctxt "privacy.apply_hold"
+msgid "Apply hold"
+msgstr "Applica hold"
+
+msgctxt "privacy.approval_reason"
+msgid "Approval reason"
+msgstr "Motivo approvazione"
+
+msgctxt "privacy.approve_erasure"
+msgid "Approve erasure"
+msgstr "Approva erasure"
+
+msgctxt "privacy.approve_erasure_consequence"
+msgid "Schedules this account's personal data for erasure."
+msgstr "Pianifica la cancellazione dei dati personali di questo account."
+
+msgctxt "privacy.data_export"
+msgid "Data export"
+msgstr "Export dati"
+
+msgctxt "privacy.data_export_requests"
+msgid "Data export requests"
+msgstr "Richieste export dati"
+
+msgctxt "privacy.deletion_approved"
+msgid "Deletion approved"
+msgstr "Cancellazione approvata"
+
+msgctxt "privacy.deletion_description"
+msgid "Ask for your account and your personal data to be erased. Staff review each request before anything is removed."
+msgstr "Chiedi la cancellazione del tuo account e dei tuoi dati personali. Lo staff esamina ogni richiesta prima che qualcosa venga rimosso."
+
+msgctxt "privacy.deletion_held"
+msgid "Legal hold applied"
+msgstr "Legal hold applicato"
+
+msgctxt "privacy.deletion_requested"
+msgid "Deletion requested"
+msgstr "Cancellazione richiesta"
+
+msgctxt "privacy.deletion_requests"
+msgid "Deletion requests"
+msgstr "Richieste cancellazione"
+
+msgctxt "privacy.download_export"
+msgid "Download export"
+msgstr "Scarica export"
+
+msgctxt "privacy.erasure_completed"
+msgid "Erasure completed"
+msgstr "Erasure completata"
+
+msgctxt "privacy.erasure_jobs"
+msgid "Erasure jobs"
+msgstr "Job erasure"
+
+msgctxt "privacy.export_description"
+msgid "A copy of your posts, attachments and notifications, prepared as a file to download."
+msgstr "Una copia dei tuoi post, allegati e notifiche, preparata come file da scaricare."
+
+msgctxt "privacy.export_requested"
+msgid "Export requested"
+msgstr "Export richiesto"
+
+msgctxt "privacy.export_requests"
+msgid "Export requests"
+msgstr "Richieste export"
+
+msgctxt "privacy.hold_reason"
+msgid "Hold reason"
+msgstr "Motivo hold"
+
+msgctxt "privacy.no_deletion_requests"
+msgid "No deletion requests yet."
+msgstr "Nessuna richiesta cancellazione."
+
+msgctxt "privacy.no_deletion_review"
+msgid "No deletion requests are waiting for review."
+msgstr "Nessuna richiesta cancellazione in attesa di revisione."
+
+msgctxt "privacy.no_erasure_pending"
+msgid "No erasure jobs are pending."
+msgstr "Nessun job erasure in attesa."
+
+msgctxt "privacy.no_export_pending"
+msgid "No export requests are pending."
+msgstr "Nessuna richiesta export in attesa."
+
+msgctxt "privacy.no_export_requests"
+msgid "No export requests yet."
+msgstr "Nessuna richiesta export."
+
+msgctxt "privacy.pending_deletion_requests"
+msgid "Pending deletion requests"
+msgstr "Richieste cancellazione in attesa"
+
+msgctxt "privacy.pending_erasure_jobs"
+msgid "Pending erasure jobs"
+msgstr "Job erasure in attesa"
+
+msgctxt "privacy.pending_export_requests"
+msgid "Pending export requests"
+msgstr "Richieste export in attesa"
+
+msgctxt "privacy.request_deletion"
+msgid "Request deletion"
+msgstr "Richiedi cancellazione"
+
+msgctxt "privacy.request_export"
+msgid "Request export"
+msgstr "Richiedi export"
+
+msgctxt "privacy.retention_holds"
+msgid "Retention holds"
+msgstr "Retention hold"
+
+msgctxt "privacy.review"
+msgid "Privacy review"
+msgstr "Revisione privacy"
+
+msgctxt "privacy.run_erasure"
+msgid "Run erasure"
+msgstr "Esegui erasure"
+
+msgctxt "privacy.run_erasure_consequence"
+msgid "Erases this account's personal data now. This cannot be undone."
+msgstr "Cancella ora i dati personali di questo account. Non si può annullare."
+
+msgctxt "profile.contributor_summary"
+msgid "Contributor summary"
+msgstr "Riepilogo contributor"
+
+msgctxt "profile.discussion_reply"
+msgid "Discussion reply"
+msgstr "Risposta alla discussione"
+
+msgctxt "profile.joined"
+msgid "Joined"
+msgstr "Iscrizione"
+
+msgctxt "profile.new_contributor"
+msgid "New contributor"
+msgstr "Nuovo contributor"
+
+msgctxt "profile.no_public_discussions"
+msgid "No public discussions yet."
+msgstr "Nessuna discussione pubblica."
+
+msgctxt "profile.no_public_replies"
+msgid "No public replies yet."
+msgstr "Nessuna risposta pubblica."
+
+msgctxt "profile.not_found_message"
+msgid "The requested public profile is not available."
+msgstr "Il profilo pubblico richiesto non è disponibile."
+
+msgctxt "profile.not_found_title"
+msgid "Profile not found"
+msgstr "Profilo non trovato"
+
+msgctxt "profile.older_public_discussions"
+msgid "Older public discussions"
+msgstr "Discussioni pubbliche precedenti"
+
+msgctxt "profile.profile_activity_pagination"
+msgid "Profile activity pagination"
+msgstr "Paginazione attività profilo"
+
+msgctxt "profile.public_contributions"
+msgid "Public contributions"
+msgstr "Contributi pubblici"
+
+msgctxt "profile.public_discussions"
+msgid "Public discussions"
+msgstr "Discussioni pubbliche"
+
+msgctxt "profile.public_discussions_by_contributor"
+msgid "Public discussions by this contributor"
+msgstr "Discussioni pubbliche di questo contributor"
+
+msgctxt "profile.public_replies"
+msgid "Public replies"
+msgstr "Risposte pubbliche"
+
+msgctxt "profile.public_threads"
+msgid "Public threads"
+msgstr "Thread pubblici"
+
+msgctxt "profile.recent_public_replies"
+msgid "Recent public replies"
+msgstr "Risposte pubbliche recenti"
+
+msgctxt "profile.recent_public_replies_by_contributor"
+msgid "Recent public replies by this contributor"
+msgstr "Risposte pubbliche recenti di questo contributor"
+
+msgctxt "profile.replied"
+msgid "Replied"
+msgstr "Risposto"
+
+msgctxt "profile.reputation_score"
+msgid "Reputation score"
+msgstr "Punteggio reputazione"
+
+msgctxt "profile.trust_badge"
+msgid "Trust badge"
+msgstr "Badge trust"
+
+msgctxt "search.by_author"
+msgid "By"
+msgstr "Di"
+
+msgctxt "search.by_one_author"
+msgid "By one author"
+msgstr "Di un solo autore"
+
+msgctxt "search.category"
+msgid "Category"
+msgstr "Categoria"
+
+msgctxt "search.degraded"
+msgid "Search is temporarily degraded."
+msgstr "La ricerca è temporaneamente degradata."
+
+msgctxt "search.empty_guidance"
+msgid ""
+"Search public discussions, replies, categories, authors, or date ranges."
+msgstr ""
+"Cerca discussioni pubbliche, risposte, categorie, autori o intervalli di "
+"date."
+
+msgctxt "search.empty_title"
+msgid "Search the forum"
+msgstr "Cerca nel forum"
+
+msgctxt "search.filters"
+msgid "Filters"
+msgstr "Filtri"
+
+msgctxt "search.from"
+msgid "From"
+msgstr "Da"
+
+msgctxt "search.help"
+msgid "Results respect visibility, moderation, and your current permissions."
+msgstr "I risultati rispettano visibilità, moderazione e permessi correnti."
+
+msgctxt "search.more_results"
+msgid "Show more results"
+msgstr "Mostra altri risultati"
+
+msgctxt "search.no_results"
+msgid "No visible results matched your search."
+msgstr "Nessun risultato visibile corrisponde alla ricerca."
+
+msgctxt "search.no_results_guidance"
+msgid "Try a broader query, remove a filter, or check the spelling."
+msgstr ""
+"Prova una ricerca più ampia, rimuovi un filtro o controlla la scrittura."
+
+msgctxt "search.pagination"
+msgid "Search pagination"
+msgstr "Paginazione ricerca"
+
+msgctxt "search.permission_note"
+msgid "Snippets only include content you are allowed to read."
+msgstr "Gli estratti includono solo contenuti che puoi leggere."
+
+msgctxt "search.query"
+msgid "Search query"
+msgstr "Testo da cercare"
+
+#, python-brace-format
+msgctxt "search.ranking_capped"
+msgid ""
+"Results are ranked among the {limit} most recent matches only. Add a word or "
+"a filter to reach older ones."
+msgstr ""
+"I risultati sono ordinati solo tra le {limit} corrispondenze più recenti. "
+"Aggiungi una parola o un filtro per raggiungere quelle più vecchie."
+
+msgctxt "search.results"
+msgid "Search results"
+msgstr "Risultati ricerca"
+
+#, python-brace-format
+msgctxt "search.results_summary"
+msgid "{count} results"
+msgstr "{count} risultati"
+
+msgctxt "search.search_everywhere"
+msgid "Search everywhere"
+msgstr "Cerca ovunque"
+
+msgctxt "search.submit"
+msgid "Search"
+msgstr "Cerca"
+
+msgctxt "search.title"
+msgid "Search"
+msgstr "Cerca"
+
+msgctxt "search.to"
+msgid "To"
+msgstr "A"
+
+msgctxt "search.within_category"
+msgid "Within one category"
+msgstr "In una sola categoria"
+
+msgctxt "settings.appearance"
+msgid "Language and theme"
+msgstr "Lingua e tema"
+
+msgctxt "settings.change_email"
+msgid "Request email change"
+msgstr "Richiedi cambio email"
+
+msgctxt "settings.change_password"
+msgid "Change password"
+msgstr "Cambia password"
+
+msgctxt "settings.credentials"
+msgid "Credentials"
+msgstr "Credenziali"
+
+msgctxt "settings.description"
+msgid "Choose how GPForum renders the interface for your account."
+msgstr "Scegli come GPForum mostra l’interfaccia del tuo account."
+
+# Same as English.
+msgctxt "settings.email"
+msgid "Email"
+msgstr "Email"
+
+msgctxt "settings.email_change_requested"
+msgid "Email change confirmation requested."
+msgstr "Conferma cambio email richiesta."
+
+msgctxt "settings.login_required"
+msgid "Sign in to manage your preferences."
+msgstr "Accedi per gestire le tue preferenze."
+
+msgctxt "settings.notification_channels"
+msgid "Notification channels"
+msgstr "Canali di notifica"
+
+msgctxt "settings.notifications"
+msgid "Notifications"
+msgstr "Notifiche"
+
+msgctxt "settings.notifications_description"
+msgid "Control which product channels are allowed to notify you."
+msgstr "Controlla quali canali prodotto possono notificarti."
+
+msgctxt "settings.password_changed"
+msgid "Password changed."
+msgstr "Password cambiata."
+
+msgctxt "settings.save"
+msgid "Save preferences"
+msgstr "Salva preferenze"
+
+msgctxt "settings.saved"
+msgid "Preferences saved."
+msgstr "Preferenze salvate."
+
+msgctxt "settings.timezone"
+msgid "Time zone"
+msgstr "Fuso orario"
+
+#, python-brace-format
+msgctxt "settings.timezone_default"
+msgid "Forum default ({zone})"
+msgstr "Predefinito del forum ({zone})"
+
+msgctxt "settings.timezone_help"
+msgid "Dates and times across the forum are shown in this zone."
+msgstr "Date e orari del forum vengono mostrati in questo fuso."
+
+msgctxt "settings.title"
+msgid "Settings"
+msgstr "Impostazioni"
+
+msgctxt "settings.your_data_description"
+msgid "Export a copy of what you have written, or ask for your account to be deleted."
+msgstr "Esporta una copia di ciò che hai scritto, o chiedi l'eliminazione del tuo account."
+
+msgctxt "settings.your_data_open"
+msgid "Manage your data"
+msgstr "Gestisci i tuoi dati"
+
+msgctxt "state.active"
+msgid "Active"
+msgstr "Attivo"
+
+msgctxt "state.all"
+msgid "All"
+msgstr "Tutti"
+
+msgctxt "state.behind"
+msgid "Behind"
+msgstr "In ritardo"
+
+msgctxt "state.cancelled"
+msgid "Cancelled"
+msgstr "Annullato"
+
+msgctxt "state.completed"
+msgid "Completed"
+msgstr "Completato"
+
+msgctxt "state.current"
+msgid "Current"
+msgstr "Aggiornato"
+
+msgctxt "state.degraded"
+msgid "Degraded"
+msgstr "Degradato"
+
+msgctxt "state.disabled"
+msgid "Disabled"
+msgstr "Disattivato"
+
+msgctxt "state.done"
+msgid "Done"
+msgstr "Completato"
+
+msgctxt "state.failed"
+msgid "Failed"
+msgstr "Fallito"
+
+msgctxt "state.indefinite"
+msgid "Indefinite"
+msgstr "Indefinita"
+
+msgctxt "state.manual"
+msgid "Manual"
+msgstr "Manuale"
+
+msgctxt "state.not_run"
+msgid "Not run"
+msgstr "Non eseguito"
+
+# Same as English.
+msgctxt "state.ok"
+msgid "OK"
+msgstr "OK"
+
+msgctxt "state.open"
+msgid "Open"
+msgstr "Aperto"
+
+msgctxt "state.pending"
+msgid "Pending"
+msgstr "In attesa"
+
+msgctxt "state.rejected"
+msgid "Rejected"
+msgstr "Respinto"
+
+msgctxt "state.replayed"
+msgid "Replayed"
+msgstr "Rimessa in coda"
+
+msgctxt "state.resolved"
+msgid "Resolved"
+msgstr "Risolto"
+
+msgctxt "state.sent"
+msgid "Sent"
+msgstr "Inviato"
+
+msgctxt "state.suspended"
+msgid "Suspended"
+msgstr "Sospeso"
+
+msgctxt "state.triaged"
+msgid "Triaged"
+msgstr "Preso in carico"
+
+msgctxt "state.unknown"
+msgid "Unknown"
+msgstr "Sconosciuto"
+
+# Same as English.
+msgctxt "target.post"
+msgid "Post"
+msgstr "Post"
+
+msgctxt "target.thread"
+msgid "Thread"
+msgstr "Discussione"
+
+msgctxt "target.user"
+msgid "User"
+msgstr "Utente"
+
+msgctxt "theme.auto"
+msgid "Automatic"
+msgstr "Automatico"
+
+msgctxt "theme.choose"
+msgid "Theme"
+msgstr "Tema"
+
+msgctxt "theme.dark"
+msgid "Dark"
+msgstr "Scuro"
+
+msgctxt "theme.default"
+msgid "Light"
+msgstr "Chiaro"
+
+msgctxt "theme.high_contrast"
+msgid "High contrast"
+msgstr "Alto contrasto"
+
+msgctxt "theme.selector_label"
+msgid "Theme selector"
+msgstr "Selettore tema"
+
+msgctxt "theme.updated"
+msgid "Theme updated"
+msgstr "Tema aggiornato"
+
+msgctxt "ui.actions"
+msgid "Page actions"
+msgstr "Azioni pagina"
+
+msgctxt "ui.admin_table"
+msgid "Admin table"
+msgstr "Tabella admin"
+
+msgctxt "ui.confirmation"
+msgid "Confirmation"
+msgstr "Conferma"
+
+msgctxt "ui.dialog_close"
+msgid "Close dialog"
+msgstr "Chiudi dialog"
+
+msgctxt "ui.empty_state"
+msgid "Nothing to show yet"
+msgstr "Niente da mostrare"
+
+msgctxt "ui.loading"
+msgid "Loading"
+msgstr "Caricamento"
+
+msgctxt "ui.moderation_indicator"
+msgid "Moderation state:"
+msgstr "Stato moderazione:"
+
+msgctxt "ui.pagination"
+msgid "Pagination"
+msgstr "Paginazione"
+
+msgctxt "ui.status_banner"
+msgid "Status"
+msgstr "Stato"

@@ -1,0 +1,18 @@
+gpforum-private-beta-checklist: print-only orchestrator
+PRIVATE BETA: NOT CLAIMED (commands/status only; record evidence separately)
+Docs: docs/ops/private-beta-checklist.md
+
+entrypoint	label	path
+ok	system-perl	script/gpforum-system-perl
+ok	macports-env	script/gpforum-macports-env
+ok	migrate	bin/gpforum-migrate
+ok	query-budget	script/query-budget
+ok	staging-drill	script/staging-drill
+ok	staging-drill-attachments	script/staging-drill-attachments
+ok	staging-host-verify	script/staging-host-verify
+ok	stress-load	script/stress-load
+ok	mail-check	script/gpforum-mail-check
+present	checklist-doc	docs/ops/private-beta-checklist.md
+present	staging-host-doc	docs/ops/staging-host.md
+
+status=print-only residual_gaps=live-staging-smtp-stress-deploy private_beta=not-claimed

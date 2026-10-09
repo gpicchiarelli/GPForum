@@ -1,0 +1,9 @@
+carton_ok check:
+carton_ok
+BOOTSTRAP_EXIT:0
+distributions: 158
+158 distributions installed
+Complete! Modules were installed into /workspace/local
+bootstrap-deps: verifying lock with carton check
+cpanfile's dependencies are satisfied.
+BOOTSTRAP_EXIT:0

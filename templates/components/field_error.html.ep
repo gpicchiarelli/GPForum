@@ -1,0 +1,7 @@
+% my $field_id = stash('field_id') || q{};
+% my $message = stash('message') || q{};
+% my $role = stash('role') || q{};
+
+% if (length $message) {
+  <p id="<%= $field_id %>" class="field-error"<%== length $role ? ' role="' . $role . '"' : q{} %>><%= $message %></p>
+% }

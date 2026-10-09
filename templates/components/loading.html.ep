@@ -1,0 +1,3 @@
+% my $label = stash('label') || t('ui.loading');
+
+<p class="ui-loading" role="status" aria-live="polite" hidden><%= $label %></p>

@@ -1,0 +1,27 @@
+% layout 'default';
+% title $thread->{title} . ' - ' . t('app.name');
+% stash breadcrumbs => ui_thread_breadcrumbs($thread);
+% my $can_reply = !$thread->{deleted_at} && !$thread->{locked_at};
+
+<article class="thread" aria-labelledby="thread-heading">
+  <%= include 'forum/_thread_header', can_reply => $can_reply %>
+  <%= include 'forum/_thread_notices' %>
+  <section aria-labelledby="posts-heading">
+    <h2 class="visually-hidden" id="posts-heading"><%= t('forum.posts') %></h2>
+    % if (@{$posts}) {
+      <ol class="ui-card-list" id="posts">
+        <%= include 'forum/_posts', posts => $posts %>
+      </ol>
+    % } else {
+      <%= include 'components/empty_state',
+        heading_id => 'posts-empty-heading',
+        component_title => t('forum.no_visible_posts') %>
+    % }
+    <%= include 'forum/_posts_pagination' %>
+  </section>
+  % if ($can_reply) {
+    <%= include 'forum/_composer' %>
+  % } else {
+    <div id="reply" hidden></div>
+  % }
+</article>

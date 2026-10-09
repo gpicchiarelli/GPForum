@@ -1,0 +1,40 @@
+%# What an action on the thread page changed, for the page to swap in place
+%# (HX-Request). What the request pointed at takes the first part: the list
+%# takes the posts, the toolbar takes itself; each other part names its own
+%# place with hx-swap-oob. Nothing here has a layout; a head carries a
+%# <title>, which htmx gives the document.
+%#
+%# Reads the thread page's payload, "fragment", which parts to send, and
+%# "flash_message", what a redirect would have flashed.
+% my $can_reply = !$thread->{deleted_at} && !$thread->{locked_at};
+% if ($fragment->{header}) {
+<title><%= $thread->{title} . ' - ' . t('app.name') %></title>
+<%= include 'forum/_thread_header', can_reply => $can_reply %>
+% }
+% if ($fragment->{breadcrumbs}) {
+<%= include 'components/breadcrumbs', breadcrumbs => ui_thread_breadcrumbs($thread), swap_oob => 1 %>
+% }
+% if ($fragment->{notices}) {
+<%= include 'forum/_thread_notices', swap_oob => 1 %>
+% }
+% if ($fragment->{posts}) {
+<%= include 'forum/_posts', posts => $posts %>
+% }
+% if ($fragment->{pagination}) {
+<%= include 'forum/_posts_pagination', swap_oob => 1 %>
+% }
+% if ($fragment->{toolbar}) {
+<%= include 'forum/_thread_tools', can_reply => $can_reply %>
+% }
+% if ($fragment->{composer} && $can_reply) {
+<%= include 'forum/_composer', swap_oob => 1 %>
+% } elsif ($fragment->{composer}) {
+<div id="reply" hidden hx-swap-oob="true"></div>
+% }
+% if (stash('flash_message')) {
+<div id="flash" hx-swap-oob="true">
+  <section class="flash-stack page-shell" aria-label="<%= t('layout.flash_messages') %>">
+    <p class="flash flash--success" role="status"><%= stash('flash_message') %></p>
+  </section>
+</div>
+% }

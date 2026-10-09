@@ -1,0 +1,15 @@
+%# The theme, as one button for each: pressing one chooses it. The one in use
+%# says so (aria-pressed).
+<form class="theme-form" method="post" action="<%= ui_path('theme_update') %>" aria-label="<%= t('theme.selector_label') %>">
+  <%= csrf_field %>
+  % if (session('user_id')) {
+    <input type="hidden" name="command_id" value="<%= ui_command_id %>">
+  % }
+  <input type="hidden" name="return_to" value="<%= ui_return_to %>">
+  <span id="theme-selector-label"><%= t('theme.choose') %></span>
+  <span class="segmented" role="group" aria-labelledby="theme-selector-label">
+    % for my $option (@{ ui_theme_options() }) {
+      <button type="submit" name="theme" value="<%= $option->{name} %>" aria-pressed="<%= $option->{current} ? 'true' : 'false' %>"><%= $option->{label} %></button>
+    % }
+  </span>
+</form>

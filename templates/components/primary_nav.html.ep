@@ -1,0 +1,15 @@
+%# Where a reader can go: the places of the forum, and for a member their own
+%# lists. Starting a thread is something to do, so it is a button on the pages
+%# that list threads and not a place here. The link to the page being read
+%# says so (aria-current), and the stylesheet marks it.
+% my $here = current_route() // q{};
+% my $current = sub { return $here eq shift ? ' aria-current="page"' : q{} };
+<nav class="site-nav" aria-label="<%= t('nav.primary') %>">
+  <a href="<%= ui_path('categories') %>"<%== $current->('categories') %>><%= t('nav.categories') %></a>
+  <a href="<%= ui_path('forum_search') %>"<%== $current->('forum_search') %>><%= t('nav.search') %></a>
+  % if (session('user_id')) {
+    <a href="<%= ui_path('bookmarks') %>"<%== $current->('bookmarks') %>><%= t('nav.bookmarks') %></a>
+    <a href="<%= ui_path('feed') %>"<%== $current->('feed') %>><%= t('nav.feed') %></a>
+    <a href="<%= ui_path('notifications') %>"<%== $current->('notifications') %>><%= t('nav.notifications') %></a>
+  % }
+</nav>

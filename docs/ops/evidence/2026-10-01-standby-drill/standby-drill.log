@@ -1,0 +1,12 @@
+standby-drill: rehearsing a streaming standby and a failover
+  cloning the standby from a base backup
+  standby is in recovery, streaming from the primary
+  a write on the primary reached the standby in 54 ms
+  the standby refuses writes
+  the driver's multi-host DSN writes to the primary (port 55445)
+  losing the primary, with the application connected
+  the standby was promoted in 166 ms
+  the connected application reconnected to the promoted standby (port 55446) and wrote to it
+  rows written before the loss, present on the new primary: 3 (want 3)
+
+standby-drill status=pass caught_up_ms=54 promoted_ms=166

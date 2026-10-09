@@ -1,0 +1,165 @@
+% layout 'default', shell => 'wide';
+% title t('admin.settings') . ' - ' . t('app.name');
+% my %section_title = (
+%   antivirus        => t('admin.settings_section_antivirus'),
+%   application      => t('admin.settings_section_application'),
+%   cache            => t('admin.settings_section_cache'),
+%   database         => t('admin.settings_section_database'),
+%   jobs             => t('admin.settings_section_jobs'),
+%   mail             => t('admin.settings_section_mail'),
+%   operating_system => t('admin.settings_section_operating_system'),
+%   processes        => t('admin.settings_section_processes'),
+%   realtime         => t('admin.settings_section_realtime'),
+%   search           => t('admin.settings_section_search'),
+%   security         => t('admin.settings_section_security'),
+% );
+% my %file_label = (
+%   eicar    => t('admin.antivirus_eicar'),
+%   largest  => t('admin.antivirus_largest'),
+%   ordinary => t('admin.antivirus_ordinary'),
+% );
+
+<section aria-labelledby="admin-settings-heading">
+  <%= include 'components/page_header', heading_id => 'admin-settings-heading', component_title => t('admin.settings'), actions_label => t('admin.settings_nav'), actions => ui_actions({ href => ui_path('admin_dashboard'), label => t('admin.admin') }, { href => '#admin-configuration-heading', label => t('admin.configuration') }, { href => '#admin-mail-heading', label => t('admin.mail') }, { href => '#admin-antivirus-heading', label => t('admin.antivirus') }) %>
+
+  <section aria-labelledby="admin-configuration-heading">
+    <%= include 'components/section_header', heading_id => 'admin-configuration-heading', component_title => t('admin.configuration') %>
+    <p><%= t('admin.settings_intro') %></p>
+    <p><%= t('admin.settings_change', { file => $change->{file} // q{}, freebsd_file => $change->{freebsd_file} // q{}, restart => $change->{restart} // q{} }) %></p>
+    <p><%= t('admin.settings_secret_note') %></p>
+    % for my $section (@{$sections}) {
+      % my $heading_id = $section->{ui}{heading_id};
+      <section aria-labelledby="<%= $heading_id %>">
+        <h3 id="<%= $heading_id %>"><%= $section_title{ $section->{name} } // $section->{name} %></h3>
+        <div class="ui-table-wrap">
+          <table class="ui-admin-table" aria-labelledby="<%= $heading_id %>">
+            <thead>
+              <tr>
+                <th scope="col"><%= t('admin.setting') %></th>
+                <th scope="col"><%= t('admin.setting_value') %></th>
+                <th scope="col"><%= t('admin.setting_source') %></th>
+              </tr>
+            </thead>
+            <tbody>
+              % for my $setting (@{ $section->{settings} || [] }) {
+                <tr>
+                  <th scope="row"><code><%= $setting->{env} %></code></th>
+                  % if ($setting->{secret}) {
+                    % if (!$setting->{configured}) {
+                      <td><%= t('admin.setting_secret_unset') %></td>
+                    % } elsif ($setting->{list}) {
+                      <td><%= tc('admin.setting_secret_count', $setting->{configured}) %></td>
+                    % } else {
+                      <td><%= t('admin.setting_secret_set') %></td>
+                    % }
+                  % } elsif (length($setting->{value} // q{})) {
+                    <td><code><%= $setting->{value} %></code></td>
+                  % } else {
+                    <td><%= t('admin.setting_empty') %></td>
+                  % }
+                  <td><%= ($setting->{source} // q{}) eq 'environment' ? t('admin.setting_source_environment') : t('admin.setting_source_default') %></td>
+                </tr>
+              % }
+            </tbody>
+          </table>
+        </div>
+      </section>
+    % }
+  </section>
+
+  <section aria-labelledby="admin-mail-heading">
+    <%= include 'components/section_header', heading_id => 'admin-mail-heading', component_title => t('admin.mail') %>
+    % if ($diagnostics_unavailable) {
+      <p><%= t('admin.diagnostics_unavailable') %></p>
+    % } else {
+      % if (($mail->{transport} // q{}) eq 'test') {
+        <p><%= t('admin.mail_test_transport_note') %></p>
+      % }
+      % if (length($mail->{recipient} // q{})) {
+        <form method="post" action="<%= ui_path('admin_mail_test') %>">
+          <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $mail->{command_id} %>">
+          <p id="mail-test-hint"><%= t('admin.mail_test_hint', { address => $mail->{recipient}, transport => $mail->{transport} // q{} }) %></p>
+          <button type="submit" aria-describedby="mail-test-hint"><%= t('admin.send_test_mail') %></button>
+        </form>
+      % } else {
+        <p><%= t('admin.mail_test_no_address') %></p>
+      % }
+      <h3 id="admin-mail-last-heading"><%= t('admin.mail_test_last') %></h3>
+      % if (my $last = $mail->{latest}) {
+        <dl>
+          <dt><%= t('admin.status') %></dt>
+          <dd><%= include 'components/status_badge', value => $last->{outcome} %> <time datetime="<%= $last->{at} %>"><%= dt($last->{at}) %></time></dd>
+          <dt><%= t('admin.mail_transport') %></dt>
+          <dd><%= $last->{transport} // t('common.none') %></dd>
+          % if (length($last->{error} // q{})) {
+            <dt><%= t('admin.error') %></dt>
+            <dd><%= $last->{error} %></dd>
+          % }
+        </dl>
+      % } else {
+        <p><%= t('admin.mail_test_never') %></p>
+      % }
+    % }
+  </section>
+
+  <section aria-labelledby="admin-antivirus-heading">
+    <%= include 'components/section_header', heading_id => 'admin-antivirus-heading', component_title => t('admin.antivirus') %>
+    % if ($diagnostics_unavailable) {
+      <p><%= t('admin.diagnostics_unavailable') %></p>
+    % } else {
+      % if ($antivirus->{in_request}) {
+        <form method="post" action="<%= ui_path('admin_antivirus_check') %>">
+          <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $antivirus->{command_id} %>">
+          <p id="antivirus-check-hint"><%= t('admin.antivirus_check_hint', { engine => $antivirus->{engine} // q{} }) %></p>
+          <button type="submit" aria-describedby="antivirus-check-hint"><%= t('admin.run_antivirus_check') %></button>
+        </form>
+      % } else {
+        <p><%= t('admin.antivirus_check_shell_only') %></p>
+      % }
+      <h3 id="admin-antivirus-last-heading"><%= t('admin.antivirus_check_last') %></h3>
+      % if (my $last = $antivirus->{latest}) {
+        % my $health = $last->{health} || {};
+        <dl>
+          <dt><%= t('admin.status') %></dt>
+          <dd><%= include 'components/status_badge', value => $last->{status} %> <time datetime="<%= $last->{at} %>"><%= dt($last->{at}) %></time></dd>
+          <dt><%= t('admin.antivirus_engine') %></dt>
+          <dd><%= $last->{engine} // t('common.none') %></dd>
+          % if ($health->{status}) {
+            <dt><%= t('admin.antivirus_health') %></dt>
+            <dd>
+              <%= include 'components/status_badge', value => $health->{status} %>
+              % for my $field (grep { length($health->{$_} // q{}) } qw(engine database published socket program error)) {
+                <span class="ui-meta"><%= $health->{$field} %></span>
+              % }
+            </dd>
+          % }
+          % for my $file (@{ $last->{files} || [] }) {
+            <dt><%= $file_label{ $file->{key} } %></dt>
+            % if ($file->{key} eq 'eicar') {
+              <dd><%= $file->{passed} ? t('admin.antivirus_detected') : t('admin.antivirus_not_detected') %><%= length($file->{signature} // q{}) ? " ($file->{signature})" : q{} %></dd>
+            % } else {
+              <dd><%= $file->{passed} ? t('admin.antivirus_clean') : t('admin.antivirus_not_clean') %><%= length($file->{error} // q{}) ? " ($file->{error})" : q{} %></dd>
+            % }
+          % }
+        </dl>
+        % if ($last->{status} eq 'disabled') {
+          <p><%= t('admin.antivirus_disabled') %></p>
+        % } elsif ($last->{status} eq 'not_run') {
+          <p><%= t('admin.antivirus_check_shell_only') %></p>
+        % }
+        % if (@{ $last->{problems} || [] }) {
+          <h4 id="admin-antivirus-problems-heading"><%= t('admin.antivirus_problems') %></h4>
+          <ul aria-labelledby="admin-antivirus-problems-heading">
+            % for my $problem (@{ $last->{problems} }) {
+              <li><%= $problem %></li>
+            % }
+          </ul>
+        % }
+      % } else {
+        <p><%= t('admin.antivirus_check_never') %></p>
+      % }
+    % }
+  </section>
+</section>

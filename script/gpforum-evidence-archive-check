@@ -1,0 +1,84 @@
+#!/bin/sh
+set -eu
+
+# Validate every archived ops evidence blob under docs/ops/evidence.
+#
+# Each archive stores a `<name>.exit` sidecar with the exit status of the
+# harness that produced `<name>.json`. Status 0 or 1 means the harness ran and
+# wrote evidence (1 is a `--check` threshold failure, which is still a
+# measurement). Status 2 or higher means the harness aborted before producing
+# evidence — an unusable host, missing dependencies — so the blob records a
+# failed attempt, not a claim, and is listed and skipped instead of validated.
+# See docs/ops/evidence/README.md.
+#
+# Does not claim private-beta readiness.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+archive_root=docs/ops/evidence
+format=--human
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-evidence-archive-check [--json|--human|--help]
+
+  --json   validator report as JSON
+  --human  short plain-text validator report (default)
+
+Validates docs/ops/evidence/**/*.json with
+`script/evidence-validate --strict`, skipping blobs whose `.exit`
+sidecar records a harness that never produced evidence.
+EOF
+}
+
+for argument in "$@"; do
+    case "$argument" in
+        --json)
+            format=--json
+            ;;
+        --human)
+            format=--human
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-evidence-archive-check: unknown option: $argument" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [ ! -d "$archive_root" ]; then
+    echo "gpforum-evidence-archive-check: missing archive root: $archive_root" >&2
+    exit 1
+fi
+
+skipped=0
+set --
+for json in $(find "$archive_root" -type f -name '*.json' | sort); do
+    sidecar="${json%.json}.exit"
+    if [ -f "$sidecar" ]; then
+        status=$(tr -dc '0-9' < "$sidecar" | cut -c1-3)
+        if [ -n "$status" ] && [ "$status" -ge 2 ]; then
+            printf 'skip: %s (harness exit=%s; no evidence produced)\n' \
+                "$json" "$status"
+            skipped=$((skipped + 1))
+            continue
+        fi
+    fi
+    set -- "$@" "$json"
+done
+
+if [ "$#" -eq 0 ]; then
+    echo "gpforum-evidence-archive-check: no archived evidence to validate" >&2
+    exit 1
+fi
+
+printf 'gpforum-evidence-archive-check: validating %s archive(s), skipped %s\n' \
+    "$#" "$skipped"
+
+exec script/evidence-validate --strict "$format" "$@"

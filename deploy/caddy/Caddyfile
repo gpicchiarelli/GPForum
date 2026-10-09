@@ -1,0 +1,70 @@
+forum.example.com {
+    encode zstd gzip
+
+    # Pages name the application's static files with ?v=<the first twelve
+    # hex digits of the SHA-256 of the file's bytes>
+    # (GPForum::Web::AssetManifest). A versioned URL names those bytes for
+    # good, so it is cached for a year and never revalidated; a bare one (an
+    # old bookmark, the standalone index.html) for an hour -- the values the
+    # application sends itself. Caddy cannot check the digest; see BUGS AND
+    # LIMITATIONS in that module.
+    @versioned query v=*
+    @unversioned not query v=*
+
+    # The application's static roots are assets/css and assets/img, searched
+    # in that order and served at the site root (/gpforum-ssr.css,
+    # /gpforum-mark.svg). Caddy serves them from disk with the application's
+    # Cache-Control; a name neither holds goes on to the application. A file
+    # Caddy serves itself carries none of the application's browser headers,
+    # so nosniff is added here.
+    @static_root {
+        path_regexp ^/[^/]+\.(css|js|svg|png|jpe?g|webp|ico|woff2)$
+        file {
+            root /opt/gpforum/assets
+            try_files /css{path} /img{path}
+        }
+    }
+    handle @static_root {
+        root * /opt/gpforum/assets
+        rewrite * {file_match.relative}
+        header @versioned Cache-Control "public, max-age=31536000, immutable"
+        header @unversioned Cache-Control "public, max-age=3600"
+        header X-Content-Type-Options nosniff
+        file_server
+    }
+
+    # The repository's assets/ tree, for the standalone index.html; the
+    # application does not serve this prefix. handle keeps the /assets/
+    # prefix, so /assets/css/site.css maps to
+    # /opt/gpforum/assets/css/site.css. Only a file that exists is handled
+    # here: Caddy would put these lifetimes on its own 404 as well, and keep
+    # a missing versioned URL missing for a year. A miss goes on to the
+    # application, which answers it without them.
+    @assets_file {
+        path /assets/*
+        file {
+            root /opt/gpforum
+        }
+    }
+    handle @assets_file {
+        root * /opt/gpforum
+        header @versioned Cache-Control "public, max-age=31536000, immutable"
+        header @unversioned Cache-Control "public, max-age=3600"
+        header X-Content-Type-Options nosniff
+        file_server
+    }
+
+    # /metrics answers the loopback only, as in the nginx configurations: the
+    # scraper runs on this host, and the token alone should not be all that
+    # stands between the internet and the counters. The application answers
+    # /metrics/ as /metrics, so both are named.
+    @metrics_remote {
+        path /metrics /metrics/
+        not remote_ip 127.0.0.1 ::1
+    }
+    respond @metrics_remote 403
+
+    reverse_proxy 127.0.0.1:8080 {
+        header_up X-Forwarded-Proto {scheme}
+    }
+}

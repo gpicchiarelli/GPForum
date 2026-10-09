@@ -1,0 +1,22 @@
+# GPForum Perl::Tidy profile.
+#
+# Without this file the format of ~93k lines is whatever the installed
+# Perl::Tidy happens to default to, so a tool upgrade rewrites the entire tree
+# and breaks the `tidy` gate everywhere at once. These values are the defaults
+# of Perl::Tidy v20260826, written down so they stop being implicit.
+
+--maximum-line-length=80
+--indent-columns=4
+--continuation-indentation=2
+
+--paren-tightness=1
+--square-bracket-tightness=1
+--brace-tightness=1
+--block-brace-tightness=0
+
+--default-tabsize=8
+--no-tabs
+
+# Keep the diff of a formatting change readable: no reflowing of comments and
+# no guessing at the author's line breaks beyond what the rules above imply.
+--nooutdent-long-comments

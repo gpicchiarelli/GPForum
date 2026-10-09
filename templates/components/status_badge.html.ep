@@ -1,0 +1,5 @@
+% my $namespace = stash('namespace') || 'state';
+% my $value = stash('value') || 'unknown';
+% my $badge = ui_badge($namespace, $value);
+
+<%= include 'components/badge', tone => $badge->{tone}, label => $badge->{label} %>

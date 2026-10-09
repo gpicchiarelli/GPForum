@@ -1,0 +1,7 @@
+# ShellCheck configuration for GPForum POSIX sh entrypoints (script/*).
+#
+# SC1007 fires on `root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)`, the
+# repository-wide idiom for resolving the project root. `CDPATH= cd` clears
+# CDPATH for that one command so `cd` cannot print or jump elsewhere; the empty
+# assignment is deliberate, not a typo.
+disable=SC1007

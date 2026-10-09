@@ -1,0 +1,16 @@
+%# An action that opens over the page: a popover holding a short form. The
+%# button that opens it names it through popovertarget; the browser closes it
+%# on Escape or on a click outside, and gives focus back to that button.
+%# Where popovers are not supported it is a panel in the page, and its forms
+%# work all the same.
+%#
+%# Takes "sheet_id", "component_title" and "sheet_body", a template block.
+% my $sheet_id = stash('sheet_id');
+
+<div class="sheet" id="<%= $sheet_id %>" popover role="dialog" aria-labelledby="<%= $sheet_id %>-heading">
+  <header class="sheet__header">
+    <h2 id="<%= $sheet_id %>-heading"><%= stash('component_title') %></h2>
+    <button type="button" class="button--quiet sheet__dismiss" popovertarget="<%= $sheet_id %>" popovertargetaction="hide" aria-label="<%= t('ui.dialog_close') %>">&times;</button>
+  </header>
+  <%= stash('sheet_body')->() %>
+</div>

@@ -1,0 +1,1 @@
+{"check":"live","status":"ok","time":"2026-09-20T21:12:57Z"}

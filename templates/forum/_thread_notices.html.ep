@@ -1,0 +1,21 @@
+%# What the page says about the thread's state: locked, hidden, and for its
+%# author the way to restore it. A write that changes the state answers with
+%# these for their place.
+%#
+%# Reads the page's "thread"; "swap_oob" marks a copy sent to replace the
+%# page's.
+<div id="thread-notices"<%== stash('swap_oob') ? ' hx-swap-oob="true"' : q{} %>>
+  % if ($thread->{locked_at}) {
+    <%= include 'components/alert', tone => 'warning', message => t('forum.thread_locked') %>
+  % }
+  % if ($thread->{deleted_at}) {
+    <p role="status"><%= t('forum.thread_deleted_notice') %></p>
+  % }
+  % if ($thread->{can_restore_thread}) {
+    <form method="post" action="<%= ui_path('thread_restore', thread_id => $thread->{thread_id}) %>" hx-post="<%= ui_path('thread_restore', thread_id => $thread->{thread_id}) %>" hx-target="#thread-header" hx-swap="outerHTML">
+      <%= csrf_field %>
+      <input type="hidden" name="command_id" value="<%= $thread->{restore_thread_command_id} || q{} %>">
+      <button type="submit" class="button--secondary"><%= t('forum.restore_thread') %></button>
+    </form>
+  % }
+</div>

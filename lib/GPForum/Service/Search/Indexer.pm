@@ -1,0 +1,837 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Search::Indexer;
+
+use Const::Fast;
+use List::Util  qw(any none uniq);
+use Digest::SHA qw(sha1_hex);
+use Mojo::Base 'GPForum::Base', -signatures;
+use v5.40;
+
+use GPForum::Infrastructure::CountedQuery;
+use GPForum::Infrastructure::Row;
+use GPForum::Infrastructure::UniqueConflict;
+use GPForum::X::Argument;
+use GPForum::X::Conflict;
+use GPForum::Service::Clock;
+use GPForum::Infrastructure::Id;
+use GPForum::Service::Search::DocumentBuilder;
+
+our $VERSION = '0.001';
+
+const my $VECTOR_EXPRESSION => join q{ },
+  q{setweight(to_tsvector(?, coalesce(?, '')), 'A') ||},
+  q{setweight(to_tsvector(?, coalesce(?, '')), 'B')};
+const my $REBUILD_BATCH     => 500;
+const my $ENTITY_CONSTRAINT => 'search_documents_entity_key';
+const my @REBUILD_COUNTS    => qw(indexed pruned unchanged);
+
+# A UUID's 8-4-4-4-12 hex groups, read from the front of a SHA-1 digest.
+const my $UUID_GROUPS => 'A8 A4 A4 A4 A12';
+
+# A document's id is derived from its entity (_document_id_for), so a second
+# insert of the same entity collides on both keys, and PostgreSQL names the
+# primary key: the index it checks first. Either name is the same document.
+const my $ID_CONSTRAINT => 'search_documents_pkey';
+
+# _lock_document's lock for a batch of documents, in one statement. The keys
+# are taken in sorted order -- PostgreSQL evaluates a volatile function in the
+# select list after the sort -- so two batches over the same documents queue
+# behind each other instead of deadlocking.
+const my $LOCK_DOCUMENTS_SQL => join q{ },
+  q{SELECT pg_advisory_xact_lock(hashtextextended(lock_key, 0))},
+  q{FROM unnest(?::text[]) AS document(lock_key) ORDER BY lock_key};
+
+# What the document builder indexes: a live thread, visible or locked, and a
+# live, visible post in such a thread.
+const my %LIVE_STATES => (
+    post   => ['visible'],
+    thread => [qw(locked visible)],
+);
+
+# Documents whose source is gone, deleted or hidden: candidates only. Each is
+# checked again under its document lock before it goes (see _prune).
+const my %PRUNE_CANDIDATES_SQL => (
+    post => join( q{ },
+q{SELECT d.entity_id FROM search_documents d WHERE d.entity_type = 'post'},
+        q{AND NOT EXISTS (SELECT 1 FROM posts p},
+        q{JOIN threads t ON t.thread_id = p.thread_id},
+        q{WHERE p.post_id = d.entity_id AND p.deleted_at IS NULL},
+        q{AND p.moderation_state = 'visible' AND t.deleted_at IS NULL},
+        q{AND t.moderation_state IN ('visible', 'locked'))} ),
+    thread => join( q{ },
+q{SELECT d.entity_id FROM search_documents d WHERE d.entity_type = 'thread'},
+        q{AND NOT EXISTS (SELECT 1 FROM threads t},
+        q{WHERE t.thread_id = d.entity_id AND t.deleted_at IS NULL},
+        q{AND t.moderation_state IN ('visible', 'locked'))} ),
+);
+
+# Every outbox message is dispatched to every handler for its event, search
+# included, so the oldest one not yet delivered bounds how far behind search
+# can be.
+const my $LAG_SQL => join q{ },
+  q{SELECT count(*) AS pending, to_char(min(created_at) AT TIME ZONE 'UTC',},
+  q{'YYYY-MM-DD"T"HH24:MI:SS"Z"') AS oldest_pending_at,},
+  q{coalesce(floor(extract(epoch FROM now() - min(created_at))), 0)},
+  q{AS lag_seconds FROM outbox_messages},
+  q{WHERE status IN ('pending', 'running', 'failed')};
+
+const my @DOCUMENT_COPY => qw(
+  author_user_id
+  body
+  category_id
+  language
+  permission_scope
+  permission_version
+  source_created_at
+  source_version
+  space_id
+  title
+  visibility
+  visibility_version
+);
+
+has builder => sub { return GPForum::Service::Search::DocumentBuilder->new; };
+has clock   => sub { return GPForum::Service::Clock->new; };
+has id_service     => sub { return GPForum::Infrastructure::Id->new; };
+has offset_tracker => undef;    # optional: without one lag is not observed
+
+# Ids a rebuild step indexes, and posts a batch of one thread indexes or
+# removes: enough to be worth an outbox message, few enough that a step never
+# holds the dispatcher for long, nor a removal's transaction more than this
+# many document locks.
+has rebuild_batch_size => $REBUILD_BATCH;
+__PACKAGE__->requires(qw(schema));
+
+# How far search can be behind the forum. An offset tracker answers when one
+# is wired; otherwise the outbox does, which every search update passes
+# through.
+sub observe_lag ($self) {
+    return $self->offset_tracker->observe_lag('search_documents')
+      if $self->offset_tracker;
+
+    my $row =
+      GPForum::Infrastructure::CountedQuery->select_row( $self->schema,
+        $LAG_SQL );
+
+    return {
+        lag_seconds       => 0 + ( $row->{lag_seconds} // 0 ),
+        oldest_pending_at => $row->{oldest_pending_at},
+        pending           => 0 + ( $row->{pending} // 0 ),
+        projection_name   => 'search_documents',
+        status            => $row->{pending} ? 'behind' : 'current',
+    };
+}
+
+sub index_thread ( $self, $thread_id ) {
+    return $self->schema->txn_do(
+        sub {
+            return $self->_index_thread($thread_id);
+        }
+    );
+}
+
+# Reading the source row and rewriting search_documents are one unit: a
+# document half written from a row that moved on indexes stale content.
+sub _index_thread ( $self, $thread_id ) {
+    $self->_lock_document( 'thread', $thread_id );
+    my $thread = $self->schema->resultset('Thread')->find($thread_id);
+    return $self->_remove_document( 'thread', $thread_id ) if !$thread;
+
+    my $document = $self->builder->build_thread($thread);
+    return $self->_remove_document( 'thread', $thread_id ) if !$document;
+
+    return $self->_upsert_document($document);
+}
+
+# Batch drivers stay outside a single transaction on purpose: each entity
+# below is already atomic and a corpus-wide transaction would pin the
+# snapshot for the whole rebuild.
+sub index_thread_posts ( $self, $thread_id ) {
+    my %summary = map { $_ => 0 } @REBUILD_COUNTS;
+    my $after;
+    while (1) {
+        my $batch = $self->index_thread_posts_batch( $thread_id, $after );
+        for my $count (@REBUILD_COUNTS) {
+            $summary{$count} += $batch->{$count};
+        }
+        $after = $batch->{next_after};
+        last if !defined $after;
+    }
+
+    return \%summary;
+}
+
+# One batch of a thread's posts indexed again, each post in its own
+# transaction: every post of the thread, whatever its state, so a post that
+# died since keeps no document. $after is the position of the last post
+# done; next_after, set when the batch was full, is where the next batch
+# starts. The search handler runs one batch per outbox message, so renaming
+# or moving a large thread never holds the dispatcher for long.
+sub index_thread_posts_batch ( $self, $thread_id, $after = undef ) {
+    my $posts  = $self->_thread_post_batch( $thread_id, $after );
+    my %counts = map { $_ => 0 } @REBUILD_COUNTS;
+    for my $post ( @{$posts} ) {
+        $counts{ _rebuild_outcome( $self->index_post( $post->{post_id} ) ) }++;
+    }
+
+    return {
+        %counts,
+        next_after => _next_position( $posts, $self->rebuild_batch_size ),
+        thread_id  => $thread_id,
+    };
+}
+
+sub index_post ( $self, $post_id ) {
+    return $self->schema->txn_do(
+        sub {
+            return $self->_index_post($post_id);
+        }
+    );
+}
+
+sub _index_post ( $self, $post_id ) {
+    $self->_lock_document( 'post', $post_id );
+    my $post = $self->schema->resultset('Post')->find($post_id);
+    return $self->_remove_document( 'post', $post_id ) if !$post;
+
+    my $document = $self->builder->build_post($post);
+    return $self->_remove_document( 'post', $post_id ) if !$document;
+
+    return $self->_upsert_document($document);
+}
+
+sub remove_post ( $self, $post_id ) {
+    return $self->schema->txn_do(
+        sub {
+            return $self->_remove_document( 'post', $post_id );
+        }
+    );
+}
+
+# A hidden or deleted thread leaves the index with every post in it, or
+# deleted content stays searchable. The thread's document goes first, in its
+# own transaction: autocomplete serves thread documents only, so the title
+# leaves the suggestions at once. The posts follow a batch at a time, each
+# batch one transaction. It was one transaction for the whole thread, holding
+# one advisory lock per post, and PostgreSQL's shared lock table holds a few
+# thousand: a thread that large failed to leave, retried until it was
+# dead-lettered, and its posts stayed searchable. A failure part way leaves
+# removed whatever went; the retry removes the rest.
+#
+# Each step reads the thread again under its locks and removes only while it
+# is still dead: the thread's document is indexed again, which removes it
+# from a dead thread, and a batch of posts stops at a live one. Two
+# dispatchers can deliver a hide and the restore after it in either order,
+# and a removal that came second deleted what the restore had just indexed:
+# the restored thread stayed out of search until the next rebuild.
+sub remove_thread ( $self, $thread_id ) {
+    my $result = $self->index_thread($thread_id);
+    $result->{posts_removed} = $self->_remove_posts_for_thread($thread_id);
+
+    return $result;
+}
+
+# Rebuilds the projection from the canonical rows (ADR 0062), after a
+# search configuration change, a handler bug or dead-lettered events: every
+# live thread and post is indexed again, a batch of ids at a time so memory
+# stays flat however large the forum, and documents whose source is gone,
+# deleted or hidden are removed. It returned every row it indexed, and kept
+# locked threads and orphaned documents out of the rebuild.
+sub rebuild ( $self, $scope ) {
+    my $entity_type = $scope->{entity_type} || 'all';
+    my %summary     = (
+        entity_type => $entity_type,
+        indexed     => 0,
+        ok          => 1,
+        pruned      => 0,
+        unchanged   => 0,
+    );
+    my $cursor = { entity_type => $entity_type };
+    while ($cursor) {
+        my $step = $self->rebuild_batch($cursor);
+        for my $count (@REBUILD_COUNTS) {
+            $summary{$count} += $step->{$count};
+        }
+        $cursor = $step->{next};
+    }
+
+    return \%summary;
+}
+
+# One step of a rebuild: up to 500 ids of one entity type, or, last, the
+# removal of orphaned documents. $cursor holds entity_type (thread, post or
+# all), stage (the type being indexed, or prune) and after (the last id
+# done). Returns this step's counts and the next cursor, or none when the
+# rebuild is done. The console's rebuild runs one step per outbox message,
+# so a large forum never holds the dispatcher for long.
+sub rebuild_batch ( $self, $cursor ) {
+    my @types  = _rebuild_types( $cursor->{entity_type} );
+    my $stage  = $cursor->{stage} || $types[0];
+    my %counts = map { $_ => 0 } @REBUILD_COUNTS;
+
+    if ( $stage eq 'prune' ) {
+
+        # A dead thread's posts go with it, whichever type was rebuilt: the
+        # post prune removes only posts that are dead or in a dead thread.
+        for my $type ( uniq( @types, 'post' ) ) {
+            $counts{pruned} += $self->_prune($type);
+        }
+        return { %counts, next => undef };
+    }
+    if ( none { $_ eq $stage } @types ) {
+        GPForum::X::Argument->throw(
+            message => "unknown rebuild stage: $stage" );
+    }
+
+    my @ids = $self->_live_ids( $stage, $cursor->{after} );
+    for my $id (@ids) {
+        my $result =
+            $stage eq 'thread'
+          ? $self->index_thread($id)
+          : $self->index_post($id);
+        $counts{ _rebuild_outcome($result) }++;
+    }
+
+    my %next = ( entity_type => $cursor->{entity_type} || 'all' );
+    if ( @ids == $self->rebuild_batch_size ) {
+        @next{qw(stage after)} = ( $stage, $ids[-1] );
+    }
+    else {
+        $next{stage} = _stage_after( $stage, @types );
+    }
+
+    return { %counts, next => \%next };
+}
+
+sub _rebuild_types ($entity_type) {
+    my $type = $entity_type || 'all';
+    return qw(thread post) if $type eq 'all';
+    return ($type)         if exists $LIVE_STATES{$type};
+
+    GPForum::X::Argument->throw(
+        message => "unknown rebuild entity type: $type" );
+}
+
+sub _stage_after ( $stage, @types ) {
+    my ($position) = grep { $types[$_] eq $stage } 0 .. $#types;
+
+    return $position < $#types ? $types[ $position + 1 ] : 'prune';
+}
+
+sub _rebuild_outcome ($result) {
+    return 'unchanged'                                 if $result->{skipped};
+    return $result->{deleted} ? 'pruned' : 'unchanged' if $result->{removed};
+
+    return 'indexed';
+}
+
+# The ids the document builder will index: a post counts only in a live
+# thread, or every rebuild would visit, and remove again, the posts of a
+# hidden thread.
+sub _live_ids ( $self, $type, $after ) {
+    my $key    = "${type}_id";
+    my %thread = (
+        'thread.deleted_at'       => undef,
+        'thread.moderation_state' => { -in => $LIVE_STATES{thread} },
+    );
+
+    return map { _column( $_, $key ) } _rows(
+        $self->schema->resultset( ucfirst $type )->search_rs(
+            {
+                'me.deleted_at'       => undef,
+                'me.moderation_state' => { -in => $LIVE_STATES{$type} },
+                ( $type eq 'post' ? %thread                             : () ),
+                ( defined $after  ? ( "me.$key" => { q{>} => $after } ) : () ),
+            },
+            {
+                columns  => ["me.$key"],
+                order_by => { -asc => "me.$key" },
+                rows     => $self->rebuild_batch_size,
+                ( $type eq 'post' ? ( join => 'thread' ) : () ),
+            }
+        )
+    );
+}
+
+# Two phases. The candidates are read from one snapshot, then each is
+# indexed again under its document lock: a source restored since the
+# snapshot is indexed rather than lost, and only what is still dead goes.
+sub _prune ( $self, $type ) {
+    my $storage = $self->schema->storage;
+    return 0 if !$storage->can('dbh_do');
+
+    my $candidates = $storage->dbh_do(
+        sub ( $, $dbh ) {
+            return $dbh->selectcol_arrayref( $PRUNE_CANDIDATES_SQL{$type} );
+        }
+    );
+    my $pruned = 0;
+    for my $id ( @{ $candidates || [] } ) {
+        my $result =
+          $type eq 'thread' ? $self->index_thread($id) : $self->index_post($id);
+        if ( _rebuild_outcome($result) eq 'pruned' ) {
+            $pruned++;
+        }
+    }
+
+    return $pruned;
+}
+
+sub _remove_posts_for_thread ( $self, $thread_id ) {
+    my $removed = 0;
+    my $after;
+    while (1) {
+        my $posts = $self->_thread_post_batch( $thread_id, $after );
+        last if !@{$posts};
+
+        my $deleted = $self->_remove_post_batch( $thread_id,
+            [ map { $_->{post_id} } @{$posts} ] );
+        last if !defined $deleted;
+
+        $removed += $deleted;
+        $after = _next_position( $posts, $self->rebuild_batch_size );
+        last if !defined $after;
+    }
+
+    return $removed;
+}
+
+# One transaction per batch: the batch's document locks in one statement,
+# then the thread read again, then one delete. However large the thread, a
+# transaction holds at most rebuild_batch_size advisory locks. A thread live
+# again by then was restored: its restore committed before these locks were
+# taken, or its reindex waits for them, so nothing is deleted and undef stops
+# the removal.
+sub _remove_post_batch ( $self, $thread_id, $post_ids ) {
+    return $self->schema->txn_do(
+        sub {
+            $self->_lock_documents( 'post', $post_ids );
+            return undef if $self->_thread_is_live($thread_id);
+
+            my $documents = $self->schema->resultset('SearchDocument');
+            my $deleted   = $documents->search_rs(
+                {
+                    entity_id   => \[ '= ANY(?::uuid[])', [ {} => $post_ids ] ],
+                    entity_type => 'post',
+                }
+            )->delete;
+
+            return 0 + ( $deleted // 0 );
+        }
+    );
+}
+
+# Whether the document builder would index the thread: live, visible or
+# locked. Read afresh, so under a batch's locks it sees every restore that
+# committed before them.
+sub _thread_is_live ( $self, $thread_id ) {
+    my $thread = $self->schema->resultset('Thread')->find($thread_id);
+    return 0 if !$thread || defined _column( $thread, 'deleted_at' );
+
+    my $state = _column( $thread, 'moderation_state' ) // q{};
+    return ( any { $_ eq $state } @{ $LIVE_STATES{thread} } ) ? 1 : 0;
+}
+
+# Up to rebuild_batch_size posts of a thread, by position after $after:
+# every post, whatever its state, since a hidden or deleted post may still
+# have a document. Position, not post id: the thread's unique position index
+# serves the range and the order, where post id order would sort the whole
+# thread for every batch.
+sub _thread_post_batch ( $self, $thread_id, $after ) {
+    my $posts = $self->schema->resultset('Post');
+    return [] if !$posts;
+
+    return [
+        map {
+            {
+                position => _column( $_, 'position' ),
+                post_id  => _column( $_, 'post_id' ),
+            }
+        } _rows(
+            $posts->search_rs(
+                {
+                    'me.thread_id' => $thread_id,
+                    (
+                        defined $after
+                        ? ( 'me.position' => { q{>} => $after } )
+                        : ()
+                    ),
+                },
+                {
+                    columns  => [qw(me.post_id me.position)],
+                    order_by => { -asc => 'me.position' },
+                    rows     => $self->rebuild_batch_size,
+                }
+            )
+        )
+    ];
+}
+
+# Where the next batch starts, or nothing when this one was the last: a
+# batch shorter than the batch size has run out of posts.
+sub _next_position ( $posts, $batch_size ) {
+    return undef if @{$posts} < $batch_size;
+
+    return $posts->[-1]{position};
+}
+
+# The insert runs inside txn_do, so a unique race is contained by a
+# savepoint instead of aborting the whole transaction. The document a
+# concurrent writer inserted first is kept when it already says the same,
+# and written over when it does not.
+sub _upsert_document ( $self, $document ) {
+    my $existing = $self->_existing_document($document);
+    if ( _unchanged_document( $existing, $document ) ) {
+        return _skipped_document($existing);
+    }
+
+    my $documents = $self->schema->resultset('SearchDocument');
+    my $row       = $self->_document_row($document);
+    if ( !$existing ) {
+        my ( $created, $error ) =
+          GPForum::Infrastructure::UniqueConflict->attempt(
+            $self->schema,
+            sub {
+                $documents->create($row);
+                return $row;
+            }
+          );
+        return $created if $created;
+
+        my $conflict = GPForum::X::Conflict->caught($error);
+        if (
+            !$conflict
+            || !(
+                   $conflict->on($ENTITY_CONSTRAINT)
+                || $conflict->on($ID_CONSTRAINT)
+            )
+          )
+        {
+            GPForum::Infrastructure::UniqueConflict->rethrow($error);
+        }
+        my $winner = $self->_existing_document($document);
+        if ( _unchanged_document( $winner, $document ) ) {
+            return _skipped_document($winner);
+        }
+        if ( !$winner ) {
+            GPForum::Infrastructure::UniqueConflict->rethrow($error);
+        }
+    }
+
+    $documents->update_or_create($row);
+    return $row;
+}
+
+sub _existing_document ( $self, $document ) {
+    my $search = $self->schema->resultset('SearchDocument')->search_rs(
+        {
+            entity_id   => $document->{entity_id},
+            entity_type => $document->{entity_type},
+        }
+    );
+    my @rows = _rows($search);
+
+    return $rows[0];
+}
+
+# The stored document already holds every field the builder copies.
+sub _unchanged_document ( $existing, $document ) {
+    return 0 if !$existing;
+
+    for my $name (@DOCUMENT_COPY) {
+        my $held = _column( $existing, $name ) // q{};
+        return 0 if $held ne ( $document->{$name} // q{} );
+    }
+
+    return 1;
+}
+
+sub _skipped_document ($existing) {
+    return {
+        entity_id      => _column( $existing, 'entity_id' ),
+        entity_type    => _column( $existing, 'entity_type' ),
+        indexed_at     => _column( $existing, 'indexed_at' ),
+        skipped        => 1,
+        source_version => _column( $existing, 'source_version' ),
+    };
+}
+
+sub _document_row ( $self, $document ) {
+    return {
+        search_document_id => _document_id_for($document),
+        %{$document},
+        indexed_at    => $self->clock->now_iso8601,
+        search_vector => _search_vector_for($document),
+    };
+}
+
+sub _column ( $row, $name ) {
+    return GPForum::Infrastructure::Row->column( $row, $name );
+}
+
+sub _remove_document ( $self, $entity_type, $entity_id ) {
+    $self->_lock_document( $entity_type, $entity_id );
+    my $search = $self->schema->resultset('SearchDocument')->search_rs(
+        {
+            entity_type => $entity_type,
+            entity_id   => $entity_id,
+        }
+    );
+    my $deleted = $search->delete;
+
+    return {
+        deleted     => 0 + ( $deleted // 0 ),
+        entity_id   => $entity_id,
+        entity_type => $entity_type,
+        ok          => 1,
+        removed     => 1,
+    };
+}
+
+# One writer per document at a time, until the transaction ends. A rebuild
+# and the live search handler could otherwise interleave -- the rebuild
+# reads the old source, the handler writes the new document, the rebuild
+# writes the old one back -- and the stale document would stay, a hidden
+# post searchable among them. A source change commits before its event is
+# dispatched, so whichever takes the lock second reads the newest source.
+# The lock is on the document's name, not on any forum row.
+sub _lock_document ( $self, $entity_type, $entity_id ) {
+    my $storage = $self->schema->storage;
+    return if !$storage->can('dbh_do');
+
+    $storage->dbh_do(
+        sub ( $, $dbh ) {
+            return $dbh->do(
+                'SELECT pg_advisory_xact_lock(hashtextextended(?, 0))',
+                undef, _lock_key( $entity_type, $entity_id ) );
+        }
+    );
+
+    return;
+}
+
+# The same locks for a batch of documents of one type: the same keys, so a
+# batch and a single document writer exclude each other.
+sub _lock_documents ( $self, $entity_type, $entity_ids ) {
+    my $storage = $self->schema->storage;
+    return if !$storage->can('dbh_do');
+
+    $storage->dbh_do(
+        sub ( $, $dbh ) {
+            return $dbh->do( $LOCK_DOCUMENTS_SQL, undef,
+                [ map { _lock_key( $entity_type, $_ ) } @{$entity_ids} ] );
+        }
+    );
+
+    return;
+}
+
+sub _lock_key ( $entity_type, $entity_id ) {
+    return "search_document:$entity_type:$entity_id";
+}
+
+sub _search_vector_for ($document) {
+    return \[
+        $VECTOR_EXPRESSION,
+        [ language => $document->{language} ],
+        [ title    => $document->{title} ],
+        [ language => $document->{language} ],
+        [ body     => $document->{body} ],
+    ];
+}
+
+sub _document_id_for ($document) {
+    my $hex = sha1_hex(
+        join q{:}, 'search_document',
+        $document->{entity_type},
+        $document->{entity_id}
+    );
+
+    return join q{-}, unpack $UUID_GROUPS, $hex;
+}
+
+sub _rows ($search) {
+    return $search->all       if $search->can('all');
+    return @{ $search->rows } if $search->can('rows');
+
+    return;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Search::Indexer - Keeps the search_documents projection in step with threads and posts, and rebuilds it.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $indexer = GPForum::Service::Search::Indexer->new( schema => $schema );
+
+    $indexer->index_thread($thread_id);
+    $indexer->index_post($post_id);
+    $indexer->remove_thread($thread_id);
+
+    my $batch = $indexer->index_thread_posts_batch( $thread_id, $after );
+    # next batch from $batch->{next_after}, until it is undef
+
+    my $summary = $indexer->rebuild( { entity_type => 'all' } );
+    my $step    = $indexer->rebuild_batch( { entity_type => 'post' } );
+    my $lag     = $indexer->observe_lag;
+
+=head1 DESCRIPTION
+
+C<search_documents> is a projection of the canonical rows (ADR 0062): one
+document per live thread (visible or locked) and per visible post in such
+a thread, as L<GPForum::Service::Search::DocumentBuilder> builds it, with a
+weighted C<tsvector> of title (A) and body (B) in the document's language.
+The document id is derived from the entity type and id, so it is stable.
+
+Each thread or post is indexed in its own transaction: the source row is
+read and the document written or removed under a transaction-scoped
+advisory lock on the document's name, so a rebuild and the live search
+handler cannot interleave and leave a stale document. A document whose
+fields are unchanged is not rewritten. A source that is gone, deleted or
+hidden has its document removed.
+
+Work that can be large runs in batches of C<rebuild_batch_size> (500) and
+never in one transaction: a thread's posts by position, a rebuild by id.
+The search handler and the console's rebuild run one batch per outbox
+message, so neither holds the dispatcher for long. Removing a thread
+removes its own document first, then its posts' documents a batch at a
+time, each batch rechecking under its locks that the thread is still dead,
+so a removal delivered after a restore deletes nothing the restore indexed.
+
+Without a database handle that can C<dbh_do> (a test double), the advisory
+locks are skipped and the prune step finds nothing.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 observe_lag
+
+Takes no arguments. Returns how far search may be behind the forum. When
+the indexer was built with a projection tracker
+(L<GPForum::Service::Projection::OffsetTracker>), that tracker's
+C<observe_lag('search_documents')>. Otherwise from the outbox, which every search update passes through:
+C<< { projection_name => 'search_documents', pending, oldest_pending_at,
+lag_seconds, status } >>, C<pending> the outbox messages still pending,
+running or failed, C<lag_seconds> the age of the oldest, and C<status>
+C<behind> or C<current>.
+
+=head2 index_thread
+
+Takes a thread id and indexes it in a transaction. Returns the written
+document row as a hash reference (its fields, C<search_document_id>,
+C<indexed_at> and C<search_vector>); C<< { skipped => 1, entity_type,
+entity_id, indexed_at, source_version } >> when the stored document is
+already current; or, when the thread is missing or not live,
+C<< { ok => 1, removed => 1, deleted, entity_type, entity_id } >>,
+C<deleted> being the number of documents removed. It does not touch the
+thread's posts.
+
+=head2 index_thread_posts
+
+Takes a thread id and reindexes every post of the thread, whatever its
+state, batch after batch, each post in its own transaction. Returns
+C<< { indexed, pruned, unchanged } >>: posts written, documents removed,
+and posts skipped as current or with no document to remove.
+
+=head2 index_thread_posts_batch
+
+Takes a thread id and an optional position (the last post done). Reindexes
+up to C<rebuild_batch_size> posts after it, as C<index_thread_posts> does.
+Returns C<< { indexed, pruned, unchanged, thread_id, next_after } >>,
+C<next_after> the position to pass next, or undef when this batch was the
+last.
+
+=head2 index_post
+
+Takes a post id and indexes it in a transaction. Returns as
+C<index_thread> does; a post is removed when it is missing, not visible,
+or in a thread that is not live.
+
+=head2 remove_post
+
+Takes a post id and deletes its document in a transaction, without
+reading the post. Returns C<< { ok => 1, removed => 1, deleted,
+entity_type => 'post', entity_id } >>.
+
+=head2 remove_thread
+
+Takes a thread id. Indexes the thread again, which removes its document
+when the thread is dead, then removes the documents of its posts a batch
+at a time, stopping as soon as the thread is found live again. Returns
+C<index_thread>'s result with C<posts_removed>, the number of post
+documents deleted. A failure part way leaves removed what went; a retry
+removes the rest.
+
+=head2 rebuild
+
+Takes a hash reference with C<entity_type>: C<thread>, C<post> or C<all>
+(the default). Runs C<rebuild_batch> until it is done: every live thread
+and post of that type is indexed again, then documents whose source is
+gone, deleted or hidden are pruned. Returns
+C<< { ok => 1, entity_type, indexed, pruned, unchanged } >>.
+
+=head2 rebuild_batch
+
+Takes a cursor hash reference with C<entity_type>, and optionally C<stage>
+(the type being indexed, or C<prune>) and C<after> (the last id done).
+Indexes up to C<rebuild_batch_size> live ids of the stage's type, or, at
+the C<prune> stage, removes orphaned documents: those of the rebuilt type
+and always those of posts, so a dead thread's posts go with it. Each prune
+candidate is indexed again under its lock, so one restored since is kept.
+Returns C<< { indexed, pruned, unchanged, next } >>, C<next> the cursor
+for the following step or undef when the rebuild is done.
+
+=head1 DIAGNOSTICS
+
+C<rebuild> and C<rebuild_batch> throw L<GPForum::X::Argument> C<unknown
+rebuild entity type:> or C<unknown rebuild stage:> for a cursor they cannot
+follow. A document insert that fails for any reason other than a unique
+conflict on that document -- its entity key, or its primary key, which
+PostgreSQL names first -- or whose conflict leaves no row to update, croaks
+with the database error. Other
+database errors propagate and roll back the entity's transaction.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. C<builder>, C<clock> and C<id_service> default to
+L<GPForum::Service::Search::DocumentBuilder>, L<GPForum::Service::Clock>
+and L<GPForum::Infrastructure::Id>; C<rebuild_batch_size> defaults to 500.
+
+=head1 DEPENDENCIES
+
+L<Const::Fast>, L<Digest::SHA>, L<List::Util>, L<Mojo::Base>,
+L<GPForum::Infrastructure::CountedQuery>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Infrastructure::Row>, L<GPForum::Infrastructure::UniqueConflict>,
+L<GPForum::Service::Clock>, L<GPForum::Service::Search::DocumentBuilder>,
+L<GPForum::X::Argument>, L<GPForum::X::Conflict>;
+PostgreSQL for the advisory locks and C<to_tsvector>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+C<observe_lag> without a projection tracker counts every outbox message not
+yet delivered, not only those for search, so it is an upper bound.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

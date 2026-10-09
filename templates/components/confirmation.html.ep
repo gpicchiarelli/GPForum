@@ -1,0 +1,10 @@
+% my $heading_id = stash('heading_id') || 'confirmation-heading';
+% my $component_title = stash('component_title') || t('ui.confirmation');
+% my $message = stash('message') || q{};
+
+<section class="ui-confirmation" aria-labelledby="<%= $heading_id %>">
+  <h2 id="<%= $heading_id %>"><%= $component_title %></h2>
+  % if (length $message) {
+    <p><%= $message %></p>
+  % }
+</section>

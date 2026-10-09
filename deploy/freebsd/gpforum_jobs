@@ -1,0 +1,17 @@
+# GPForum's hourly jobs and daily partition window on FreeBSD: the
+# counterpart of deploy/systemd's two timers and of the launchd jobs.
+# cron(8) reads this file from /usr/local/etc/cron.d/, in the system
+# crontab's format, whose sixth field is the account each command runs as.
+# `gpforum service print rc` writes it with this host's paths.
+#
+# bin/gpforum reads the service's environment file itself, as the rc scripts
+# do, and finds the Perl and the dependencies this checkout installed; it is
+# a Perl script, so PATH names /usr/local/bin, where the perl5 package puts
+# perl and cron's own PATH does not look. cron mails what each run prints to
+# the account. Give the daily run another minute on each node: the runs take
+# an advisory lock, and one that does not get it does nothing.
+PATH=/usr/local/bin:/usr/bin:/bin
+#
+# minute hour mday month wday who command
+0 * * * * gpforum /usr/local/www/gpforum/bin/gpforum scheduled-jobs --once --limit 100
+17 3 * * * gpforum /usr/local/www/gpforum/bin/gpforum partitions --apply

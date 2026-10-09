@@ -1,0 +1,9 @@
+% layout 'default';
+% title t('app.unavailable_title');
+
+<section aria-labelledby="home-unavailable-heading">
+  <%= include 'components/page_header',
+    heading_id => 'home-unavailable-heading',
+    component_title => t('app.name'),
+    description => t('forum.index_unavailable') %>
+</section>

@@ -1,0 +1,15 @@
+% if (session('user_id')) {
+  <form class="identity-form" method="post" action="<%= ui_path('logout') %>" aria-label="<%= t('auth.logout_aria') %>">
+    <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= ui_command_id %>">
+    <a href="<%= ui_path('settings') %>"<%== (current_route() // q{}) eq 'settings' ? ' aria-current="page"' : q{} %>><%= t('nav.settings') %></a>
+    <button type="submit"><%= t('auth.logout') %></button>
+  </form>
+% } else {
+  <nav class="identity-nav" aria-label="<%= t('nav.identity') %>">
+    <a href="<%= ui_path('register') %>"><%= t('auth.register') %></a>
+    %# Signing in leads back to this page, unless this page is the way in.
+    % my $here = ui_return_to;
+    <a href="<%= $here eq q{/} || $here =~ m{\A/(?:login|register)}msx ? ui_path('login') : url_for('login')->query(return_to => $here) %>"><%= t('auth.login') %></a>
+  </nav>
+% }

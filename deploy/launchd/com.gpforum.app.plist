@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gpforum.app</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/gpforum</string>
+  <!-- The service's own account, as on Linux and FreeBSD: launchd runs a
+       daemon as root unless it is told otherwise. DEPLOYMENT.md (macOS With
+       launchd) makes the account and the directories it writes. -->
+  <key>UserName</key>
+  <string>gpforum</string>
+  <key>GroupName</key>
+  <string>gpforum</string>
+  <!-- The log and the pid file. Every other setting keeps the default
+       GPForum::Config gives it, or the value in Homebrew's
+       etc/gpforum/gpforum.env, which the job reads before it starts and
+       bin/gpforum when Hypnotoad loads it: launchd has no environment file
+       of its own. -->
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Hypnotoad reopens STDERR on /dev/null when it daemonizes, so the
+         application needs an explicit destination of its own. -->
+    <key>GPFORUM_LOG_PATH</key>
+    <string>/usr/local/var/log/gpforum/gpforum.log</string>
+    <!-- The code directory belongs to root; var/ under it is the one the
+         service's account writes. -->
+    <key>GPFORUM_RUNTIME_PID_FILE</key>
+    <string>/opt/gpforum/var/hypnotoad.pid</string>
+  </dict>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- The mode is the environment file's GPFORUM_ENV, read before the
+         job starts, as systemd's EnvironmentFile= wins over a unit's
+         Environment=: production when the file names none. Set here
+         instead, it outweighed the file, and the service ran in
+         production while the file and gpforum doctor said staging. -->
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>GPFORUM_ENV=production; export GPFORUM_ENV; set -a; [ ! -e "$0" ] || . "$0"; set +a; exec "${@}"</string>
+    <string>/usr/local/etc/gpforum/gpforum.env</string>
+    <string>/opt/gpforum/bin/gpforum</string>
+    <string>start</string>
+    <string>--service</string>
+    <string>--foreground</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>SoftResourceLimits</key>
+  <dict>
+    <key>NumberOfFiles</key>
+    <integer>65536</integer>
+  </dict>
+</dict>
+</plist>

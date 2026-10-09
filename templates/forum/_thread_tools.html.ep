@@ -1,0 +1,133 @@
+%# What a reader can do with a thread, on one quiet line under its title:
+%# reply, follow, bookmark. What is rarer or needs a field waits in the
+%# "Thread tools" sheet: marking as read, muting, reporting and, for the
+%# author, the title, the category and deletion. Going to what is unread is
+%# a place in the page, so it is a link in the line above, not an action.
+%#
+%# With the page's script each form posts in place (hx-post) and the bar
+%# comes back as it then is; "swap_oob" marks a copy sent to replace it.
+%#
+%# Takes "can_reply"; reads the page's "thread", "reading" and "engagement".
+% my $thread_id = $thread->{thread_id};
+% my $reads = $reading && $reading->{authenticated};
+% my $signed_in = $engagement && $engagement->{authenticated};
+% my $bookmark = $signed_in && $engagement->{bookmark} || {};
+% my $subscription = $signed_in && $engagement->{subscription} || {};
+
+<div class="toolbar" id="thread-toolbar" hx-target="#thread-toolbar" hx-swap="outerHTML"<%== stash('swap_oob') ? ' hx-swap-oob="true"' : q{} %>>
+  % if ($can_reply) {
+    <a class="button button--secondary button--small" href="#reply-body"><%= t('forum.reply') %></a>
+  % }
+  % if ($signed_in) {
+    <section aria-labelledby="engagement-heading">
+      <h2 class="visually-hidden" id="engagement-heading"><%= t('forum.thread_tools') %></h2>
+      % if ($subscription->{subscribed}) {
+        <form method="post" action="<%= ui_path('thread_unsubscribe', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_unsubscribe', thread_id => $thread_id) %>">
+          <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{unsubscribe_command_id} || q{} %>">
+          <button type="submit" class="button--quiet"><%= t('community.unfollow_thread') %></button>
+        </form>
+      % } else {
+        <form method="post" action="<%= ui_path('thread_subscribe', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_subscribe', thread_id => $thread_id) %>">
+          <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{subscribe_command_id} || q{} %>">
+          <input type="hidden" name="preference" value="all">
+          <button type="submit" class="button--quiet"><%= t('community.follow_thread') %></button>
+        </form>
+      % }
+      % if ($bookmark->{bookmarked}) {
+        <form method="post" action="<%= ui_path('thread_bookmark_remove', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_bookmark_remove', thread_id => $thread_id) %>">
+          <%= csrf_field %>
+          <input type="hidden" name="command_id" value="<%= $engagement->{bookmark_remove_command_id} || q{} %>">
+          <button type="submit" class="button--quiet"><%= t('community.remove_bookmark') %></button>
+        </form>
+      % } else {
+        <button type="button" class="button--quiet" popovertarget="thread-bookmark"><%= t('community.save_bookmark') %></button>
+        <%= include 'components/sheet', sheet_id => 'thread-bookmark', component_title => t('community.save_bookmark'), sheet_body => begin %>
+          <form method="post" action="<%= ui_path('thread_bookmark', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_bookmark', thread_id => $thread_id) %>">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $engagement->{bookmark_command_id} || q{} %>">
+            <label for="bookmark-note"><%= t('community.bookmark_note') %></label>
+            <input id="bookmark-note" name="note" type="text" value="">
+            <button type="submit"><%= t('community.save_bookmark') %></button>
+          </form>
+        <% end %>
+      % }
+    </section>
+  % }
+  % if ($reads || $signed_in || $thread->{can_edit_thread}) {
+    <button type="button" class="button--quiet" popovertarget="thread-tools"><%= t('forum.thread_tools') %></button>
+    <%= include 'components/sheet', sheet_id => 'thread-tools', component_title => t('forum.thread_tools'), sheet_body => begin %>
+      % if ($reads) {
+        <section class="sheet__part" aria-labelledby="reading-heading">
+          <h3 id="reading-heading"><%= t('forum.reading_progress') %></h3>
+          % if (!$reading->{first_unread_anchor}) {
+            <p class="sheet__consequence"><%= t('forum.reading_caught_up') %></p>
+          % }
+          <form method="post" action="<%= ui_path('thread_mark_read', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_mark_read', thread_id => $thread_id) %>">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $reading->{read_command_id} || q{} %>">
+            <input type="hidden" name="last_read_position" value="<%= $reading->{last_visible_position} // 0 %>">
+            <button type="submit" class="button--secondary"><%= t('forum.mark_visible_posts_read') %></button>
+          </form>
+        </section>
+      % }
+      % if ($subscription->{subscribed} && !$subscription->{muted}) {
+        <section class="sheet__part" aria-labelledby="thread-mute-heading">
+          <h3 id="thread-mute-heading"><%= t('nav.notifications') %></h3>
+          <form method="post" action="<%= ui_path('thread_subscription_mute', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_subscription_mute', thread_id => $thread_id) %>">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $engagement->{mute_command_id} || q{} %>">
+            <button type="submit" class="button--secondary"><%= t('community.mute_notifications') %></button>
+          </form>
+        </section>
+      % }
+      % if ($thread->{can_edit_thread}) {
+        <section class="sheet__part" aria-labelledby="thread-edit-heading">
+          <h3 id="thread-edit-heading"><%= t('forum.edit_title') %></h3>
+          <form method="post" action="<%= ui_path('thread_edit', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_edit', thread_id => $thread_id) %>" hx-target="#thread-header">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $thread->{edit_thread_command_id} || q{} %>">
+            <label for="thread-edit-title"><%= t('forum.thread_title') %></label>
+            <input id="thread-edit-title" name="title" type="text" required value="<%= $thread->{title} %>">
+            <button type="submit" class="button--secondary"><%= t('forum.save_title') %></button>
+          </form>
+        </section>
+        <section class="sheet__part" aria-labelledby="thread-move-heading">
+          <h3 id="thread-move-heading"><%= t('forum.move_thread') %></h3>
+          <form method="post" action="<%= ui_path('thread_move', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_move', thread_id => $thread_id) %>" hx-target="#thread-header">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $thread->{move_thread_command_id} || q{} %>">
+            <label for="thread-move-category"><%= t('search.category') %></label>
+            <select id="thread-move-category" name="category_id" required>
+              % for my $category (@{ $thread->{move_categories} || [] }) {
+                <option value="<%= $category->{category_id} %>"<%= ($category->{category_id} || q{}) eq ($thread->{category_id} || q{}) ? ' selected' : '' %>><%= $category->{title} %></option>
+              % }
+            </select>
+            <button type="submit" class="button--secondary"><%= t('forum.move_thread') %></button>
+          </form>
+        </section>
+      % }
+      % if ($signed_in) {
+        <section class="sheet__part" aria-labelledby="thread-report-heading">
+          <h3 id="thread-report-heading"><%= t('moderation.report_thread') %></h3>
+          <%= include 'forum/_report_form',
+            post_to => ui_path('thread_report', thread_id => $thread_id),
+            command_id => $engagement->{thread_report_command_id},
+            field_id => 'thread-report' %>
+        </section>
+      % }
+      % if ($thread->{can_edit_thread}) {
+        <section class="sheet__part" aria-labelledby="thread-delete-heading">
+          <h3 id="thread-delete-heading"><%= t('forum.delete_thread') %></h3>
+          <form method="post" action="<%= ui_path('thread_delete', thread_id => $thread_id) %>" hx-post="<%= ui_path('thread_delete', thread_id => $thread_id) %>" hx-target="#thread-header">
+            <%= csrf_field %>
+            <input type="hidden" name="command_id" value="<%= $thread->{delete_thread_command_id} || q{} %>">
+            <p class="sheet__consequence"><%= t('forum.delete_thread_consequence') %></p>
+            <button type="submit" class="button--danger"><%= t('forum.delete_thread') %></button>
+          </form>
+        </section>
+      % }
+    <% end %>
+  % }
+</div>

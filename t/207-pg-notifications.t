@@ -1,0 +1,465 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use v5.40;
+
+use Const::Fast;
+use Test::More;
+
+use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Infrastructure::PgNotifications;
+use GPForum::Service::Operations::CacheInvalidationBus;
+use GPForum::Service::Realtime::ChannelAuthorizer;
+use GPForum::Service::Realtime::ConnectionRegistry;
+use GPForum::Service::Realtime::EventEnvelope;
+use GPForum::Service::Realtime::Hub;
+use GPForum::Service::Realtime::PgListener;
+use GPForum::Service::Realtime::PgNotifier;
+use GPForum::Test::FlakyReadability;
+use GPForum::Test::RealtimeBadgeCounter;
+use GPForum::Test::RealtimeBusDbh;
+use GPForum::Test::RealtimeBusSchema;
+use GPForum::Test::RealtimeConnection;
+use GPForum::Test::RealtimePermissionEngine;
+
+our $VERSION = '0.001';
+
+const my $WORKER_PID      => 101;
+const my $RECONNECTED_PID => 102;
+const my $PEER_PID        => 303;
+const my $UNREAD_COUNT    => 4;
+const my $SMALL_QUEUE     => 2;
+const my $CACHE_CHANNEL   => 'gpforum_cache_invalidation';
+const my $DOMAIN_CHANNEL  => 'gpforum_domain_events';
+
+# The first drain registers the channel and takes, trying twice.
+const my $FAILED_LISTENS => 3;
+
+# One web process: the cache bus and the realtime listener on one handle,
+# sharing one queue, as Bootstrap wires them. A peer backend of the same
+# PostgreSQL publishes.
+sub _process {
+    my $peer    = GPForum::Test::RealtimeBusDbh->new( pg_pid => $PEER_PID );
+    my $backend = GPForum::Test::RealtimeBusDbh->new( pg_pid => $WORKER_PID )
+      ->join_network($peer);
+    my $schema = GPForum::Test::RealtimeBusSchema->new( dbh => $backend );
+    my $queue =
+      GPForum::Infrastructure::PgNotifications->new( schema => $schema );
+    my $thread = GPForum::Test::RealtimeConnection->new;
+    my $badge  = GPForum::Test::RealtimeConnection->new;
+    my $hub    = GPForum::Service::Realtime::Hub->new(
+        authorizer => GPForum::Service::Realtime::ChannelAuthorizer->new(
+            permission_engine => GPForum::Test::RealtimePermissionEngine->new,
+        ),
+        badge_counter => GPForum::Test::RealtimeBadgeCounter->new(
+            counts => { 'user-1' => $UNREAD_COUNT },
+        ),
+        registry => GPForum::Service::Realtime::ConnectionRegistry->new,
+    );
+    _subscribe( $hub, 'thread-socket', 'thread:thread-1',      $thread );
+    _subscribe( $hub, 'badge-socket',  'notifications:user-1', $badge );
+
+    my $peer_schema = GPForum::Test::RealtimeBusSchema->new( dbh => $peer );
+
+    return {
+        backend => $backend,
+        badge   => $badge,
+        bus     => GPForum::Service::Operations::CacheInvalidationBus->new(
+            notifications => $queue,
+            schema        => $schema,
+        ),
+        listener => GPForum::Service::Realtime::PgListener->new(
+            hub           => $hub,
+            notifications => $queue,
+            schema        => $schema,
+        ),
+        peer     => $peer,
+        peer_bus => GPForum::Service::Operations::CacheInvalidationBus->new(
+            schema => $peer_schema
+        ),
+        peer_notifier =>
+          GPForum::Service::Realtime::PgNotifier->new( schema => $peer_schema ),
+        queue  => $queue,
+        schema => $schema,
+        thread => $thread,
+    };
+}
+
+sub _subscribe {
+    my ( $hub, $connection_id, $channel, $connection ) = @_;
+
+    $hub->register_connection( $connection_id, { user_id => 'user-1' },
+        $connection );
+    $hub->subscribe(
+        {
+            actor         => { user_id => 'user-1' },
+            channel       => $channel,
+            connection_id => $connection_id,
+            context       => {},
+        }
+    );
+
+    return;
+}
+
+sub _thread_event {
+    my ( $post_id, $thread_id ) = @_;
+    $thread_id //= 'thread-1';
+
+    return GPForum::Service::Realtime::EventEnvelope->new->build(
+        type           => 'thread.update',
+        aggregate_type => 'thread',
+        aggregate_id   => $thread_id,
+        payload        => { post_id => $post_id, thread_id => $thread_id },
+    );
+}
+
+sub _start {
+    my ($process) = @_;
+
+    $process->{listener}->start;
+    $process->{bus}->drain;
+
+    return;
+}
+
+# The listener read every notification on the handle and dropped the cache
+# purges as malformed, so that worker served a hidden post from L1 until it
+# expired. The bus read every notification too and took realtime events as
+# empty invalidations.
+subtest 'the listener polls first: the cache purges wait for the bus' => sub {
+    my $process = _process();
+    _start($process);
+
+    $process->{peer_bus}->publish( { tags => ['thread:thread-1'] } );
+    $process->{peer_notifier}->notify( _thread_event('post-1') );
+    $process->{peer_bus}->publish( { keys => ['public:/t/thread-1'] } );
+
+    my $poll = $process->{listener}->poll_once;
+    is( $poll->{received}, 1, 'the listener receives only its own event' );
+    is( $process->{listener}->snapshot->{malformed_payloads},
+        0, 'and rejects nothing as malformed' );
+    is( $process->{thread}->sent->[0]{json}{payload}{post_id},
+        'post-1', 'the event reaches the socket' );
+
+    my $requests = $process->{bus}->drain;
+    is_deeply(
+        [ map { [ $_->{tags}, $_->{keys} ] } @{$requests} ],
+        [ [ ['thread:thread-1'], [] ], [ [], ['public:/t/thread-1'] ] ],
+        'the bus still gets both invalidations, in order'
+    );
+};
+
+subtest 'the bus drains first: the event waits for the listener' => sub {
+    my $process = _process();
+    _start($process);
+
+    $process->{peer_notifier}->notify( _thread_event('post-2') );
+    $process->{peer_bus}->publish( { tags => ['thread:thread-1'] } );
+
+    my $requests = $process->{bus}->drain;
+    is( scalar @{$requests}, 1, 'the bus gets only the cache purge' );
+    is( $process->{bus}->stats->{applied},
+        1, 'and applies no realtime event as an empty invalidation' );
+
+    my $poll = $process->{listener}->poll_once;
+    is( $poll->{received},  1, 'the listener still receives its event' );
+    is( $poll->{delivered}, 1, 'and delivers it' );
+};
+
+# DBIx::Class replaces the handle after a reconnect, and a LISTEN lives on
+# one backend. The listener's was never re-issued; it kept reporting
+# "listening" and received nothing.
+subtest 'a new backend is listened to again and reported as a gap' => sub {
+    my $process = _process();
+    _start($process);
+
+    my $reconnected =
+      GPForum::Test::RealtimeBusDbh->new( pg_pid => $RECONNECTED_PID )
+      ->join_network( $process->{peer} );
+    $process->{schema}->dbh($reconnected);
+
+    is_deeply(
+        $process->{bus}->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'the bus clears L1 once: what was NOTIFYed meanwhile is gone'
+    );
+    is_deeply(
+        [ sort keys %{ $reconnected->listening } ],
+        [ $CACHE_CHANNEL, $DOMAIN_CHANNEL ],
+        'both channels are listened to on the new backend'
+    );
+    is_deeply( $process->{bus}->drain, [], 'one clear, not one per drain' );
+
+    $process->{listener}->poll_once;
+    is( $process->{badge}->sent->[-1]{json}{type},
+        'notification.badge', 'the listener re-sends the badge snapshots' );
+    is( $process->{badge}->sent->[-1]{json}{payload}{unread_count},
+        $UNREAD_COUNT, 'with the current unread count' );
+    is( scalar @{ $process->{thread}->sent },
+        0, 'and nothing to the sockets of other channels' );
+    is( $process->{listener}->status, 'listening', 'it is listening again' );
+
+    $process->{peer_notifier}->notify( _thread_event('post-3') );
+    $process->{listener}->poll_once;
+    is( $process->{thread}->sent->[-1]{json}{payload}{post_id},
+        'post-3', 'and delivery resumes' );
+    is( $process->{queue}->snapshot->{relistens},
+        2, 'the queue counts the channels it listened to again' );
+};
+
+# A PostgreSQL restarted in a fresh container hands out the same small PIDs
+# again, so a reconnect can land on a backend with the PID of the one it
+# lost. The PID alone said "same connection", and nothing was listened to.
+subtest 'a new handle is a new connection, whatever its PID' => sub {
+    my $process = _process();
+    _start($process);
+
+    my $same_pid = GPForum::Test::RealtimeBusDbh->new( pg_pid => $WORKER_PID )
+      ->join_network( $process->{peer} );
+    $process->{schema}->dbh($same_pid);
+
+    is_deeply(
+        $process->{bus}->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'a replaced handle on the same PID is a gap'
+    );
+    is_deeply(
+        [ sort keys %{ $same_pid->listening } ],
+        [ $CACHE_CHANNEL, $DOMAIN_CHANNEL ],
+        'and both channels are listened to on it'
+    );
+
+    # The handle DBIx::Class dropped is freed, and the next one may take
+    # its address: held weakly, the old one is simply gone.
+    my $schema = GPForum::Test::RealtimeBusSchema->new(
+        dbh => GPForum::Test::RealtimeBusDbh->new( network => [] ) );
+    my $queue =
+      GPForum::Infrastructure::PgNotifications->new( schema => $schema );
+    $queue->listen_to($CACHE_CHANNEL);
+    $schema->dbh(undef);
+    $schema->dbh( GPForum::Test::RealtimeBusDbh->new( network => [] ) );
+
+    ok( $queue->take($CACHE_CHANNEL)->{gap},
+        'a freed handle replaced on the same PID is a gap too' );
+    ok(
+        $schema->dbh->listening->{$CACHE_CHANNEL},
+        'and the channel is listened to on the new one'
+    );
+};
+
+# A standby refuses LISTEN. The queue counted the failure and reported
+# nothing, so the bus kept serving L1 entries that nobody could invalidate.
+subtest 'a channel not listened to reports a gap until it is' => sub {
+    my $backend = GPForum::Test::RealtimeBusDbh->new( refuse_listen => 1 );
+    my $schema  = GPForum::Test::RealtimeBusSchema->new( dbh => $backend );
+    my $queue =
+      GPForum::Infrastructure::PgNotifications->new( schema => $schema );
+    my $bus = GPForum::Service::Operations::CacheInvalidationBus->new(
+        notifications => $queue,
+        schema        => $schema,
+    );
+
+    for my $drain ( 1 .. 2 ) {
+        is_deeply(
+            $bus->drain,
+            [ { clear => 1, keys => [], tags => [] } ],
+            "drain $drain while the LISTEN fails clears L1"
+        );
+    }
+
+    $backend->refuse_listen(0);
+    is_deeply(
+        $bus->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'so does the one that issues it: what was raised meanwhile is gone'
+    );
+    is_deeply( $bus->drain, [], 'and then nothing is missed' );
+    is( $queue->snapshot->{listen_failures},
+        $FAILED_LISTENS, 'each failed attempt is counted' );
+};
+
+# While the LISTEN failed, the listener re-sent every subscriber's count on
+# every poll, a query per user per second, each stale at the next change it
+# could not hear.
+subtest 'badges are re-sent once the LISTEN is in effect' => sub {
+    my $process = _process();
+    _start($process);
+    my $sent = scalar @{ $process->{badge}->sent };
+
+    my $standby = GPForum::Test::RealtimeBusDbh->new(
+        pg_pid        => $RECONNECTED_PID,
+        refuse_listen => 1,
+    )->join_network( $process->{peer} );
+    $process->{schema}->dbh($standby);
+
+    for ( 1 .. 2 ) {
+        $process->{listener}->poll_once;
+    }
+    is( scalar @{ $process->{badge}->sent },
+        $sent, 'nothing is re-sent while nothing can be heard' );
+    is( $process->{listener}->status, 'polling', 'the listener says so' );
+
+    $standby->refuse_listen(0);
+    $process->{listener}->poll_once;
+    is( scalar @{ $process->{badge}->sent },
+        $sent + 1, 'the count goes out once the LISTEN is back' );
+    $process->{listener}->poll_once;
+    is( scalar @{ $process->{badge}->sent }, $sent + 1, 'and only once' );
+};
+
+# Who may read a thread is asked at every broadcast (ADR 0102), and the
+# database can fail that question, the more so just after the reconnect
+# that made the gap. The exception left the poll: the gap the take had
+# returned was lost, so no badge was re-sent, and so was every
+# notification after the one that failed.
+subtest 'a broadcast that throws loses neither the gap nor the rest' => sub {
+    my $process = _process();
+    _start($process);
+    my $hub   = $process->{listener}->hub;
+    my $other = GPForum::Test::RealtimeConnection->new;
+    _subscribe( $hub, 'other-socket', 'thread:thread-2', $other );
+    $hub->readability(
+        GPForum::Test::FlakyReadability->new(
+            unreachable => { 'thread-1' => 1 }
+        )
+    );
+    my $badges = scalar @{ $process->{badge}->sent };
+
+    $process->{peer_notifier}->notify( _thread_event('post-4') );
+    $process->{peer_notifier}->notify( _thread_event( 'post-5', 'thread-2' ) );
+    $process->{bus}->drain;
+    $process->{schema}->dbh(
+        GPForum::Test::RealtimeBusDbh->new( pg_pid => $RECONNECTED_PID )
+          ->join_network( $process->{peer} ) );
+
+    my $poll;
+    try {
+        $poll = $process->{listener}->poll_once;
+    }
+    catch ($error) {
+        $poll = undef;
+    };
+    ok( $poll, 'the poll does not throw' );
+    is( $process->{listener}->stats->{broadcast_failures},
+        1, 'the failed broadcast is counted' );
+    is_deeply( [ map { $_->{json}{payload}{post_id} } @{ $other->sent } ],
+        ['post-5'], 'the notification after it is still delivered' );
+    is(
+        scalar @{ $process->{badge}->sent },
+        $badges + 1,
+        'and the badges are re-sent for the gap'
+    );
+};
+
+subtest 'a full queue drops its oldest and reports a gap' => sub {
+    my $backend = GPForum::Test::RealtimeBusDbh->new;
+    my $schema  = GPForum::Test::RealtimeBusSchema->new( dbh => $backend );
+    my $queue   = GPForum::Infrastructure::PgNotifications->new(
+        max_queued => $SMALL_QUEUE,
+        schema     => $schema,
+    );
+    my $bus = GPForum::Service::Operations::CacheInvalidationBus->new(
+        notifications => $queue,
+        schema        => $schema,
+    );
+    my $publisher = GPForum::Service::Operations::CacheInvalidationBus->new(
+        schema => GPForum::Test::RealtimeBusSchema->new(
+            dbh => GPForum::Test::RealtimeBusDbh->new( pg_pid => $PEER_PID )
+              ->join_network($backend)
+        ),
+    );
+    $bus->drain;
+
+    for my $tag (qw(a b c)) {
+        $publisher->publish( { tags => [$tag] } );
+    }
+
+    # Another consumer on the handle pumps every channel, including this
+    # one it does not take, and each take reads at most max_queued. The bus
+    # is not read before its queue overflows.
+    $queue->listen_to($DOMAIN_CHANNEL);
+    for ( 1 .. 2 ) {
+        $queue->take($DOMAIN_CHANNEL);
+    }
+
+    is( $queue->snapshot->{overflowed}, 1, 'the queue overflows once' );
+    is_deeply(
+        $bus->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'the bus clears L1 rather than apply what is left'
+    );
+};
+
+subtest 'notifications nobody registered are dropped, not queued' => sub {
+    my $backend = GPForum::Test::RealtimeBusDbh->new;
+    my $queue   = GPForum::Infrastructure::PgNotifications->new(
+        schema => GPForum::Test::RealtimeBusSchema->new( dbh => $backend ) );
+    $queue->listen_to($CACHE_CHANNEL);
+    push @{ $backend->notifies }, [ 'gpforum_elsewhere', 1, '{}' ];
+
+    is_deeply( $queue->take($CACHE_CHANNEL)->{notifications},
+        [], 'the registered channel gets nothing' );
+    is( $queue->snapshot->{dropped}, 1, 'and the stray one is counted' );
+    is( $queue->take('gpforum_unregistered')->{available},
+        0, 'a channel never registered is not read at all' );
+};
+
+subtest 'nothing is read or listened to inside a transaction' => sub {
+    my $backend = GPForum::Test::RealtimeBusDbh->new;
+    my $queue   = GPForum::Infrastructure::PgNotifications->new(
+        schema => GPForum::Test::RealtimeBusSchema->new( dbh => $backend ) );
+    $backend->{AutoCommit} = 0;
+
+    ok( !$queue->listen_to($CACHE_CHANNEL),
+        'a LISTEN a rollback could undo is not issued' );
+    is_deeply( $backend->listening, {}, 'so nothing is listened to yet' );
+
+    $backend->{AutoCommit} = 1;
+    my $taken = $queue->take($CACHE_CHANNEL);
+    ok( $queue->listening($CACHE_CHANNEL),
+        'the next take outside the transaction issues it' );
+    ok( $taken->{gap}, 'and reports a gap: nobody was listening until then' );
+};
+
+# A worker's first cache read registers the channel. When the database
+# could not be reached then, no LISTEN was issued, L1 went on filling from
+# L2, and the take that finally issued the LISTEN reported nothing: what
+# other workers invalidated meanwhile stayed in L1 until it expired.
+subtest 'a channel registered with no handle reports a gap when listened to' =>
+  sub {
+    my $schema = GPForum::Test::RealtimeBusSchema->new;
+    my $bus    = GPForum::Service::Operations::CacheInvalidationBus->new(
+        notifications =>
+          GPForum::Infrastructure::PgNotifications->new( schema => $schema ),
+        schema => $schema,
+    );
+
+    is_deeply( $bus->drain, [], 'with no handle there is nothing to apply' );
+
+    $schema->dbh( GPForum::Test::RealtimeBusDbh->new );
+    is_deeply(
+        $bus->drain,
+        [ { clear => 1, keys => [], tags => [] } ],
+        'the drain that issues the LISTEN clears L1'
+    );
+    is_deeply( $bus->drain, [], 'and the next one misses nothing' );
+  };
+
+subtest 'the bus still skips its own notifications' => sub {
+    my $process = _process();
+    _start($process);
+
+    $process->{bus}->publish( { tags => ['thread:thread-1'] } );
+
+    is_deeply( $process->{bus}->drain, [], 'its own purge is not replayed' );
+    is( $process->{bus}->stats->{skipped_self}, 1, 'and is counted' );
+};
+
+done_testing();
+
+1;

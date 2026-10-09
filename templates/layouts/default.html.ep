@@ -1,0 +1,47 @@
+<!doctype html>
+% my $locale_metadata = ui_locale_metadata;
+<html lang="<%= ui_locale %>" dir="<%= ui_direction %>" data-locale="<%= ui_locale %>" data-direction="<%= ui_direction %>" data-script="<%= $locale_metadata->{script} %>" data-theme="<%= ui_theme %>" data-color-scheme="<%= ui_theme_color_scheme %>">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="<%= ui_theme_color_scheme %>">
+    % for my $tint (@{ ui_theme_registry->theme_colors(ui_theme) }) {
+      <meta name="theme-color"<%== $tint->{media} ? ' media="' . $tint->{media} . '"' : q{} %> content="<%= $tint->{color} %>">
+    % }
+    <title><%= title %></title>
+    <link rel="icon" href="<%= ui_asset_url('gpforum-mark.svg') %>" type="image/svg+xml">
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="<%= ui_asset_url('inter-latin-wght-normal.woff2') %>">
+    <link rel="stylesheet" href="<%= ui_asset_url('gpforum-ssr.css') %>">
+    <meta name="htmx-config" content='{"allowEval":false,"includeIndicatorStyles":false,"responseHandling":[{"code":"204","swap":false},{"code":"[23]..","swap":true},{"code":"[45]..","swap":true,"error":true},{"code":"...","swap":false}]}'>
+    <script src="<%= ui_asset_url('htmx.min.js') %>" defer></script>
+    % my $page_metadata = stash('page_metadata') || {};
+    % if ($page_metadata->{description}) {
+      <meta name="description" content="<%= $page_metadata->{description} %>">
+    % }
+    % if ($page_metadata->{robots}) {
+      <meta name="robots" content="<%= $page_metadata->{robots} %>">
+    % }
+    % if ($page_metadata->{canonical}) {
+      <link rel="canonical" href="<%= $page_metadata->{canonical} %>">
+    % }
+    % if ($page_metadata->{open_graph}) {
+      % my $open_graph = $page_metadata->{open_graph};
+      <meta property="og:title" content="<%= $open_graph->{title} %>">
+      <meta property="og:type" content="<%= $open_graph->{type} %>">
+      <meta property="og:url" content="<%= $open_graph->{url} %>">
+      % if ($open_graph->{description}) {
+        <meta property="og:description" content="<%= $open_graph->{description} %>">
+      % }
+    % }
+  </head>
+  <body class="app-shell <%= ui_typography_class %><%= (stash('shell') // q{}) eq 'wide' ? ' app-shell--wide' : q{} %>">
+    <a class="skip-link" href="#content"><%= t('nav.skip_to_content') %></a>
+    <%= include 'components/site_header' %>
+    <%= include 'components/breadcrumbs' %>
+    <div id="flash"><%= include 'components/flash_messages' %></div>
+    <main id="content" class="page-shell" tabindex="-1">
+      <%= content %>
+    </main>
+    <%= include 'components/site_footer' %>
+  </body>
+</html>

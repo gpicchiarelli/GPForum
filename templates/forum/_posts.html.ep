@@ -1,0 +1,139 @@
+%# The posts of a thread: for each, who wrote it and when, what they wrote,
+%# and what the reader may do with it. Editing, deleting and reporting each
+%# open in a sheet, so the page stays the conversation.
+%#
+%# A page shows up to 25 posts, so whatever is done for one is done 25 times.
+%# The sheet and the report form are blocks of this template rather than the
+%# components/sheet and forum/_report_form partials, and the time is the
+%# ui_timestamp helper rather than the components/timestamp partial: a partial
+%# costs a render of its own, and 75 of them were a third of the page.
+%#
+%# With the page's script each post's forms post in place (hx-post), and the
+%# post comes back as the list now lists it, in its own place (hx-target on
+%# the item).
+%#
+%# Takes "posts"; reads the page's "engagement".
+% my $signed_in = $engagement && $engagement->{authenticated};
+% my %profile_url;
+% my $sheet = begin
+%   my ($id, $title, $body) = @_;
+  <div class="sheet" id="<%= $id %>" popover role="dialog" aria-labelledby="<%= $id %>-heading">
+    <header class="sheet__header">
+      <h2 id="<%= $id %>-heading"><%= $title %></h2>
+      <button type="button" class="button--quiet sheet__dismiss" popovertarget="<%= $id %>" popovertargetaction="hide" aria-label="<%= t('ui.dialog_close') %>">&times;</button>
+    </header>
+    <%= $body->() %>
+  </div>
+% end
+% my $report_form = begin
+%   my ($post_to, $command_id, $field_id) = @_;
+  <form method="post" action="<%= $post_to %>" hx-post="<%= $post_to %>">
+    <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= $command_id || q{} %>">
+    <label for="<%= $field_id %>-reason"><%= t('common.reason') %></label>
+    <select id="<%= $field_id %>-reason" name="reason" required>
+      <option value="spam"><%= t('moderation.reason.spam') %></option>
+      <option value="abuse"><%= t('moderation.reason.abuse') %></option>
+      <option value="privacy"><%= t('moderation.reason.privacy') %></option>
+      <option value="other"><%= t('moderation.reason.other') %></option>
+    </select>
+    <label for="<%= $field_id %>-details"><%= t('common.details') %></label>
+    <textarea id="<%= $field_id %>-details" name="details" rows="3"></textarea>
+    <button type="submit"><%= t('moderation.submit_report') %></button>
+  </form>
+% end
+
+% for my $post (@{$posts}) {
+%   my $dom_id = 'post-' . $post->{post_id};
+%   my $ordinal = '#' . $post->{position};
+%   my $author = $post->{author_username};
+%   my $author_url = $author ? $profile_url{$author} //= ui_path('profile', username => $author) : undef;
+  <li class="ui-card-list__item" hx-target="this" hx-swap="outerHTML">
+    <article class="post" id="<%= $dom_id %>" aria-labelledby="<%= $dom_id %>-heading">
+      <h3 class="visually-hidden" id="<%= $dom_id %>-heading"><%= t('forum.post_number', { position => $post->{position} }) %></h3>
+      <span class="avatar avatar--<%= $post->{author_tint} %> post__avatar" aria-hidden="true"><%= $post->{author_initial} %></span>
+      <header class="post__header">
+        <p class="ui-meta post__byline">
+          % if ($post->{author_username}) {
+            <a class="post__author" href="<%= $author_url %>"><%= $post->{author_display_name} || $post->{author_profile_label} %></a>
+            % if ($post->{author_display_name}) {
+              <span><%= $post->{author_profile_label} %></span>
+            % }
+          % }
+          % if ($post->{created_at}) {
+            <span><%= ui_timestamp($post->{created_at}) %></span>
+          % }
+        </p>
+        <a class="post__permalink" href="#<%= $dom_id %>" aria-label="<%= t('forum.permalink') %> <%= $ordinal %>"><%= $ordinal %></a>
+      </header>
+      <div class="forum-post-body"><%== ui_trusted_html($post->{body}, 'forum.post.body') %></div>
+      % if ($post->{deleted_at}) {
+        <p role="status"><%= t('forum.post_deleted_notice') %></p>
+      % }
+      % if ($post->{attachments} && @{ $post->{attachments} }) {
+        <ul class="post__attachments" aria-label="<%= t('forum.post_attachments') %>">
+          % for my $attachment (@{ $post->{attachments} }) {
+            <li>
+              <a href="<%= ui_path('attachment_download', attachment_id => $attachment->{attachment_id}) %>"><%= $attachment->{original_filename} %></a>
+              <span><%= $attachment->{media_type} %></span>
+              % if ($post->{can_edit}) {
+                <form method="post" action="<%= ui_path('post_attachment_delete', post_id => $post->{post_id}, attachment_id => $attachment->{attachment_id}) %>">
+                  <%= csrf_field %>
+                  <input type="hidden" name="command_id" value="<%= $attachment->{delete_command_id} || q{} %>">
+                  <button type="submit" class="button--quiet"><%= t('forum.delete_attachment') %></button>
+                </form>
+              % }
+            </li>
+          % }
+        </ul>
+      % }
+      % if ($post->{can_edit} || $post->{can_delete} || $post->{can_restore} || $signed_in) {
+        <footer class="post__actions">
+          % if ($post->{can_edit}) {
+          %   my $edit_body = begin
+              <form method="post" action="<%= ui_path('post_edit', post_id => $post->{post_id}) %>" hx-post="<%= ui_path('post_edit', post_id => $post->{post_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $post->{edit_command_id} || q{} %>">
+                <label for="<%= $dom_id %>-edit-body"><%= t('forum.edit_body') %></label>
+                <textarea id="<%= $dom_id %>-edit-body" name="body_source" rows="10" required><%= $post->{body_source} %></textarea>
+                <button type="submit"><%= t('forum.save_edit') %></button>
+              </form>
+              <form method="post" enctype="multipart/form-data" action="<%= ui_path('post_attachment_upload', post_id => $post->{post_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $post->{upload_command_id} || q{} %>">
+                <label for="<%= $dom_id %>-attachment"><%= t('form.attach_file') %></label>
+                <input id="<%= $dom_id %>-attachment" name="attachment" type="file" required>
+                <button type="submit" class="button--secondary"><%= t('form.upload_attachment') %></button>
+              </form>
+          %   end
+            <button type="button" class="button--quiet" popovertarget="<%= $dom_id %>-edit"><%= t('forum.edit_post') %></button>
+            <%= $sheet->("$dom_id-edit", t('forum.edit_post') . " $ordinal", $edit_body) %>
+          % }
+          % if ($post->{can_delete}) {
+          %   my $delete_body = begin
+              <form method="post" action="<%= ui_path('post_delete', post_id => $post->{post_id}) %>" hx-post="<%= ui_path('post_delete', post_id => $post->{post_id}) %>">
+                <%= csrf_field %>
+                <input type="hidden" name="command_id" value="<%= $post->{delete_command_id} || q{} %>">
+                <p class="sheet__consequence"><%= t('forum.delete_post_consequence') %></p>
+                <button type="submit" class="button--danger"><%= t('forum.delete_post') %></button>
+              </form>
+          %   end
+            <button type="button" class="button--quiet" popovertarget="<%= $dom_id %>-delete"><%= t('forum.delete_post') %></button>
+            <%= $sheet->("$dom_id-delete", t('forum.delete_post') . " $ordinal", $delete_body) %>
+          % }
+          % if ($post->{can_restore}) {
+            <form method="post" action="<%= ui_path('post_restore', post_id => $post->{post_id}) %>" hx-post="<%= ui_path('post_restore', post_id => $post->{post_id}) %>">
+              <%= csrf_field %>
+              <input type="hidden" name="command_id" value="<%= $post->{restore_command_id} || q{} %>">
+              <button type="submit" class="button--quiet"><%= t('forum.restore_post') %></button>
+            </form>
+          % }
+          % if ($signed_in) {
+            <button type="button" class="button--quiet" popovertarget="<%= $dom_id %>-report"><%= t('moderation.report_post') %></button>
+            <%= $sheet->("$dom_id-report", t('moderation.report_post') . " $ordinal", sub { $report_form->(ui_path('post_report', post_id => $post->{post_id}), $post->{report_command_id}, "$dom_id-report") }) %>
+          % }
+        </footer>
+      % }
+    </article>
+  </li>
+% }

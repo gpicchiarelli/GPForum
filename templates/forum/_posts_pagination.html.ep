@@ -1,0 +1,16 @@
+%# The way to the next posts. With the page's script the link fetches them
+%# (hx-get) and appends them to the list, and this element comes back out of
+%# band, pointing further on or, at the end, empty. Without the script it is
+%# the next page.
+%#
+%# Reads the page's "thread" and "next_cursor"; "swap_oob" marks this copy as
+%# the one that replaces the page's.
+% my $oob = stash('swap_oob') ? ' hx-swap-oob="true"' : q{};
+% if ($next_cursor) {
+%   my $next = url_for('thread', thread_id => $thread->{thread_id})->query(after => $next_cursor);
+<nav class="ui-pagination" id="posts-pagination" aria-label="<%= t('forum.post_pagination') %>"<%== $oob %>>
+  <a href="<%= $next %>" rel="next" hx-get="<%= $next %>" hx-target="#posts" hx-swap="beforeend"><%= t('forum.next_posts') %></a>
+</nav>
+% } else {
+<span id="posts-pagination"<%== $oob %>></span>
+% }

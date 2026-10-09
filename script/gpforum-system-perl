@@ -1,0 +1,268 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+# Resolve and validate the OS / distro system Perl. GPForum does not support
+# version managers (perlbrew, plenv, asdf), perl-from-source, or other custom
+# PREFIX installs. Carton and local/ still install under this interpreter.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+
+# The operator's language, from the command line's catalogs. A copy of this
+# script without them still says what it found, in English.
+if [ -r "$root/script/lib/words.sh" ]; then
+    # shellcheck source=script/lib/words.sh
+    . "$root/script/lib/words.sh"
+else
+    words_say() {
+        words_text=$2
+        shift 2
+        for words_pair in "$@"; do
+            words_name=${words_pair%%=*}
+            words_text=$(printf '%s' "$words_text" | sed "s|{$words_name}|${words_pair#*=}|g")
+        done
+        printf '%s\n' "$words_text"
+    }
+    words_mark() { printf '%s\n' "$2"; }
+    words_fixes() { for words_fix in "$@"; do printf '    %s\n' "$words_fix"; done; }
+    words_summary() { :; }
+fi
+
+usage() {
+    cat <<'EOF'
+Usage: script/gpforum-system-perl [--print | --require | --preflight [--verbose]] [--as NAME]
+
+Find the Perl GPForum runs on: the operating system's (Debian 13, Ubuntu
+26.04, FreeBSD's port) or Homebrew's, 5.40 or newer -- never a version
+manager's (perlbrew, plenv, asdf) or one built by hand.
+
+  --print      print its path (the default)
+  --require    print its path, or say why there is none and exit 1
+  --preflight  say whether this host has it, and what to do next
+               (make system-perl runs this)
+  --verbose    with --preflight, also print perl -V
+  --as NAME    with --require, the program named before why there is none
+               (bin/gpforum says gpforum)
+  --help       this text
+
+GPFORUM_PERL names a Perl to use instead; it must pass the same checks.
+EOF
+}
+
+mode=print
+verbose=0
+name=gpforum-system-perl
+while [ $# -gt 0 ]; do
+    argument=$1
+    shift
+    case "$argument" in
+        --as)
+            if [ $# -eq 0 ] || [ -z "$1" ]; then
+                echo "gpforum-system-perl: --as needs a name" >&2
+                exit 2
+            fi
+            name=$1
+            shift
+            ;;
+        --print)
+            mode=print
+            ;;
+        --require)
+            mode=require
+            ;;
+        --preflight)
+            mode=preflight
+            ;;
+        --verbose)
+            verbose=1
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "gpforum-system-perl: unknown option: $argument" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+# What installs a Perl GPForum accepts on this operating system.
+perl_fix() {
+    case "$(uname -s 2>/dev/null || echo unknown)" in
+        Darwin)
+            words_say system.fix_perl_macos 'brew install perl'
+            ;;
+        FreeBSD)
+            words_say system.fix_perl_freebsd 'sudo pkg install perl5 p5-App-cpanminus'
+            ;;
+        *)
+            words_say system.fix_perl_linux 'a distribution with Perl 5.40 or newer, such as Debian 13 or Ubuntu 26.04: sudo apt install perl build-essential cpanminus libpq-dev'
+            ;;
+    esac
+}
+
+# No acceptable Perl: under --preflight, a finding with its fix and the
+# count; otherwise one line on stderr for the script that asked, and the
+# fix under it.
+reject() {
+    message=$(words_say "$@")
+    if [ "$mode" = preflight ]; then
+        words_mark fail "$message"
+        words_fixes "$(perl_fix)"
+        echo
+        words_summary 1
+        exit 1
+    fi
+    echo "$name: $message" >&2
+    words_fixes "$(perl_fix)" >&2
+    exit 1
+}
+
+is_denied_path() {
+    perl_path=$1
+    # The per-manager layouts stay spelled out so the rejected install shapes
+    # remain readable, even where a broader pattern already covers one.
+    # shellcheck disable=SC2221,SC2222
+    case "$perl_path" in
+        */perlbrew/*|*/.perlbrew/*|*/perl5/perlbrew/*)
+            return 0
+            ;;
+        */.plenv/*|*/plenv/versions/*)
+            return 0
+            ;;
+        */.asdf/installs/perl/*|*/asdf/installs/perl/*)
+            return 0
+            ;;
+        */.local/perl/*|*/perl-from-source/*|*/opt/perl/*)
+            return 0
+            ;;
+    esac
+    return 1
+}
+
+is_system_prefix() {
+    candidate=$1
+    # A packaged Perl: Config prefix /usr (Linux distros), /usr/local
+    # (FreeBSD packages), or Homebrew's keg (/opt/homebrew/opt/perl on
+    # Apple silicon, /usr/local/opt/perl on Intel). Accept those without
+    # broader OS probes so architecture OS rules stay behind
+    # lib/GPForum/OS*.pm.
+    "$candidate" -MConfig -e '
+        my $prefix = $Config{prefix} // q{};
+        exit(
+            (   $prefix eq "/usr"
+                || $prefix eq "/usr/local"
+                || $prefix eq "/opt/homebrew/opt/perl"
+                || $prefix eq "/usr/local/opt/perl"
+            ) ? 0 : 1
+        );
+    '
+}
+
+meets_version() {
+    candidate=$1
+    "$candidate" -e 'exit($] < 5.040 ? 1 : 0)'
+}
+
+canonicalize() {
+    candidate=$1
+    if command -v readlink >/dev/null 2>&1; then
+        resolved=$(readlink -f "$candidate" 2>/dev/null || true)
+        if [ -n "$resolved" ] && [ -x "$resolved" ]; then
+            printf '%s\n' "$resolved"
+            return 0
+        fi
+    fi
+    printf '%s\n' "$candidate"
+}
+
+# Return 0 when $1 is an acceptable system Perl (path, prefix, version).
+validate_system_perl() {
+    candidate=$1
+    if is_denied_path "$candidate"; then
+        return 1
+    fi
+    if ! is_system_prefix "$candidate"; then
+        return 1
+    fi
+    if ! meets_version "$candidate"; then
+        return 1
+    fi
+    return 0
+}
+
+reject_invalid() {
+    candidate=$1
+    if is_denied_path "$candidate"; then
+        reject system.perl_manager "{path} is a version manager's Perl; GPForum runs on the system's or Homebrew's" "path=$candidate"
+    fi
+    if ! is_system_prefix "$candidate"; then
+        prefix=$("$candidate" -MConfig -e 'print $Config{prefix}')
+        reject system.perl_prefix '{path} is not a system Perl (its prefix is {prefix})' "path=$candidate" "prefix=$prefix"
+    fi
+    if ! meets_version "$candidate"; then
+        version=$("$candidate" -e 'printf "%vd", $^V')
+        reject system.perl_old 'Perl {version} at {path} is older than the 5.40 GPForum needs' "version=$version" "path=$candidate"
+    fi
+}
+
+resolve_candidate() {
+    if [ -n "${GPFORUM_PERL:-}" ]; then
+        printf '%s\n' "${GPFORUM_PERL}"
+        return 0
+    fi
+
+    # Prefer distro paths; fall through so macOS's old /usr/bin/perl does
+    # not block Homebrew's perl when that meets 5.40+. Homebrew links it as
+    # /opt/homebrew/bin/perl (Apple silicon) or /usr/local/bin/perl (Intel);
+    # canonicalize resolves the link to the keg in the Cellar.
+    for candidate in /usr/bin/perl /usr/local/bin/perl /opt/homebrew/bin/perl; do
+        if [ -x "$candidate" ]; then
+            canonical=$(canonicalize "$candidate")
+            if validate_system_perl "$canonical"; then
+                printf '%s\n' "$canonical"
+                return 0
+            fi
+        fi
+    done
+
+    if command -v perl >/dev/null 2>&1; then
+        command -v perl
+        return 0
+    fi
+
+    return 1
+}
+
+# Said here, not in resolve_candidate: what that prints is its answer.
+if [ -n "${GPFORUM_PERL:-}" ] && [ ! -x "${GPFORUM_PERL}" ]; then
+    reject system.perl_not_executable 'GPFORUM_PERL names {path}, which is not a program' "path=${GPFORUM_PERL}"
+fi
+
+perl_bin=$(resolve_candidate) || reject system.perl_missing 'no Perl was found in /usr/bin, /usr/local/bin or /opt/homebrew/bin'
+perl_bin=$(canonicalize "$perl_bin")
+
+# GPFORUM_PERL and PATH fallbacks still need hard rejection messages.
+reject_invalid "$perl_bin"
+
+case "$mode" in
+    print)
+        printf '%s\n' "$perl_bin"
+        ;;
+    require)
+        printf '%s\n' "$perl_bin"
+        ;;
+    preflight)
+        version=$("$perl_bin" -e 'printf "%vd", $^V')
+        words_mark ok "$(words_say system.perl_ok 'Perl {version} at {path}' "version=$version" "path=$perl_bin")"
+        if [ "$verbose" -eq 1 ]; then
+            "$perl_bin" -V
+        fi
+        echo
+        words_say system.next_deps 'Next: make install-deps-postgres, or sudo make install-deps-production on a server'
+        ;;
+esac

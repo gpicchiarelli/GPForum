@@ -1,0 +1,11 @@
+%# What a request the page made from its script gets when it fails: the
+%# message the error page would show, for the message's place, and nothing
+%# for the target it asked for (HX-Reswap: none, on the response), so a post
+%# or a toolbar that could not be changed stays as it was.
+%#
+%# Reads "error_page" as the error page does.
+<div id="flash" hx-swap-oob="true">
+  <section class="flash-stack page-shell" aria-label="<%= t('layout.flash_messages') %>">
+    <p class="flash flash--error" role="alert"><%= t($error_page->{message_key}) %></p>
+  </section>
+</div>

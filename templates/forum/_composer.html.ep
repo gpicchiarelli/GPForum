@@ -1,0 +1,19 @@
+%# Where a reply is written. Sent by the page's script when it has one
+%# (hx-post), the reply comes back as the post to append to the list; the
+%# composer itself comes back out of band with a fresh command id, so the next
+%# reply is a new command. Without the script the form posts and the page
+%# reloads at the new post.
+%#
+%# Reads the page's "thread" and "reply_command_id"; "swap_oob" marks this
+%# copy as the one that replaces the page's.
+% my $thread_id = $thread->{thread_id};
+<section class="composer" id="reply" aria-labelledby="reply-heading"<%== stash('swap_oob') ? ' hx-swap-oob="true"' : q{} %>>
+  <h2 id="reply-heading"><%= t('forum.reply') %></h2>
+  <form method="post" action="<%= ui_path('reply_create', thread_id => $thread_id) %>" hx-post="<%= ui_path('reply_create', thread_id => $thread_id) %>" hx-target="#posts" hx-swap="beforeend">
+    <%= csrf_field %>
+    <input type="hidden" name="command_id" value="<%= $reply_command_id || q{} %>">
+    <label class="visually-hidden" for="reply-body"><%= t('forum.reply_body') %></label>
+    <textarea id="reply-body" name="body_source" rows="8" required></textarea>
+    <button type="submit"><%= t('forum.post_reply') %></button>
+  </form>
+</section>

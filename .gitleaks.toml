@@ -1,0 +1,40 @@
+# GPForum secret-scanning configuration.
+#
+# Secrets stay out of the repository (ADR 0059, SECURITY.md): configuration
+# is externalized through GPFORUM_* environment variables and /etc/gpforum.
+# This file only removes scan paths that never hold repository content and
+# fixture strings that exist to prove hashing/redaction behaviour, plus one
+# documented PostgreSQL index identifier mistaken for an API key.
+
+title = "GPForum"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Build, coverage and runtime trees are not repository content"
+paths = [
+  '''^local/''',
+  '''^local\.rebuild\.''',
+  '''^local\.incomplete\.''',
+  '''^cover_db/''',
+  '''^var/''',
+  '''^artifacts/''',
+  '''^\.claude/''',
+  '''^\.git/''',
+]
+
+[[allowlists]]
+description = "Test fixtures carry placeholder hashes and tokens, never credentials"
+targetRules = ["generic-api-key"]
+paths = [
+  '''^t/''',
+]
+
+[[allowlists]]
+description = "PostgreSQL partition index example in conflict classification documentation"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^lib/GPForum/X/Conflict\.pm$''']
+regexTarget = "secret"
+regexes = ['''^notifications_2026_10_pkey$''']

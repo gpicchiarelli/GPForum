@@ -1,0 +1,47 @@
+% layout 'default';
+% title t('nav.notifications') . ' - ' . t('app.name');
+
+<section aria-labelledby="notifications-heading">
+  <%= include 'components/page_header', heading_id => 'notifications-heading', component_title => t('nav.notifications') %>
+  % my $unread = $unread_count || 0;
+  <div class="toolbar">
+    <p class="ui-meta"><span class="ui-count"><%= $unread > 99 ? t('notifications.unread_many') : tc('notifications.unread_count', $unread) %></span></p>
+    % if ($unread_count) {
+      <form method="post" action="<%= ui_path('notifications_read_all') %>">
+        <%= csrf_field %>
+        <button type="submit" class="button--secondary button--small"><%= t('notifications.mark_all_read') %></button>
+      </form>
+    % }
+  </div>
+  % if (@{$notifications}) {
+    <ol class="ui-card-list" aria-label="<%= t('notifications.inbox_label') %>">
+      % for my $notification (@{$notifications}) {
+        % my $presentation = $notification->{presentation} || {};
+        % my $payload = $notification->{payload} || {};
+        % my $notification_href = q{};
+        % if ($payload->{thread_id}) {
+          % $notification_href = url_for('thread', thread_id => $payload->{thread_id})->to_string;
+          % if ($payload->{post_id}) {
+            % $notification_href .= '#post-' . $payload->{post_id};
+          % }
+        % }
+        <li class="ui-card-list__item">
+          <%= include 'components/notification_surface',
+            heading_id => 'notification-' . $notification->{notification_id} . '-heading',
+            component_title => $presentation->{title} || t('notifications.title.notification'),
+            thread_title => $notification->{thread_title},
+            summary => $presentation->{summary} || q{},
+            href => $notification_href,
+            created_at => $notification->{created_at},
+            read => $notification->{read_at} ? 1 : 0,
+            read_action => url_for('notification_read', notification_id => $notification->{notification_id})->to_string %>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state', heading_id => 'notifications-empty-heading', component_title => t('notifications.empty') %>
+  % }
+  % if ($next_cursor) {
+    <%= include 'components/pagination', label => t('notifications.pagination'), items => ui_next_page(href => url_for('notifications')->query(after => $next_cursor), label => t('notifications.older')) %>
+  % }
+</section>

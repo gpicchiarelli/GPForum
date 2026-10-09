@@ -1,0 +1,97 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Test::QueryBudgetResultSet;
+
+use Mojo::Base -base;
+use v5.40;
+
+use GPForum::Infrastructure::UniqueConflict;
+use GPForum::Test::CommunityRow;
+use GPForum::Test::CommunitySearch;
+
+our $VERSION = '0.001';
+
+has rows              => sub { return {}; };
+has skip_search_count => 0;
+has updated           => sub { return []; };
+has deleted           => sub { return []; };
+
+sub create {
+    my ( $self, $row ) = @_;
+
+    $self->_assert_budget_unique($row);
+    return $self->_store_budget($row);
+}
+
+sub update_or_create {
+    my ( $self, $row ) = @_;
+
+    return $self->_store_budget($row);
+}
+
+sub find {
+    my ( $self, $query ) = @_;
+
+    my $name = ref $query eq 'HASH' ? $query->{endpoint_name} : $query;
+    return $self->rows->{$name};
+}
+
+# DBIx::Class's context-proof form of search. lib/ calls it wherever it means a
+# resultset, because search itself returns every row in list context.
+sub search_rs {
+    my ( $self, @arguments ) = @_;
+
+    return $self->search(@arguments);
+}
+
+sub search {
+    my ( $self, $query, $attrs ) = @_;
+
+    if ( $self->skip_search_count ) {
+        $self->skip_search_count( $self->skip_search_count - 1 );
+        return GPForum::Test::CommunitySearch->new( rows => [] );
+    }
+
+    return GPForum::Test::CommunitySearch->new(
+        query     => $query,
+        resultset => $self,
+        rows      => [ values %{ $self->rows } ],
+    );
+}
+
+# The one delete lib/ sends: endpoint_name IN (...), for the rows a sync
+# finds the catalog no longer has.
+sub delete_matching {
+    my ( $self, $query ) = @_;
+
+    my $names = $query->{endpoint_name}{-in} || [];
+    my @gone  = grep { exists $self->rows->{$_} } @{$names};
+    delete @{ $self->rows }{@gone};
+    push @{ $self->deleted }, @gone;
+
+    return scalar @gone;
+}
+
+sub _assert_budget_unique {
+    my ( $self, $row ) = @_;
+
+    if ( $self->rows->{ $row->{endpoint_name} } ) {
+        GPForum::Infrastructure::UniqueConflict->throw(
+            'endpoint_query_budgets_pkey');
+    }
+
+    return;
+}
+
+sub _store_budget {
+    my ( $self, $row ) = @_;
+
+    my $object = GPForum::Test::CommunityRow->new( data => $row );
+    $self->rows->{ $row->{endpoint_name} } = $object;
+    push @{ $self->updated }, $row;
+
+    return $object;
+}
+
+1;

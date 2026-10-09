@@ -1,0 +1,33 @@
+% layout 'default';
+% title t('nav.categories') . ' - ' . t('app.name');
+
+<section aria-labelledby="categories-heading">
+  <%= include 'components/page_header',
+    heading_id => 'categories-heading',
+    component_title => t('nav.categories'),
+    actions_label => t('forum.forum_actions'),
+    actions => ui_actions(
+      { href => ui_path('forum_search'), label => t('nav.search') },
+      { class => 'button', href => ui_path('new_thread'), label => t('nav.start_thread') },
+    ) %>
+  % if (@{$categories}) {
+    <ul class="ui-card-list" aria-label="<%= t('forum.forum_categories') %>">
+      % for my $category (@{$categories}) {
+        <li class="ui-card-list__item ui-row">
+          <article aria-labelledby="category-<%= $category->{category_id} %>-heading">
+            <h2 class="ui-row__title" id="category-<%= $category->{category_id} %>-heading">
+              <a href="<%= ui_path('category', category_id => $category->{category_id}) %>"><%= $category->{title} %></a>
+            </h2>
+            % if ($category->{description}) {
+              <p><%= $category->{description} %></p>
+            % }
+          </article>
+        </li>
+      % }
+    </ul>
+  % } else {
+    <%= include 'components/empty_state',
+      heading_id => 'categories-empty-heading',
+      component_title => t('forum.categories_empty') %>
+  % }
+</section>

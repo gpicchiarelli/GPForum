@@ -1,0 +1,81 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Test::ReadinessSchema;
+
+use Mojo::Base -base;
+use v5.40;
+
+use GPForum::Service::Operations::QueryBudget;
+use GPForum::Test::QueryBudgetResultSet;
+use GPForum::Test::QueryBudgetSchema;
+
+our $VERSION = '0.001';
+
+has query_budget_resultset => sub {
+    my $resultset = GPForum::Test::QueryBudgetResultSet->new;
+    GPForum::Service::Operations::QueryBudget->new->sync_schema(
+        GPForum::Test::QueryBudgetSchema->new(
+            budget_resultset => $resultset,
+        )
+    );
+
+    return $resultset;
+};
+has search_count => 0;
+
+sub storage {
+    my ($self) = @_;
+
+    return $self;
+}
+
+sub dbh {
+    my ($self) = @_;
+
+    return $self;
+}
+
+sub selectrow_array {
+    return 1;
+}
+
+sub resultset {
+    my ( $self, $name ) = @_;
+
+    return $self->query_budget_resultset
+      if defined $name && $name eq 'EndpointQueryBudget';
+
+    return $self;
+}
+
+# DBIx::Class's context-proof form of search. lib/ calls it wherever it means a
+# resultset, because search itself returns every row in list context.
+sub search_rs {
+    my ( $self, @arguments ) = @_;
+
+    return $self->search(@arguments);
+}
+
+sub search {
+    my ($self) = @_;
+
+    $self->search_count( $self->search_count + 1 );
+
+    return $self;
+}
+
+# DBIx::Class's cursor and single row over a table this double keeps empty.
+BEGIN {
+    *next = \&next_row;
+}
+
+sub next_row {
+    return undef;
+}
+
+sub single {
+    return undef;
+}
+
+1;

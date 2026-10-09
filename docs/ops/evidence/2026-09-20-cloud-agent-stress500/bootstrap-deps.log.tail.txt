@@ -1,0 +1,40 @@
+Successfully installed Class-C3-0.35
+Successfully installed Class-C3-Componentised-1.001002
+Successfully installed Config-Any-0.33
+Successfully installed Scope-Guard-0.21
+Successfully installed Module-Find-0.17
+Successfully installed Dist-CheckConflicts-0.11
+Successfully installed Package-Stash-XS-0.30
+Successfully installed Package-Stash-0.40
+Successfully installed Data-Dumper-Concise-2.023
+Successfully installed Context-Preserve-0.03
+Successfully installed Variable-Magic-0.65
+Successfully installed B-Hooks-EndOfScope-0.28
+Successfully installed namespace-clean-0.27
+Successfully installed Path-Class-0.37
+Successfully installed Test-Warn-0.37
+Successfully installed SQL-Abstract-Classic-1.91
+Successfully installed Devel-GlobalDestruction-0.14
+Successfully installed DBIx-Class-0.082844
+Successfully installed ExtUtils-CChecker-0.12
+Successfully installed XS-Parse-Keyword-0.50
+Successfully installed Syntax-Keyword-Try-0.31
+Successfully installed Class-Singleton-1.6
+Successfully installed Eval-Closure-0.14
+Successfully installed Clone-PP-1.09
+Successfully installed XString-0.005
+Successfully installed Specio-0.53
+Successfully installed namespace-autoclean-0.31
+Successfully installed Params-ValidationCompiler-0.31
+Successfully installed DateTime-TimeZone-2.69
+Successfully installed DateTime-Locale-1.46
+Successfully installed DateTime-1.67
+Successfully installed DateTime-Format-Strptime-1.80
+Successfully installed Params-Validate-1.31
+Successfully installed DateTime-Format-Builder-0.83
+Successfully installed DateTime-Format-Pg-0.16014
+158 distributions installed
+Complete! Modules were installed into /workspace/local
+bootstrap-deps: verifying lock with carton check
+cpanfile's dependencies are satisfied.
+BOOTSTRAP_EXIT:0

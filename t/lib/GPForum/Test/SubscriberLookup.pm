@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Test::SubscriberLookup;
+
+use Mojo::Base -base;
+use v5.40;
+
+our $VERSION = '0.001';
+
+has calls    => sub { return []; };
+has user_ids => sub { return []; };
+
+sub subscribers_for {
+    my ( $self, $target_type, $target_id ) = @_;
+
+    push @{ $self->calls },
+      {
+        target_id   => $target_id,
+        target_type => $target_type,
+      };
+
+    return @{ $self->user_ids };
+}
+
+1;

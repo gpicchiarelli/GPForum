@@ -1,0 +1,52 @@
+fresh-checkout-check: commit 9ecca7d (Give the state-reporting commands --json; exit 1 not 255 on database errors)
+  working directory: a temporary one, removed afterwards (--keep keeps it)
+  45 uncommitted paths in this checkout are not part of the run
+  GPFORUM_DATABASE_DSN is set: the quick start makes and migrates the throwaway role and
+  database gpforum_fresh_1790977490_20793, dropped afterwards, and the integration tier runs last
+
+  step                   result   time  command
+  clone                  pass       0s  git clone --no-hardlinks, then check out 9ecca7d
+  system-perl            pass       0s  make system-perl
+  install-deps-postgres  pass     156s  make install-deps-postgres
+  system-preflight       pass       2s  script/system-preflight
+  createuser             pass       0s  createuser_with_password "$fresh_role"
+  createdb               pass       0s  createdb --maintenance-db="$maintenance_db" --username="$db_user" --owner="$fresh_role" "$fresh_db"
+  migrate-plan           pass       1s  script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --plan
+                                        48 migrations planned
+  migrate-apply          fail       0s  script/gpforum-carton exec perl -Ilib bin/gpforum-migrate --apply
+                                        0 migrations applied
+
+--- the last 40 lines of the migrate-apply log ---
+DBIx::Class::Storage::DBI::_do_query(): DBI Exception: DBD::Pg::db do failed: ERROR:  permission denied to set parameter "lc_messages"
+--- end of the migrate-apply log ---
+
+  syntax                 pass      79s  make syntax
+  test                   pass      86s  make test
+                                        Files=250, Tests=11256, 86 wallclock secs ( 0.73 usr  0.38 sys + 65.21 cusr 11.77 csys = 78.09 CPU)
+                                        Result: PASS
+  critic                 fail     105s  make critic
+
+--- the last 40 lines of the critic log ---
+script/perlcritic
+perlcritic: found 1 violation(s) outside baseline
+[CodeLayout::RequireTidyCode] Code is not tidy at t/82-realtime-supervisor.t line <line>, column <column>. Severity: 1. See page 33 of PBP. # SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+perlcritic: 73 baseline violation(s) disappeared; update etc/perlcritic-baseline.txt after review
+make: *** [critic] Error 1
+--- end of the critic log ---
+
+  tidy                   fail     512s  make tidy
+
+--- the last 40 lines of the tidy log ---
+script/perltidy-check
+perltidy-check: t/82-realtime-supervisor.t is not perltidy-clean
+make: *** [tidy] Error 1
+--- end of the tidy log ---
+
+  architecture           pass       3s  make architecture
+  integration            pass      44s  make integration
+                                        Files=34, Tests=1111, 44 wallclock secs ( 0.12 usr  0.07 sys + 20.80 cusr  4.04 csys = 25.03 CPU)
+                                        Result: PASS
+
+  host Darwin arm64, perl v5.44.0, PostgreSQL 18.6 (Homebrew) client
+
+fresh-checkout-check status=fail commit=9ecca7d steps=14 failed=migrate-apply,critic,tidy skipped=none total=988s

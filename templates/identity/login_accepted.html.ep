@@ -1,0 +1,16 @@
+% layout 'default';
+% title t('auth.login_accepted_title') . ' - ' . t('app.name');
+
+%# The answer to signing in is what happened, in the title, and where to go.
+<section aria-labelledby="login-accepted-heading">
+  <%= include 'components/page_header',
+    heading_id => 'login-accepted-heading',
+    component_title => t('auth.login_accepted_title'),
+    actions_label => t('auth.login_next_steps'),
+    actions => ui_actions(
+      { class => 'button', href => ui_path('categories'), label => t('forum.browse_categories') },
+      { href => ui_path('new_thread'), label => t('nav.start_thread') },
+      { href => ui_path('forum_search'), label => t('nav.search') },
+      { href => ui_path('bookmarks'), label => t('nav.bookmarks') },
+    ) %>
+</section>

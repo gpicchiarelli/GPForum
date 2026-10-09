@@ -1,0 +1,246 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use v5.40;
+
+use Carp qw(croak);
+use Const::Fast;
+use Test::Exception;
+use Test::More;
+
+use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Bootstrap::Workers;
+use GPForum::Command::OutboxDispatch;
+use GPForum::Config;
+use GPForum::Service::Outbox::Dispatcher;
+use GPForum::Service::Outbox::DomainEventTransport;
+use GPForum::Test::OutboxCommandDispatcher;
+use GPForum::Test::UnreachableMinion;
+use GPForum::Worker::MinionGuard;
+use GPForum::Worker::MinionRegistrar;
+use Mojolicious;
+
+our $VERSION = '0.001';
+
+# Messages each pass of the draining loop claims, with --limit 3: full,
+# short, full, none, short, and then full again.
+const my @CLAIMED      => ( 3, 1, 3, 0, 2 );
+const my $DRAIN_PASSES => 6;
+const my $EXIT_USAGE   => 2;
+const my $LOOP_LIMIT   => 3;
+
+my $minion_unavailable =
+  qr{Minion [ ] PostgreSQL [ ] backend [ ] is [ ] unavailable:}msx;
+my $minion_connection = qr{connection [ ] refused}msx;
+my $minion_ping       = qr{Minion [ ] PostgreSQL [ ] ping [ ] failed}msx;
+
+my $application = Mojolicious->new;
+$application->secrets( ['workers-bootstrap-test'] );
+_install_worker_helper_dependencies($application);
+
+GPForum::Bootstrap::Workers->register(
+    application => $application,
+    config      => GPForum::Config->new,
+);
+
+my $controller = $application->build_controller;
+isa_ok(
+    $controller->gp_outbox_transport,
+    'GPForum::Service::Outbox::DomainEventTransport',
+    'workers bootstrap registers outbox transport helper'
+);
+isa_ok(
+    $controller->gp_outbox_dispatcher,
+    'GPForum::Service::Outbox::Dispatcher',
+    'workers bootstrap registers outbox dispatcher helper'
+);
+isa_ok(
+    $controller->gp_worker_registrar,
+    'GPForum::Worker::MinionRegistrar',
+    'workers bootstrap registers worker registrar helper'
+);
+
+throws_ok(
+    sub {
+        GPForum::Config->new( minion_enabled => 1 )->validate;
+    },
+    qr/^ \s* GPFORUM_MINION_PG_URL [ ] is [ ] required/msx,
+    'Minion enablement requires explicit PostgreSQL URL'
+);
+
+my $dispatcher = GPForum::Test::OutboxCommandDispatcher->new;
+my @sleeps;
+my $output = q{};
+open my $output_handle, '>', \$output    ## no critic (InputOutput::RequireBriefOpen) -- the command writes to it for the rest of the test
+  or croak 'failed to open scalar output';
+my $command = GPForum::Command::OutboxDispatch->new(
+    dispatcher => $dispatcher,
+    output     => $output_handle,
+    sleeper    => sub {
+        my ($seconds) = @_;
+
+        push @sleeps, $seconds;
+
+        return;
+    },
+);
+
+my $nothing_failed = qr/failed=0 [ ] dead_lettered=0/msx;
+my $exit = $command->run( '--loop', '--limit', $LOOP_LIMIT, '--sleep', '2',
+    '--max-iterations', '2', );
+is( $exit, 0, 'outbox dispatch command exits successfully' );
+is_deeply(
+    $dispatcher->calls,
+    [ $LOOP_LIMIT, $LOOP_LIMIT ],
+    'outbox dispatch loop calls dispatcher for each iteration'
+);
+like(
+    $output,
+    qr/outbox_dispatch [ ] selected=3 [ ] dispatched=3 [ ] $nothing_failed/msx,
+    'outbox dispatch command prints operational summary'
+);
+like(
+    $output,
+    qr/[ ] dead_lettered=0 [ ] acknowledged=3 [ ] lost=0 \n/msx,
+    'with the messages acknowledged and the claims lost, after the rest'
+);
+
+# It slept after every batch, so however large the backlog it delivered at
+# most --limit messages per --sleep seconds, with realtime, notifications and
+# cache purges waiting behind it. A full batch now goes straight on to the
+# next; only a short one, the backlog drained, waits.
+is_deeply( \@sleeps, [], 'a full batch goes straight on to the next' );
+
+@sleeps = ();
+my $draining =
+  GPForum::Test::OutboxCommandDispatcher->new( selected => [@CLAIMED] );
+my $draining_command = GPForum::Command::OutboxDispatch->new(
+    dispatcher => $draining,
+    output     => $output_handle,
+    sleeper    => sub {
+        my ($seconds) = @_;
+
+        push @sleeps, $seconds;
+
+        return;
+    },
+);
+$draining_command->run( '--loop', '--limit', '3', '--sleep', '2',
+    '--max-iterations', $DRAIN_PASSES );
+is_deeply(
+    \@sleeps,
+    [ 2, 2, 2 ],
+    'a short or empty batch sleeps before the next'
+);
+is( scalar @{ $draining->calls },
+    $DRAIN_PASSES, 'and the loop still runs every pass' );
+
+# Misuse is the contract's 2 with the usage on stderr; it used to die, so the
+# service manager saw 255, the status of an uncaught exception.
+{
+    my $errors = q{};
+    open my $stderr, '>', \$errors or croak 'capture stderr';
+    my $misuse_exit;
+    {
+        local *STDERR = $stderr;
+        $misuse_exit =
+          GPForum::Command::OutboxDispatch->new( dispatcher => $dispatcher )
+          ->run('--bad-option');
+    }
+    close $stderr or croak 'close stderr';
+    is( $misuse_exit, $EXIT_USAGE,
+        'outbox dispatch command rejects unknown options with 2' );
+    like(
+        $errors,
+        qr/\A unknown [ ] option [ ] --bad-option \n Usage:/msx,
+        'saying what was wrong, then the usage'
+    );
+}
+
+ok(
+    GPForum::Worker::MinionGuard->requested(
+        _enabled_minion_config(), 'hypnotoad'
+    ),
+    'web process requests Minion when it is enabled'
+);
+ok(
+    !GPForum::Worker::MinionGuard->requested(
+        _enabled_minion_config(), '/opt/gpforum/bin/gpforum-outbox-dispatch'
+    ),
+    'direct outbox process skips Minion when it is enabled'
+);
+ok(
+    !GPForum::Worker::MinionGuard->requested(
+        GPForum::Config->new, 'hypnotoad'
+    ),
+    'web process skips Minion when it is disabled'
+);
+
+throws_ok(
+    sub {
+        GPForum::Worker::MinionGuard->wrap(
+            sub { croak "connection refused\n"; } );
+    },
+    qr{\A $minion_unavailable [ ] $minion_connection}msx,
+    'Minion enablement fails closed when the backend is absent'
+);
+
+my $unreachable = GPForum::Test::UnreachableMinion->new;
+ok(
+    !GPForum::Worker::MinionGuard->reachable($unreachable),
+    'Minion guard treats a failed ping as unreachable'
+);
+throws_ok(
+    sub {
+        GPForum::Worker::MinionGuard->wrap(
+            sub {
+                GPForum::Worker::MinionGuard->assert_reachable($unreachable);
+                return;
+            }
+        );
+    },
+    qr{\A $minion_unavailable [ ] $minion_ping}msx,
+    'Minion enablement fails closed when the backend ping fails'
+);
+
+done_testing();
+
+sub _install_worker_helper_dependencies {
+    my ($worker_application) = @_;
+
+    $worker_application->helper( gp_schema => sub { return {}; } );
+    $worker_application->helper(
+        gp_realtime_pg_notifier => sub { return {}; } );
+    $worker_application->helper(
+        gp_notification_dispatcher => sub { return {}; } );
+    $worker_application->helper( gp_local_cache        => sub { return {}; } );
+    $worker_application->helper( gp_attachment_storage => sub { return {}; } );
+    $worker_application->helper( gp_attachment_store   => sub { return {}; } );
+    $worker_application->helper( gp_media_processor    => sub { return {}; } );
+    $worker_application->helper( gp_subscription_store => sub { return {}; } );
+    $worker_application->helper( gp_identity_mailer    => sub { return {}; } );
+
+    # Scanning off. A scalar undef, not an empty list: the helper's value is
+    # an argument in a constructor's key/value list.
+    $worker_application->helper(
+        gp_antivirus => sub {
+            my $none;
+            return $none;
+        }
+    );
+
+    return;
+}
+
+sub _enabled_minion_config {
+    return GPForum::Config->new(
+        minion_enabled => 1,
+        minion_pg_url  => 'postgresql://gpforum@/gpforum_minion',
+    );
+}
+
+1;

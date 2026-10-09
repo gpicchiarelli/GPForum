@@ -1,0 +1,13 @@
+pitr-drill: rehearsing point-in-time recovery
+  working directory $GPFORUM_PITR_DIR (a temporary directory)
+  taking a base backup
+  recovery target 2026-10-01 09:40:50.712336+02
+  rows before the incident: 3
+  simulating loss of the data directory
+  restoring to the recovery target
+
+  rows after the restore: 2
+  rows written before the target, recovered: 1 (want 1)
+  rows written after the target, recovered:  0 (want 0)
+
+pitr-drill status=pass target='2026-10-01 09:40:50.712336+02' recovered=2

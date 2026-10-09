@@ -1,0 +1,399 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Identity::ProfileReader;
+
+use Const::Fast;
+use Mojo::Base 'GPForum::Base', -signatures;
+use v5.40;
+
+use GPForum::Infrastructure::Keyset;
+use GPForum::Infrastructure::Row;
+use GPForum::Service::Forum::PageWindow;
+
+our $VERSION = '0.001';
+
+const my $DEFAULT_THREAD_LIMIT  => 10;
+const my @THREAD_CURSOR_COLUMNS => qw(last_activity_at thread_id);
+const my @REPLY_CURSOR_COLUMNS  => qw(created_at post_id);
+const my $TRUST_NEW             => 0;
+const my $TRUST_PARTICIPANT     => 1;
+const my $TRUST_TRUSTED         => 2;
+
+has page_window => sub { return GPForum::Service::Forum::PageWindow->new; };
+__PACKAGE__->requires(qw(schema));
+
+sub public_profile ( $self, $username, $options ) {
+    my $user = $self->_find_public_user($username);
+    return { ok => 0, error => 'not_found' } if !$user;
+
+    my $safe_options = $options || {};
+    my $counts       = $self->_contribution_counts($user);
+    my $threads      = $self->_recent_public_threads( $user, $safe_options );
+    my $replies      = $self->_recent_public_replies( $user, $safe_options );
+
+    return {
+        ok      => 1,
+        profile => {
+            user    => _user_hash($user),
+            trust   => $self->_trust_hash($user),
+            counts  => $counts,
+            threads => $threads,
+            replies => $replies,
+        },
+    };
+}
+
+sub _find_public_user ( $self, $username ) {
+    my $user = $self->schema->resultset('User')
+      ->find( { username => _normalize_username($username) } );
+
+    return undef if !$user;
+    return undef if defined _column( $user, 'deleted_at' );
+    return undef if ( _column( $user, 'status' ) || q{} ) eq 'suspended';
+
+    return $user;
+}
+
+sub _trust_hash ( $self, $user ) {
+    my $snapshot =
+      $self->schema->resultset('TrustScoreSnapshot')
+      ->find( _column( $user, 'id' ) );
+
+    return {
+        score       => _column( $snapshot, 'score' ) || 0,
+        trust_level => _column( $snapshot, 'trust_level' )
+          || _column( $user, 'trust_level' )
+          || 0,
+        calculated_at => _column( $snapshot, 'calculated_at' ),
+        version       => _column( $snapshot, 'version' ) || 1,
+        badge         => _trust_badge(
+                 _column( $snapshot, 'trust_level' )
+              || _column( $user, 'trust_level' )
+              || 0
+        ),
+    };
+}
+
+sub _recent_public_threads ( $self, $user, $options ) {
+    my $page = $self->page_window->plan($options);
+    my @rows =
+      _rows( $self->public_threads_resultset( _column( $user, 'id' ), $page ) );
+    my $window = $self->page_window->page( \@rows, $page->{limit},
+        \@THREAD_CURSOR_COLUMNS );
+
+    return {
+        items       => [ map { _thread_hash($_) } @{ $window->{items} } ],
+        next_cursor => $window->{next_cursor},
+    };
+}
+
+# The resultset the profile's thread list executes. Public so the plan tests
+# EXPLAIN what actually runs.
+sub public_threads_resultset ( $self, $user_id, $page ) {
+    return $self->schema->resultset('Thread')->search_rs(
+        _thread_query( $user_id, $page->{after} ),
+        {
+            columns => [
+                qw(
+                  thread_id category_id author_user_id title slug visibility
+                  moderation_state last_activity_at created_at
+                )
+            ],
+            join     => { category => 'space' },
+            order_by => [
+                { -desc => 'me.last_activity_at' },
+                { -desc => 'me.thread_id' }
+            ],
+            rows => $page->{fetch_rows} || $DEFAULT_THREAD_LIMIT,
+        }
+    );
+}
+
+sub _recent_public_replies ( $self, $user, $options ) {
+    my $page   = $self->page_window->plan($options);
+    my $query  = _reply_query( _column( $user, 'id' ), $page->{after} );
+    my $search = $self->schema->resultset('Post')->search_rs(
+        $query,
+        {
+            columns => [
+                qw(
+                  post_id thread_id author_user_id position visibility
+                  moderation_state created_at
+                )
+            ],
+            join => [ { thread => { category => 'space' } }, 'current_body' ],
+            '+select' => [
+                'thread.title', 'thread.slug',
+                'current_body.body_rendered_safe'
+            ],
+            '+as'    => [qw(thread_title thread_slug body)],
+            order_by =>
+              [ { -desc => 'me.created_at' }, { -desc => 'me.post_id' } ],
+            rows => $page->{fetch_rows} || $DEFAULT_THREAD_LIMIT,
+        }
+    );
+
+    my @rows   = _rows($search);
+    my $window = $self->page_window->page( \@rows, $page->{limit},
+        \@REPLY_CURSOR_COLUMNS );
+
+    return {
+        items       => [ map { _reply_hash($_) } @{ $window->{items} } ],
+        next_cursor => $window->{next_cursor},
+    };
+}
+
+sub _contribution_counts ( $self, $user ) {
+    my $user_id = _column( $user, 'id' );
+    my $threads = _count_search(
+        $self->schema->resultset('Thread')->search_rs(
+            _thread_query($user_id), { join => { category => 'space' } }
+        )
+    );
+    my $replies = _count_search(
+        $self->schema->resultset('Post')->search_rs(
+            _reply_query($user_id),
+            { join => { thread => { category => 'space' } } }
+        )
+    );
+
+    return {
+        public_threads => $threads,
+        public_replies => $replies,
+        total_public   => $threads + $replies,
+    };
+}
+
+# The category and space a profile row sits in must be public and live: a
+# public thread in a private category is not public activity (ADR 0102).
+sub _public_placement ($category) {
+    return {
+        "$category.deleted_at" => undef,
+        "$category.visibility" => 'public',
+        'space.visibility'     => 'public',
+    };
+}
+
+# A profile is public for every reader (ADR 0102): only public threads in
+# public, live categories of public spaces, whoever is looking.
+sub _thread_query ( $user_id, $after = undef ) {
+    my $query = {
+        'me.author_user_id'   => $user_id,
+        'me.deleted_at'       => undef,
+        'me.moderation_state' => { -in => [ 'visible', 'locked' ] },
+        'me.visibility'       => 'public',
+        %{ _public_placement('category') },
+    };
+    if ($after) {
+        GPForum::Infrastructure::Keyset->after(
+            $query,
+            {
+                direction => 'desc',
+                id        => [ 'me.thread_id',        $after->{id} ],
+                sort      => [ 'me.last_activity_at', $after->{sort_value} ],
+            }
+        );
+    }
+
+    return $query;
+}
+
+sub _reply_query ( $user_id, $after = undef ) {
+    my $query = {
+        'me.author_user_id'       => $user_id,
+        'me.deleted_at'           => undef,
+        'me.moderation_state'     => 'visible',
+        'me.visibility'           => 'public',
+        'me.position'             => { q{>} => 1 },
+        'thread.deleted_at'       => undef,
+        'thread.moderation_state' => { -in => [ 'visible', 'locked' ] },
+        'thread.visibility'       => 'public',
+        %{ _public_placement('category') },
+    };
+    if ($after) {
+        GPForum::Infrastructure::Keyset->after(
+            $query,
+            {
+                direction => 'desc',
+                id        => [ 'me.post_id',    $after->{id} ],
+                sort      => [ 'me.created_at', $after->{sort_value} ],
+            }
+        );
+    }
+
+    return $query;
+}
+
+sub _user_hash ($user) {
+    return {
+        user_id       => _column( $user, 'id' ),
+        username      => _column( $user, 'username' ),
+        display_name  => _column( $user, 'display_name' ),
+        status        => _column( $user, 'status' ),
+        trust_level   => _column( $user, 'trust_level' ) || 0,
+        created_at    => _column( $user, 'created_at' ),
+        updated_at    => _column( $user, 'updated_at' ),
+        profile_label => q{@} . ( _column( $user, 'username' ) || q{} ),
+    };
+}
+
+sub _thread_hash ($thread) {
+    return {
+        thread_id        => _column( $thread, 'thread_id' ),
+        category_id      => _column( $thread, 'category_id' ),
+        author_user_id   => _column( $thread, 'author_user_id' ),
+        title            => _column( $thread, 'title' ),
+        slug             => _column( $thread, 'slug' ),
+        visibility       => _column( $thread, 'visibility' ),
+        moderation_state => _column( $thread, 'moderation_state' ),
+        last_activity_at => _column( $thread, 'last_activity_at' ),
+        created_at       => _column( $thread, 'created_at' ),
+    };
+}
+
+sub _reply_hash ($post) {
+    return {
+        post_id          => _column( $post, 'post_id' ),
+        thread_id        => _column( $post, 'thread_id' ),
+        author_user_id   => _column( $post, 'author_user_id' ),
+        position         => _column( $post, 'position' ),
+        visibility       => _column( $post, 'visibility' ),
+        moderation_state => _column( $post, 'moderation_state' ),
+        thread_title     => _column( $post, 'thread_title' ),
+        thread_slug      => _column( $post, 'thread_slug' ),
+        body             => _column( $post, 'body' ),
+        created_at       => _column( $post, 'created_at' ),
+    };
+}
+
+sub _trust_badge ($level) {
+    return 'Trusted contributor' if $level >= $TRUST_TRUSTED;
+    return 'Participant'         if $level >= $TRUST_PARTICIPANT;
+    return 'New contributor'     if $level >= $TRUST_NEW;
+
+    return 'New contributor';
+}
+
+sub _normalize_username ($username) {
+    my $normalized = defined $username ? lc $username : q{};
+    $normalized =~ s/\A \s+//msx;
+    $normalized =~ s/\s+ \z//msx;
+
+    return $normalized;
+}
+
+sub _column ( $row, $column ) {
+    return GPForum::Infrastructure::Row->column( $row, $column );
+}
+
+sub _rows ($search) {
+    return $search->all       if $search->can('all');
+    return @{ $search->rows } if $search->can('rows');
+
+    return;
+}
+
+sub _count_search ($search) {
+    return $search->count if $search && $search->can('count');
+
+    my @rows = _rows($search);
+    return scalar @rows;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Identity::ProfileReader - A member's public profile: identity, trust, counts and recent public activity.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $reader =
+      GPForum::Service::Identity::ProfileReader->new( schema => $schema );
+
+    my $result = $reader->public_profile( 'Alice', { limit => 10 } );
+    if ( $result->{ok} ) {
+        my $profile = $result->{profile};
+        # user, trust, counts, threads, replies
+    }
+
+=head1 DESCRIPTION
+
+Builds the data of the public profile page. A profile is the same for every
+reader (ADR 0102): it counts and lists only public threads, not deleted and
+visible or locked, in public, live categories of public spaces, and the
+replies in them that are public, visible and not deleted, leaving out each
+thread's opening post. Deleted and suspended members have no public
+profile. The thread and reply lists are keyset paged through
+L<GPForum::Service::Forum::PageWindow>, most recent first.
+
+The trust block reads the member's C<trust_score_snapshots> row and falls
+back to the trust level on the user row; the badge is
+C<New contributor> below level 1, C<Participant> at level 1 and
+C<Trusted contributor> from level 2.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 public_profile
+
+Takes a username, matched trimmed and lower-cased, and an optional hash
+reference with C<limit> and C<after>. Returns
+C<< { ok => 0, error => 'not_found' } >> when there is no such member or
+the member is deleted or suspended. Otherwise returns
+C<< { ok => 1, profile => { user, trust, counts, threads, replies } } >>:
+C<user> has the id, username, display name, status, trust level, timestamps
+and an C<@username> C<profile_label>; C<trust> has C<score>,
+C<trust_level>, C<calculated_at>, C<version> and C<badge>; C<counts> has
+C<public_threads>, C<public_replies> and C<total_public>; C<threads> and
+C<replies> are C<< { items, next_cursor } >> of plain hashes. The same limit
+and cursor apply to both lists.
+
+=head2 public_threads_resultset
+
+Takes a user id and a page plan (C<after> and C<fetch_rows>, as
+L<GPForum::Service::Forum::PageWindow/plan> returns). Returns the
+unexecuted resultset the profile's thread list runs, public so the plan
+tests can EXPLAIN it. Without C<fetch_rows> it reads 10 rows.
+
+=head1 DIAGNOSTICS
+
+A missing profile is returned as C<not_found>, not thrown. Database errors
+propagate.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::Keyset>, L<GPForum::Infrastructure::Row>,
+L<GPForum::Service::Forum::PageWindow>.
+
+Extends L<GPForum::Base>: built without C<schema> it throws
+L<GPForum::X::Argument>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- The outbox worker: it sends the verification, reset and notification
+       mail the application queues, and the forum's events. Without it no
+       mail ever leaves. The counterpart of
+       deploy/systemd/gpforum-outbox.service. -->
+  <key>Label</key>
+  <string>com.gpforum.outbox</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/gpforum</string>
+  <!-- The service's own account, as on Linux and FreeBSD: launchd runs a
+       daemon as root unless it is told otherwise. DEPLOYMENT.md (macOS With
+       launchd) makes the account and the directories it writes. -->
+  <key>UserName</key>
+  <string>gpforum</string>
+  <key>GroupName</key>
+  <string>gpforum</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GPFORUM_LOG_PATH</key>
+    <string>/usr/local/var/log/gpforum/outbox.log</string>
+  </dict>
+  <!-- Through bin/gpforum, which reads the settings from Homebrew's
+       etc/gpforum/gpforum.env, as the web service does: launchd has no
+       environment file, and the dictionary above sets only the log. -->
+  <key>ProgramArguments</key>
+  <array>
+    <!-- The mode is the environment file's GPFORUM_ENV, read before the
+         job starts, as systemd's EnvironmentFile= wins over a unit's
+         Environment=: production when the file names none. Set here
+         instead, it outweighed the file, and the service ran in
+         production while the file and gpforum doctor said staging. -->
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>GPFORUM_ENV=production; export GPFORUM_ENV; set -a; [ ! -e "$0" ] || . "$0"; set +a; exec "${@}"</string>
+    <string>/usr/local/etc/gpforum/gpforum.env</string>
+    <string>/opt/gpforum/bin/gpforum</string>
+    <string>outbox</string>
+    <string>--loop</string>
+    <string>--limit</string>
+    <string>100</string>
+    <string>--sleep</string>
+    <string>5</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/usr/local/var/log/gpforum/outbox.out</string>
+  <key>StandardErrorPath</key>
+  <string>/usr/local/var/log/gpforum/outbox.err</string>
+</dict>
+</plist>

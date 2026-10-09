@@ -1,0 +1,97 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use v5.40;
+
+use Carp    qw(croak);
+use English qw(-no_match_vars);
+use Const::Fast;
+use File::Temp qw(tempdir);
+use Mojo::File qw(path);
+use Test::More;
+
+our $VERSION = '0.001';
+
+const my $HELPER            => 'script/gpforum-homebrew-env';
+const my $EXECUTABLE        => oct 755;
+const my $EXIT_STATUS_SHIFT => 8;
+const my $EXPECTED_TESTS    => 12;
+
+plan tests => $EXPECTED_TESTS;
+
+ok( -x $HELPER, 'gpforum-homebrew-env is executable' );
+
+my $helper_src = path($HELPER)->slurp;
+like(
+    $helper_src,
+    qr/GPFORUM_HOMEBREW_PREFIX|opt\/postgresql[@]/msx,
+    'helper knows the Homebrew prefix and its PostgreSQL kegs'
+);
+like( $helper_src, qr/psql|pg_dump|pg_config/msx,
+    'helper checks PostgreSQL client tools' );
+like(
+    $helper_src,
+    qr/not [ ] Darwin|skip:/msx,
+    'helper skips non-Darwin hosts'
+);
+
+{
+    local $ENV{GPFORUM_UNAME}           = 'Linux';
+    local $ENV{GPFORUM_HOMEBREW_PREFIX} = '/nonexistent-homebrew-prefix';
+    my ( $out, $err, $code ) = _run_helper('--exports');
+    is( $code, 0,   'Linux --exports exits 0' );
+    is( $out,  q{}, 'Linux --exports prints nothing' );
+}
+
+{
+    local $ENV{GPFORUM_UNAME}           = 'Linux';
+    local $ENV{GPFORUM_HOMEBREW_PREFIX} = '/nonexistent-homebrew-prefix';
+    my ( $out, $err, $code ) = _run_helper('--check');
+    is( $code, 0, 'Linux --check exits 0 (CI-safe skip)' );
+    like( $out, qr/^skip:/msx, 'Linux --check prints skip line' );
+}
+
+{
+    my $root   = tempdir( CLEANUP => 1 );
+    my $pg_bin = path($root)->child( 'opt', 'postgresql@16', 'bin' );
+    $pg_bin->make_path;
+    for my $tool (qw(psql pg_dump pg_config)) {
+        my $tool_path = $pg_bin->child($tool);
+        $tool_path->spew("#!/bin/sh\necho $tool\n");
+        chmod $EXECUTABLE, "$tool_path"
+          or croak "chmod $tool_path: $OS_ERROR";
+    }
+
+    local $ENV{GPFORUM_UNAME}           = 'Darwin';
+    local $ENV{GPFORUM_HOMEBREW_PREFIX} = $root;
+    my ( $exports, $err, $code ) = _run_helper('--exports');
+    is( $code, 0, 'Darwin mock --exports exits 0' );
+    like(
+        $exports,
+        qr{export [ ] PATH="\Q$pg_bin\E:}msx,
+        'Darwin mock --exports prepends the Homebrew PostgreSQL keg'
+    );
+
+    my ( $check_out, $check_err, $check_code ) = _run_helper('--check');
+    is( $check_code, 0, 'Darwin mock --check exits 0' );
+    like(
+        $check_out,
+        qr/ok: [ ] psql [ ] ->/msx,
+        'Darwin mock --check resolves psql under Homebrew'
+    );
+}
+
+sub _run_helper {
+    my (@args)      = @_;
+    my $stderr_file = path( tempdir( CLEANUP => 1 ) )->child('stderr.txt');
+    my $cmd         = join q{ }, map { quotemeta } ( $HELPER, @args );
+    ## no critic (InputOutput::ProhibitBacktickOperators) -- the shell redirects stderr
+    my $out  = qx{$cmd 2>$stderr_file};
+    my $code = $CHILD_ERROR >> $EXIT_STATUS_SHIFT;
+    my $err  = -f "$stderr_file" ? $stderr_file->slurp : q{};
+    return ( $out, $err, $code );
+}
+
+1;

@@ -1,0 +1,143 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+# shellcheck source=script/lib/words.sh
+. "$root/script/lib/words.sh"
+
+usage() {
+    cat <<'EOF'
+Usage: script/system-preflight
+
+Say whether this host can install and run GPForum: the Perl it runs on,
+Carton, PostgreSQL's pg_config (which DBD::Pg needs to build), whether the
+dependencies are installed, and, once they are, what os-preflight finds.
+Each problem comes with what to do; the last line says how many there are.
+
+  --help   this text
+
+Exit status: 0 nothing stops an install; 1 something does.
+EOF
+}
+
+for argument in "$@"; do
+    case "$argument" in
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "system-preflight: unknown option: $argument" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+problems=0
+failed=0
+os=$(uname -s 2>/dev/null || echo unknown)
+
+problem() {
+    problems=$((problems + 1))
+    if [ "$1" = fail ]; then
+        failed=1
+    fi
+}
+
+# The Perl: gpforum-system-perl says why there is none, with its fix.
+if perl_bin=$(script/gpforum-system-perl --require 2>/dev/null); then
+    PATH="$(dirname "$perl_bin"):$PATH"
+    export PATH
+    version=$("$perl_bin" -e 'printf "%vd", $^V')
+    words_mark ok "$(words_say system.perl_ok 'Perl {version} at {path}' "version=$version" "path=$perl_bin")"
+else
+    script/gpforum-system-perl --preflight | sed -e '/^$/,$d'
+    problem fail
+    perl_bin=
+fi
+
+# Carton, for this Perl.
+installed=0
+if [ -n "$perl_bin" ]; then
+    if carton_version=$(script/gpforum-carton version 2>/dev/null); then
+        carton_version=${carton_version#carton }
+        words_mark ok "$(words_say system.carton_ok 'Carton {version}' "version=${carton_version#v}")"
+        if script/gpforum-carton check >/dev/null 2>&1; then
+            installed=1
+            words_mark ok "$(words_say system.deps_ok 'dependencies: installed in local/')"
+        else
+            words_mark degraded "$(words_say system.deps_missing 'dependencies: not installed yet')"
+            words_fixes "$(words_say system.fix_deps 'make install-deps-postgres, or sudo make install-deps-production on a server')"
+            problem degraded
+        fi
+    else
+        words_mark fail "$(words_say system.carton_missing 'Carton is not installed for {perl}' "perl=$perl_bin")"
+        words_fixes "$perl_bin -S cpanm -M https://cpan.metacpan.org/ Carton"
+        problem fail
+    fi
+fi
+
+# pg_config builds DBD::Pg; once the dependencies are installed it is no
+# longer needed.
+find_pg_config() {
+    if command -v pg_config >/dev/null 2>&1; then
+        command -v pg_config
+        return 0
+    fi
+    for candidate in \
+        /opt/homebrew/opt/postgresql@18/bin/pg_config \
+        /opt/homebrew/opt/postgresql@17/bin/pg_config \
+        /usr/local/opt/postgresql@18/bin/pg_config \
+        /opt/homebrew/opt/libpq/bin/pg_config \
+        /usr/local/opt/libpq/bin/pg_config
+    do
+        if [ -x "$candidate" ]; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+if [ "$installed" -eq 0 ]; then
+    if pg_config_bin=$(find_pg_config); then
+        pg_version=$("$pg_config_bin" --version 2>/dev/null || echo PostgreSQL)
+        words_mark ok "$(words_say system.pg_config_ok 'pg_config: {version} at {path}' "version=$pg_version" "path=$pg_config_bin")"
+    else
+        words_mark fail "$(words_say system.pg_config_missing 'pg_config: not found, and DBD::Pg needs it to build')"
+        case "$os" in
+            Darwin) words_fixes "brew install postgresql@18" 'eval "$(script/gpforum-homebrew-env)"' ;;
+            FreeBSD) words_fixes "sudo pkg install postgresql16-client" ;;
+            *) words_fixes "sudo apt install libpq-dev" ;;
+        esac
+        problem fail
+    fi
+fi
+
+# Homebrew keeps PostgreSQL's tools off the PATH.
+if [ "$os" = Darwin ] && command -v brew >/dev/null 2>&1 \
+    && ! script/gpforum-homebrew-env --check >/dev/null 2>&1; then
+    words_mark degraded "$(words_say system.homebrew_path "PostgreSQL's tools: not on the PATH")"
+    words_fixes 'eval "$(script/gpforum-homebrew-env)"'
+    problem degraded
+fi
+
+# The host itself, once GPForum can run: os-preflight's own lines.
+if [ "$installed" -eq 1 ]; then
+    host=$(script/gpforum-carton exec perl -Ilib bin/gpforum-os-preflight 2>&1) || failed=1
+    host=$(printf '%s\n' "$host" | sed -e '/^$/,$d')
+    printf '%s\n' "$host"
+    cross=$(printf '\342\234\227')
+    host_problems=$(printf '%s\n' "$host" | grep -c -e '^!' -e "^$cross" || true)
+    problems=$((problems + host_problems))
+fi
+
+echo
+words_summary "$problems"
+exit "$failed"

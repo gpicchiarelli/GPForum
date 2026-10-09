@@ -1,0 +1,10 @@
+# Formulae installed by `brew bundle` in .github/workflows/platform-macos.yml.
+#
+# GPForum runs on the OS system Perl only; on macOS that is Homebrew's perl
+# keg (script/gpforum-system-perl accepts its prefix). cpanminus bootstraps
+# Carton for it. postgresql@18 is keg-only: its client bins sit under
+# $(brew --prefix)/opt/postgresql@18/bin, where
+# script/gpforum-homebrew-env --check looks for them.
+brew "perl"
+brew "cpanminus"
+brew "postgresql@18"

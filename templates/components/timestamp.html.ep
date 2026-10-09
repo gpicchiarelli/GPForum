@@ -1,0 +1,21 @@
+%# One timestamp as a <time> element: the instant in datetime, the absolute
+%# time in the reader's zone in title (on hover, and to assistive technology),
+%# and as text a relative phrase ("3 minutes ago") or the absolute time.
+%#
+%# A signed-in reader's page is rendered for them alone and is not cached, so
+%# the phrase is true when it is sent. An anonymous reader's page may come
+%# from the public page cache, and a browser or proxy may keep it for a
+%# max-age and a stale-while-revalidate more: the phrase would go stale while
+%# it is kept, and would change the page's ETag on every render. It shows the
+%# absolute time, which no cache can make wrong. Signed in or not is the
+%# cache's own test (Web::PublicCacheAccess). See docs/i18n.md.
+%#
+%# An anonymous page is also in the forum's zone, never the session's: a
+%# member whose session has run out is signed out at the door but still
+%# carries their zone for that request, and the cache key does not name the
+%# zone, so their page would be served to every visitor in their time.
+%#
+%# Takes "at", the timestamp, and optionally "missing", the text shown when
+%# there is none. The element itself is the ui_timestamp helper's (Bootstrap::UI),
+%# which a page that shows many times calls directly.
+<%= ui_timestamp(stash('at'), stash('missing')) =%>

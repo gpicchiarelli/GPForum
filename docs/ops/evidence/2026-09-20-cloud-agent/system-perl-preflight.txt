@@ -1,0 +1,42 @@
+ok: system_perl -> /usr/bin/perl
+ok: which_perl -> /usr/bin/perl
+
+This is perl 5, version 38, subversion 2 (v5.38.2) built for x86_64-linux-gnu-thread-multi
+(with 67 registered patches, see perl -V for more detail)
+
+Copyright 1987-2023, Larry Wall
+
+Perl may be copied only under the terms of either the Artistic License or the
+GNU General Public License, which may be found in the Perl 5 source kit.
+
+Complete documentation for Perl, including FAQ lists, should be found on
+this system using "man perl" or "perldoc perl".  If you have access to the
+Internet, point your browser at https://www.perl.org/, the Perl Home Page.
+
+--- perl -V (summary) ---
+Summary of my perl5 (revision 5 version 38 subversion 2) configuration:
+   
+  Platform:
+    osname=linux
+    osvers=6.1.0
+    archname=x86_64-linux-gnu-thread-multi
+    uname='linux localhost 6.1.0 #1 smp debian 6.1.0 x86_64 gnulinux '
+    config_args='-Dmksymlinks -Dusethreads -Duselargefiles -Dcc=x86_64-linux-gnu-gcc -Dcpp=x86_64-linux-gnu-cpp -Dld=x86_64-linux-gnu-gcc -Dccflags=-DDEBIAN -Wdate-time -D_FORTIFY_SOURCE=3 -g -O2 -fno-omit-frame-pointer -mno-omit-leaf-frame-pointer -ffile-prefix-map=/dummy/build/dir=. -flto=auto -ffat-lto-objects -fstack-protector-strong -fstack-clash-protection -Wformat -Werror=format-security -fcf-protection -fdebug-prefix-map=/dummy/build/dir=/usr/src/perl-5.38.2-3.2ubuntu0.6 -Dldflags= -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Dlddlflags=-shared -Wl,-Bsymbolic-functions -flto=auto -ffat-lto-objects -Wl,-z,relro -Dcccdlflags=-fPIC -Darchname=x86_64-linux-gnu -Dprefix=/usr -Dprivlib=/usr/share/perl/5.38 -Darchlib=/usr/lib/x86_64-linux-gnu/perl/5.38 -Dvendorprefix=/usr -Dvendorlib=/usr/share/perl5 -Dvendorarch=/usr/lib/x86_64-linux-gnu/perl5/5.38 -Dsiteprefix=/usr/local -Dsitelib=/usr/local/share/perl/5.38.2 -Dsitearch=/usr/local/lib/x86_64-linux-gnu/perl/5.38.2 -Dman1dir=/usr/share/man/man1 -Dman3dir=/usr/share/man/man3 -Dsiteman1dir=/usr/local/man/man1 -Dsiteman3dir=/usr/local/man/man3 -Duse64bitint -Dman1ext=1 -Dman3ext=3perl -Dpager=/usr/bin/sensible-pager -Uafs -Ud_csh -Ud_ualarm -Uusesfio -Uusenm -Ui_libutil -Ui_xlocale -Uversiononly -Ud_strlcpy -Ud_strlcat -DDEBUGGING=-g -Doptimize=-O2 -dEs -Duseshrplib -Dlibperl=libperl.so.5.38.2'
+    hint=recommended
+    useposix=true
+    d_sigaction=define
+    useithreads=define
+    usemultiplicity=define
+    use64bitint=define
+    use64bitall=define
+    uselongdouble=undef
+    usemymalloc=n
+    default_inc_excludes_dot=define
+  Compiler:
+    cc='x86_64-linux-gnu-gcc'
+    ccflags ='-D_REENTRANT -D_GNU_SOURCE -DDEBIAN -fwrapv -fno-strict-aliasing -pipe -I/usr/local/include -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64'
+    optimize='-O2 -g'
+    cppflags='-D_REENTRANT -D_GNU_SOURCE -DDEBIAN -fwrapv -fno-strict-aliasing -pipe -I/usr/local/include'
+    ccversion=''
+    gccversion='13.3.0'
+exit:0

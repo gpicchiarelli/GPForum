@@ -1,0 +1,3117 @@
+# GPForum command-line messages, English.
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+#
+# What GPForum says to an operator at the command line, at start-up and in
+# the log; the forum's own pages read locale/*.po. Each message's msgctxt is
+# the key the code asks for and its msgid is the English text; msgstr is what
+# an operator whose LC_ALL, LC_MESSAGES or LANG names this language reads.
+# {name} placeholders are filled in by GPForum::Config::Report. The English
+# of the config.* keys is also in that module, and t/462 keeps them equal.
+msgid ""
+msgstr ""
+"Project-Id-Version: GPForum\n"
+"PO-Revision-Date: 2026-10-08 00:00+0000\n"
+"Last-Translator: Giacomo Picchiarelli\n"
+"Language-Team: English\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "antivirus.broken"
+msgid "antivirus: it does not scan uploads as it should"
+msgstr "antivirus: it does not scan uploads as it should"
+
+#, python-brace-format
+msgctxt "antivirus.detail"
+msgid "Detail: {detail}"
+msgstr "Detail: {detail}"
+
+#, python-brace-format
+msgctxt "antivirus.fix_clamd"
+msgid "then set GPFORUM_ANTIVIRUS=clamd {where}"
+msgstr "then set GPFORUM_ANTIVIRUS=clamd {where}"
+
+#, python-brace-format
+msgctxt "antivirus.fix_none"
+msgid ""
+"or set GPFORUM_ANTIVIRUS=none {where}, and uploads are checked for format "
+"only"
+msgstr ""
+"or set GPFORUM_ANTIVIRUS=none {where}, and uploads are checked for format "
+"only"
+
+#, python-brace-format
+msgctxt "antivirus.fix_signatures"
+msgid "update the signatures: {command}"
+msgstr "update the signatures: {command}"
+
+#, python-brace-format
+msgctxt "antivirus.fix_start"
+msgid ""
+"or, if it is installed, start it: {command} (clamd waits for freshclam's "
+"first download)"
+msgstr ""
+"or, if it is installed, start it: {command} (clamd waits for freshclam's "
+"first download)"
+
+msgctxt "antivirus.off"
+msgid "antivirus: off; uploads are checked for format only"
+msgstr "antivirus: off; uploads are checked for format only"
+
+#, python-brace-format
+msgctxt "antivirus.unreachable"
+msgid "antivirus: clamd does not answer at {socket}"
+msgstr "antivirus: clamd does not answer at {socket}"
+
+#, python-brace-format
+msgctxt "antivirus.works"
+msgid ""
+"antivirus: {engine} finds the test file and lets an ordinary one through"
+msgstr ""
+"antivirus: {engine} finds the test file and lets an ordinary one through"
+
+#, python-brace-format
+msgctxt "cli.admin.already_owner"
+msgid "{username} ({email}) was the forum's owner already; nothing changed."
+msgstr "{username} ({email}) was the forum's owner already; nothing changed."
+
+#, python-brace-format
+msgctxt "cli.admin.already_owner_id"
+msgid "User {user} held the {role} role already; nothing changed."
+msgstr "User {user} held the {role} role already; nothing changed."
+
+#, python-brace-format
+msgctxt "cli.admin.created"
+msgid "{username} ({email}) is the forum's owner and can sign in now."
+msgstr "{username} ({email}) is the forum's owner and can sign in now."
+
+msgctxt "cli.admin.display_name"
+msgid "The display name cannot be empty."
+msgstr "The display name cannot be empty."
+
+#, python-brace-format
+msgctxt "cli.admin.email_format"
+msgid "'{value}' is not an email address."
+msgstr "'{value}' is not an email address."
+
+#, python-brace-format
+msgctxt "cli.admin.email_taken"
+msgid ""
+"There is already an account with {email}: make it the owner with gpforum "
+"admin grant {email}."
+msgstr ""
+"There is already an account with {email}: make it the owner with gpforum "
+"admin grant {email}."
+
+#, python-brace-format
+msgctxt "cli.admin.granted"
+msgid "{username} ({email}) is the forum's owner."
+msgstr "{username} ({email}) is the forum's owner."
+
+#, python-brace-format
+msgctxt "cli.admin.granted_id"
+msgid "User {user} holds the {role} role."
+msgstr "User {user} holds the {role} role."
+
+msgctxt "cli.admin.member_or_id"
+msgid "Name the member by address, username or --user-id: one of them."
+msgstr "Name the member by address, username or --user-id: one of them."
+
+msgctxt "cli.admin.needs_action"
+msgid "Say what to do: gpforum admin create, or gpforum admin grant."
+msgstr "Say what to do: gpforum admin create, or gpforum admin grant."
+
+msgctxt "cli.admin.needs_member"
+msgid "Say whom to make the owner: their email address or username."
+msgstr "Say whom to make the owner: their email address or username."
+
+#, python-brace-format
+msgctxt "cli.admin.needs_option"
+msgid "gpforum admin create needs {option}."
+msgstr "gpforum admin create needs {option}."
+
+#, python-brace-format
+msgctxt "cli.admin.next_sign_in"
+msgid "sign in at {url}"
+msgstr "sign in at {url}"
+
+#, python-brace-format
+msgctxt "cli.admin.no_member"
+msgid ""
+"No account has the address or username '{member}': make one with gpforum "
+"admin create."
+msgstr ""
+"No account has the address or username '{member}': make one with gpforum "
+"admin create."
+
+msgctxt "cli.admin.no_password"
+msgid "Standard input held no password; nothing was created."
+msgstr "Standard input held no password; nothing was created."
+
+msgctxt "cli.admin.no_terminal"
+msgid ""
+"There is no terminal to ask for the password on: give it on standard input "
+"with --password-stdin."
+msgstr ""
+"There is no terminal to ask for the password on: give it on standard input "
+"with --password-stdin."
+
+#, python-brace-format
+msgctxt "cli.admin.owner_exists"
+msgid ""
+"{username} ({email}) is the forum's owner already; nothing was created, and "
+"its password is as it was."
+msgstr ""
+"{username} ({email}) is the forum's owner already; nothing was created, and "
+"its password is as it was."
+
+msgctxt "cli.admin.password_again"
+msgid "The same password again:"
+msgstr "The same password again:"
+
+msgctxt "cli.admin.password_mismatch"
+msgid "The two passwords differ; nothing was created."
+msgstr "The two passwords differ; nothing was created."
+
+msgctxt "cli.admin.password_prompt"
+msgid "Password (at least 12 characters):"
+msgstr "Password (at least 12 characters):"
+
+msgctxt "cli.admin.password_short"
+msgid "The password needs at least 12 characters; nothing was created."
+msgstr "The password needs at least 12 characters; nothing was created."
+
+#, python-brace-format
+msgctxt "cli.admin.unknown_action"
+msgid "'{action}' is not something gpforum admin does: create or grant."
+msgstr "'{action}' is not something gpforum admin does: create or grant."
+
+#, python-brace-format
+msgctxt "cli.admin.unverified"
+msgid ""
+"{username} has not verified {email} yet, and can sign in once they have."
+msgstr ""
+"{username} has not verified {email} yet, and can sign in once they have."
+
+#, python-brace-format
+msgctxt "cli.admin.username_format"
+msgid ""
+"A username is lowercase letters, digits and _, starting with a letter, not "
+"'{value}'."
+msgstr ""
+"A username is lowercase letters, digits and _, starting with a letter, not "
+"'{value}'."
+
+#, python-brace-format
+msgctxt "cli.admin.username_length"
+msgid "A username is 3 to 32 characters, not '{value}'."
+msgstr "A username is 3 to 32 characters, not '{value}'."
+
+#, python-brace-format
+msgctxt "cli.admin.username_taken"
+msgid ""
+"There is already an account named {username}: make it the owner with gpforum "
+"admin grant {username}."
+msgstr ""
+"There is already an account named {username}: make it the owner with gpforum "
+"admin grant {username}."
+
+#, python-brace-format
+msgctxt "cli.admin.would_create"
+msgid ""
+"Would create {username} ({email}) as the forum's owner; nothing was written."
+msgstr ""
+"Would create {username} ({email}) as the forum's owner; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.admin.would_grant"
+msgid "Would make {username} ({email}) the forum's owner; nothing was written."
+msgstr ""
+"Would make {username} ({email}) the forum's owner; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.backup.archive_as_owner"
+msgid ""
+"Cannot copy the uploads in {root} as {user} ({said}): run the backup as "
+"{owner}, who owns them, with {command}"
+msgstr ""
+"Cannot copy the uploads in {root} as {user} ({said}): run the backup as "
+"{owner}, who owns them, with {command}"
+
+#, python-brace-format
+msgctxt "cli.backup.archive_failed"
+msgid ""
+"Cannot copy the uploads in {root} ({said}): make every file and directory "
+"in it readable by {user}, then run the backup again."
+msgstr ""
+"Cannot copy the uploads in {root} ({said}): make every file and directory "
+"in it readable by {user}, then run the backup again."
+
+#, python-brace-format
+msgctxt "cli.backup.attachments_many"
+msgid "attachments: {count} files, {size}, from {root}"
+msgstr "attachments: {count} files, {size}, from {root}"
+
+#, python-brace-format
+msgctxt "cli.backup.attachments_none"
+msgid "attachments: none yet, in {root}"
+msgstr "attachments: none yet, in {root}"
+
+#, python-brace-format
+msgctxt "cli.backup.attachments_one"
+msgid "attachments: 1 file, {size}, from {root}"
+msgstr "attachments: 1 file, {size}, from {root}"
+
+#, python-brace-format
+msgctxt "cli.backup.cannot_make"
+msgid ""
+"Cannot make {directory} ({reason}): make it for {user} first, with sudo "
+"install -d -o {user} -m 700 {typed}"
+msgstr ""
+"Cannot make {directory} ({reason}): make it for {user} first, with sudo "
+"install -d -o {user} -m 700 {typed}"
+
+#, python-brace-format
+msgctxt "cli.backup.database"
+msgid "database {database}: {size}, schema {schema}, PostgreSQL {server}"
+msgstr "database {database}: {size}, schema {schema}, PostgreSQL {server}"
+
+#, python-brace-format
+msgctxt "cli.backup.database_bare"
+msgid "database {database}: {size}, PostgreSQL {server}"
+msgstr "database {database}: {size}, PostgreSQL {server}"
+
+#, python-brace-format
+msgctxt "cli.backup.done"
+msgid "Backed up into {directory}"
+msgstr "Backed up into {directory}"
+
+#, python-brace-format
+msgctxt "cli.backup.dump_failed"
+msgid "pg_dump could not back up the database {database}: {said}"
+msgstr "pg_dump could not back up the database {database}: {said}"
+
+#, python-brace-format
+msgctxt "cli.backup.dump_older"
+msgid ""
+"pg_dump {client} cannot back up PostgreSQL {server}, which is newer: "
+"install PostgreSQL {major}'s client programs, or name their pg_dump with "
+"GPFORUM_PG_DUMP."
+msgstr ""
+"pg_dump {client} cannot back up PostgreSQL {server}, which is newer: "
+"install PostgreSQL {major}'s client programs, or name their pg_dump with "
+"GPFORUM_PG_DUMP."
+
+#, python-brace-format
+msgctxt "cli.backup.in_attachments"
+msgid ""
+"{directory} is inside the attachment root {root}, which the backup copies: "
+"name another with --to, such as --to /var/backups/gpforum."
+msgstr ""
+"{directory} is inside the attachment root {root}, which the backup copies: "
+"name another with --to, such as --to /var/backups/gpforum."
+
+#, python-brace-format
+msgctxt "cli.backup.in_code"
+msgid ""
+"{directory} is inside the code directory {root}, which an upgrade replaces: "
+"name another with --to, such as --to /var/backups/gpforum."
+msgstr ""
+"{directory} is inside the code directory {root}, which an upgrade replaces: "
+"name another with --to, such as --to /var/backups/gpforum."
+
+#, python-brace-format
+msgctxt "cli.backup.next_check"
+msgid "check that it can be restored, with {command}"
+msgstr "check that it can be restored, with {command}"
+
+#, python-brace-format
+msgctxt "cli.backup.no_attachments"
+msgid "attachments: {root} does not exist, so the backup holds no uploads"
+msgstr "attachments: {root} does not exist, so the backup holds no uploads"
+
+msgctxt "cli.backup.no_client"
+msgid ""
+"Cannot find PostgreSQL's pg_dump and pg_restore: install its client "
+"programs, or name them with GPFORUM_PG_DUMP and GPFORUM_PG_RESTORE."
+msgstr ""
+"Cannot find PostgreSQL's pg_dump and pg_restore: install its client "
+"programs, or name them with GPFORUM_PG_DUMP and GPFORUM_PG_RESTORE."
+
+#, python-brace-format
+msgctxt "cli.backup.no_words"
+msgid "gpforum backup takes no '{word}': name the directory with --to {word}."
+msgstr "gpforum backup takes no '{word}': name the directory with --to {word}."
+
+#, python-brace-format
+msgctxt "cli.backup.not_directory"
+msgid "{directory} is a file, not a directory: name a directory with --to."
+msgstr "{directory} is a file, not a directory: name a directory with --to."
+
+#, python-brace-format
+msgctxt "cli.budgets.extra"
+msgid "No longer in the code: {endpoints}"
+msgstr "No longer in the code: {endpoints}"
+
+#, python-brace-format
+msgctxt "cli.budgets.mismatched"
+msgid "Other numbers than the code's: {endpoints}"
+msgstr "Other numbers than the code's: {endpoints}"
+
+#, python-brace-format
+msgctxt "cli.budgets.missing"
+msgid "Not in the database: {endpoints}"
+msgstr "Not in the database: {endpoints}"
+
+#, python-brace-format
+msgctxt "cli.config.footer_file"
+msgid "Set these in {file}, then try again."
+msgstr "Set these in {file}, then try again."
+
+#, python-brace-format
+msgctxt "cli.config.footer_shell"
+msgid ""
+"The shell's environment sets {variables}, which comes before {file}: "
+"correct it there, or unset it, then try again."
+msgstr ""
+"The shell's environment sets {variables}, which comes before {file}: "
+"correct it there, or unset it, then try again."
+
+#, python-brace-format
+msgctxt "cli.env_file.malformed"
+msgid ""
+"Line {line} of {file} is not NAME=value: correct it, or start it with # to "
+"leave it out."
+msgstr ""
+"Line {line} of {file} is not NAME=value: correct it, or start it with # to "
+"leave it out."
+
+#, python-brace-format
+msgctxt "cli.env_file.missing"
+msgid ""
+"There is no {file}: correct the path given to --env-file, or make the file "
+"from deploy/gpforum.env.example."
+msgstr ""
+"There is no {file}: correct the path given to --env-file, or make the file "
+"from deploy/gpforum.env.example."
+
+#, python-brace-format
+msgctxt "cli.env_file.unreadable"
+msgid ""
+"Cannot read {file} ({reason}): run gpforum as the service's user, with sudo "
+"-u gpforum, or as root."
+msgstr ""
+"Cannot read {file} ({reason}): run gpforum as the service's user, with sudo "
+"-u gpforum, or as root."
+
+#, python-brace-format
+msgctxt "cli.front_door.global_option"
+msgid ""
+"gpforum has no option {option}: a command's own options go after its name."
+msgstr ""
+"gpforum has no option {option}: a command's own options go after its name."
+
+msgctxt "cli.front_door.see_help"
+msgid "gpforum help lists them all."
+msgstr "gpforum help lists them all."
+
+#, python-brace-format
+msgctxt "cli.front_door.unknown"
+msgid "'{command}' is not a gpforum command."
+msgstr "'{command}' is not a gpforum command."
+
+msgctxt "cli.help.footer"
+msgid ""
+"gpforum help COMMAND explains one; gpforum help --all lists every command."
+msgstr ""
+"gpforum help COMMAND explains one; gpforum help --all lists every command."
+
+msgctxt "cli.help.footer_all"
+msgid "gpforum help COMMAND explains one."
+msgstr "gpforum help COMMAND explains one."
+
+msgctxt "cli.help.group.check"
+msgid "Check"
+msgstr "Check"
+
+msgctxt "cli.help.group.framework"
+msgid "Mojolicious's and Minion's own"
+msgstr "Mojolicious's and Minion's own"
+
+msgctxt "cli.help.group.maintain"
+msgid "Maintain"
+msgstr "Maintain"
+
+msgctxt "cli.help.group.more"
+msgid "Benchmarks, seeds, drills and evidence"
+msgstr "Benchmarks, seeds, drills and evidence"
+
+msgctxt "cli.help.group.run"
+msgid "Run"
+msgstr "Run"
+
+msgctxt "cli.help.group.setup"
+msgid "Set up"
+msgstr "Set up"
+
+#, python-brace-format
+msgctxt "cli.help.settings_file"
+msgid "Settings are read from {file}; the shell's environment comes first."
+msgstr "Settings are read from {file}; the shell's environment comes first."
+
+#, python-brace-format
+msgctxt "cli.help.settings_shell"
+msgid "Settings come from the shell's environment: this host has no {file}."
+msgstr "Settings come from the shell's environment: this host has no {file}."
+
+msgctxt "cli.help.usage"
+msgid "Usage: gpforum [--env-file FILE] COMMAND [OPTIONS]"
+msgstr "Usage: gpforum [--env-file FILE] COMMAND [OPTIONS]"
+
+#, python-brace-format
+msgctxt "cli.jobs.done"
+msgid "{job}: checked"
+msgstr "{job}: checked"
+
+#, python-brace-format
+msgctxt "cli.jobs.failed"
+msgid "{job}: {error}"
+msgstr "{job}: {error}"
+
+msgctxt "cli.jobs.name.attachment_backfill"
+msgid "uploads never scanned"
+msgstr "uploads never scanned"
+
+msgctxt "cli.jobs.name.attachment_scans"
+msgid "uploads waiting for a scan"
+msgstr "uploads waiting for a scan"
+
+msgctxt "cli.jobs.name.attachments"
+msgid "orphaned attachments"
+msgstr "orphaned attachments"
+
+msgctxt "cli.jobs.name.dead_letters"
+msgid "old dead letters"
+msgstr "old dead letters"
+
+msgctxt "cli.jobs.name.identity_tokens"
+msgid "expired sign-in and verification tokens"
+msgstr "expired sign-in and verification tokens"
+
+msgctxt "cli.jobs.name.outbox_messages"
+msgid "old outbox messages"
+msgstr "old outbox messages"
+
+msgctxt "cli.jobs.name.partitions"
+msgid "the partition window"
+msgstr "the partition window"
+
+msgctxt "cli.jobs.name.rate_limit_buckets"
+msgid "old rate-limit counters"
+msgstr "old rate-limit counters"
+
+msgctxt "cli.jobs.name.sessions"
+msgid "expired sessions"
+msgstr "expired sessions"
+
+msgctxt "cli.jobs.reason.antivirus_unavailable"
+msgid "antivirus unavailable"
+msgstr "antivirus unavailable"
+
+msgctxt "cli.jobs.reason.failed"
+msgid "failed"
+msgstr "failed"
+
+msgctxt "cli.jobs.reason.scanning_off"
+msgid "scanning is off"
+msgstr "scanning is off"
+
+msgctxt "cli.jobs.reason.unavailable"
+msgid "not available here"
+msgstr "not available here"
+
+#, python-brace-format
+msgctxt "cli.jobs.removed_many"
+msgid "{job}: {count} removed"
+msgstr "{job}: {count} removed"
+
+#, python-brace-format
+msgctxt "cli.jobs.removed_one"
+msgid "{job}: 1 removed"
+msgstr "{job}: 1 removed"
+
+#, python-brace-format
+msgctxt "cli.jobs.scanned_many"
+msgid "{job}: {count} scanned"
+msgstr "{job}: {count} scanned"
+
+#, python-brace-format
+msgctxt "cli.jobs.scanned_one"
+msgid "{job}: 1 scanned"
+msgstr "{job}: 1 scanned"
+
+#, python-brace-format
+msgctxt "cli.jobs.skipped"
+msgid "{job}: not run ({reason})"
+msgstr "{job}: not run ({reason})"
+
+#, python-brace-format
+msgctxt "cli.migrate.applied_many"
+msgid "Applied {count} migrations, {first} to {last}"
+msgstr "Applied {count} migrations, {first} to {last}"
+
+#, python-brace-format
+msgctxt "cli.migrate.applied_one"
+msgid "Applied migration {version}, {description}"
+msgstr "Applied migration {version}, {description}"
+
+#, python-brace-format
+msgctxt "cli.migrate.budgets"
+msgid "synced the query budgets ({count} changed)"
+msgstr "synced the query budgets ({count} changed)"
+
+#, python-brace-format
+msgctxt "cli.migrate.current"
+msgid "Schema is current ({version})"
+msgstr "Schema is current ({version})"
+
+msgctxt "cli.migrate.next_apply"
+msgid "gpforum migrate"
+msgstr "gpforum migrate"
+
+msgctxt "cli.migrate.next_owner"
+msgid ""
+"make the forum's owner, with gpforum admin create --email you@example.com "
+"--username you"
+msgstr ""
+"make the forum's owner, with gpforum admin create --email you@example.com "
+"--username you"
+
+#, python-brace-format
+msgctxt "cli.migrate.next_restart"
+msgid "restart the service on the new schema, with {restart}"
+msgstr "restart the service on the new schema, with {restart}"
+
+msgctxt "cli.migrate.next_start"
+msgid "gpforum start --foreground"
+msgstr "gpforum start --foreground"
+
+msgctxt "cli.migrate.one_mode"
+msgid "Choose one of --plan, --apply and --check."
+msgstr "Choose one of --plan, --apply and --check."
+
+#, python-brace-format
+msgctxt "cli.migrate.partitions_many"
+msgid "created {count} monthly partitions"
+msgstr "created {count} monthly partitions"
+
+#, python-brace-format
+msgctxt "cli.migrate.partitions_one"
+msgid "created {count} monthly partition"
+msgstr "created {count} monthly partition"
+
+msgctxt "cli.migrate.partitions_with_apply"
+msgid "--no-partitions goes with applying, not with --plan or --check."
+msgstr "--no-partitions goes with applying, not with --plan or --check."
+
+#, python-brace-format
+msgctxt "cli.migrate.pending_many"
+msgid "{count} migrations to apply, {first} to {last}"
+msgstr "{count} migrations to apply, {first} to {last}"
+
+#, python-brace-format
+msgctxt "cli.migrate.pending_one"
+msgid "1 migration to apply, {version} {description}"
+msgstr "1 migration to apply, {version} {description}"
+
+#, python-brace-format
+msgctxt "cli.misuse.choice"
+msgid "{option} takes one of {choices}, not '{value}'."
+msgstr "{option} takes one of {choices}, not '{value}'."
+
+#, python-brace-format
+msgctxt "cli.misuse.missing_value"
+msgid "{option} needs a value."
+msgstr "{option} needs a value."
+
+#, python-brace-format
+msgctxt "cli.misuse.non_negative_integer"
+msgid "{option} takes a whole number, not '{value}'."
+msgstr "{option} takes a whole number, not '{value}'."
+
+#, python-brace-format
+msgctxt "cli.misuse.non_negative_number"
+msgid "{option} takes a number, not '{value}'."
+msgstr "{option} takes a number, not '{value}'."
+
+#, python-brace-format
+msgctxt "cli.misuse.positive_integer"
+msgid "{option} takes a whole number above zero, not '{value}'."
+msgstr "{option} takes a whole number above zero, not '{value}'."
+
+msgctxt "cli.misuse.the_value"
+msgid "The value"
+msgstr "The value"
+
+#, python-brace-format
+msgctxt "cli.misuse.unknown_option"
+msgid "{option} is not an option of this command."
+msgstr "{option} is not an option of this command."
+
+#, python-brace-format
+msgctxt "cli.misuse.value"
+msgid "{option} does not take '{value}'."
+msgstr "{option} does not take '{value}'."
+
+#, python-brace-format
+msgctxt "cli.next"
+msgid "Next: {step}"
+msgstr "Next: {step}"
+
+#, python-brace-format
+msgctxt "cli.outbox.dead_many"
+msgid "{count} given up on"
+msgstr "{count} given up on"
+
+msgctxt "cli.outbox.dead_one"
+msgid "1 given up on"
+msgstr "1 given up on"
+
+#, python-brace-format
+msgctxt "cli.outbox.lost_many"
+msgid "{count} left to the worker that took them over"
+msgstr "{count} left to the worker that took them over"
+
+msgctxt "cli.outbox.lost_one"
+msgid "1 left to the worker that took it over"
+msgstr "1 left to the worker that took it over"
+
+msgctxt "cli.outbox.next_dead"
+msgid "see why with gpforum dead-letters --list"
+msgstr "see why with gpforum dead-letters --list"
+
+msgctxt "cli.outbox.nothing"
+msgid "Nothing was waiting to be sent."
+msgstr "Nothing was waiting to be sent."
+
+#, python-brace-format
+msgctxt "cli.outbox.retry"
+msgid "{count} to be tried again later"
+msgstr "{count} to be tried again later"
+
+#, python-brace-format
+msgctxt "cli.outbox.sent_many"
+msgid "{count} messages sent"
+msgstr "{count} messages sent"
+
+msgctxt "cli.outbox.sent_one"
+msgid "1 message sent"
+msgstr "1 message sent"
+
+#, python-brace-format
+msgctxt "cli.outbox.watching"
+msgid ""
+"Sending queued mail and events as they come, looking every {seconds} s; "
+"Ctrl-C stops."
+msgstr ""
+"Sending queued mail and events as they come, looking every {seconds} s; "
+"Ctrl-C stops."
+
+#, python-brace-format
+msgctxt "cli.partitions.conflict"
+msgid ""
+"partitions: {partition} cannot be created: {rows} rows already in {default} "
+"fall in its range"
+msgstr ""
+"partitions: {partition} cannot be created: {rows} rows already in {default} "
+"fall in its range"
+
+#, python-brace-format
+msgctxt "cli.partitions.conflict_note"
+msgid ""
+"Run these in psql, in a maintenance window: they lock {table} while they "
+"move the rows."
+msgstr ""
+"Run these in psql, in a maintenance window: they lock {table} while they "
+"move the rows."
+
+#, python-brace-format
+msgctxt "cli.partitions.created_many"
+msgid "Created {count} monthly partitions; they reach {month}."
+msgstr "Created {count} monthly partitions; they reach {month}."
+
+#, python-brace-format
+msgctxt "cli.partitions.created_one"
+msgid "Created 1 monthly partition; they reach {month}."
+msgstr "Created 1 monthly partition; they reach {month}."
+
+#, python-brace-format
+msgctxt "cli.partitions.error"
+msgid "partitions: {partition} could not be created: {error}"
+msgstr "partitions: {partition} could not be created: {error}"
+
+#, python-brace-format
+msgctxt "cli.partitions.in_place"
+msgid "The monthly partitions reach {month}."
+msgstr "The monthly partitions reach {month}."
+
+#, python-brace-format
+msgctxt "cli.partitions.planned_many"
+msgid "{count} monthly partitions to create, up to {month}."
+msgstr "{count} monthly partitions to create, up to {month}."
+
+#, python-brace-format
+msgctxt "cli.partitions.planned_one"
+msgid "1 monthly partition to create, up to {month}."
+msgstr "1 monthly partition to create, up to {month}."
+
+msgctxt "cli.partitions.skipped"
+msgid "Another run is creating the partitions now; this one did nothing."
+msgstr "Another run is creating the partitions now; this one did nothing."
+
+msgctxt "cli.restart_service"
+msgid "restart GPForum's web service and its outbox worker"
+msgstr "restart GPForum's web service and its outbox worker"
+
+#, python-brace-format
+msgctxt "cli.restore.archive_count"
+msgid "{file}: {files} files, where the backup wrote {expected}"
+msgstr "{file}: {files} files, where the backup wrote {expected}"
+
+#, python-brace-format
+msgctxt "cli.restore.archive_ok"
+msgid "{file}: {size}, as the backup wrote it; {files} files"
+msgstr "{file}: {size}, as the backup wrote it; {files} files"
+
+#, python-brace-format
+msgctxt "cli.restore.archive_ok_one"
+msgid "{file}: {size}, as the backup wrote it; 1 file"
+msgstr "{file}: {size}, as the backup wrote it; 1 file"
+
+#, python-brace-format
+msgctxt "cli.restore.archive_unreadable"
+msgid "{file}: tar cannot read it ({reason})"
+msgstr "{file}: tar cannot read it ({reason})"
+
+#, python-brace-format
+msgctxt "cli.restore.bad_manifest"
+msgid "manifest: {directory}/manifest.json is not a GPForum backup's manifest"
+msgstr "manifest: {directory}/manifest.json is not a GPForum backup's manifest"
+
+#, python-brace-format
+msgctxt "cli.restore.cannot_read"
+msgid ""
+"manifest: {user} cannot read {path}: check the backup as its owner, "
+"{owner}, with {command}"
+msgstr ""
+"manifest: {user} cannot read {path}: check the backup as its owner, "
+"{owner}, with {command}"
+
+#, python-brace-format
+msgctxt "cli.restore.checksum_differs"
+msgid ""
+"{file}: its SHA-256 is not the one the backup wrote: it changed after the "
+"backup"
+msgstr ""
+"{file}: its SHA-256 is not the one the backup wrote: it changed after the "
+"backup"
+
+#, python-brace-format
+msgctxt "cli.restore.dump_ok"
+msgid ""
+"{file}: {size}, as the backup wrote it; pg_restore reads its {entries} "
+"entries"
+msgstr ""
+"{file}: {size}, as the backup wrote it; pg_restore reads its {entries} "
+"entries"
+
+#, python-brace-format
+msgctxt "cli.restore.dump_unreadable"
+msgid "{file}: pg_restore cannot read it ({reason})"
+msgstr "{file}: pg_restore cannot read it ({reason})"
+
+#, python-brace-format
+msgctxt "cli.restore.file_cannot_read"
+msgid ""
+"{file}: {user} cannot read it: check the backup as its owner, {owner}, "
+"with {command}"
+msgstr ""
+"{file}: {user} cannot read it: check the backup as its owner, {owner}, "
+"with {command}"
+
+#, python-brace-format
+msgctxt "cli.restore.file_ok"
+msgid "{file}: {size}, as the backup wrote it"
+msgstr "{file}: {size}, as the backup wrote it"
+
+#, python-brace-format
+msgctxt "cli.restore.holds_backups"
+msgid "manifest: {directory} holds backups, and is not one itself"
+msgstr "manifest: {directory} holds backups, and is not one itself"
+
+#, python-brace-format
+msgctxt "cli.restore.manifest"
+msgid "manifest: {database}, taken {taken}, schema {schema}"
+msgstr "manifest: {database}, taken {taken}, schema {schema}"
+
+#, python-brace-format
+msgctxt "cli.restore.missing"
+msgid "{file}: not in the backup"
+msgstr "{file}: not in the backup"
+
+#, python-brace-format
+msgctxt "cli.restore.needs_check"
+msgid ""
+"gpforum restore checks a backup and restores nothing: gpforum restore "
+"--check DIR. Restoring one is done by hand, with the steps in {guide}."
+msgstr ""
+"gpforum restore checks a backup and restores nothing: gpforum restore "
+"--check DIR. Restoring one is done by hand, with the steps in {guide}."
+
+#, python-brace-format
+msgctxt "cli.restore.newer_manifest"
+msgid "manifest: {directory} was written by a newer GPForum than this one"
+msgstr "manifest: {directory} was written by a newer GPForum than this one"
+
+msgctxt "cli.restore.next_backup"
+msgid "keep it as it is, and take another with gpforum backup"
+msgstr "keep it as it is, and take another with gpforum backup"
+
+#, python-brace-format
+msgctxt "cli.restore.next_latest"
+msgid "check its newest backup, with {command}"
+msgstr "check its newest backup, with {command}"
+
+#, python-brace-format
+msgctxt "cli.restore.next_restore"
+msgid "to restore it, follow the steps in {guide}"
+msgstr "to restore it, follow the steps in {guide}"
+
+msgctxt "cli.restore.no_attachments"
+msgid ""
+"attachments: none; the attachment root did not exist when the backup was "
+"taken"
+msgstr ""
+"attachments: none; the attachment root did not exist when the backup was "
+"taken"
+
+#, python-brace-format
+msgctxt "cli.restore.no_directory"
+msgid "manifest: there is no {directory}"
+msgstr "manifest: there is no {directory}"
+
+#, python-brace-format
+msgctxt "cli.restore.no_manifest"
+msgid ""
+"manifest: {directory} has no manifest.json, so it is not a GPForum backup"
+msgstr ""
+"manifest: {directory} has no manifest.json, so it is not a GPForum backup"
+
+#, python-brace-format
+msgctxt "cli.restore.no_pg_restore"
+msgid ""
+"{file}: cannot be read without PostgreSQL's pg_restore: install its client "
+"programs, or name it with GPFORUM_PG_RESTORE"
+msgstr ""
+"{file}: cannot be read without PostgreSQL's pg_restore: install its client "
+"programs, or name it with GPFORUM_PG_RESTORE"
+
+#, python-brace-format
+msgctxt "cli.restore.not_listed"
+msgid "{file}: the manifest does not list it, so the backup is not whole"
+msgstr "{file}: the manifest does not list it, so the backup is not whole"
+
+#, python-brace-format
+msgctxt "cli.restore.size_differs"
+msgid ""
+"{file}: {size}, where the backup wrote {expected}: it was cut short or "
+"changed"
+msgstr ""
+"{file}: {size}, where the backup wrote {expected}: it was cut short or "
+"changed"
+
+msgctxt "cli.restore.sound"
+msgid "The backup can be restored; nothing was restored."
+msgstr "The backup can be restored; nothing was restored."
+
+msgctxt "cli.restore.unsound"
+msgid "This backup cannot be restored as it is."
+msgstr "This backup cannot be restored as it is."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.finished"
+msgid ""
+"The previous metrics tokens are gone from {file}; a scraper that sends one "
+"is refused."
+msgstr ""
+"The previous metrics tokens are gone from {file}; a scraper that sends one "
+"is refused."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.finished_live"
+msgid ""
+"The previous metrics tokens are gone from {file}, and the running service "
+"refuses them now, with no restart."
+msgstr ""
+"The previous metrics tokens are gone from {file}, and the running service "
+"refuses them now, with no restart."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.first"
+msgid "A new metrics token is in {file}."
+msgstr "A new metrics token is in {file}."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.first_live"
+msgid ""
+"A new metrics token is in {file}, and the running service asks for it now, "
+"with no restart."
+msgstr ""
+"A new metrics token is in {file}, and the running service asks for it now, "
+"with no restart."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.next_scrapers"
+msgid "give every scraper the new {variable} from {file}"
+msgstr "give every scraper the new {variable} from {file}"
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.rotated"
+msgid ""
+"A new metrics token is in {file}. The one before stays in {list}, so no "
+"scraper is refused."
+msgstr ""
+"A new metrics token is in {file}. The one before stays in {list}, so no "
+"scraper is refused."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.rotated_live"
+msgid ""
+"A new metrics token is in {file}. The one before stays in {list}, and the "
+"running service accepts both now, with no restart."
+msgstr ""
+"A new metrics token is in {file}. The one before stays in {list}, and the "
+"running service accepts both now, with no restart."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.then"
+msgid ""
+"give every scraper the new {variable} from {file}, then gpforum secret "
+"rotate metrics --finish"
+msgstr ""
+"give every scraper the new {variable} from {file}, then gpforum secret "
+"rotate metrics --finish"
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.would_finished"
+msgid ""
+"Would drop the previous metrics tokens from {file}; nothing was written."
+msgstr ""
+"Would drop the previous metrics tokens from {file}; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.would_first"
+msgid "Would write a new metrics token to {file}; nothing was written."
+msgstr "Would write a new metrics token to {file}; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.secret.metrics.would_rotated"
+msgid ""
+"Would write a new metrics token to {file} and keep the one before in {list}; "
+"nothing was written."
+msgstr ""
+"Would write a new metrics token to {file} and keep the one before in {list}; "
+"nothing was written."
+
+msgctxt "cli.secret.needs_kind"
+msgid "Say which secret to rotate: session or metrics."
+msgstr "Say which secret to rotate: session or metrics."
+
+msgctxt "cli.secret.needs_rotate"
+msgid "gpforum secret rotates: gpforum secret rotate session, or metrics."
+msgstr "gpforum secret rotates: gpforum secret rotate session, or metrics."
+
+#, python-brace-format
+msgctxt "cli.secret.no_file"
+msgid ""
+"There is no environment file to write to: make {file} from "
+"deploy/gpforum.env.example, or name one with gpforum --env-file FILE secret "
+"rotate {kind}."
+msgstr ""
+"There is no environment file to write to: make {file} from "
+"deploy/gpforum.env.example, or name one with gpforum --env-file FILE secret "
+"rotate {kind}."
+
+#, python-brace-format
+msgctxt "cli.secret.nothing_to_finish"
+msgid "{file} lists no previous one in {list}: there is nothing to finish."
+msgstr "{file} lists no previous one in {list}: there is nothing to finish."
+
+#, python-brace-format
+msgctxt "cli.secret.session.finished"
+msgid ""
+"The previous session secrets are gone from {file}; a cookie they signed no "
+"longer signs anyone in."
+msgstr ""
+"The previous session secrets are gone from {file}; a cookie they signed no "
+"longer signs anyone in."
+
+#, python-brace-format
+msgctxt "cli.secret.session.first"
+msgid "A new session secret is in {file}."
+msgstr "A new session secret is in {file}."
+
+#, python-brace-format
+msgctxt "cli.secret.session.rotated"
+msgid ""
+"A new session secret is in {file}. The one before stays in {list}, so nobody "
+"is signed out."
+msgstr ""
+"A new session secret is in {file}. The one before stays in {list}, so nobody "
+"is signed out."
+
+#, python-brace-format
+msgctxt "cli.secret.session.then"
+msgid ""
+"in {days} days, when every session has been renewed, gpforum secret rotate "
+"session --finish"
+msgstr ""
+"in {days} days, when every session has been renewed, gpforum secret rotate "
+"session --finish"
+
+#, python-brace-format
+msgctxt "cli.secret.session.would_finished"
+msgid ""
+"Would drop the previous session secrets from {file}; nothing was written."
+msgstr ""
+"Would drop the previous session secrets from {file}; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.secret.session.would_first"
+msgid "Would write a new session secret to {file}; nothing was written."
+msgstr "Would write a new session secret to {file}; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.secret.session.would_rotated"
+msgid ""
+"Would write a new session secret to {file} and keep the one before in "
+"{list}; nothing was written."
+msgstr ""
+"Would write a new session secret to {file} and keep the one before in "
+"{list}; nothing was written."
+
+#, python-brace-format
+msgctxt "cli.secret.unknown_kind"
+msgid "'{kind}' is not a secret gpforum rotates: session or metrics."
+msgstr "'{kind}' is not a secret gpforum rotates: session or metrics."
+
+#, python-brace-format
+msgctxt "cli.secret.unwritable"
+msgid "Cannot write {file} ({reason}): run it as root: {command}"
+msgstr "Cannot write {file} ({reason}): run it as root: {command}"
+
+#, python-brace-format
+msgctxt "cli.secret.world_readable"
+msgid ""
+"Every account on this host can read {file}, secrets included: "
+"{command}"
+msgstr ""
+"Every account on this host can read {file}, secrets included: "
+"{command}"
+
+msgctxt "cli.service.caddy_whole"
+msgid ""
+"The Caddyfile is the whole of Caddy's configuration: if Caddy serves other "
+"sites too, add this block to yours instead."
+msgstr ""
+"The Caddyfile is the whole of Caddy's configuration: if Caddy serves other "
+"sites too, add this block to yours instead."
+
+#, python-brace-format
+msgctxt "cli.service.cannot_write"
+msgid "Cannot write the files into {directory} ({reason})."
+msgstr "Cannot write the files into {directory} ({reason})."
+
+#, python-brace-format
+msgctxt "cli.service.certificate"
+msgid ""
+"The site names its certificate under /etc/letsencrypt/live/{host}/: correct "
+"the two ssl_certificate lines if yours is elsewhere."
+msgstr ""
+"The site names its certificate under /etc/letsencrypt/live/{host}/: correct "
+"the two ssl_certificate lines if yours is elsewhere."
+
+#, python-brace-format
+msgctxt "cli.service.foreign_files"
+msgid ""
+"{directory} holds files that are not {target}'s ({files}), which copying its "
+"contents would install too: name an empty directory, or a new one."
+msgstr ""
+"{directory} holds files that are not {target}'s ({files}), which copying its "
+"contents would install too: name an empty directory, or a new one."
+
+msgctxt "cli.service.needs_print"
+msgid ""
+"Say what to print: gpforum service print, or gpforum service print nginx."
+msgstr ""
+"Say what to print: gpforum service print, or gpforum service print nginx."
+
+msgctxt "cli.service.next_in_place_many"
+msgid "start them:"
+msgstr "start them:"
+
+msgctxt "cli.service.next_in_place_one"
+msgid "make it take effect:"
+msgstr "make it take effect:"
+
+msgctxt "cli.service.next_many"
+msgid "put them in place and start them:"
+msgstr "put them in place and start them:"
+
+msgctxt "cli.service.next_one"
+msgid "put it in place:"
+msgstr "put it in place:"
+
+msgctxt "cli.service.next_read_many"
+msgid "read them, then put them in place and start them:"
+msgstr "read them, then put them in place and start them:"
+
+msgctxt "cli.service.next_read_one"
+msgid "read it, then put it in place:"
+msgstr "read it, then put it in place:"
+
+msgctxt "cli.service.nginx_include"
+msgid ""
+"nginx reads it once the http block of /usr/local/etc/nginx/nginx.conf has "
+"the line include conf.d/*.conf;"
+msgstr ""
+"nginx reads it once the http block of /usr/local/etc/nginx/nginx.conf has "
+"the line include conf.d/*.conf;"
+
+#, python-brace-format
+msgctxt "cli.service.no_certificate"
+msgid ""
+"There is no {certificate} yet, and nginx refuses a site without its "
+"certificate: take it first, with {command}, then print the site again."
+msgstr ""
+"There is no {certificate} yet, and nginx refuses a site without its "
+"certificate: take it first, with {command}, then print the site again."
+
+#, python-brace-format
+msgctxt "cli.service.no_target"
+msgid ""
+"This host has no service manager GPForum ships files for: name one, "
+"{targets}."
+msgstr ""
+"This host has no service manager GPForum ships files for: name one, "
+"{targets}."
+
+#, python-brace-format
+msgctxt "cli.service.not_directory"
+msgid ""
+"{directory} is a file, not a directory: name a directory to write the files "
+"into."
+msgstr ""
+"{directory} is a file, not a directory: name a directory to write the files "
+"into."
+
+#, python-brace-format
+msgctxt "cli.service.not_files"
+msgid ""
+"{directory} holds {files} as links or directories, not files, and writing "
+"there would follow them: name an empty directory, or a new one."
+msgstr ""
+"{directory} holds {files} as links or directories, not files, and writing "
+"there would follow them: name an empty directory, or a new one."
+
+#, python-brace-format
+msgctxt "cli.service.open_directory"
+msgid ""
+"{directory} can be changed by another account, which could change the files "
+"before you copy them into place: name a directory of your own."
+msgstr ""
+"{directory} can be changed by another account, which could change the files "
+"before you copy them into place: name a directory of your own."
+
+#, python-brace-format
+msgctxt "cli.service.placeholder_host"
+msgid ""
+"GPFORUM_PUBLIC_BASE_URL is {url}, not the address members reach the forum "
+"at, so the site is written for {host}: set {variable} {where}, then print it "
+"again."
+msgstr ""
+"GPFORUM_PUBLIC_BASE_URL is {url}, not the address members reach the forum "
+"at, so the site is written for {host}: set {variable} {where}, then print it "
+"again."
+
+#, python-brace-format
+msgctxt "cli.service.unknown_file"
+msgid ""
+"'{name}' is not one of {target}'s files ({names}), nor something gpforum "
+"service prints ({targets})."
+msgstr ""
+"'{name}' is not one of {target}'s files ({names}), nor something gpforum "
+"service prints ({targets})."
+
+#, python-brace-format
+msgctxt "cli.service.wrote_many"
+msgid "{count} files for {target} are in {directory}: {files}."
+msgstr "{count} files for {target} are in {directory}: {files}."
+
+#, python-brace-format
+msgctxt "cli.service.wrote_one"
+msgid "{files} for {target} is in {directory}."
+msgstr "{files} for {target} is in {directory}."
+
+#, python-brace-format
+msgctxt "cli.start.busy"
+msgid ""
+"Something else listens on {listen} ({reason}): stop it, or listen on "
+"another port: {other}"
+msgstr ""
+"Something else listens on {listen} ({reason}): stop it, or listen on "
+"another port: {other}"
+
+#, python-brace-format
+msgctxt "cli.start.cannot_listen"
+msgid ""
+"Cannot listen on {listen} ({reason}): listen on an address this host has: "
+"{other}"
+msgstr ""
+"Cannot listen on {listen} ({reason}): listen on an address this host has: "
+"{other}"
+
+#, python-brace-format
+msgctxt "cli.start.foreground"
+msgid ""
+"gpforum start runs the forum in this terminal, for development, with "
+"--foreground. A server runs it under its service manager: {start}"
+msgstr ""
+"gpforum start runs the forum in this terminal, for development, with "
+"--foreground. A server runs it under its service manager: {start}"
+
+#, python-brace-format
+msgctxt "cli.start.no_hypnotoad"
+msgid ""
+"There is no {file}, so the dependencies are not installed: sudo bin/gpforum "
+"setup installs them."
+msgstr ""
+"There is no {file}, so the dependencies are not installed: sudo bin/gpforum "
+"setup installs them."
+
+msgctxt "cli.start_service"
+msgid "start GPForum's web service and its outbox worker"
+msgstr "start GPForum's web service and its outbox worker"
+
+#, python-brace-format
+msgctxt "cli.then"
+msgid "Then: {step}"
+msgstr "Then: {step}"
+
+#, python-brace-format
+msgctxt "cli.upgrade.backup"
+msgid "Before them, a backup to come back to: {command}"
+msgstr "Before them, a backup to come back to: {command}"
+
+msgctxt "cli.upgrade.complete"
+msgid ""
+"The last one ends with \"Nothing to fix.\" when the upgrade is complete."
+msgstr ""
+"The last one ends with \"Nothing to fix.\" when the upgrade is complete."
+
+msgctxt "cli.upgrade.guide"
+msgid ""
+"docs/ops/upgrade.md says what each one does, and the CHANGELOG what a "
+"release asks besides, under \"Operator action required\"."
+msgstr ""
+"docs/ops/upgrade.md says what each one does, and the CHANGELOG what a "
+"release asks besides, under \"Operator action required\"."
+
+#, python-brace-format
+msgctxt "cli.upgrade.restart"
+msgid "After gpforum migrate, {step}."
+msgstr "After gpforum migrate, {step}."
+
+msgctxt "cli.upgrade.restart_foreground"
+msgid "restart the forum you run with gpforum start --foreground"
+msgstr "restart the forum you run with gpforum start --foreground"
+
+msgctxt "cli.upgrade.title"
+msgid "Upgrade this forum with these three commands, in order:"
+msgstr "Upgrade this forum with these three commands, in order:"
+
+msgctxt "cli.verb.admin"
+msgid "Create the forum's owner, or make a member one"
+msgstr "Create the forum's owner, or make a member one"
+
+msgctxt "cli.verb.antivirus_check"
+msgid "Check that uploads are scanned"
+msgstr "Check that uploads are scanned"
+
+msgctxt "cli.verb.backup"
+msgid "Back up the database and the uploads"
+msgstr "Back up the database and the uploads"
+
+msgctxt "cli.verb.benchmark"
+msgid "Benchmark the pages a member reads most"
+msgstr "Benchmark the pages a member reads most"
+
+msgctxt "cli.verb.budgets"
+msgid "Check or sync the query budgets"
+msgstr "Check or sync the query budgets"
+
+msgctxt "cli.verb.dead_letter_check"
+msgid "Rehearse the dead-letter path, in memory"
+msgstr "Rehearse the dead-letter path, in memory"
+
+msgctxt "cli.verb.dead_letters"
+msgid "Review and replay messages that kept failing"
+msgstr "Review and replay messages that kept failing"
+
+msgctxt "cli.verb.doctor"
+msgid "Check the forum, from its settings to its address, with what to fix"
+msgstr "Check the forum, from its settings to its address, with what to fix"
+
+msgctxt "cli.verb.evidence_meta"
+msgid "Stamp an evidence file"
+msgstr "Stamp an evidence file"
+
+msgctxt "cli.verb.evidence_validate"
+msgid "Validate an evidence bundle"
+msgstr "Validate an evidence bundle"
+
+msgctxt "cli.verb.hypnotoad_benchmark"
+msgid "Benchmark Hypnotoad, optionally behind a proxy"
+msgstr "Benchmark Hypnotoad, optionally behind a proxy"
+
+msgctxt "cli.verb.hypnotoad_scaling"
+msgid "Benchmark Hypnotoad across worker counts"
+msgstr "Benchmark Hypnotoad across worker counts"
+
+msgctxt "cli.verb.mail_check"
+msgid "Check that mail can leave this host"
+msgstr "Check that mail can leave this host"
+
+msgctxt "cli.verb.mail_lifecycle_check"
+msgid "Rehearse mail's lifecycle, end to end"
+msgstr "Rehearse mail's lifecycle, end to end"
+
+msgctxt "cli.verb.migrate"
+msgid "Bring the database up to date"
+msgstr "Bring the database up to date"
+
+msgctxt "cli.verb.os_preflight"
+msgid "Check the host's limits against the processes it runs"
+msgstr "Check the host's limits against the processes it runs"
+
+msgctxt "cli.verb.outbox"
+msgid "Send the queued mail and events"
+msgstr "Send the queued mail and events"
+
+msgctxt "cli.verb.partitions"
+msgid "Create the next monthly log partitions"
+msgstr "Create the next monthly log partitions"
+
+msgctxt "cli.verb.performance_seed"
+msgid "Seed data for performance work"
+msgstr "Seed data for performance work"
+
+msgctxt "cli.verb.platform_check"
+msgid "Check that this host can run GPForum"
+msgstr "Check that this host can run GPForum"
+
+msgctxt "cli.verb.query_plan_evidence"
+msgid "Collect EXPLAIN evidence for the budgeted pages"
+msgstr "Collect EXPLAIN evidence for the budgeted pages"
+
+msgctxt "cli.verb.restore"
+msgid "Check that a backup can be restored"
+msgstr "Check that a backup can be restored"
+
+msgctxt "cli.verb.scheduled_jobs"
+msgid "Run the retention and clean-up jobs once"
+msgstr "Run the retention and clean-up jobs once"
+
+msgctxt "cli.verb.search_rebuild"
+msgid "Rebuild the search index, or report its lag"
+msgstr "Rebuild the search index, or report its lag"
+
+msgctxt "cli.verb.secret"
+msgid "Rotate the session secret or the metrics token"
+msgstr "Rotate the session secret or the metrics token"
+
+msgctxt "cli.verb.service"
+msgid "Print the service files, written for this host"
+msgstr "Print the service files, written for this host"
+
+msgctxt "cli.verb.setup"
+msgid "Set this host up: the settings, the database, the schema"
+msgstr "Set this host up: the settings, the database, the schema"
+
+msgctxt "cli.verb.staging_drill"
+msgid "Rehearse a backup and restore"
+msgstr "Rehearse a backup and restore"
+
+msgctxt "cli.verb.staging_drill_attachments"
+msgid "Rehearse the attachment store, end to end"
+msgstr "Rehearse the attachment store, end to end"
+
+msgctxt "cli.verb.staging_host_verify"
+msgid "Verify a host against the deploy files"
+msgstr "Verify a host against the deploy files"
+
+msgctxt "cli.verb.start"
+msgid "Run the forum in this terminal, for development"
+msgstr "Run the forum in this terminal, for development"
+
+msgctxt "cli.verb.status"
+msgid "Show the running forum's readiness report"
+msgstr "Show the running forum's readiness report"
+
+msgctxt "cli.verb.stress_load"
+msgid "Put a running forum under load"
+msgstr "Put a running forum under load"
+
+msgctxt "cli.verb.upgrade"
+msgid "Print the commands that upgrade this forum"
+msgstr "Print the commands that upgrade this forum"
+
+#, python-brace-format
+msgctxt "config.antivirus_command"
+msgid "{variable} is required when {antivirus_variable} is command."
+msgstr "{variable} is required when {antivirus_variable} is command."
+
+#, python-brace-format
+msgctxt "config.at_least"
+msgid "{variable} must be at least {minimum}, not {value}."
+msgstr "{variable} must be at least {minimum}, not {value}."
+
+#, python-brace-format
+msgctxt "config.at_most"
+msgid "{variable} must be at most {maximum}, not {value}."
+msgstr "{variable} must be at most {maximum}, not {value}."
+
+#, python-brace-format
+msgctxt "config.development_secret"
+msgid "{variable} must not include the development default."
+msgstr "{variable} must not include the development default."
+
+#, python-brace-format
+msgctxt "config.did_you_mean"
+msgid "Did you mean {suggestion}?"
+msgstr "Did you mean {suggestion}?"
+
+#, python-brace-format
+msgctxt "config.example"
+msgid "Example: {assignment}"
+msgstr "Example: {assignment}"
+
+msgctxt "config.footer"
+msgid ""
+"Set these in the service's environment file (deploy/gpforum.env.example "
+"describes every setting), then try again."
+msgstr ""
+"Set these in the service's environment file (deploy/gpforum.env.example "
+"describes every setting), then try again."
+
+#, python-brace-format
+msgctxt "config.generate"
+msgid "Generate one with: {command}"
+msgstr "Generate one with: {command}"
+
+#, python-brace-format
+msgctxt "config.glifistore_url"
+msgid ""
+"{variable} must be tcp://host:port, unix://path or host:port, not "
+"'{value}'."
+msgstr ""
+"{variable} must be tcp://host:port, unix://path or host:port, not "
+"'{value}'."
+
+msgctxt "config.header"
+msgid "GPForum's settings need attention:"
+msgstr "GPForum's settings need attention:"
+
+#, python-brace-format
+msgctxt "config.https"
+msgid "{variable} must use https:// in {environment}, not '{value}'."
+msgstr "{variable} must use https:// in {environment}, not '{value}'."
+
+#, python-brace-format
+msgctxt "config.listen"
+msgid ""
+"{variable} must list addresses such as http://127.0.0.1:8080, not "
+"'{value}'."
+msgstr ""
+"{variable} must list addresses such as http://127.0.0.1:8080, not "
+"'{value}'."
+
+#, python-brace-format
+msgctxt "config.log_transport"
+msgid ""
+"{variable}=log only writes mail to the log; {environment} must deliver it, "
+"with sendmail or smtp."
+msgstr ""
+"{variable}=log only writes mail to the log; {environment} must deliver it, "
+"with sendmail or smtp."
+
+#, python-brace-format
+msgctxt "config.mail_from_local"
+msgid ""
+"{variable} is '{value}': mail servers refuse a sender at localhost, so "
+"{environment} needs an address at the forum's own domain."
+msgstr ""
+"{variable} is '{value}': mail servers refuse a sender at localhost, so "
+"{environment} needs an address at the forum's own domain."
+
+#, python-brace-format
+msgctxt "config.minion_url"
+msgid "{variable} is required while {minion_variable} is on."
+msgstr "{variable} is required while {minion_variable} is on."
+
+#, python-brace-format
+msgctxt "config.not_above"
+msgid "{variable} must not exceed {limit_variable} ({limit}), not {value}."
+msgstr "{variable} must not exceed {limit_variable} ({limit}), not {value}."
+
+#, python-brace-format
+msgctxt "config.not_boolean"
+msgid "{variable} must be on or off, not '{value}'."
+msgstr "{variable} must be on or off, not '{value}'."
+
+#, python-brace-format
+msgctxt "config.not_integer"
+msgid "{variable} must be a whole number, not '{value}'."
+msgstr "{variable} must be a whole number, not '{value}'."
+
+#, python-brace-format
+msgctxt "config.not_integer_or_auto"
+msgid "{variable} must be a whole number or auto, not '{value}'."
+msgstr "{variable} must be a whole number or auto, not '{value}'."
+
+#, python-brace-format
+msgctxt "config.one_of"
+msgid "{variable} must be one of {choices}, not '{value}'."
+msgstr "{variable} must be one of {choices}, not '{value}'."
+
+#, python-brace-format
+msgctxt "config.placeholder_mail_from"
+msgid ""
+"{variable} is '{value}', an example address mail servers will not deliver "
+"from; {environment} needs one at the forum's own domain."
+msgstr ""
+"{variable} is '{value}', an example address mail servers will not deliver "
+"from; {environment} needs one at the forum's own domain."
+
+#, python-brace-format
+msgctxt "config.placeholder_url"
+msgid ""
+"{variable} is '{value}', an example address that leads nowhere; "
+"{environment} needs the one members reach this forum at."
+msgstr ""
+"{variable} is '{value}', an example address that leads nowhere; "
+"{environment} needs the one members reach this forum at."
+
+#, python-brace-format
+msgctxt "config.renamed"
+msgid ""
+"{variable} is now called {replacement}; write {assignment} in the "
+"environment file in its place."
+msgstr ""
+"{variable} is now called {replacement}; write {assignment} in the "
+"environment file in its place."
+
+#, python-brace-format
+msgctxt "config.required"
+msgid "{variable} is required."
+msgstr "{variable} is required."
+
+#, python-brace-format
+msgctxt "config.required_in"
+msgid "{variable} is required in {environment}."
+msgstr "{variable} is required in {environment}."
+
+#, python-brace-format
+msgctxt "config.retired"
+msgid ""
+"{variable} no longer has any effect; remove it from the environment file."
+msgstr ""
+"{variable} no longer has any effect; remove it from the environment file."
+
+#, python-brace-format
+msgctxt "config.short_secret"
+msgid ""
+"{variable} is {length} characters long; {environment} needs at least "
+"{minimum}."
+msgstr ""
+"{variable} is {length} characters long; {environment} needs at least "
+"{minimum}."
+
+#, python-brace-format
+msgctxt "config.smtp_host"
+msgid "{variable} is required when {transport_variable} is smtp."
+msgstr "{variable} is required when {transport_variable} is smtp."
+
+#, python-brace-format
+msgctxt "config.smtp_tls_module"
+msgid ""
+"{variable}={value} encrypts mail through the Perl module {module}, which "
+"this Perl cannot load: install it, or set {variable}=off for a relay that "
+"takes mail in the clear."
+msgstr ""
+"{variable}={value} encrypts mail through the Perl module {module}, which "
+"this Perl cannot load: install it, or set {variable}=off for a relay that "
+"takes mail in the clear."
+
+#, python-brace-format
+msgctxt "config.test_transport"
+msgid ""
+"{variable}=test keeps mail in memory and sends none; {environment} must "
+"deliver it, with sendmail or smtp."
+msgstr ""
+"{variable}=test keeps mail in memory and sends none; {environment} must "
+"deliver it, with sendmail or smtp."
+
+#, python-brace-format
+msgctxt "config.timezone"
+msgid ""
+"{variable} must be an IANA time zone such as Europe/Rome, not '{value}'."
+msgstr ""
+"{variable} must be an IANA time zone such as Europe/Rome, not '{value}'."
+
+#, python-brace-format
+msgctxt "config.trusted_proxies"
+msgid "{variable} must name at least one address while {proxy_variable} is on."
+msgstr ""
+"{variable} must name at least one address while {proxy_variable} is on."
+
+#, python-brace-format
+msgctxt "config.url"
+msgid ""
+"{variable} must be a full address, with http:// or https:// and a host, "
+"not '{value}'."
+msgstr ""
+"{variable} must be a full address, with http:// or https:// and a host, "
+"not '{value}'."
+
+#, python-brace-format
+msgctxt "database.authentication"
+msgid ""
+"PostgreSQL at {server} refused the password of role {user}: correct "
+"GPFORUM_DATABASE_PASSWORD {where}, or set the role's password with "
+"{set_password}."
+msgstr ""
+"PostgreSQL at {server} refused the password of role {user}: correct "
+"GPFORUM_DATABASE_PASSWORD {where}, or set the role's password with "
+"{set_password}."
+
+#, python-brace-format
+msgctxt "database.no_hba"
+msgid ""
+"PostgreSQL at {server} does not let role {user} connect to {database} from "
+"this host: allow it in pg_hba.conf, or correct GPFORUM_DATABASE_DSN {where}."
+msgstr ""
+"PostgreSQL at {server} does not let role {user} connect to {database} from "
+"this host: allow it in pg_hba.conf, or correct GPFORUM_DATABASE_DSN {where}."
+
+#, python-brace-format
+msgctxt "database.not_migrated"
+msgid ""
+"The database has no {relation} table yet: apply the migrations with "
+"{migrate}, or check that GPFORUM_DATABASE_DSN {where} names the forum's "
+"database."
+msgstr ""
+"The database has no {relation} table yet: apply the migrations with "
+"{migrate}, or check that GPFORUM_DATABASE_DSN {where} names the forum's "
+"database."
+
+#, python-brace-format
+msgctxt "database.refused"
+msgid ""
+"Cannot reach PostgreSQL at {server} (connection refused): start it with "
+"{start}, or correct GPFORUM_DATABASE_DSN {where}."
+msgstr ""
+"Cannot reach PostgreSQL at {server} (connection refused): start it with "
+"{start}, or correct GPFORUM_DATABASE_DSN {where}."
+
+#, python-brace-format
+msgctxt "database.unknown_database"
+msgid ""
+"PostgreSQL at {server} has no database {database}: create it with "
+"{create_database}, or correct GPFORUM_DATABASE_DSN {where}."
+msgstr ""
+"PostgreSQL at {server} has no database {database}: create it with "
+"{create_database}, or correct GPFORUM_DATABASE_DSN {where}."
+
+#, python-brace-format
+msgctxt "database.unknown_host"
+msgid ""
+"Cannot find the PostgreSQL host {host}: correct the host in "
+"GPFORUM_DATABASE_DSN {where}."
+msgstr ""
+"Cannot find the PostgreSQL host {host}: correct the host in "
+"GPFORUM_DATABASE_DSN {where}."
+
+#, python-brace-format
+msgctxt "database.unknown_role"
+msgid ""
+"PostgreSQL at {server} has no role {user}: create it with {create_role}, or "
+"correct GPFORUM_DATABASE_USER {where}."
+msgstr ""
+"PostgreSQL at {server} has no role {user}: create it with {create_role}, or "
+"correct GPFORUM_DATABASE_USER {where}."
+
+#, python-brace-format
+msgctxt "database.unread_file"
+msgid ""
+"This command did not read {path}, which holds the service's settings: run "
+"it as docs/DEPLOYMENT.md shows."
+msgstr ""
+"This command did not read {path}, which holds the service's settings: run "
+"it as docs/DEPLOYMENT.md shows."
+
+#, python-brace-format
+msgctxt "database.where_file"
+msgid "in {path}"
+msgstr "in {path}"
+
+#, python-brace-format
+msgctxt "database.where_shell"
+msgid "in your shell's environment"
+msgstr "in your shell's environment"
+
+#, python-brace-format
+msgctxt "doctor.address_certificate"
+msgid "address: {url} answers, but its certificate is refused: {reason}"
+msgstr "address: {url} answers, but its certificate is refused: {reason}"
+
+#, python-brace-format
+msgctxt "doctor.address_down"
+msgid "address: {url} does not answer: {reason}"
+msgstr "address: {url} does not answer: {reason}"
+
+#, python-brace-format
+msgctxt "doctor.address_handshake"
+msgid "address: no TLS handshake with {url}"
+msgstr "address: no TLS handshake with {url}"
+
+#, python-brace-format
+msgctxt "doctor.address_ok"
+msgid "address: {url} answers"
+msgstr "address: {url} answers"
+
+#, python-brace-format
+msgctxt "doctor.address_status"
+msgid "address: {url} answers HTTP {code} for /health/live"
+msgstr "address: {url} answers HTTP {code} for /health/live"
+
+#, python-brace-format
+msgctxt "doctor.address_tls"
+msgid "address: {url} answers, with a certificate this host accepts"
+msgstr "address: {url} answers, with a certificate this host accepts"
+
+#, python-brace-format
+msgctxt "doctor.address_unchecked"
+msgid "address: {url} was not checked: {reason}"
+msgstr "address: {url} was not checked: {reason}"
+
+msgctxt "doctor.budgets"
+msgid "query budgets: as the code sets them"
+msgstr "query budgets: as the code sets them"
+
+#, python-brace-format
+msgctxt "doctor.budgets_drift"
+msgid ""
+"query budgets: {count} differ from the code, and /health/ready fails until "
+"they match"
+msgstr ""
+"query budgets: {count} differ from the code, and /health/ready fails until "
+"they match"
+
+#, python-brace-format
+msgctxt "doctor.database"
+msgid "database: PostgreSQL {version}, {database} at {server}"
+msgstr "database: PostgreSQL {version}, {database} at {server}"
+
+#, python-brace-format
+msgctxt "doctor.database_failed"
+msgid "database: it cannot be used: {error}"
+msgstr "database: it cannot be used: {error}"
+
+#, python-brace-format
+msgctxt "doctor.database_problem"
+msgid "database: {problem}"
+msgstr "database: {problem}"
+
+msgctxt "doctor.day"
+msgid "1 day"
+msgstr "1 day"
+
+#, python-brace-format
+msgctxt "doctor.days"
+msgid "{count} days"
+msgstr "{count} days"
+
+#, python-brace-format
+msgctxt "doctor.deps_broken"
+msgid "dependencies: built for another Perl than {version}: {modules}"
+msgstr "dependencies: built for another Perl than {version}: {modules}"
+
+#, python-brace-format
+msgctxt "doctor.deps_missing"
+msgid "dependencies: not installed for Perl {version}: {modules}"
+msgstr "dependencies: not installed for Perl {version}: {modules}"
+
+#, python-brace-format
+msgctxt "doctor.deps_ok"
+msgid ""
+"dependencies: the {count} modules this release needs, for Perl {version}"
+msgstr ""
+"dependencies: the {count} modules this release needs, for Perl {version}"
+
+#, python-brace-format
+msgctxt "doctor.deps_outdated"
+msgid "dependencies: older than this release needs: {modules}"
+msgstr "dependencies: older than this release needs: {modules}"
+
+#, python-brace-format
+msgctxt "doctor.fix_changed"
+msgid ""
+"put migrations/ back as this release ships it: git -C {root} checkout -- "
+"migrations"
+msgstr ""
+"put migrations/ back as this release ships it: git -C {root} checkout -- "
+"migrations"
+
+#, python-brace-format
+msgctxt "doctor.fix_correct"
+msgid "correct {variable} {where}"
+msgstr "correct {variable} {where}"
+
+msgctxt "doctor.fix_curl"
+msgid "install curl, which gpforum asks https addresses with"
+msgstr "install curl, which gpforum asks https addresses with"
+
+#, python-brace-format
+msgctxt "doctor.fix_database"
+msgid ""
+"check GPFORUM_DATABASE_DSN, GPFORUM_DATABASE_USER and "
+"GPFORUM_DATABASE_PASSWORD {where}"
+msgstr ""
+"check GPFORUM_DATABASE_DSN, GPFORUM_DATABASE_USER and "
+"GPFORUM_DATABASE_PASSWORD {where}"
+
+#, python-brace-format
+msgctxt "doctor.fix_dns"
+msgid ""
+"point {host} at this host in the DNS, or correct GPFORUM_PUBLIC_BASE_URL "
+"{where}"
+msgstr ""
+"point {host} at this host in the DNS, or correct GPFORUM_PUBLIC_BASE_URL "
+"{where}"
+
+msgctxt "doctor.fix_proxy"
+msgid "put GPForum's nginx site in place:"
+msgstr "put GPForum's nginx site in place:"
+
+#, python-brace-format
+msgctxt "doctor.fix_remove"
+msgid "remove the {variable} line from {file}"
+msgstr "remove the {variable} line from {file}"
+
+#, python-brace-format
+msgctxt "doctor.fix_set"
+msgid "set {assignment} {where}"
+msgstr "set {assignment} {where}"
+
+#, python-brace-format
+msgctxt "doctor.hours"
+msgid "{count} h"
+msgstr "{count} h"
+
+#, python-brace-format
+msgctxt "doctor.minutes"
+msgid "{count} min"
+msgstr "{count} min"
+
+#, python-brace-format
+msgctxt "doctor.outbox_busy"
+msgid "outbox worker: {count} waiting, the oldest for {age}"
+msgstr "outbox worker: {count} waiting, the oldest for {age}"
+
+#, python-brace-format
+msgctxt "doctor.outbox_busy_one"
+msgid "outbox worker: 1 waiting, for {age}"
+msgstr "outbox worker: 1 waiting, for {age}"
+
+#, python-brace-format
+msgctxt "doctor.outbox_idle"
+msgid "outbox worker: nothing waiting; the last message left {age} ago"
+msgstr "outbox worker: nothing waiting; the last message left {age} ago"
+
+msgctxt "doctor.outbox_quiet"
+msgid "outbox worker: nothing waiting"
+msgstr "outbox worker: nothing waiting"
+
+#, python-brace-format
+msgctxt "doctor.outbox_stalled"
+msgid ""
+"outbox worker: {count} messages waiting, the oldest for {age}; nothing is "
+"sending them"
+msgstr ""
+"outbox worker: {count} messages waiting, the oldest for {age}; nothing is "
+"sending them"
+
+#, python-brace-format
+msgctxt "doctor.outbox_stalled_one"
+msgid "outbox worker: 1 message waiting for {age}; nothing is sending it"
+msgstr "outbox worker: 1 message waiting for {age}; nothing is sending it"
+
+msgctxt "doctor.reason_refused"
+msgid "connection refused"
+msgstr "connection refused"
+
+#, python-brace-format
+msgctxt "doctor.reason_timeout"
+msgid "no answer within {seconds} s"
+msgstr "no answer within {seconds} s"
+
+msgctxt "doctor.reason_unresolved"
+msgid "its host name is not known"
+msgstr "its host name is not known"
+
+#, python-brace-format
+msgctxt "doctor.schema_changed"
+msgid "schema: migrations {versions} changed after they were applied"
+msgstr "schema: migrations {versions} changed after they were applied"
+
+#, python-brace-format
+msgctxt "doctor.schema_current"
+msgid "schema: current ({version})"
+msgstr "schema: current ({version})"
+
+#, python-brace-format
+msgctxt "doctor.schema_pending_many"
+msgid "schema: {count} migrations to apply, {first} to {last}"
+msgstr "schema: {count} migrations to apply, {first} to {last}"
+
+#, python-brace-format
+msgctxt "doctor.schema_pending_one"
+msgid "schema: 1 migration to apply, {version} {description}"
+msgstr "schema: 1 migration to apply, {version} {description}"
+
+#, python-brace-format
+msgctxt "doctor.seconds"
+msgid "{count} s"
+msgstr "{count} s"
+
+#, python-brace-format
+msgctxt "doctor.service_stale"
+msgid ""
+"services: {service} has run for {started}, but the code changed {changed} ago"
+msgstr ""
+"services: {service} has run for {started}, but the code changed {changed} ago"
+
+#, python-brace-format
+msgctxt "doctor.service_stopped"
+msgid "services: {service} is not running"
+msgstr "services: {service} is not running"
+
+msgctxt "doctor.services_current"
+msgid "services: gpforum and gpforum-outbox run the code on disk"
+msgstr "services: gpforum and gpforum-outbox run the code on disk"
+
+#, python-brace-format
+msgctxt "doctor.settings_file"
+msgid "settings: {environment}, read from {file}"
+msgstr "settings: {environment}, read from {file}"
+
+#, python-brace-format
+msgctxt "doctor.settings_open"
+msgid "settings: every account on this host can read {file}, secrets included"
+msgstr "settings: every account on this host can read {file}, secrets included"
+
+#, python-brace-format
+msgctxt "doctor.settings_shell"
+msgid "settings: {environment}, from the shell's environment"
+msgstr "settings: {environment}, from the shell's environment"
+
+#, python-brace-format
+msgctxt "doctor.timer_failed"
+msgid "timer: the run {timer} started {age} ago failed"
+msgstr "timer: the run {timer} started {age} ago failed"
+
+#, python-brace-format
+msgctxt "doctor.timer_late"
+msgid "timer: {timer} last fired {age} ago, later than it should"
+msgstr "timer: {timer} last fired {age} ago, later than it should"
+
+#, python-brace-format
+msgctxt "doctor.timer_off"
+msgid "timer: {timer} is not on, so its job never runs"
+msgstr "timer: {timer} is not on, so its job never runs"
+
+#, python-brace-format
+msgctxt "doctor.timer_ok"
+msgid "timer: {timer} fired {age} ago"
+msgstr "timer: {timer} fired {age} ago"
+
+#, python-brace-format
+msgctxt "doctor.timer_waiting"
+msgid "timer: {timer} is on and has not fired yet"
+msgstr "timer: {timer} is on and has not fired yet"
+
+#, python-brace-format
+msgctxt "doctor.unit_contract"
+msgid "services: {unit} lacks {labels}, which the service needs"
+msgstr "services: {unit} lacks {labels}, which the service needs"
+
+#, python-brace-format
+msgctxt "doctor.units_diff"
+msgid "{command} shows how"
+msgstr "{command} shows how"
+
+#, python-brace-format
+msgctxt "doctor.units_drifted"
+msgid "services: {units} differ from this release's"
+msgstr "services: {units} differ from this release's"
+
+#, python-brace-format
+msgctxt "doctor.units_drifted_one"
+msgid "services: {units} differs from this release's"
+msgstr "services: {units} differs from this release's"
+
+#, python-brace-format
+msgctxt "doctor.units_missing"
+msgid "services: {units} not installed in {directory}"
+msgstr "services: {units} not installed in {directory}"
+
+#, python-brace-format
+msgctxt "doctor.units_ok"
+msgid "services: {count} files in {directory}, as this release ships them"
+msgstr "services: {count} files in {directory}, as this release ships them"
+
+msgctxt "doctor.waiting"
+msgid ""
+"The host, the database, mail and the services are checked once the settings "
+"above are right."
+msgstr ""
+"The host, the database, mail and the services are checked once the settings "
+"above are right."
+
+#, python-brace-format
+msgctxt "findings.fix"
+msgid "Fix: {fix}"
+msgstr "Fix: {fix}"
+
+#, python-brace-format
+msgctxt "findings.summary_many"
+msgid "{count} things to fix."
+msgstr "{count} things to fix."
+
+msgctxt "findings.summary_none"
+msgid "Nothing to fix."
+msgstr "Nothing to fix."
+
+msgctxt "findings.summary_one"
+msgid "1 thing to fix."
+msgstr "1 thing to fix."
+
+#, python-brace-format
+msgctxt "mail.log_transport"
+msgid "Mail not sent ({transport_variable}=log); this is what it says:"
+msgstr "Mail not sent ({transport_variable}=log); this is what it says:"
+
+msgctxt "mailcheck.check_inbox"
+msgid "Check that it arrived, and not among the spam."
+msgstr "Check that it arrived, and not among the spam."
+
+msgctxt "mailcheck.fix_mta"
+msgid "install a mail server, such as postfix"
+msgstr "install a mail server, such as postfix"
+
+msgctxt "mailcheck.fix_smtp_blocked"
+msgid ""
+"many VPS providers block outgoing mail ports until asked: ask yours to open "
+"them"
+msgstr ""
+"many VPS providers block outgoing mail ports until asked: ask yours to open "
+"them"
+
+#, python-brace-format
+msgctxt "mailcheck.fix_smtp_settings"
+msgid "check GPFORUM_SMTP_HOST and GPFORUM_SMTP_PORT {where}"
+msgstr "check GPFORUM_SMTP_HOST and GPFORUM_SMTP_PORT {where}"
+
+#, python-brace-format
+msgctxt "mailcheck.fix_to"
+msgid "add your own: {command}"
+msgstr "add your own: {command}"
+
+#, python-brace-format
+msgctxt "mailcheck.fix_use_smtp"
+msgid ""
+"or send through a provider: GPFORUM_MAIL_TRANSPORT=smtp and "
+"GPFORUM_SMTP_HOST {where}"
+msgstr ""
+"or send through a provider: GPFORUM_MAIL_TRANSPORT=smtp and "
+"GPFORUM_SMTP_HOST {where}"
+
+msgctxt "mailcheck.log"
+msgid "mail: written to the log, not sent (GPFORUM_MAIL_TRANSPORT=log)"
+msgstr "mail: written to the log, not sent (GPFORUM_MAIL_TRANSPORT=log)"
+
+#, python-brace-format
+msgctxt "mailcheck.not_sent"
+msgid "mail: the message to {to} was not sent"
+msgstr "mail: the message to {to} was not sent"
+
+#, python-brace-format
+msgctxt "mailcheck.prove_delivery"
+msgid "To prove delivery, send one to yourself: {command}"
+msgstr "To prove delivery, send one to yourself: {command}"
+
+msgctxt "mailcheck.proves_port"
+msgid ""
+"That shows the port answers, not that the server takes the message or the "
+"password."
+msgstr ""
+"That shows the port answers, not that the server takes the message or the "
+"password."
+
+msgctxt "mailcheck.proves_program"
+msgid "That shows a program is there, not that mail leaves this host."
+msgstr "That shows a program is there, not that mail leaves this host."
+
+#, python-brace-format
+msgctxt "mailcheck.said"
+msgid "Detail: {error}"
+msgstr "Detail: {error}"
+
+#, python-brace-format
+msgctxt "mailcheck.sendmail"
+msgid "mail: from {from} through sendmail at {path}"
+msgstr "mail: from {from} through sendmail at {path}"
+
+msgctxt "mailcheck.sendmail_missing"
+msgid ""
+"mail: no sendmail program in /usr/sbin, /usr/lib, /usr/bin or on the PATH"
+msgstr ""
+"mail: no sendmail program in /usr/sbin, /usr/lib, /usr/bin or on the PATH"
+
+#, python-brace-format
+msgctxt "mailcheck.sent"
+msgid "mail: a verification message went to {to}, from {from}"
+msgstr "mail: a verification message went to {to}, from {from}"
+
+#, python-brace-format
+msgctxt "mailcheck.settings"
+msgid "mail: {error}"
+msgstr "mail: {error}"
+
+#, python-brace-format
+msgctxt "mailcheck.smtp"
+msgid "mail: from {from} through {host}:{port}, which answers"
+msgstr "mail: from {from} through {host}:{port}, which answers"
+
+#, python-brace-format
+msgctxt "mailcheck.smtp_unreachable"
+msgid "mail: {host}:{port} does not answer"
+msgstr "mail: {host}:{port} does not answer"
+
+msgctxt "mailcheck.test"
+msgid "mail: kept in memory by the test transport, not sent"
+msgstr "mail: kept in memory by the test transport, not sent"
+
+msgctxt "mailcheck.to_missing"
+msgid "mail: --send needs an address to send to"
+msgstr "mail: --send needs an address to send to"
+
+msgctxt "mailcheck.vps"
+msgid ""
+"On a VPS, outgoing port 25 is often blocked, and mail from a host without "
+"SPF and a PTR record is refused: relay through your provider's SMTP "
+"(GPFORUM_MAIL_TRANSPORT=smtp)."
+msgstr ""
+"On a VPS, outgoing port 25 is often blocked, and mail from a host without "
+"SPF and a PTR record is refused: relay through your provider's SMTP "
+"(GPFORUM_MAIL_TRANSPORT=smtp)."
+
+msgctxt "preflight.backend_missing"
+msgid "event loop: no event backend was found"
+msgstr "event loop: no event backend was found"
+
+msgctxt "preflight.backend_select"
+msgid ""
+"event loop: select, the slow fallback, because neither epoll nor kqueue was "
+"found"
+msgstr ""
+"event loop: select, the slow fallback, because neither epoll nor kqueue was "
+"found"
+
+msgctxt "preflight.cpu_unknown"
+msgid "CPUs: they could not be counted"
+msgstr "CPUs: they could not be counted"
+
+#, python-brace-format
+msgctxt "preflight.feature_unsupported"
+msgid "{feature}: asked for, but this operating system cannot do it"
+msgstr "{feature}: asked for, but this operating system cannot do it"
+
+#, python-brace-format
+msgctxt "preflight.files_ok"
+msgid "open files: up to {limit}"
+msgstr "open files: up to {limit}"
+
+#, python-brace-format
+msgctxt "preflight.fix_feature"
+msgid "set {variable}=auto {where}"
+msgstr "set {variable}=auto {where}"
+
+#, python-brace-format
+msgctxt "preflight.fix_min_workers"
+msgid ""
+"set GPFORUM_OS_MIN_RECOMMENDED_WORKERS={recommended} {where}, or give the "
+"host more CPUs"
+msgstr ""
+"set GPFORUM_OS_MIN_RECOMMENDED_WORKERS={recommended} {where}, or give the "
+"host more CPUs"
+
+#, python-brace-format
+msgctxt "preflight.fix_nofile_shell"
+msgid "or ulimit -n {minimum} in the shell that starts GPForum"
+msgstr "or ulimit -n {minimum} in the shell that starts GPForum"
+
+#, python-brace-format
+msgctxt "preflight.fix_nofile_unit"
+msgid ""
+"LimitNOFILE={minimum} in the service file (the units in deploy/systemd/ set "
+"it)"
+msgstr ""
+"LimitNOFILE={minimum} in the service file (the units in deploy/systemd/ set "
+"it)"
+
+#, python-brace-format
+msgctxt "preflight.fix_open_over"
+msgid "raise GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS {where}"
+msgstr "raise GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS {where}"
+
+#, python-brace-format
+msgctxt "preflight.fix_swap"
+msgid "add memory, or lower GPFORUM_WEB_PROCESSES {where}"
+msgstr "add memory, or lower GPFORUM_WEB_PROCESSES {where}"
+
+#, python-brace-format
+msgctxt "preflight.fix_web_auto"
+msgid "set GPFORUM_WEB_PROCESSES=auto {where}"
+msgstr "set GPFORUM_WEB_PROCESSES=auto {where}"
+
+#, python-brace-format
+msgctxt "preflight.host"
+msgid "host: {os} with {backend}, {cpus} CPUs"
+msgstr "host: {os} with {backend}, {cpus} CPUs"
+
+#, python-brace-format
+msgctxt "preflight.host_one"
+msgid "host: {os} with {backend}, 1 CPU"
+msgstr "host: {os} with {backend}, 1 CPU"
+
+#, python-brace-format
+msgctxt "preflight.limit_low"
+msgid "open files: the limit is {limit}; GPForum needs at least {minimum}"
+msgstr "open files: the limit is {limit}; GPForum needs at least {minimum}"
+
+#, python-brace-format
+msgctxt "preflight.open_over"
+msgid ""
+"open files: {open}, more than GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS "
+"({maximum})"
+msgstr ""
+"open files: {open}, more than GPFORUM_OS_MAX_OPEN_FILE_DESCRIPTORS "
+"({maximum})"
+
+msgctxt "preflight.open_unknown"
+msgid "open files: they could not be counted"
+msgstr "open files: they could not be counted"
+
+msgctxt "preflight.os_missing"
+msgid "host: the operating system could not be read"
+msgstr "host: the operating system could not be read"
+
+msgctxt "preflight.os_unknown"
+msgid ""
+"host: GPForum does not know this operating system and runs it in a cautious "
+"mode"
+msgstr ""
+"host: GPForum does not know this operating system and runs it in a cautious "
+"mode"
+
+msgctxt "preflight.processes_unknown"
+msgid "processes: the process settings could not be read"
+msgstr "processes: the process settings could not be read"
+
+#, python-brace-format
+msgctxt "preflight.socket_unsupported"
+msgid "sockets: {socket} is asked for, but not supported"
+msgstr "sockets: {socket} is asked for, but not supported"
+
+msgctxt "preflight.sockets_unknown"
+msgid "sockets: the socket settings could not be read"
+msgstr "sockets: the socket settings could not be read"
+
+msgctxt "preflight.swap_elevated"
+msgid "memory: swap is in use"
+msgstr "memory: swap is in use"
+
+msgctxt "preflight.swap_high"
+msgid "memory: swap use is high"
+msgstr "memory: swap use is high"
+
+#, python-brace-format
+msgctxt "preflight.usage_high"
+msgid "open files: {open} of {limit} in use, more than 80%"
+msgstr "open files: {open} of {limit} in use, more than 80%"
+
+#, python-brace-format
+msgctxt "preflight.web_ok"
+msgid "web processes: {processes} for {cpus} CPUs"
+msgstr "web processes: {processes} for {cpus} CPUs"
+
+#, python-brace-format
+msgctxt "preflight.web_ok_one"
+msgid "web processes: {processes} for 1 CPU"
+msgstr "web processes: {processes} for 1 CPU"
+
+#, python-brace-format
+msgctxt "preflight.web_over"
+msgid "web processes: {processes}, more than {cpus} CPUs carry ({limit})"
+msgstr "web processes: {processes}, more than {cpus} CPUs carry ({limit})"
+
+#, python-brace-format
+msgctxt "preflight.web_over_one"
+msgid "web processes: {processes}, more than 1 CPU carries ({limit})"
+msgstr "web processes: {processes}, more than 1 CPU carries ({limit})"
+
+#, python-brace-format
+msgctxt "preflight.workers_below"
+msgid ""
+"workers: this host carries {recommended}, fewer than "
+"GPFORUM_OS_MIN_RECOMMENDED_WORKERS ({threshold})"
+msgstr ""
+"workers: this host carries {recommended}, fewer than "
+"GPFORUM_OS_MIN_RECOMMENDED_WORKERS ({threshold})"
+
+msgctxt "preflight.workers_unknown"
+msgid "workers: no worker count could be worked out for this host"
+msgstr "workers: no worker count could be worked out for this host"
+
+#, python-brace-format
+msgctxt "readiness.shared_cache_local"
+msgid ""
+"No GlifiStore is configured: each process keeps its own cache. That suits "
+"a single host; set {variable} to share one between hosts."
+msgstr ""
+"No GlifiStore is configured: each process keeps its own cache. That suits "
+"a single host; set {variable} to share one between hosts."
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_kept"
+msgid ""
+"{file} changed, but /metrics and the full health reports keep the tokens "
+"they accepted, because {reason}."
+msgstr ""
+"{file} changed, but /metrics and the full health reports keep the tokens "
+"they accepted, because {reason}."
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_malformed"
+msgid "line {line} of it is not NAME=value"
+msgstr "line {line} of it is not NAME=value"
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_none"
+msgid "it names no {variable}, and /metrics never opens to anyone"
+msgstr "it names no {variable}, and /metrics never opens to anyone"
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_not_the_file"
+msgid ""
+"/metrics and the full health reports keep the tokens this service started "
+"with until it restarts: {file} holds others, so it is not the file they "
+"came from."
+msgstr ""
+"/metrics and the full health reports keep the tokens this service started "
+"with until it restarts: {file} holds others, so it is not the file they "
+"came from."
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_read"
+msgid "Read the metrics tokens again from {file}: {count} accepted."
+msgstr "Read the metrics tokens again from {file}: {count} accepted."
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_unfollowed"
+msgid ""
+"/metrics and the full health reports keep the tokens this service started "
+"with until it restarts, because {reason}."
+msgstr ""
+"/metrics and the full health reports keep the tokens this service started "
+"with until it restarts, because {reason}."
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_unreadable"
+msgid "it cannot be read ({reason})"
+msgstr "it cannot be read ({reason})"
+
+#, python-brace-format
+msgctxt "runtime.metrics_tokens_writable"
+msgid "accounts other than its owner may write it: chmod 0640 {file}"
+msgstr "accounts other than its owner may write it: chmod 0640 {file}"
+
+#, python-brace-format
+msgctxt "runtime.outdated_unit"
+msgid ""
+"The installed systemd unit is older than this release (it sets MOJO_MODE): "
+"copy the units in deploy/systemd/ to /etc/systemd/system/ again and run "
+"systemctl daemon-reload. Until then Hypnotoad keeps its pid file in the "
+"code directory."
+msgstr ""
+"The installed systemd unit is older than this release (it sets MOJO_MODE): "
+"copy the units in deploy/systemd/ to /etc/systemd/system/ again and run "
+"systemctl daemon-reload. Until then Hypnotoad keeps its pid file in the "
+"code directory."
+
+msgctxt "setup.account_by_hand"
+msgid "make it as docs/DEPLOYMENT.md shows for this system"
+msgstr "make it as docs/DEPLOYMENT.md shows for this system"
+
+#, python-brace-format
+msgctxt "setup.account_failed"
+msgid "account {user}: could not be made ({reason})"
+msgstr "account {user}: could not be made ({reason})"
+
+#, python-brace-format
+msgctxt "setup.account_made"
+msgid "account {user}: made, with {directory} for its uploads"
+msgstr "account {user}: made, with {directory} for its uploads"
+
+#, python-brace-format
+msgctxt "setup.account_missing"
+msgid "account {user}: not on this host, and the services run as it"
+msgstr "account {user}: not on this host, and the services run as it"
+
+#, python-brace-format
+msgctxt "setup.account_present"
+msgid "account {user}, with {directory} for its uploads"
+msgstr "account {user}, with {directory} for its uploads"
+
+msgctxt "setup.another_file"
+msgid "or write a file of your own: gpforum --env-file FILE setup"
+msgstr "or write a file of your own: gpforum --env-file FILE setup"
+
+msgctxt "setup.ask_address"
+msgid "Public address"
+msgstr "Public address"
+
+msgctxt "setup.ask_database"
+msgid "Database"
+msgstr "Database"
+
+msgctxt "setup.ask_mail"
+msgid "Mail (sendmail, smtp HOST:PORT USER, or log)"
+msgstr "Mail (sendmail, smtp HOST:PORT USER, or log)"
+
+#, python-brace-format
+msgctxt "setup.ask_replace"
+msgid "{file} has {variable}={current}. Replace it with {wanted}? [y/N]"
+msgstr "{file} has {variable}={current}. Replace it with {wanted}? [y/N]"
+
+#, python-brace-format
+msgctxt "setup.ask_smtp_password"
+msgid "Password of {user} at {host}:"
+msgstr "Password of {user} at {host}:"
+
+#, python-brace-format
+msgctxt "setup.by_account"
+msgid "as PostgreSQL's superuser {as}, through the account {account}"
+msgstr "as PostgreSQL's superuser {as}, through the account {account}"
+
+#, python-brace-format
+msgctxt "setup.by_given"
+msgid "as PostgreSQL's superuser {as}, from {from}"
+msgstr "as PostgreSQL's superuser {as}, from {from}"
+
+#, python-brace-format
+msgctxt "setup.by_you"
+msgid "as PostgreSQL's superuser {as}"
+msgstr "as PostgreSQL's superuser {as}"
+
+#, python-brace-format
+msgctxt "setup.cannot_write"
+msgid "{file}: cannot be written ({reason})"
+msgstr "{file}: cannot be written ({reason})"
+
+#, python-brace-format
+msgctxt "setup.conflict"
+msgid "{file} has {variable}={current}, not {wanted}."
+msgstr "{file} has {variable}={current}, not {wanted}."
+
+msgctxt "setup.conflict_footer"
+msgid ""
+"Nothing was changed: setup replaces a setting the file has only with "
+"--force, or when you say so at a terminal."
+msgstr ""
+"Nothing was changed: setup replaces a setting the file has only with "
+"--force, or when you say so at a terminal."
+
+#, python-brace-format
+msgctxt "setup.database_made_both"
+msgid "database {database} at {server}: made, with its role {user}"
+msgstr "database {database} at {server}: made, with its role {user}"
+
+#, python-brace-format
+msgctxt "setup.database_made_database"
+msgid "database {database} at {server}: made, for role {user}"
+msgstr "database {database} at {server}: made, for role {user}"
+
+#, python-brace-format
+msgctxt "setup.database_made_role"
+msgid "database {database} at {server}: role {user} made"
+msgstr "database {database} at {server}: role {user} made"
+
+#, python-brace-format
+msgctxt "setup.database_present"
+msgid "database {database} at {server}, as role {user}"
+msgstr "database {database} at {server}, as role {user}"
+
+#, python-brace-format
+msgctxt "setup.database_unmade_database"
+msgid ""
+"database {database} at {server}: no PostgreSQL superuser answers here "
+"({tried}), so the database of role {user} is not made"
+msgstr ""
+"database {database} at {server}: no PostgreSQL superuser answers here "
+"({tried}), so the database of role {user} is not made"
+
+#, python-brace-format
+msgctxt "setup.database_unmade_role"
+msgid ""
+"database {database} at {server}: no PostgreSQL superuser answers here "
+"({tried}), so role {user} and its database are not made"
+msgstr ""
+"database {database} at {server}: no PostgreSQL superuser answers here "
+"({tried}), so role {user} and its database are not made"
+
+msgctxt "setup.dry_run"
+msgid "Nothing was changed: --dry-run says what setup would do."
+msgstr "Nothing was changed: --dry-run says what setup would do."
+
+#, python-brace-format
+msgctxt "setup.file_changed"
+msgid "{file}: {names} set, {mode} {owner}:{group}"
+msgstr "{file}: {names} set, {mode} {owner}:{group}"
+
+#, python-brace-format
+msgctxt "setup.file_given"
+msgid "{file}: now {owner}:{group}, {mode}, so the services can read it"
+msgstr "{file}: now {owner}:{group}, {mode}, so the services can read it"
+
+#, python-brace-format
+msgctxt "setup.file_new"
+msgid ""
+"{file}: written, {mode} {owner}:{group}, with a new session secret and "
+"metrics token"
+msgstr ""
+"{file}: written, {mode} {owner}:{group}, with a new session secret and "
+"metrics token"
+
+#, python-brace-format
+msgctxt "setup.file_same"
+msgid "{file}: as it was, {mode} {owner}:{group}"
+msgstr "{file}: as it was, {mode} {owner}:{group}"
+
+#, python-brace-format
+msgctxt "setup.fix_by_hand_database"
+msgid "or make it as the superuser, then {command} again:"
+msgstr "or make it as the superuser, then {command} again:"
+
+#, python-brace-format
+msgctxt "setup.fix_by_hand_role"
+msgid "or make them as the superuser, then {command} again:"
+msgstr "or make them as the superuser, then {command} again:"
+
+#, python-brace-format
+msgctxt "setup.fix_pguser"
+msgid ""
+"name the superuser with PGUSER, its password in ~/.pgpass if it asks for "
+"one: {command}"
+msgstr ""
+"name the superuser with PGUSER, its password in ~/.pgpass if it asks for "
+"one: {command}"
+
+msgctxt "setup.intro"
+msgid "GPForum setup. Three questions; Enter accepts the suggestion."
+msgstr "GPForum setup. Three questions; Enter accepts the suggestion."
+
+#, python-brace-format
+msgctxt "setup.invalid_database"
+msgid ""
+"'{value}' is neither create nor a PostgreSQL data source, such as "
+"dbi:Pg:dbname=gpforum;host=127.0.0.1;port=5432."
+msgstr ""
+"'{value}' is neither create nor a PostgreSQL data source, such as "
+"dbi:Pg:dbname=gpforum;host=127.0.0.1;port=5432."
+
+#, python-brace-format
+msgctxt "setup.invalid_mail"
+msgid "'{value}' is not sendmail, smtp HOST:PORT USER, or log."
+msgstr "'{value}' is not sendmail, smtp HOST:PORT USER, or log."
+
+#, python-brace-format
+msgctxt "setup.link_failed"
+msgid "gpforum: could not be linked into {directory} ({reason})"
+msgstr "gpforum: could not be linked into {directory} ({reason})"
+
+#, python-brace-format
+msgctxt "setup.link_made"
+msgid "gpforum: linked into {directory}, so it runs from any directory"
+msgstr "gpforum: linked into {directory}, so it runs from any directory"
+
+#, python-brace-format
+msgctxt "setup.link_other"
+msgid ""
+"gpforum: {link} is another program, so this checkout's is not linked there"
+msgstr ""
+"gpforum: {link} is another program, so this checkout's is not linked there"
+
+#, python-brace-format
+msgctxt "setup.log_refused"
+msgid ""
+"log only writes the mail to the log, and {environment} must deliver it: "
+"answer sendmail or smtp."
+msgstr ""
+"log only writes the mail to the log, and {environment} must deliver it: "
+"answer sendmail or smtp."
+
+msgctxt "setup.migrate_failed"
+msgid "schema: the migrations did not finish, as said above"
+msgstr "schema: the migrations did not finish, as said above"
+
+#, python-brace-format
+msgctxt "setup.next_doctor"
+msgid "check the whole forum, with {command}"
+msgstr "check the whole forum, with {command}"
+
+#, python-brace-format
+msgctxt "setup.next_owner"
+msgid "make the forum's owner, with {command}"
+msgstr "make the forum's owner, with {command}"
+
+#, python-brace-format
+msgctxt "setup.next_services"
+msgid "install and start the services, with {command}"
+msgstr "install and start the services, with {command}"
+
+msgctxt "setup.next_services_by_hand"
+msgid "install and start the services, as docs/DEPLOYMENT.md shows"
+msgstr "install and start the services, as docs/DEPLOYMENT.md shows"
+
+#, python-brace-format
+msgctxt "setup.next_start"
+msgid "start the forum, with {command}"
+msgstr "start the forum, with {command}"
+
+msgctxt "setup.no_smtp_password"
+msgid ""
+"There is no terminal to ask for the SMTP password on: give it on standard "
+"input with --smtp-password-stdin."
+msgstr ""
+"There is no terminal to ask for the SMTP password on: give it on standard "
+"input with --smtp-password-stdin."
+
+msgctxt "setup.no_terminal"
+msgid ""
+"There is no terminal to ask on: give the answers as options, with --yes."
+msgstr ""
+"There is no terminal to ask on: give the answers as options, with --yes."
+
+#, python-brace-format
+msgctxt "setup.not_root"
+msgid ""
+"not run as root: {file} is yours, and the services' account {user} is not "
+"made"
+msgstr ""
+"not run as root: {file} is yours, and the services' account {user} is not "
+"made"
+
+#, python-brace-format
+msgctxt "setup.run_again"
+msgid "then {command} again"
+msgstr "then {command} again"
+
+msgctxt "setup.see_help"
+msgid "gpforum help setup explains each option."
+msgstr "gpforum help setup explains each option."
+
+#, python-brace-format
+msgctxt "setup.sender_follows"
+msgid "GPFORUM_MAIL_FROM: {sender}, following the address (it was {from})"
+msgstr "GPFORUM_MAIL_FROM: {sender}, following the address (it was {from})"
+
+msgctxt "setup.stopped"
+msgid "Setup stopped; nothing was changed."
+msgstr "Setup stopped; nothing was changed."
+
+#, python-brace-format
+msgctxt "setup.suggest_create"
+msgid "create '{database}' on this host"
+msgstr "create '{database}' on this host"
+
+#, python-brace-format
+msgctxt "setup.tried"
+msgid "{as}: {reason}"
+msgstr "{as}: {reason}"
+
+#, python-brace-format
+msgctxt "setup.tried_from"
+msgid "{as}, from {from}: {reason}"
+msgstr "{as}, from {from}: {reason}"
+
+msgctxt "setup.tried_none"
+msgid "no login to try"
+msgstr "no login to try"
+
+msgctxt "setup.unchanged"
+msgid "Nothing changed: this host was set up already."
+msgstr "Nothing changed: this host was set up already."
+
+#, python-brace-format
+msgctxt "setup.uploads_failed"
+msgid "uploads: {directory} cannot be made ({reason})"
+msgstr "uploads: {directory} cannot be made ({reason})"
+
+#, python-brace-format
+msgctxt "setup.would_account"
+msgid "account {user}: would be made, with {command}"
+msgstr "account {user}: would be made, with {command}"
+
+#, python-brace-format
+msgctxt "setup.would_database_made_both"
+msgid "database {database} at {server}: would be made, with its role {user}"
+msgstr "database {database} at {server}: would be made, with its role {user}"
+
+#, python-brace-format
+msgctxt "setup.would_database_made_database"
+msgid "database {database} at {server}: would be made, for role {user}"
+msgstr "database {database} at {server}: would be made, for role {user}"
+
+#, python-brace-format
+msgctxt "setup.would_database_made_role"
+msgid "database {database} at {server}: role {user} would be made"
+msgstr "database {database} at {server}: role {user} would be made"
+
+#, python-brace-format
+msgctxt "setup.would_database_unmade"
+msgid ""
+"database {database} at {server}: no PostgreSQL superuser answers here "
+"({tried}); setup would print the psql commands that make it"
+msgstr ""
+"database {database} at {server}: no PostgreSQL superuser answers here "
+"({tried}); setup would print the psql commands that make it"
+
+#, python-brace-format
+msgctxt "setup.would_file_changed"
+msgid "{file}: would set {names}"
+msgstr "{file}: would set {names}"
+
+#, python-brace-format
+msgctxt "setup.would_file_new"
+msgid "{file}: would be written, with a new session secret and metrics token"
+msgstr "{file}: would be written, with a new session secret and metrics token"
+
+#, python-brace-format
+msgctxt "setup.would_link"
+msgid "gpforum: would be linked into {directory}"
+msgstr "gpforum: would be linked into {directory}"
+
+msgctxt "setup.would_migrate"
+msgid ""
+"schema: the migrations, partitions and query budgets would be brought up to "
+"date"
+msgstr ""
+"schema: the migrations, partitions and query budgets would be brought up to "
+"date"
+
+#, python-brace-format
+msgctxt "status.check_detail"
+msgid "{label}: {detail}"
+msgstr "{label}: {detail}"
+
+#, python-brace-format
+msgctxt "status.check_failed"
+msgid "{label}: not ok"
+msgstr "{label}: not ok"
+
+#, python-brace-format
+msgctxt "status.fix_runbook"
+msgid "read {runbook}"
+msgstr "read {runbook}"
+
+#, python-brace-format
+msgctxt "status.fix_says_why"
+msgid "{command} says why"
+msgstr "{command} says why"
+
+#, python-brace-format
+msgctxt "status.fix_token"
+msgid ""
+"the service holds another GPFORUM_METRICS_TOKEN than the one {where}: "
+"restart it, so it reads the file again, with {restart}"
+msgstr ""
+"the service holds another GPFORUM_METRICS_TOKEN than the one {where}: "
+"restart it, so it reads the file again, with {restart}"
+
+msgctxt "status.fix_url"
+msgid ""
+"or, if it listens elsewhere, name that address: gpforum status --url "
+"http://HOST:PORT"
+msgstr ""
+"or, if it listens elsewhere, name that address: gpforum status --url "
+"http://HOST:PORT"
+
+#, python-brace-format
+msgctxt "status.foreign"
+msgid "{url} answered HTTP {code}, not with GPForum's readiness report"
+msgstr "{url} answered HTTP {code}, not with GPForum's readiness report"
+
+#, python-brace-format
+msgctxt "status.heading_degraded"
+msgid "{url}: ready, with warnings ({environment}, {count} checks)"
+msgstr "{url}: ready, with warnings ({environment}, {count} checks)"
+
+#, python-brace-format
+msgctxt "status.heading_fail"
+msgid "{url}: not ready ({environment}, {count} checks)"
+msgstr "{url}: not ready ({environment}, {count} checks)"
+
+#, python-brace-format
+msgctxt "status.heading_ok"
+msgid "{url}: ready ({environment}, {count} checks)"
+msgstr "{url}: ready ({environment}, {count} checks)"
+
+#, python-brace-format
+msgctxt "status.held_back"
+msgid ""
+"{url} answers {state}, but keeps the rest of its report from this metrics "
+"token"
+msgstr ""
+"{url} answers {state}, but keeps the rest of its report from this metrics "
+"token"
+
+msgctxt "status.label_antivirus"
+msgid "antivirus"
+msgstr "antivirus"
+
+msgctxt "status.label_budget_table"
+msgid "query budget table"
+msgstr "query budget table"
+
+msgctxt "status.label_budgets"
+msgid "query budgets"
+msgstr "query budgets"
+
+msgctxt "status.label_cache"
+msgid "shared cache"
+msgstr "shared cache"
+
+msgctxt "status.label_database"
+msgid "database"
+msgstr "database"
+
+msgctxt "status.label_event_table"
+msgid "event log table"
+msgstr "event log table"
+
+msgctxt "status.label_host"
+msgid "host limits"
+msgstr "host limits"
+
+msgctxt "status.label_outbox_table"
+msgid "outbox table"
+msgstr "outbox table"
+
+msgctxt "status.label_partitions"
+msgid "partitions"
+msgstr "partitions"
+
+msgctxt "status.label_processes"
+msgid "web processes"
+msgstr "web processes"
+
+msgctxt "status.label_profile"
+msgid "operational profile"
+msgstr "operational profile"
+
+msgctxt "status.label_projection_table"
+msgid "projection table"
+msgstr "projection table"
+
+msgctxt "status.label_replication"
+msgid "replication slots"
+msgstr "replication slots"
+
+msgctxt "status.label_runtime"
+msgid "runtime"
+msgstr "runtime"
+
+msgctxt "status.mode_cache_disabled"
+msgid "one per process, no GlifiStore"
+msgstr "one per process, no GlifiStore"
+
+msgctxt "status.mode_cache_fallback"
+msgid "GlifiStore does not answer; each process uses its own"
+msgstr "GlifiStore does not answer; each process uses its own"
+
+msgctxt "status.mode_cache_shared"
+msgid "shared through GlifiStore"
+msgstr "shared through GlifiStore"
+
+msgctxt "status.mode_format_check"
+msgid "off; uploads are checked for format only"
+msgstr "off; uploads are checked for format only"
+
+#, python-brace-format
+msgctxt "status.passing"
+msgid "readiness: {count} more checks of {path} pass"
+msgstr "readiness: {count} more checks of {path} pass"
+
+#, python-brace-format
+msgctxt "status.unreachable"
+msgid "{url} does not answer: {reason}"
+msgstr "{url} does not answer: {reason}"
+
+
+#, python-brace-format
+msgctxt "system.carton_missing"
+msgid "Carton is not installed for {perl}"
+msgstr "Carton is not installed for {perl}"
+
+#, python-brace-format
+msgctxt "system.carton_ok"
+msgid "Carton {version}"
+msgstr "Carton {version}"
+
+msgctxt "system.deps_dry_run"
+msgid "Nothing was installed: --dry-run says what setup would do."
+msgstr "Nothing was installed: --dry-run says what setup would do."
+
+#, python-brace-format
+msgctxt "system.deps_for_setup"
+msgid ""
+"gpforum setup installs the dependencies into {local} first, as make {target} "
+"does: carton {command}"
+msgstr ""
+"gpforum setup installs the dependencies into {local} first, as make {target} "
+"does: carton {command}"
+
+#, python-brace-format
+msgctxt "system.deps_installed"
+msgid "dependencies: installed into {local}, for Perl {version}"
+msgstr "dependencies: installed into {local}, for Perl {version}"
+
+msgctxt "system.deps_missing"
+msgid "dependencies: not installed yet"
+msgstr "dependencies: not installed yet"
+
+msgctxt "system.deps_ok"
+msgid "dependencies: installed in local/"
+msgstr "dependencies: installed in local/"
+
+msgctxt "system.fix_deps"
+msgid ""
+"make install-deps-postgres, or sudo make install-deps-production on a server"
+msgstr ""
+"make install-deps-postgres, or sudo make install-deps-production on a server"
+
+msgctxt "system.fix_perl_freebsd"
+msgid "sudo pkg install perl5 p5-App-cpanminus"
+msgstr "sudo pkg install perl5 p5-App-cpanminus"
+
+msgctxt "system.fix_perl_linux"
+msgid ""
+"a distribution with Perl 5.40 or newer, such as Debian 13 or Ubuntu 26.04: "
+"sudo apt install perl build-essential cpanminus libpq-dev"
+msgstr ""
+"a distribution with Perl 5.40 or newer, such as Debian 13 or Ubuntu 26.04: "
+"sudo apt install perl build-essential cpanminus libpq-dev"
+
+msgctxt "system.fix_perl_macos"
+msgid "brew install perl"
+msgstr "brew install perl"
+
+msgctxt "system.homebrew_path"
+msgid "PostgreSQL's tools: not on the PATH"
+msgstr "PostgreSQL's tools: not on the PATH"
+
+msgctxt "system.next_deps"
+msgid ""
+"Next: make install-deps-postgres, or sudo make install-deps-production on a "
+"server"
+msgstr ""
+"Next: make install-deps-postgres, or sudo make install-deps-production on a "
+"server"
+
+msgctxt "system.next_preflight"
+msgid "Next: check the host, with script/system-preflight"
+msgstr "Next: check the host, with script/system-preflight"
+
+#, python-brace-format
+msgctxt "system.next_setup"
+msgid "Next: set this host up, with sudo {gpforum} setup"
+msgstr "Next: set this host up, with sudo {gpforum} setup"
+
+#, python-brace-format
+msgctxt "system.perl_manager"
+msgid ""
+"{path} is a version manager's Perl; GPForum runs on the system's or "
+"Homebrew's"
+msgstr ""
+"{path} is a version manager's Perl; GPForum runs on the system's or "
+"Homebrew's"
+
+msgctxt "system.perl_missing"
+msgid "no Perl was found in /usr/bin, /usr/local/bin or /opt/homebrew/bin"
+msgstr "no Perl was found in /usr/bin, /usr/local/bin or /opt/homebrew/bin"
+
+#, python-brace-format
+msgctxt "system.perl_not_executable"
+msgid "GPFORUM_PERL names {path}, which is not a program"
+msgstr "GPFORUM_PERL names {path}, which is not a program"
+
+#, python-brace-format
+msgctxt "system.perl_ok"
+msgid "Perl {version} at {path}"
+msgstr "Perl {version} at {path}"
+
+#, python-brace-format
+msgctxt "system.perl_old"
+msgid "Perl {version} at {path} is older than the 5.40 GPForum needs"
+msgstr "Perl {version} at {path} is older than the 5.40 GPForum needs"
+
+#, python-brace-format
+msgctxt "system.perl_prefix"
+msgid "{path} is not a system Perl (its prefix is {prefix})"
+msgstr "{path} is not a system Perl (its prefix is {prefix})"
+
+msgctxt "system.pg_config_missing"
+msgid "pg_config: not found, and DBD::Pg needs it to build"
+msgstr "pg_config: not found, and DBD::Pg needs it to build"
+
+#, python-brace-format
+msgctxt "system.pg_config_ok"
+msgid "pg_config: {version} at {path}"
+msgstr "pg_config: {version} at {path}"
+

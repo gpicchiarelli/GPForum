@@ -1,0 +1,15 @@
+%# The interface language, as one button for each: pressing one chooses it.
+%# The one in use says so (aria-pressed).
+<form class="locale-form" method="post" action="<%= ui_path('locale_update') %>" aria-label="<%= t('locale.selector_label') %>">
+  <%= csrf_field %>
+  % if (session('user_id')) {
+    <input type="hidden" name="command_id" value="<%= ui_command_id %>">
+  % }
+  <input type="hidden" name="return_to" value="<%= ui_return_to %>">
+  <span id="locale-selector-label"><%= t('locale.choose') %></span>
+  <span class="segmented" role="group" aria-labelledby="locale-selector-label">
+    % for my $option (@{ ui_locale_options() }) {
+      <button type="submit" name="locale" value="<%= $option->{locale} %>" lang="<%= $option->{locale} %>" aria-pressed="<%= $option->{current} ? 'true' : 'false' %>"><%= $option->{native_name} %></button>
+    % }
+  </span>
+</form>

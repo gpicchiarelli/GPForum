@@ -1,0 +1,324 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use v5.40;
+
+use Carp qw(croak);
+use Const::Fast;
+use JSON::MaybeXS qw(encode_json);
+use List::Util    qw(max);
+use Time::HiRes   qw(time);
+
+use lib 'lib';
+use lib 't/lib';
+
+use GPForum::Command::Usage;
+use GPForum::Service::Outbox::Dispatcher;
+use GPForum::Test::OutboxBenchmarkDbh;
+use GPForum::Test::OutboxClock;
+use GPForum::Test::OutboxCreateResultSet;
+use GPForum::Test::OutboxResultSet;
+use GPForum::Test::OutboxSchema;
+use GPForum::Test::OutboxStorage;
+use GPForum::Test::OutboxTransport;
+use GPForum::X::Usage;
+
+our $VERSION = '0.001';
+
+const my @DEFAULT_WORKER_COUNTS  => ( 1, 2, 4, 8 );
+const my @DEFAULT_MESSAGE_COUNTS => (1_000);
+const my $DEFAULT_BATCH_SIZE     => 100;
+const my $MILLISECONDS           => 1_000;
+const my $MINIMUM_ELAPSED_SEC    => 0.000_001;
+const my $ROUND_HALF_UP          => 0.5;
+const my $P95                    => 0.95;
+const my $READY_AT               => '2026-05-23T12:00:00Z';
+
+my $cli_options;
+try {
+    $cli_options = _options(@ARGV);
+}
+catch ($error) {
+    croak $error if !GPForum::Command::Usage->is_usage($error);
+    exit GPForum::Command::Usage->error( undef, "$error" );
+};
+exit GPForum::Command::Usage->help( \*STDOUT, _usage() )
+  if $cli_options->{help};
+
+my $benchmark = _benchmark_report($cli_options);
+if ( defined $cli_options->{artifact} ) {
+    _write_artifact( $cli_options->{artifact}, $benchmark );
+}
+
+if ( $cli_options->{json} ) {
+    print encode_json($benchmark), "\n" or croak 'failed to write JSON report';
+}
+else {
+    _print_text_report($benchmark);
+}
+
+exit( $benchmark->{status} eq 'ok' ? 0 : 1 );
+
+sub _benchmark_report {
+    my ($options) = @_;
+
+    my @results;
+    for my $message_count ( @{ $options->{message_counts} } ) {
+        for my $worker_count ( @{ $options->{worker_counts} } ) {
+            push @results,
+              _run_benchmark( $message_count, $worker_count,
+                $options->{batch_size} );
+        }
+    }
+
+    return {
+        status => ( grep { $_->{status} ne 'ok' } @results ) ? 'fail' : 'ok',
+        mode   => 'fixture',
+        batch_size     => $options->{batch_size},
+        message_counts => $options->{message_counts},
+        worker_counts  => $options->{worker_counts},
+        results        => \@results,
+    };
+}
+
+sub _run_benchmark {
+    my ( $message_count, $worker_count, $batch_size ) = @_;
+
+    my @rows = map {
+        _ready_row(
+            'bench-' . $message_count . q{-} . $worker_count . q{-} . $_ )
+    } ( 1 .. $message_count );
+    my $schema    = _schema_for_rows(@rows);
+    my $transport = GPForum::Test::OutboxTransport->new;
+    my @workers   = _dispatchers( $schema, $transport, $worker_count );
+
+    my $started = time;
+    my $drain   = _drain_pool( $batch_size, @workers );
+    my $elapsed = time - $started;
+
+    my $delivered  = scalar @{ $transport->delivered };
+    my $duplicates = _duplicate_count( $transport->delivered );
+    my $lost       = $message_count - $delivered + $duplicates;
+
+    # Each message is acknowledged on its own now, as soon as it is
+    # delivered: one acknowledgement a message, where there was one a batch.
+    my $unacknowledged = $message_count - $drain->{acknowledged};
+    my $failed         = $duplicates || $lost || $unacknowledged;
+    my $safe_time =
+        $elapsed > $MINIMUM_ELAPSED_SEC
+      ? $elapsed
+      : $MINIMUM_ELAPSED_SEC;
+
+    return {
+        status          => $failed ? 'fail' : 'ok',
+        acknowledged    => $drain->{acknowledged},
+        claimed_batches => $drain->{nonempty_claims},
+        workers         => $worker_count,
+        messages        => $message_count,
+        batch_size      => $batch_size,
+        delivered       => $delivered,
+        lost            => $lost,
+        duplicates      => $duplicates,
+        dispatch_calls  => $drain->{dispatch_calls},
+        nonempty_claims => $drain->{nonempty_claims},
+        elapsed_ms      => $elapsed * $MILLISECONDS,
+        msg_s           => $delivered / $safe_time,
+        p95_claim_ms    => _percentile( $drain->{claim_ms}, $P95 ),
+        max_claim_ms    => max( 0, @{ $drain->{claim_ms} } ),
+    };
+}
+
+sub _drain_pool {
+    my ( $batch_size, @workers ) = @_;
+
+    my @claim_ms;
+    my $acknowledged    = 0;
+    my $dispatch_calls  = 0;
+    my $nonempty_claims = 0;
+
+    while (1) {
+        my $selected = 0;
+        for my $worker (@workers) {
+            my $started = time;
+            my $summary = $worker->dispatch_pending($batch_size);
+            my $elapsed = time - $started;
+            push @claim_ms, $elapsed * $MILLISECONDS;
+            $dispatch_calls++;
+            if ( $summary->{selected} ) {
+                $nonempty_claims++;
+            }
+            $selected     += $summary->{selected};
+            $acknowledged += $summary->{acknowledged} // 0;
+        }
+        last if !$selected;
+    }
+
+    return {
+        acknowledged    => $acknowledged,
+        claim_ms        => \@claim_ms,
+        dispatch_calls  => $dispatch_calls,
+        nonempty_claims => $nonempty_claims,
+    };
+}
+
+sub _dispatchers {
+    my ( $schema, $transport, $worker_count ) = @_;
+
+    return
+      map { _dispatcher( $schema, $transport, 'bench-worker-' . $_ ) }
+      ( 1 .. $worker_count );
+}
+
+sub _dispatcher {
+    my ( $schema, $transport, $worker_id ) = @_;
+
+    return GPForum::Service::Outbox::Dispatcher->new(
+        schema    => $schema,
+        transport => $transport,
+        clock     => GPForum::Test::OutboxClock->new,
+        worker_id => $worker_id,
+    );
+}
+
+sub _schema_for_rows {
+    my (@rows) = @_;
+
+    return GPForum::Test::OutboxSchema->new(
+        outbox_resultset      => GPForum::Test::OutboxResultSet->new,
+        dead_letter_resultset => GPForum::Test::OutboxCreateResultSet->new,
+        storage               => GPForum::Test::OutboxStorage->new(
+            dbh => GPForum::Test::OutboxBenchmarkDbh->new( rows => \@rows ),
+        ),
+    );
+}
+
+sub _ready_row {
+    my ($outbox_id) = @_;
+
+    return {
+        outbox_id       => $outbox_id,
+        attempt_count   => 0,
+        payload         => {},
+        next_attempt_at => $READY_AT,
+        created_at      => $READY_AT,
+    };
+}
+
+sub _duplicate_count {
+    my ($values) = @_;
+
+    my %seen;
+    my $duplicates = 0;
+    for my $value ( @{$values} ) {
+        if ( $seen{$value} ) {
+            $duplicates++;
+        }
+        $seen{$value} = 1;
+    }
+
+    return $duplicates;
+}
+
+sub _percentile {
+    my ( $values, $percentile ) = @_;
+
+    return 0 if !@{$values};
+
+    my @sorted = sort { $a <=> $b } @{$values};
+    my $index  = int( ( @sorted - 1 ) * $percentile + $ROUND_HALF_UP );
+
+    return $sorted[$index];
+}
+
+sub _print_text_report {
+    my ($report) = @_;
+
+    for my $result ( @{ $report->{results} } ) {
+        printf
+'outbox_dispatch_benchmark status=%s workers=%d messages=%d batch_size=%d delivered=%d lost=%d duplicates=%d acknowledged=%d claimed_batches=%d elapsed_ms=%.3f msg_s=%.3f p95_claim_ms=%.3f max_claim_ms=%.3f'
+          . "\n",
+          @{$result}{
+            qw(status workers messages batch_size delivered lost duplicates acknowledged claimed_batches elapsed_ms msg_s p95_claim_ms max_claim_ms)
+          }
+          or croak 'failed to write outbox benchmark result';
+    }
+
+    return;
+}
+
+sub _write_artifact {
+    my ( $artifact, $report ) = @_;
+
+    open my $handle, '>', $artifact
+      or croak "failed to write artifact $artifact";
+    print {$handle} encode_json($report), "\n"
+      or croak "failed to write artifact $artifact";
+    close $handle
+      or croak "failed to close artifact $artifact";
+
+    return;
+}
+
+sub _options {
+    my (@arguments) = @_;
+
+    my $usage  = _usage();
+    my $counts = sub {
+        my ($value) = @_;
+
+        my @values = split /,/msx, $value // q{};
+        if ( !@values ) {
+            GPForum::X::Usage->throw( message => $usage );
+        }
+
+        return [
+            map {
+                GPForum::Command::Usage->option_number( $_,
+                    'positive_integer', $usage )
+            } @values
+        ];
+    };
+
+    return GPForum::Command::Usage->parse_options(
+        \@arguments,
+        {
+            artifact       => undef,
+            batch_size     => $DEFAULT_BATCH_SIZE,
+            help           => 0,
+            json           => 0,
+            message_counts => [@DEFAULT_MESSAGE_COUNTS],
+            worker_counts  => [@DEFAULT_WORKER_COUNTS],
+        },
+        {
+            usage    => $usage,
+            switches =>
+              { '--help' => { help => 1 }, '--json' => { json => 1 } },
+            numbers =>
+              { '--batch-size' => [ batch_size => 'positive_integer' ] },
+            values => {
+                '--artifact' => sub {
+                    my ( $parsed, $value ) = @_;
+                    $parsed->{artifact} =
+                      GPForum::Command::Usage->option_value( $value, qr/./msx,
+                        $usage );
+                },
+                '--messages' => sub {
+                    my ( $parsed, $value ) = @_;
+                    $parsed->{message_counts} = $counts->($value);
+                },
+                '--workers' => sub {
+                    my ( $parsed, $value ) = @_;
+                    $parsed->{worker_counts} = $counts->($value);
+                },
+            },
+        },
+    );
+}
+
+sub _usage {
+    return
+'Usage: script/bench-outbox-dispatcher [--json] [--artifact FILE] [--messages 1000,10000,100000] [--workers 1,2,4,8] [--batch-size N]';
+}

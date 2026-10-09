@@ -1,0 +1,36 @@
+% layout 'default';
+% title t('community.feed') . ' - ' . t('app.name');
+
+<section aria-labelledby="feed-heading">
+  <%= include 'components/page_header', heading_id => 'feed-heading', component_title => t('community.feed') %>
+  % if (@{$feed_items}) {
+    <ol class="ui-card-list" aria-label="<%= t('community.personal_feed') %>">
+      % for my $item (@{$feed_items}) {
+        % my $is_thread = ($item->{item_type} || q{}) eq 'thread';
+        % my $thread_id = $is_thread ? $item->{item_id} : $item->{thread_id};
+        <li class="ui-card-list__item ui-row">
+          <article aria-labelledby="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
+            <h2 class="ui-row__title" id="feed-<%= $item->{item_type} %>-<%= $item->{item_id} %>-heading">
+              % if ($thread_id) {
+                <a href="<%= ui_path('thread', thread_id => $thread_id) %><%= $is_thread ? q{} : '#post-' . $item->{item_id} %>"><%= $item->{thread_title} // t('forum.thread') . q{ } . $thread_id %></a>
+              % } else {
+                <%= ucfirst($item->{item_type} || t('community.item')) %> <%= $item->{item_id} %>
+              % }
+            </h2>
+            <p class="ui-meta">
+              <span>
+                <%= t('community.added') %>:
+                <%= include 'components/timestamp', at => $item->{created_at} %>
+              </span>
+            </p>
+          </article>
+        </li>
+      % }
+    </ol>
+  % } else {
+    <%= include 'components/empty_state', heading_id => 'feed-empty-heading', component_title => t('community.feed_empty') %>
+  % }
+  % if ($next_cursor) {
+    <%= include 'components/pagination', label => t('community.feed_pagination'), items => ui_next_page(href => url_for('feed')->query(after => $next_cursor), label => t('community.older_feed_items')) %>
+  % }
+</section>

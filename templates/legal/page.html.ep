@@ -1,0 +1,13 @@
+% layout 'default';
+% title t($title_key) . ' - ' . t('app.name');
+
+<section aria-labelledby="<%= $heading_id %>">
+  <%= include 'components/page_header',
+    heading_id => $heading_id,
+    component_title => t($title_key) %>
+  <div class="prose">
+    % for my $section_key (@{ $section_keys }) {
+      <p><%= t($section_key) %></p>
+    % }
+  </div>
+</section>

@@ -1,0 +1,26 @@
+%# The head of a thread page: its title, who started it, where the unread
+%# posts begin, and the toolbar. A write that changes the title, the category
+%# or the thread's state answers with this header for its place.
+%#
+%# Takes "can_reply"; reads the page's "thread" and "reading"; "swap_oob"
+%# marks a copy sent to replace the page's.
+<header class="thread__header" id="thread-header"<%== stash('swap_oob') ? ' hx-swap-oob="true"' : q{} %>>
+  <%= include 'components/page_header',
+    heading_id => 'thread-heading',
+    component_title => $thread->{title} %>
+  % my $unread = $reading && $reading->{authenticated} && $reading->{first_unread_anchor};
+  % if ($thread->{author_username} || $unread) {
+    <p class="ui-meta">
+      % if ($thread->{author_username}) {
+        <span>
+          <%= t('forum.started_by') %>
+          <a href="<%= ui_path('profile', username => $thread->{author_username}) %>"><%= $thread->{author_display_name} || $thread->{author_profile_label} %></a>
+        </span>
+      % }
+      % if ($unread) {
+        <span><a class="ui-meta__jump" href="#<%= $unread %>"><%= t('community.jump_to_first_unread') %></a></span>
+      % }
+    </p>
+  % }
+  <%= include 'forum/_thread_tools', can_reply => $can_reply %>
+</header>

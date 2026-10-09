@@ -1,0 +1,207 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Operations::RateLimiter::PostgreSQLStore;
+
+use Const::Fast;
+use Digest::SHA qw(sha256_hex);
+use Mojo::Base 'GPForum::Base', -signatures;
+use v5.40;
+use POSIX qw(strftime);
+
+use GPForum::Service::Clock;
+
+our $VERSION = '0.001';
+
+const my $DEFAULT_LIMIT          => 60;
+const my $DEFAULT_WINDOW_SECONDS => 60;
+
+has clock => sub { return GPForum::Service::Clock->new; };
+__PACKAGE__->requires(qw(schema));
+
+sub check ( $self, $input ) {
+    my $limit          = $input->{limit}          || $DEFAULT_LIMIT;
+    my $window_seconds = $input->{window_seconds} || $DEFAULT_WINDOW_SECONDS;
+    my $now            = $self->clock->now_epoch;
+    my $window_start   = $now - ( $now % $window_seconds );
+    my $row            = $self->_upsert_bucket(
+        $input,
+        {
+            actor_hash     => _actor_hash($input),
+            limit          => $limit,
+            now_epoch      => $now,
+            now_iso        => _iso8601_from_epoch($now),
+            window_seconds => $window_seconds,
+            window_start   => _iso8601_from_epoch($window_start),
+            expires_at     =>
+              _iso8601_from_epoch( $window_start + $window_seconds ),
+        },
+    );
+
+    return {
+        ok  => $row->{observed_count} <= $limit ? 1 : 0,
+        key => join( q{:},
+            $input->{scope},  $row->{actor_hash},
+            $input->{action}, $row->{window_started_at} ),
+        limit           => $limit,
+        remaining       => _remaining( $limit, $row->{observed_count} ),
+        reset_at_epoch  => $window_start + $window_seconds,
+        store           => 'postgresql',
+        window_seconds  => $window_seconds,
+        observed_count  => $row->{observed_count},
+        mitigation_hint => 'slow_down',
+        actor_hash      => $row->{actor_hash},
+    };
+}
+
+sub snapshot ($self) {
+    my $buckets = $self->schema->resultset('RateLimitBucket');
+    my $count   = $buckets->search_rs(
+        { expires_at => { '>' => $self->clock->now_iso8601 } } )->count;
+
+    return {
+        buckets => $count,
+        store   => 'postgresql',
+        status  => 'ok',
+    };
+}
+
+sub _upsert_bucket ( $self, $input, $window ) {
+    my $sql = <<~'SQL';
+        INSERT INTO rate_limit_buckets (
+            scope, actor_hash, action, window_started_at, window_seconds,
+            observed_count, blocked_count, first_seen_at, last_seen_at,
+            expires_at
+        )
+        VALUES (?, ?, ?, ?::timestamptz, ?, 1, CASE WHEN 1 > ? THEN 1 ELSE 0 END,
+            ?::timestamptz, ?::timestamptz, ?::timestamptz)
+        ON CONFLICT (scope, actor_hash, action, window_started_at)
+        DO UPDATE SET
+            observed_count = rate_limit_buckets.observed_count + 1,
+            blocked_count = rate_limit_buckets.blocked_count
+                + CASE WHEN rate_limit_buckets.observed_count + 1 > ? THEN 1 ELSE 0 END,
+            last_seen_at = EXCLUDED.last_seen_at,
+            expires_at = EXCLUDED.expires_at
+        RETURNING scope, actor_hash, action, window_started_at,
+            observed_count, blocked_count
+        SQL
+
+    return $self->schema->storage->dbh->selectrow_hashref(
+        $sql,                      undef,
+        $input->{scope},           $window->{actor_hash},
+        $input->{action},          $window->{window_start},
+        $window->{window_seconds}, $window->{limit},
+        $window->{now_iso},        $window->{now_iso},
+        $window->{expires_at},     $window->{limit},
+    );
+}
+
+sub _actor_hash ($input) {
+    return sha256_hex( join q{:}, $input->{scope}, $input->{actor_id} || q{} );
+}
+
+sub _remaining ( $limit, $count ) {
+    my $remaining = $limit - $count;
+
+    return $remaining > 0 ? $remaining : 0;
+}
+
+sub _iso8601_from_epoch ($epoch) {
+    return strftime '%Y-%m-%dT%H:%M:%SZ', gmtime $epoch;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::RateLimiter::PostgreSQLStore - Rate limit counters shared by every worker, in PostgreSQL.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $store = GPForum::Service::Operations::RateLimiter::PostgreSQLStore
+      ->new( schema => $schema );
+    my $decision = $store->check(
+        {
+            action         => 'thread.create',
+            actor_id       => $user_id,
+            limit          => 30,
+            scope          => 'forum_http',
+            window_seconds => 60,
+        }
+    );
+    my $snapshot = $store->snapshot;
+
+=head1 DESCRIPTION
+
+The primary store behind L<GPForum::Service::Operations::RateLimiter>. Each
+check is one C<INSERT ... ON CONFLICT DO UPDATE> on C<rate_limit_buckets>,
+keyed by scope, actor hash, action and the start of the fixed window, so
+every Hypnotoad worker and every node counts in the same bucket and the
+increment is atomic. The row also counts how many requests went over the
+limit (C<blocked_count>) and records when the bucket expires.
+
+The actor is never stored in clear: the bucket holds the SHA-256 of the
+scope and the actor id. Windows are aligned on multiples of the window
+length in epoch seconds.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required and must be connected to
+PostgreSQL, since the upsert is written in its dialect; C<clock> defaults to
+L<GPForum::Service::Clock>.
+
+=head2 check
+
+Takes a hash reference with C<scope>, C<action>, C<actor_id> (an empty
+string when absent), and optional C<limit> and C<window_seconds> (both 60
+when absent or zero). Counts one request and returns a hash reference with
+C<ok> (1 while the count is within the limit, 0 above it), C<key>
+(scope, actor hash, action and window start joined by colons), C<limit>,
+C<remaining> (never below 0), C<reset_at_epoch>, C<< store => 'postgresql' >>,
+C<window_seconds>, C<observed_count>, C<< mitigation_hint => 'slow_down' >>
+and C<actor_hash>. A refused request is still counted.
+
+=head2 snapshot
+
+Returns C<< { buckets => $count, store => 'postgresql', status => 'ok' } >>,
+where C<$count> is the number of buckets that have not expired yet.
+
+=head1 DIAGNOSTICS
+
+Database errors propagate; L<GPForum::Service::Operations::RateLimiter>
+catches them from C<check> and applies its degradation policy.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None. Limits and windows come from the caller.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Clock>, L<Digest::SHA>, L<POSIX>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

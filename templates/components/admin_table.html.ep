@@ -1,0 +1,24 @@
+% my $label = stash('label') || t('ui.admin_table');
+% my $columns = stash('columns') || [];
+% my $rows = stash('rows') || [];
+
+<div class="ui-table-wrap">
+  <table class="ui-admin-table" aria-label="<%= $label %>">
+    <thead>
+      <tr>
+        % for my $column (@{$columns}) {
+          <th scope="col"><%= $column->{label} || $column->{key} %></th>
+        % }
+      </tr>
+    </thead>
+    <tbody>
+      % for my $row (@{$rows}) {
+        <tr>
+          % for my $column (@{$columns}) {
+            <td><%= $row->{ $column->{key} } // q{} %></td>
+          % }
+        </tr>
+      % }
+    </tbody>
+  </table>
+</div>

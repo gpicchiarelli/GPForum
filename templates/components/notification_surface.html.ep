@@ -1,0 +1,50 @@
+%# One notification, as a row of the inbox: the discussion it is about, which
+%# is the link to where it happened; then what happened, when, and whether it
+%# has been read. One still unread is set in the stronger weight and carries
+%# the button that marks it.
+%#
+%# Takes "heading_id", "component_title" (what happened), "thread_title" (the
+%# discussion, when the reader knows it), "summary" (shown when it does not),
+%# "href", "time_label", "created_at", "read" and "read_action".
+% my $heading_id = stash('heading_id') || 'notification-heading';
+% my $component_title = stash('component_title') || t('notifications.title.notification');
+% my $thread_title = stash('thread_title') // q{};
+% my $summary = stash('summary') || q{};
+% my $href = stash('href') || q{};
+% my $time_label = stash('time_label') || t('notifications.received');
+% my $created_at = stash('created_at') || q{};
+% my $read = stash('read') || 0;
+% my $read_action = stash('read_action') || q{};
+
+<article class="ui-notification-surface ui-row<%= $read ? q{} : ' ui-notification-surface--unread' %>" aria-labelledby="<%= $heading_id %>">
+  <h2 class="ui-row__title" id="<%= $heading_id %>">
+    % if (length $href) {
+      <a href="<%= $href %>"><%= length $thread_title ? $thread_title : $component_title %></a>
+    % } else {
+      <%= length $thread_title ? $thread_title : $component_title %>
+    % }
+  </h2>
+  % if (!length $thread_title && length $summary) {
+    <p><%= $summary %></p>
+  % }
+  <p class="ui-meta">
+    % if (length $thread_title) {
+      <span><%= $component_title %></span>
+    % }
+    % if (length $created_at) {
+      <span>
+        <%= $time_label %>:
+        <%= include 'components/timestamp', at => $created_at %>
+      </span>
+    % }
+    % if ($read) {
+      <span><%= t('notifications.read') %></span>
+    % }
+  </p>
+  % if (!$read && length $read_action) {
+    <form method="post" action="<%= $read_action %>">
+      <%= csrf_field %>
+      <button type="submit" class="button--quiet"><%= t('notifications.mark_read') %></button>
+    </form>
+  % }
+</article>

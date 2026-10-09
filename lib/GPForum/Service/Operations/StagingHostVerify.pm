@@ -1,0 +1,881 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Operations::StagingHostVerify;
+
+use Carp qw(croak);
+use Const::Fast;
+use English qw(-no_match_vars);
+use GPForum::X::Config;
+use IPC::Open3    qw(open3);
+use JSON::MaybeXS qw(encode_json);
+use List::Util    qw(any);
+use Mojo::Base -base, -signatures;
+use v5.40;
+use Mojo::File qw(path);
+use Mojo::UserAgent;
+use Symbol qw(gensym);
+
+use GPForum::Service::Operations::DeployContract qw(
+  deploy_host_unit_checks
+  deploy_match_text
+  deploy_nginx_checks
+);
+use GPForum::Service::Operations::Doctor;
+use GPForum::Service::Operations::EvidenceMeta qw(evidence_finalize);
+
+our $VERSION = '0.001';
+
+const my $EXIT_FAILURE     => 1;
+const my $EXIT_SHIFT       => 8;
+const my $REPO_ROOT_MARKER => 'cpanfile';
+const my $ROOT_WALK_LIMIT  => 8;
+const my $DEFAULT_TIMEOUT  => 5;
+const my $HTTP_OK_MIN      => 200;
+const my $HTTP_OK_MAX      => 399;
+const my $HTTP_PORT        => 80;
+const my $HTTPS_PORT       => 443;
+const my $OUTPUT_LIMIT     => 400;
+const my @REQUIRED_ENV_KEYS => qw(
+  GPFORUM_SESSION_SECRET
+  GPFORUM_DATABASE_DSN
+  GPFORUM_DATABASE_USER
+  GPFORUM_METRICS_TOKEN
+);
+
+# What the shipped units set, for a file that does not say.
+const my $UNIT_ENVIRONMENT => 'production';
+
+# An assignment as an environment file holds it.
+const my $ASSIGNMENT =>
+  qr/\A \s* (?: export \s+ )? ([[:alpha:]_]\w*) \s* = \s* (.*) \z/msxa;
+const my @SYSTEMD_UNITS => qw(
+  gpforum.service
+  gpforum-outbox.service
+  gpforum-scheduled-jobs.timer
+);
+const my @REPO_ARTIFACTS => (
+    'deploy/systemd/gpforum.service',
+    'deploy/systemd/gpforum-outbox.service',
+    'deploy/systemd/gpforum-scheduled-jobs.service',
+    'deploy/systemd/gpforum-scheduled-jobs.timer',
+    'deploy/nginx/gpforum.conf',
+    'script/gpforum-carton',
+    'bin/gpforum',
+    'docs/ops/staging-host.md',
+    'docs/ops/staging-drills.md',
+    'docs/ops/mail-check.md',
+    'docs/ops/stress-load.md',
+    'docs/ops/dead-letters.md',
+);
+const my $RESIDUAL_LIVE =>
+'Live systemd install, nginx reload, Hypnotoad start, and TLS termination remain operator steps; archive verify JSON from the staging host.';
+const my $RESIDUAL_BETA =>
+  'This verify does not claim private-beta readiness by itself.';
+const my $RESIDUAL_EVIDENCE =>
+'Archive mail-check, stress-load, and staging-drill evidence beside this verify on the staging target.';
+
+has repo_root  => sub { return _detect_repo_root() };
+has user_agent => sub {
+    return Mojo::UserAgent->new->max_redirects(0);
+};
+
+sub run ( $self, $options ) {
+    $options ||= {};
+    my $evidence = {
+        status        => undef,
+        check         => 'staging_host_verify',
+        residual_gaps => [],
+    };
+
+    try {
+        $self->_execute( $evidence, $options );
+    }
+    catch ($error) {
+        $evidence->{status} = 'fail';
+        $evidence->{error}  = _trim_error($error);
+    };
+    $evidence->{status} ||= _combined_status($evidence);
+
+    return evidence_finalize($evidence);
+}
+
+sub format_evidence ( $self, $evidence, $format ) {
+    $format ||= 'json';
+    return encode_json($evidence) . "\n" if $format eq 'json';
+
+    return _human_evidence($evidence);
+}
+
+sub exit_status ( $, $evidence ) {
+    my $status = $evidence->{status} // q{};
+    return 0 if $status eq 'pass' || $status eq 'degraded';
+
+    return $EXIT_FAILURE;
+}
+
+sub _execute ( $self, $evidence, $options ) {
+    $evidence->{prerequisites} = $self->_prerequisites_phase;
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{prerequisites}{residual_gaps} // [] };
+
+    $evidence->{env_file} = $self->_env_file_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{env_file}{residual_gaps} // [] };
+
+    $evidence->{systemd} = $self->_systemd_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{systemd}{residual_gaps} // [] };
+
+    $evidence->{unit_files} = $self->_unit_files_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{unit_files}{residual_gaps} // [] };
+
+    $evidence->{nginx_conf} = $self->_nginx_conf_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{nginx_conf}{residual_gaps} // [] };
+
+    $evidence->{health} = $self->_health_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{health}{residual_gaps} // [] };
+
+    $evidence->{tls} = $self->_tls_phase($options);
+    push @{ $evidence->{residual_gaps} },
+      @{ $evidence->{tls}{residual_gaps} // [] };
+
+    push @{ $evidence->{residual_gaps} }, $RESIDUAL_LIVE, $RESIDUAL_BETA,
+      $RESIDUAL_EVIDENCE;
+
+    return;
+}
+
+sub _prerequisites_phase ($self) {
+    my $root = $self->repo_root;
+    if ( !_has_text($root) ) {
+        GPForum::X::Config->throw( message => 'repository root not found' );
+    }
+
+    my @artifacts;
+    my @missing;
+    for my $relative (@REPO_ARTIFACTS) {
+        my $absolute = path( $root, $relative )->to_string;
+        my $exists   = -f $absolute ? 1 : 0;
+        push @artifacts,
+          {
+            path   => $relative,
+            exists => $exists ? \1     : \0,
+            status => $exists ? 'pass' : 'fail',
+          };
+        if ( !$exists ) {
+            push @missing, $relative;
+        }
+    }
+
+    return {
+        status    => @missing ? 'fail' : 'pass',
+        repo_root => $root,
+        artifacts => \@artifacts,
+        missing   => \@missing,
+    };
+}
+
+sub _env_file_phase ( $self, $options ) {
+    my $path = $options->{env_file};
+    if ( !_has_text($path) ) {
+        return {
+            status        => 'skipped',
+            reason        => 'pass --env-file PATH to inspect staging env keys',
+            residual_gaps => [
+'Env-file key presence not checked; pass --env-file /etc/gpforum/gpforum.env on the staging host.'
+            ],
+        };
+    }
+
+    if ( !-f $path ) {
+        return {
+            status => 'fail',
+            path   => $path,
+            error  => 'env file missing',
+        };
+    }
+
+    my $parsed = _parse_env_keys($path);
+    my @present;
+    my @absent;
+    for my $key (@REQUIRED_ENV_KEYS) {
+        if ( $parsed->{$key} ) {
+            push @present, $key;
+        }
+        else {
+            push @absent, $key;
+        }
+    }
+
+    # Every setting, checked as the service checks them when it starts --
+    # what gpforum doctor reports -- not only the four keys above: a file
+    # that set those and left GPFORUM_PUBLIC_BASE_URL on its development
+    # default passed here, and the service then refused to start.
+    my $environment = _file_environment($path);
+    my $problems =
+      GPForum::Service::Operations::Doctor->settings_problems($environment);
+
+    return {
+        status          => ( @absent || @{$problems} ) ? 'fail' : 'pass',
+        path            => $path,
+        environment     => $environment->{GPFORUM_ENV},
+        required_keys   => [@REQUIRED_ENV_KEYS],
+        present_keys    => \@present,
+        missing_keys    => \@absent,
+        problems        => $problems,
+        values_redacted => \1,
+        note            => 'Only key names and the settings\' problems are'
+          . ' reported; secret values are never copied',
+    };
+}
+
+# The settings the file gives the service, as systemd and a shell read it:
+# NAME=value, optionally quoted, the last assignment of a name winning; under
+# the environment the shipped units set when the file names none.
+sub _file_environment ($path) {
+    my %environment = ( GPFORUM_ENV => $UNIT_ENVIRONMENT );
+    for my $line ( split /\n/msx, path($path)->slurp ) {
+        my ( $name, $value ) = $line =~ $ASSIGNMENT;
+        next if !defined $name;
+        $environment{$name} = _unquoted($value);
+    }
+
+    return \%environment;
+}
+
+# A value bare, single-quoted (literal) or double-quoted, with \", \\, \$
+# and \` unescaped.
+sub _unquoted ($value) {
+    $value =~ s/\s+\z//msx;
+    my ($single) = $value =~ /\A ' ([^']*) ' \z/msx;
+    return $single if defined $single;
+
+    my ($double) = $value =~ /\A " (.*) " \z/msx;
+    return $value if !defined $double;
+
+    return $double =~ s/ \\ ([\\"\$`]) /$1/grmsx;
+}
+
+sub _parse_env_keys ($path) {
+    my %present;
+    my $text = path($path)->slurp;
+    for my $line ( split /\n/msx, $text ) {
+        next if $line =~ /\A\s*\#/msx;
+        my ( $key, $value ) =
+          $line =~ /\A \s* ([[:alpha:]_]\w*) \s* = \s* (.*) \z/msxa;
+        next if !defined $key;
+        $value =~ s/\A["']|["']\z//gmsx;
+        if ( length $value ) {
+            $present{$key} = 1;
+        }
+    }
+
+    return \%present;
+}
+
+sub _systemd_phase ( $self, $options ) {
+    if ( !$options->{systemd} ) {
+        return {
+            status        => 'skipped',
+            reason        => 'pass --systemd to probe systemctl is-active',
+            residual_gaps => [
+'systemd unit activity not probed; pass --systemd on a host with systemctl.'
+            ],
+        };
+    }
+
+    my $binary = _which('systemctl');
+    if ( !_has_text($binary) ) {
+        return {
+            status        => 'skipped',
+            reason        => 'systemctl not on PATH',
+            residual_gaps =>
+              ['systemctl unavailable; live unit activity not verified'],
+        };
+    }
+
+    my @units;
+    for my $unit (@SYSTEMD_UNITS) {
+        my $capture =
+          _capture_command( [ $binary, 'is-active', '--quiet', $unit ] );
+        my $active = $capture->{exit} == 0 ? 1 : 0;
+        push @units,
+          {
+            name   => $unit,
+            status => $active ? 'pass' : 'fail',
+            active => $active ? \1     : \0,
+            exit   => $capture->{exit},
+            output => _trim_output( $capture->{output} ),
+          };
+    }
+
+    my $failed = grep { $_->{status} eq 'fail' } @units;
+
+    return {
+        status    => $failed ? 'fail' : 'pass',
+        available => \1,
+        tool      => $binary,
+        units     => \@units,
+    };
+}
+
+sub _unit_files_phase ( $self, $options ) {
+    my $dir = $options->{unit_dir};
+    if ( !_has_text($dir) ) {
+        return {
+            status => 'skipped',
+            reason =>
+              'pass --unit-dir /etc/systemd/system to observe installed units',
+            residual_gaps => [
+'Installed unit-file contracts not observed; pass --unit-dir on the staging host after copying deploy/systemd templates.'
+            ],
+        };
+    }
+
+    if ( !-d $dir ) {
+        return {
+            status => 'fail',
+            path   => $dir,
+            error  => 'unit directory missing',
+        };
+    }
+
+    my @units;
+    for my $expected ( deploy_host_unit_checks() ) {
+        push @units, _observe_unit_file( $dir, $expected );
+    }
+
+    my $failed = grep { $_->{status} eq 'fail' } @units;
+    my @gaps;
+    if ( !$failed ) {
+        push @gaps,
+'Unit-file contract observe is not a substitute for systemctl enable/start or nginx TLS install evidence.';
+    }
+
+    return {
+        status => $failed ? 'fail' : 'pass',
+        path   => $dir,
+        note   =>
+'Compares installed unit text to the in-repo contract (User, EnvironmentFile, ExecStart). Does not install, enable, or reload units.',
+        units         => \@units,
+        residual_gaps => \@gaps,
+    };
+}
+
+sub _observe_unit_file ( $dir, $expected ) {
+    my $name = $expected->{name};
+    my $path = path( $dir, $name )->to_string;
+    if ( !-f $path ) {
+        return {
+            name   => $name,
+            path   => $path,
+            status => 'fail',
+            error  => 'unit file missing',
+        };
+    }
+
+    my $text  = path($path)->slurp;
+    my $match = deploy_match_text( $text, $expected );
+
+    return {
+        name           => $name,
+        path           => $path,
+        status         => $match->{status},
+        missing_labels => $match->{missing_labels},
+        matched_labels => $match->{matched_labels},
+        checked_labels => $match->{checked_labels},
+    };
+}
+
+sub _nginx_conf_phase ( $self, $options ) {
+    my $path = $options->{nginx_conf};
+    if ( !_has_text($path) ) {
+        return {
+            status => 'skipped',
+            reason =>
+              'pass --nginx-conf /etc/nginx/sites-enabled/gpforum to observe',
+            residual_gaps => [
+'Installed nginx site contract not observed; pass --nginx-conf on the staging host after installing a deploy/nginx template.'
+            ],
+        };
+    }
+
+    if ( !-f $path ) {
+        return {
+            status => 'fail',
+            path   => $path,
+            error  => 'nginx conf missing',
+        };
+    }
+
+    my $text = path($path)->slurp;
+    my @attempts;
+    my $winner;
+    for my $expected ( deploy_nginx_checks() ) {
+        my $match = deploy_match_text( $text, $expected );
+        push @attempts,
+          {
+            name           => $expected->{name},
+            template       => $expected->{path},
+            status         => $match->{status},
+            matched_labels => $match->{matched_labels},
+            missing_labels => $match->{missing_labels},
+          };
+        if ( $match->{status} eq 'pass' && !$winner ) {
+            $winner = $expected->{name};
+        }
+    }
+
+    my @gaps;
+    if ($winner) {
+        push @gaps,
+'Nginx conf contract observe is not a substitute for nginx -t, reload, or TLS certificate install evidence.';
+    }
+
+    return {
+        status          => $winner ? 'pass' : 'fail',
+        path            => $path,
+        matched_profile => $winner,
+        attempts        => \@attempts,
+        note            =>
+'Passes when the installed site matches either tcp (gpforum.conf) or unix-socket template contract. Does not reload nginx.',
+        residual_gaps => \@gaps,
+        error         => $winner ? undef : 'no deploy/nginx contract matched',
+    };
+}
+
+sub _health_phase ( $self, $options ) {
+    my $base = $options->{base_url};
+    if ( !_has_text($base) ) {
+        return {
+            status => 'skipped',
+            reason => 'pass --base-url to probe /health/live and /health/ready',
+            residual_gaps => [
+'HTTP health not probed; pass --base-url https://staging.example after Hypnotoad+TLS is up.'
+            ],
+        };
+    }
+
+    $base =~ s{/\z}{}msx;
+    my $timeout = $options->{timeout} // $DEFAULT_TIMEOUT;
+    my $ua      = $self->user_agent;
+    $ua->connect_timeout($timeout);
+    $ua->request_timeout($timeout);
+
+    my @endpoints = (
+        { name => 'live',  path => '/health/live' },
+        { name => 'ready', path => '/health/ready' },
+    );
+
+    my @results;
+    for my $endpoint (@endpoints) {
+        push @results,
+          _probe_http( $ua, $base . $endpoint->{path}, $endpoint->{name} );
+    }
+
+    my $metrics_token = $options->{metrics_token};
+    if ( _has_text($metrics_token) ) {
+        push @results,
+          _probe_http(
+            $ua, $base . '/metrics',
+            'metrics', { 'X-GPForum-Metrics-Token' => $metrics_token },
+          );
+    }
+    else {
+        push @results,
+          {
+            name   => 'metrics',
+            status => 'skipped',
+            reason => 'pass --metrics-token to probe /metrics',
+          };
+    }
+
+    my $failed = grep { $_->{status} eq 'fail' } @results;
+
+    return {
+        status    => $failed ? 'fail' : 'pass',
+        base_url  => $base,
+        endpoints => \@results,
+    };
+}
+
+sub _tls_phase ( $self, $options ) {
+    my $base = $options->{base_url};
+    if ( !_has_text($base) ) {
+        return {
+            status => 'skipped',
+            reason => 'pass --base-url https://staging.example to observe TLS',
+            residual_gaps => [
+'TLS not observed; pass an https --base-url after staging TLS termination is up.'
+            ],
+        };
+    }
+
+    $base =~ s{/\z}{}msx;
+    my $parsed = _parse_base_url($base);
+    if ( !$parsed->{ok} ) {
+        return {
+            status   => 'fail',
+            reason   => $parsed->{error},
+            base_url => $base,
+        };
+    }
+
+    if ( $parsed->{scheme} eq 'http' ) {
+        return {
+            status        => 'skipped',
+            scheme        => 'http',
+            base_url      => $base,
+            host          => $parsed->{host},
+            port          => $parsed->{port},
+            reason        => 'base-url uses http; TLS termination not observed',
+            residual_gaps => [
+'--base-url is http; archive staging-host-verify against https://… for TLS evidence.'
+            ],
+        };
+    }
+
+    return {
+        status   => 'pass',
+        scheme   => 'https',
+        base_url => $base,
+        host     => $parsed->{host},
+        port     => $parsed->{port},
+        note     =>
+'Records https scheme for staging TLS evidence. Does not pin CAs, check HSTS, run ACME, or replace operator cert inventory. Pair with a successful health probe on the same --base-url.',
+        residual_gaps => [
+'Full ACME/cert-rotation evidence and reverse-proxy TLS config remain operator steps on the staging host.'
+        ],
+    };
+}
+
+sub _parse_base_url ($base) {
+    if ( $base =~ m{\Ahttps://([^/]+)}msxi ) {
+        my ( $host, $port ) = _split_host_port( $1, $HTTPS_PORT );
+        return { ok => 1, scheme => 'https', host => $host, port => $port };
+    }
+    if ( $base =~ m{\Ahttp://([^/]+)}msxi ) {
+        my ( $host, $port ) = _split_host_port( $1, $HTTP_PORT );
+        return { ok => 1, scheme => 'http', host => $host, port => $port };
+    }
+
+    return {
+        ok    => 0,
+        error => 'base-url must start with http:// or https://',
+    };
+}
+
+sub _split_host_port ( $host_port, $default_port ) {
+    if ( $host_port =~ /\A\[([^\]]+)\]:(\d+)\z/msx ) {
+        return ( $1, 0 + $2 );
+    }
+    if ( $host_port =~ /\A\[([^\]]+)\]\z/msx ) {
+        return ( $1, 0 + $default_port );
+    }
+    if ( $host_port =~ /\A([^:]+):(\d+)\z/msx ) {
+        return ( $1, 0 + $2 );
+    }
+
+    return ( $host_port, 0 + $default_port );
+}
+
+sub _probe_http ( $ua, $url, $name, $headers = undef ) {
+    my ( $tx, $failure );
+    try {
+        my $built = $ua->build_tx( GET => $url );
+        if ($headers) {
+            for my $header ( keys %{$headers} ) {
+                $built->req->headers->header( $header => $headers->{$header} );
+            }
+        }
+        $tx = $ua->start($built);
+    }
+    catch ($error) {
+        $failure = $error;
+    };
+    if ( !$tx ) {
+        return {
+            name   => $name,
+            url    => $url,
+            status => 'fail',
+            error  => _trim_error( $failure || 'HTTP probe failed' ),
+        };
+    }
+    if ( my $err = $tx->error ) {
+        return {
+            name   => $name,
+            url    => $url,
+            status => 'fail',
+            error  => $err->{message} // 'transport error',
+        };
+    }
+
+    my $code = $tx->res->code // 0;
+    my $ok   = $code >= $HTTP_OK_MIN && $code <= $HTTP_OK_MAX;
+
+    return {
+        name        => $name,
+        url         => $url,
+        status      => $ok ? 'pass' : 'fail',
+        http_status => $code,
+    };
+}
+
+sub _combined_status ($evidence) {
+    my @statuses;
+    for my $name (
+        qw(prerequisites env_file systemd unit_files nginx_conf health tls))
+    {
+        my $status = $evidence->{$name}{status} // q{};
+        next if $status eq 'skipped';
+        push @statuses, $status;
+    }
+
+    return 'fail'     if any { $_ eq 'fail' } @statuses;
+    return 'degraded' if any { $_ eq 'degraded' } @statuses;
+    return 'pass'     if @statuses;
+
+    return 'pass';
+}
+
+sub _human_evidence ($evidence) {
+    my @lines =
+      ( 'staging-host-verify status=' . ( $evidence->{status} // 'fail' ) );
+    for my $name (
+        qw(prerequisites env_file systemd unit_files nginx_conf health tls))
+    {
+        my $phase = $evidence->{$name} // {};
+        push @lines, "$name status=" . ( $phase->{status} // 'missing' );
+        for my $problem ( @{ $phase->{problems} // [] } ) {
+            push @lines, "  $problem->{sentence}";
+        }
+    }
+    if ( _has_text( $evidence->{error} ) ) {
+        push @lines, 'error=' . $evidence->{error};
+    }
+
+    return join( "\n", @lines ) . "\n";
+}
+
+sub _capture_command ($command) {
+    my $stderr = gensym;
+    my $pid    = open3( my $stdin, my $stdout, $stderr, @{$command} );
+    close $stdin or croak 'failed to close staging-host-verify stdin';
+    my $output = _slurp_handle($stdout) . _slurp_handle($stderr);
+    waitpid $pid, 0;
+    my $exit = $CHILD_ERROR >> $EXIT_SHIFT;
+
+    return { ok => ( $exit == 0 ? 1 : 0 ), exit => $exit, output => $output };
+}
+
+sub _slurp_handle ($handle) {
+    my $output = q{};
+    while ( my $line = <$handle> ) {
+        $output .= $line;
+    }
+    close $handle or croak 'failed to close staging-host-verify handle';
+
+    return $output;
+}
+
+sub _which ($name) {
+    for my $dir ( split /:/msx, ( $ENV{PATH} // q{} ) ) {
+        my $candidate = path( $dir, $name )->to_string;
+        return $candidate if -x $candidate;
+    }
+
+    return undef;
+}
+
+sub _detect_repo_root {
+    my $start  = path(__FILE__)->realpath->dirname;
+    my $cursor = $start;
+    for ( 1 .. $ROOT_WALK_LIMIT ) {
+        return $cursor->to_string
+          if -f $cursor->child($REPO_ROOT_MARKER)->to_string;
+        last if $cursor->to_string eq $cursor->dirname->to_string;
+        $cursor = $cursor->dirname;
+    }
+
+    return undef;
+}
+
+sub _trim_error ($error) {
+    $error = "$error";
+    $error =~ s/\s+\z//msx;
+
+    return $error;
+}
+
+sub _trim_output ($output) {
+    $output //= q{};
+    $output =~ s/\s+\z//msx;
+    return $output if length $output <= $OUTPUT_LIMIT;
+
+    return substr( $output, 0, $OUTPUT_LIMIT ) . '…';
+}
+
+sub _has_text ($value) {
+    return defined $value && length $value;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::StagingHostVerify - Non-destructive staging host verify.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $verify   = GPForum::Service::Operations::StagingHostVerify->new;
+    my $evidence = $verify->run(
+        {
+            env_file   => '/etc/gpforum/gpforum.env',
+            systemd    => 1,
+            unit_dir   => '/etc/systemd/system',
+            nginx_conf => '/etc/nginx/sites-enabled/gpforum',
+            base_url   => 'https://staging.example',
+        }
+    );
+    print $verify->format_evidence( $evidence, 'human' );
+    exit $verify->exit_status($evidence);
+
+=head1 DESCRIPTION
+
+Probes repository prerequisites and, when asked, staging env-file key presence
+(values redacted), systemd unit activity, installed unit-file and nginx
+site contracts, HTTP health endpoints, and https TLS scheme observe. Never
+installs units, reloads nginx, or starts Hypnotoad.
+
+=head1 SUBROUTINES/METHODS
+
+=head2 run
+
+Takes a hash reference of options and returns the evidence hash reference:
+C<check> (C<staging_host_verify>), C<status>, one entry per phase, and
+C<residual_gaps>, finalized by C<evidence_finalize> from
+L<GPForum::Service::Operations::EvidenceMeta>. Each phase has a C<status> of
+C<pass>, C<fail> or C<skipped>; all but the first are skipped unless their
+option is given.
+
+=over 4
+
+=item prerequisites
+
+Always run: the deploy units, nginx site, launcher scripts and ops documents
+must exist under C<repo_root>.
+
+=item env_file
+
+C<env_file>: every setting the file gives the service, checked as the
+service checks them when it starts -- the checks C<gpforum doctor> reports
+(L<GPForum::Service::Operations::Doctor/settings_problems>) -- under the
+file's C<GPFORUM_ENV>, else C<production>, which the shipped units set. Each
+problem is reported as C<variable>, C<key> and an English C<sentence>
+without the value of a secret or a password a value carries (a DSN's
+C<password=>, a URL's C<user:password@>), and C<environment> names the
+environment checked. C<present_keys> and C<missing_keys> still say which of
+C<GPFORUM_SESSION_SECRET>, C<GPFORUM_DATABASE_DSN>, C<GPFORUM_DATABASE_USER>
+and C<GPFORUM_METRICS_TOKEN> the file sets to a non-empty value. The phase
+fails on a missing key or a problem.
+
+=item systemd
+
+C<systemd> (true): C<systemctl is-active --quiet> for C<gpforum.service>,
+C<gpforum-outbox.service> and C<gpforum-scheduled-jobs.timer>; skipped when
+C<systemctl> is not on C<PATH>.
+
+=item unit_files
+
+C<unit_dir>: the installed unit files compared with the in-repo contracts of
+L<GPForum::Service::Operations::DeployContract>.
+
+=item nginx_conf
+
+C<nginx_conf>: passes when the installed site matches either nginx template
+contract, TCP or Unix socket.
+
+=item health
+
+C<base_url>: C<GET /health/live> and C<GET /health/ready>, and C</metrics>
+with the C<X-GPForum-Metrics-Token> header when C<metrics_token> is given. A
+status from 200 to 399 passes. Only the code is read: C</health/ready>
+answers the same code with or without the token, and its body is the status
+alone without one. C<timeout> sets the connect and request
+timeouts (5 seconds by default).
+
+=item tls
+
+C<base_url>: passes and records host and port for an C<https> URL, is
+skipped for C<http>, and fails for anything else.
+
+=back
+
+The run is C<fail> when any phase that ran failed, otherwise C<pass>. A
+phase that dies stops the run, which is then C<fail> with the message in
+C<error>.
+
+=head2 format_evidence
+
+Takes the evidence and a format. C<json>, the default, returns one line of
+JSON; anything else returns text: the status, a line per phase, and the
+error when there is one.
+
+=head2 exit_status
+
+Returns 0 when the status is C<pass> or C<degraded>, otherwise 1.
+
+=head1 DIAGNOSTICS
+
+None thrown. A phase that dies -- C<repository root not found> when no
+directory above the module holds a F<cpanfile>, a file that cannot be read,
+or a failure to close a command's handles -- becomes C<fail> evidence with
+an C<error>.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+Searches C<PATH> for C<systemctl>. The C<repo_root> and C<user_agent>
+attributes default to the checkout this module sits in and a
+L<Mojo::UserAgent> that follows no redirects.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Service::Operations::DeployContract>,
+L<GPForum::Service::Operations::EvidenceMeta>,
+L<Mojo::UserAgent>,
+L<Mojo::File>,
+L<IPC::Open3>,
+L<JSON::MaybeXS>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+The TLS phase records the URL's scheme only: it does not inspect the
+certificate, pin CAs, check HSTS or run ACME. Redirects are not followed and
+count as healthy. The env-file reader does not recognize lines written as
+C<export KEY=value>. Live systemd install, nginx reload, Hypnotoad start and
+TLS termination remain operator steps.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

@@ -1,0 +1,17 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use v5.40;
+
+use FindBin;
+use lib "$FindBin::Bin/../lib";
+use GPForum::CLI::FrontDoor::Carton;
+
+use GPForum::Command::StagingDrillAttachments;
+
+our $VERSION = '0.001';
+
+exit GPForum::Command::StagingDrillAttachments->new->run(@ARGV);

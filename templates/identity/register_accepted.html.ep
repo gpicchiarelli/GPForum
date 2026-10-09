@@ -1,0 +1,17 @@
+% layout 'default';
+% title t('auth.registration_accepted_title') . ' - ' . t('app.name');
+
+%# The answer to registering is the one thing left to do, in the title, and
+%# what was done under it.
+<section aria-labelledby="registration-accepted-heading">
+  <%= include 'components/page_header',
+    heading_id => 'registration-accepted-heading',
+    component_title => t('auth.registration_accepted_title'),
+    description => t('auth.registration_ready', { username => $registration->{user}{username} }),
+    actions_label => t('auth.registration_next_steps'),
+    actions => ui_actions(
+      { class => 'button', href => ui_path('login'), label => t('auth.login') },
+      { href => ui_path('email_verify_request'), label => t('auth.email_verify_request_title') },
+      { href => ui_path('categories'), label => t('forum.browse_categories') },
+    ) %>
+</section>

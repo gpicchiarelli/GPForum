@@ -1,0 +1,85 @@
+#!/bin/sh
+
+# PROVIDE: gpforum_outbox
+# REQUIRE: LOGIN postgresql gpforum
+# KEYWORD: shutdown
+
+# The outbox worker: it sends the verification, reset and notification mail
+# the application queues, and the forum's events. Without it no mail ever
+# leaves. The counterpart of deploy/systemd/gpforum-outbox.service; it reads
+# the same rc.conf settings and environment file as deploy/freebsd/gpforum.
+
+. /etc/rc.subr
+
+name="gpforum_outbox"
+rcvar="gpforum_outbox_enable"
+
+: ${gpforum_outbox_enable:="NO"}
+: ${gpforum_user:="gpforum"}
+: ${gpforum_group:="gpforum"}
+: ${gpforum_home:="/usr/local/www/gpforum"}
+: ${gpforum_env:="production"}
+: ${gpforum_env_file:="/usr/local/etc/gpforum/gpforum.env"}
+: ${gpforum_outbox_log:="/var/log/gpforum/outbox.log"}
+: ${gpforum_rundir:="/var/run/gpforum"}
+: ${gpforum_path:="/usr/local/bin:/usr/bin:/bin"}
+
+# daemon(8) supervises the worker and starts it again if it exits (-r), as
+# Restart=on-failure does under systemd. A stop sends daemon(8) TERM, which
+# it passes on to the worker.
+# bin/gpforum finds the Perl and the dependencies this checkout installed;
+# rc's PATH has no /usr/local/bin, where the perl5 package puts perl.
+pidfile="${gpforum_rundir}/outbox-daemon.pid"
+procname="/usr/sbin/daemon"
+command="/usr/sbin/daemon"
+command_args="-f -r -P ${pidfile} -u ${gpforum_user} /usr/bin/env PATH=${gpforum_path} GPFORUM_LOG_PATH=${gpforum_outbox_log} ${gpforum_home}/bin/gpforum --env-file ${gpforum_env_file} outbox --loop --limit 100 --sleep 5"
+start_precmd="gpforum_outbox_prestart"
+
+# The same checks as deploy/freebsd/gpforum: the file holds secrets, so it
+# must belong to root, be closed to others and be writable by nobody else.
+gpforum_outbox_load_env()
+{
+    if [ ! -r "${gpforum_env_file}" ]; then
+        warn "${gpforum_env_file} is missing; see docs/DEPLOYMENT.md"
+        return 1
+    fi
+    set -- $(stat -f '%Su %Lp' "${gpforum_env_file}")
+    if [ "$1" != "root" ]; then
+        warn "${gpforum_env_file} must be owned by root"
+        return 1
+    fi
+    case "$2" in
+        *[!0])
+            warn "${gpforum_env_file} must not be readable by others (chmod 0640)"
+            return 1
+            ;;
+        *[2367]?)
+            warn "${gpforum_env_file} must not be writable by its group (chmod 0640)"
+            return 1
+            ;;
+    esac
+
+    set -a
+    . "${gpforum_env_file}"
+    set +a
+
+    # The file's GPFORUM_ENV is the mode, as systemd's EnvironmentFile= wins
+    # over the unit's Environment=, and gpforum doctor reads it there: set
+    # on daemon(8)'s command line, rc.conf's gpforum_env had the service run
+    # in production while the file and doctor said staging. gpforum_env is
+    # the mode of a file that names none.
+    GPFORUM_ENV="${GPFORUM_ENV:-${gpforum_env}}"
+    export GPFORUM_ENV
+}
+
+gpforum_outbox_prestart()
+{
+    install -d -o root -g wheel -m 0755 "${gpforum_rundir}" || return 1
+    install -d -o "${gpforum_user}" -g "${gpforum_group}" -m 0750 \
+        "$(dirname "${gpforum_outbox_log}")" || return 1
+    gpforum_outbox_load_env || return 1
+    cd "${gpforum_home}" || return 1
+}
+
+load_rc_config $name
+run_rc_command "$1"

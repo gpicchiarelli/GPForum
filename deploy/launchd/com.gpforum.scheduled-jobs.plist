@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.gpforum.scheduled-jobs</string>
+  <key>WorkingDirectory</key>
+  <string>/opt/gpforum</string>
+  <!-- The service's own account, as on Linux and FreeBSD: launchd runs a
+       daemon as root unless it is told otherwise. DEPLOYMENT.md (macOS With
+       launchd) makes the account and the directories it writes. -->
+  <key>UserName</key>
+  <string>gpforum</string>
+  <key>GroupName</key>
+  <string>gpforum</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- Hypnotoad reopens STDERR on /dev/null when it daemonizes, so the
+         application needs an explicit destination of its own. -->
+    <key>GPFORUM_LOG_PATH</key>
+    <string>/usr/local/var/log/gpforum/scheduled-jobs.log</string>
+  </dict>
+  <!-- Through bin/gpforum, which reads the settings from Homebrew's
+       etc/gpforum/gpforum.env, as the web service does: launchd has no
+       environment file, and the dictionary above sets only the log. -->
+  <key>ProgramArguments</key>
+  <array>
+    <!-- The mode is the environment file's GPFORUM_ENV, read before the
+         job starts, as systemd's EnvironmentFile= wins over a unit's
+         Environment=: production when the file names none. Set here
+         instead, it outweighed the file, and the service ran in
+         production while the file and gpforum doctor said staging. -->
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>GPFORUM_ENV=production; export GPFORUM_ENV; set -a; [ ! -e "$0" ] || . "$0"; set +a; exec "${@}"</string>
+    <string>/usr/local/etc/gpforum/gpforum.env</string>
+    <string>/opt/gpforum/bin/gpforum</string>
+    <string>scheduled-jobs</string>
+    <string>--once</string>
+    <string>--limit</string>
+    <string>100</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>Nice</key>
+  <integer>10</integer>
+</dict>
+</plist>

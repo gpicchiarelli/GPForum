@@ -1,0 +1,17 @@
+{
+  "name": "GPForum",
+  "short_name": "GPForum",
+  "description": "Independent community infrastructure for durable forums.",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#f8f6ef",
+  "theme_color": "#111412",
+  "icons": [
+    {
+      "src": "assets/img/gpforum-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+#!/usr/bin/env perl
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package main;
+
+use Cwd     qw(realpath);
+use English qw(-no_match_vars);
+
+# A Perl older than 5.40 stops at `use v5.40` below, with "Perl v5.40.0
+# required--this is only v5.34.1", before the front door can say anything:
+# macOS's own /usr/bin/perl is 5.34, and it comes first on a PATH that does
+# not have Homebrew's before it. This block -- the one piece of code t/321
+# lets run ahead of that line, in this file alone -- asks
+# script/gpforum-system-perl for the Perl GPForum runs on and runs this file
+# again under it. Where there is none, that script has said which Perl was
+# found and what installs one, in the operator's language, and gpforum
+# stops. It is written for any Perl 5, without what use v5.40 turns on.
+BEGIN {    ## no critic (TestingAndDebugging::RequireUseStrict, TestingAndDebugging::RequireUseWarnings) -- code for the Perl that cannot read use v5.40
+    if ( $OLD_PERL_VERSION < 5.040 ) {    ## no critic (ValuesAndExpressions::ProhibitMagicNumbers) -- the version use v5.40 asks for
+        my $root = realpath($PROGRAM_NAME) =~ s{/bin/[^/]+ \z}{}rmsx;
+        my $find = "$root/script/gpforum-system-perl";
+        open my $found, q{-|}, $find, '--require', '--as', 'gpforum'
+          or die "gpforum: cannot run $find: $OS_ERROR\n";
+        my $perl = <$found>;
+        close $found or exit 1;
+        chomp $perl;
+        exec {$perl} $perl, "$root/bin/gpforum", @ARGV
+          or die "gpforum: cannot run $perl: $OS_ERROR\n";
+    }
+}
+
+use v5.40;
+
+use FindBin ();
+use lib "$FindBin::RealBin/../lib";
+
+# GPForum's front door: `gpforum VERB`, wherever it is linked from
+# (/usr/local/bin/gpforum, say), and the application file Hypnotoad loads.
+#
+# The dependencies live in local/, installed by Carton for one validated
+# Perl; a shell started without them on @INC is re-run under
+# script/gpforum-carton, which puts them there and picks that Perl
+# (GPForum::CLI::FrontDoor::Carton, which every bin/gpforum-* loads too). So
+# an operator types `gpforum migrate`, not `script/gpforum-carton exec perl
+# -Ilib bin/gpforum-migrate`. Only core modules are loaded before that, since
+# the others may be the ones missing.
+use GPForum::CLI::FrontDoor::Carton;
+
+our $VERSION = '0.001';
+
+require GPForum::CLI::FrontDoor::Launcher;
+
+if ( !defined $ENV{MOJO_APP_LOADER} ) {
+    exit GPForum::CLI::FrontDoor::Launcher->new->run(@ARGV);
+}
+
+# Loaded by Hypnotoad (or any Mojo::Server): the service reads the same
+# environment file the front door does, under what its supervisor set, and
+# hands back the application. A line it cannot read is left to the
+# supervisor, which read the file its own way. `gpforum start --service`
+# names the file it read in GPFORUM_ENV_FILE, which is read in place of the
+# host's: a unit printed for another file gives that one.
+require GPForum::Command::Support::ServiceEnvironment;
+my $named = $ENV{GPFORUM_ENV_FILE};
+GPForum::Command::Support::ServiceEnvironment->new(
+    strict => 0,
+    defined $named && -e $named ? ( file => $named ) : (),
+)->load;
+
+require Mojolicious::Commands;
+
+# The last value is the application: Mojo::Server's load_app requires this
+# file and takes what it returns. A trailing `1;` made Hypnotoad refuse it
+# with "did not return an application object".
+Mojolicious::Commands->start_app('GPForum');

@@ -1,0 +1,20 @@
+% my $heading_id = stash('heading_id') || 'card-heading';
+% my $component_title = stash('component_title') || q{};
+% my $description = stash('description') || q{};
+% my $actions = stash('actions') || [];
+
+<article class="ui-card" aria-labelledby="<%= $heading_id %>">
+  % if (length $component_title) {
+    <h2 id="<%= $heading_id %>"><%= $component_title %></h2>
+  % }
+  % if (length $description) {
+    <p><%= $description %></p>
+  % }
+  % if (@{$actions}) {
+    <nav class="ui-action-list" aria-label="<%= t('ui.actions') %>">
+      % for my $action (@{$actions}) {
+        <a class="<%= $action->{class} || 'button button--secondary' %>" href="<%= $action->{href} %>"<%== $action->{rel} ? ' rel="' . $action->{rel} . '"' : q{} %>><%= $action->{label} %></a>
+      % }
+    </nav>
+  % }
+</article>

@@ -1,0 +1,215 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+# Rehearses a streaming standby and a failover against two throwaway
+# PostgreSQL clusters: the standby follows the primary through a replication
+# slot, the primary is lost, the standby is promoted, and the application's
+# own driver, given one multi-host DSN, finds the new primary by itself.
+
+root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
+cd "$root"
+
+primary_port=${GPFORUM_STANDBY_PRIMARY_PORT:-55445}
+standby_port=${GPFORUM_STANDBY_PORT:-55446}
+workdir=${GPFORUM_STANDBY_DIR:-${TMPDIR:-/tmp}/gpforum-standby.$$}
+socket=/tmp/gpfsb.$$
+keep=0
+
+for argument in "$@"; do
+    case "$argument" in
+        --keep) keep=1 ;;
+        --help|-h)
+            cat <<'USAGE'
+Usage: script/standby-drill [--keep]
+
+Rehearses a streaming standby and a failover against two throwaway
+PostgreSQL clusters, and reports whether the application's driver reached
+the promoted standby through a multi-host DSN.
+
+  --keep   leave the clusters behind for inspection
+  --help   show this help
+
+Environment:
+  GPFORUM_STANDBY_PRIMARY_PORT  port for the primary (default 55445)
+  GPFORUM_STANDBY_PORT          port for the standby (default 55446)
+  GPFORUM_STANDBY_DIR           working directory (default a temporary one)
+
+Exit status: 0 the failover worked, 1 it did not, 2 usage error.
+USAGE
+            exit 0
+            ;;
+        *)
+            echo "unknown option $argument" >&2
+            echo "Usage: script/standby-drill [--keep]" >&2
+            exit 2
+            ;;
+    esac
+done
+
+if ! command -v initdb >/dev/null 2>&1; then
+    eval "$(script/gpforum-homebrew-env 2>/dev/null || true)"
+fi
+for tool in initdb pg_ctl pg_basebackup psql; do
+    command -v "$tool" >/dev/null 2>&1 || {
+        echo "standby-drill: $tool not found on PATH" >&2
+        exit 1
+    }
+done
+
+primary="$workdir/primary"
+standby="$workdir/standby"
+mkdir -p "$workdir" "$socket"
+
+cleanup() {
+    pg_ctl -D "$primary" -m immediate stop >/dev/null 2>&1 || true
+    pg_ctl -D "$standby" -m immediate stop >/dev/null 2>&1 || true
+    [ "$keep" -eq 1 ] || rm -rf "$workdir" "$socket"
+}
+trap cleanup EXIT HUP INT TERM
+
+say() { printf '  %s\n' "$1"; }
+fail() {
+    echo "standby-drill status=fail reason=$1" >&2
+    exit 1
+}
+start() {
+    pg_ctl -D "$1" -l "$1.log" \
+        -o "-p $2 -k $socket -c listen_addresses=127.0.0.1" start >/dev/null
+}
+run() { psql -h 127.0.0.1 -p "$1" -U gpforum -d "$2" -Atqc "$3"; }
+now_ms() { perl -MTime::HiRes=time -e 'printf "%d\n", time * 1000'; }
+
+# Polls until $3 returns $4 on port $1, database $2, for up to ten seconds.
+wait_for() {
+    tries=0
+    while [ "$(run "$1" "$2" "$3" 2>/dev/null || true)" != "$4" ]; do
+        tries=$((tries + 1))
+        [ "$tries" -le 100 ] || return 1
+        sleep 0.1
+    done
+}
+
+printf 'standby-drill: rehearsing a streaming standby and a failover\n'
+
+initdb -D "$primary" --auth-local=trust --auth-host=trust -U gpforum >/dev/null
+cat >>"$primary/postgresql.conf" <<CONF
+wal_level = replica
+max_wal_senders = 5
+max_replication_slots = 5
+hot_standby = on
+CONF
+cat >>"$primary/pg_hba.conf" <<HBA
+host replication gpforum 127.0.0.1/32 trust
+HBA
+start "$primary" "$primary_port"
+sleep 2
+
+run "$primary_port" postgres "CREATE DATABASE gpfsb;" >/dev/null
+run "$primary_port" gpfsb \
+    "CREATE TABLE posts (id serial primary key, body text);" >/dev/null
+run "$primary_port" gpfsb \
+    "INSERT INTO posts (body) VALUES ('before the standby');" >/dev/null
+
+# A slot keeps the primary's WAL until the standby has it, so a standby that
+# falls behind catches up instead of needing a new base backup.
+run "$primary_port" postgres \
+    "SELECT pg_create_physical_replication_slot('gpforum_standby');" >/dev/null
+
+say 'cloning the standby from a base backup'
+pg_basebackup -h 127.0.0.1 -p "$primary_port" -U gpforum -D "$standby" \
+    -Fp -Xs -R -S gpforum_standby >/dev/null
+start "$standby" "$standby_port"
+sleep 2
+
+[ "$(run "$standby_port" postgres 'SELECT pg_is_in_recovery();')" = t ] \
+    || fail standby-not-in-recovery
+say 'standby is in recovery, streaming from the primary'
+
+run "$primary_port" gpfsb \
+    "INSERT INTO posts (body) VALUES ('written on the primary');" >/dev/null
+began=$(now_ms)
+wait_for "$standby_port" gpfsb \
+    "SELECT count(*) FROM posts WHERE body = 'written on the primary';" 1 \
+    || fail standby-did-not-catch-up
+caught_up_ms=$(( $(now_ms) - began ))
+say "a write on the primary reached the standby in ${caught_up_ms} ms"
+
+if run "$standby_port" gpfsb \
+    "INSERT INTO posts (body) VALUES ('must fail');" >/dev/null 2>&1; then
+    fail standby-accepted-a-write
+fi
+say 'the standby refuses writes'
+
+dsn="dbi:Pg:dbname=gpfsb;host=127.0.0.1,127.0.0.1;port=$primary_port,$standby_port;target_session_attrs=read-write"
+driver_port() {
+    script/gpforum-carton exec perl -MDBI -e '
+        my $dbh = DBI->connect( $ARGV[0], q{gpforum}, q{},
+            { RaiseError => 1, PrintError => 0 } );
+        $dbh->do(q{INSERT INTO posts (body) VALUES (?)}, undef, $ARGV[1]);
+        print $dbh->selectrow_array(q{SELECT inet_server_port()}), "\n";
+    ' "$dsn" "$1"
+}
+
+before=$(driver_port 'written through the multi-host DSN') \
+    || fail driver-could-not-connect
+[ "$before" = "$primary_port" ] || fail "driver-chose-port-$before"
+say "the driver's multi-host DSN writes to the primary (port $before)"
+
+# The failover itself runs inside a process that holds the application's own
+# connection (GPForum::Schema) from before the primary is lost to after the
+# standby is promoted: a running node must reach the new primary by itself,
+# without a restart or a configuration change.
+say 'losing the primary, with the application connected'
+failover=$(GPFORUM_DATABASE_DSN="$dsn" GPFORUM_DATABASE_USER=gpforum \
+    GPFORUM_DATABASE_PASSWORD='' \
+    script/gpforum-carton exec perl -Ilib -MGPForum::Config -MGPForum::Schema \
+    -MTime::HiRes=time,sleep -e '
+    my ( $primary, $standby, $standby_port ) = @ARGV;
+    my $schema = GPForum::Schema->connect_from_config(
+        GPForum::Config->from_environment );
+    my $port = sub {
+        return $schema->storage->dbh_do( sub {
+            my ( undef, $dbh ) = @_;
+            return scalar $dbh->selectrow_array(q{SELECT inet_server_port()});
+        } );
+    };
+    my $before = $port->();
+    system(qq{pg_ctl -D "$primary" -m immediate stop >/dev/null 2>&1}) == 0
+      or die "stop failed\n";
+    my $began = time;
+    system(qq{pg_ctl -D "$standby" promote >/dev/null 2>&1}) == 0
+      or die "promote failed\n";
+    my $promoted;
+    for ( 1 .. 100 ) {
+        my $state = qx{psql -h 127.0.0.1 -p $standby_port -U gpforum -d postgres -Atqc "SELECT pg_is_in_recovery()" 2>/dev/null};
+        if ( $state =~ /\Af/msx ) { $promoted = 1; last }
+        sleep 0.1;
+    }
+    die "standby did not promote\n" if !$promoted;
+    my $promoted_ms = int( ( time - $began ) * 1000 );
+    my $after = $port->();
+    $schema->storage->dbh_do( sub {
+        my ( undef, $dbh ) = @_;
+        $dbh->do( q{INSERT INTO posts (body) VALUES (?)},
+            undef, q{written after the failover} );
+    } );
+    print "$before $after $promoted_ms\n";
+' "$primary" "$standby" "$standby_port" 2>/dev/null | tail -n 1) \
+    || fail failover-in-process
+set -- $failover
+before=$1 after=$2 promoted_ms=$3
+[ "$before" = "$primary_port" ] || fail "application-started-on-port-$before"
+say "the standby was promoted in ${promoted_ms} ms"
+[ "$after" = "$standby_port" ] || fail "application-reached-port-$after"
+say "the connected application reconnected to the promoted standby (port $after) and wrote to it"
+
+kept=$(run "$standby_port" gpfsb \
+    "SELECT count(*) FROM posts WHERE body <> 'written after the failover';")
+say "rows written before the loss, present on the new primary: $kept (want 3)"
+[ "$kept" -eq 3 ] || fail "lost-rows-kept-$kept"
+
+printf '\n'
+echo "standby-drill status=pass caught_up_ms=$caught_up_ms promoted_ms=$promoted_ms"

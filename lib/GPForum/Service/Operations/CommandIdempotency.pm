@@ -1,0 +1,524 @@
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+package GPForum::Service::Operations::CommandIdempotency;
+
+use Carp qw(croak);
+use Const::Fast;
+use Digest::SHA qw(sha256_hex);
+use JSON::MaybeXS;
+use Mojo::Base 'GPForum::Base', -signatures;
+use v5.40;
+
+use GPForum::Infrastructure::UniqueConflict;
+use GPForum::Service::Clock;
+use GPForum::Infrastructure::Id;
+use GPForum::X::Conflict;
+
+our $VERSION = '0.001';
+
+const my $ID_CONSTRAINT  => 'command_log_pkey';
+const my $KEY_CONSTRAINT => 'command_log_idempotency_key_key';
+const my $FAILED_STATUS  => 'failed';
+const my $ABANDONED      => __PACKAGE__ . '::Abandoned';
+
+has clock      => sub { return GPForum::Service::Clock->new; };
+has id_service => sub { return GPForum::Infrastructure::Id->new; };
+__PACKAGE__->requires(qw(schema));
+
+# A workflow command run through run(), answered in the shape every workflow
+# returns: the stored response on a replay, the new result, or a refusal --
+# invalid without a command id, conflict when the id belongs to another
+# request or is still running. $job holds actor_id, command_id,
+# command_type, request and run. Seven workflows carried their own copy of
+# this (ADR 0110).
+sub result_of ( $self, $job ) {
+    my $guarded = $self->run(
+        {
+            actor_id     => $job->{actor_id},
+            command_id   => _trim( $job->{command_id} ),
+            command_type => $job->{command_type},
+            request      => $job->{request} || {},
+        },
+        $job->{run},
+        sub ($result) { return $result; },
+    );
+    return $guarded->{response} if $guarded->{replayed};
+    return $guarded->{result}   if $guarded->{recorded};
+
+    return _refusal($guarded);
+}
+
+sub _refusal ($guarded) {
+    my %refusal =
+      $guarded->{invalid}
+      ? (
+        errors => { command_id => 'command_id is required' },
+        status => 'invalid',
+      )
+      : ( error => $guarded->{error}, status => 'conflict' );
+
+    return {
+        error  => $refusal{error},
+        errors => $refusal{errors},
+        ok     => 0,
+        status => $refusal{status},
+        stored => undef,
+    };
+}
+
+sub run ( $self, $input, $code, $response_builder ) {
+    my $key = _command_key($input);
+    if ( !length $key ) {
+        return {
+            error   => 'command_id is required',
+            invalid => 1,
+        };
+    }
+
+    my $request_hash = _canonical_hash( $input->{request} || {} );
+
+    my $guarded;
+    try {
+        $guarded = $self->schema->txn_do(
+            sub {
+                return $self->_run_inside_txn(
+                    {
+                        code             => $code,
+                        input            => $input,
+                        key              => $key,
+                        request_hash     => $request_hash,
+                        response_builder => $response_builder,
+                    }
+                );
+            }
+        );
+    }
+    catch ($error) {
+        if ( ref $error eq $ABANDONED ) {
+            return {
+                recorded    => 1,
+                result      => $error->{result},
+                rolled_back => 1,
+            };
+        }
+
+        croak $error;
+    };
+
+    return $guarded;
+}
+
+sub _run_inside_txn ( $self, $job ) {
+    my $existing = $self->_find_existing( $job->{key} );
+    if ($existing) {
+        return $self->_existing_result( $existing, $job->{request_hash} );
+    }
+
+    my ( $row, $error ) = GPForum::Infrastructure::UniqueConflict->attempt(
+        $self->schema,
+        sub {
+            $job->{row} = $self->_command_row($job);
+            return $self->_create_command( $job->{row} );
+        },
+    );
+    if ($row) {
+        return $self->_finish_new_command( $job, $row );
+    }
+
+    my $conflict = GPForum::X::Conflict->caught($error);
+    if ( $conflict && $conflict->on($ID_CONSTRAINT) ) {
+        return $self->_retry_or_reuse_command($job);
+    }
+    if ( $conflict && $conflict->on($KEY_CONSTRAINT) ) {
+        return $self->_replay_existing( $job, $error );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+}
+
+# A failed result is never the command's answer. Every workflow's guarded
+# code catches its store's exception and returns 'failed' from inside this
+# transaction. Committing then kept whatever the store wrote before it
+# failed, whenever PostgreSQL survived the failure -- a savepoint rolled back,
+# or not a database error at all -- and stored 'failed' as the command id's
+# answer, so retrying the same command could never succeed. Abandoning the
+# transaction leaves neither; run() hands the failure back uncommitted.
+sub _finish_new_command ( $self, $job, $row ) {
+    my $result = $job->{code}->();
+    if ( _is_failed($result) ) {
+        croak bless { result => $result }, $ABANDONED;
+    }
+
+    my $builder  = $job->{response_builder};
+    my $response = $result;
+    if ($builder) {
+        $response = $builder->($result);
+    }
+
+    $self->_finish_command_row( $row, $result, $response );
+
+    return {
+        recorded => 1,
+        result   => $result,
+    };
+}
+
+# The new row's command id was taken. When the row holding it is this
+# command's own (same key), it is replayed once it has a response and
+# finished otherwise; any other row means the id collided, and a new one is
+# drawn.
+sub _retry_or_reuse_command ( $self, $job ) {
+    my $stored = $self->schema->resultset('CommandLog')
+      ->find( { command_id => $job->{row}{command_id} } );
+    if (   !$stored
+        || !_same_text( _column( $stored, 'idempotency_key' ), $job->{key} ) )
+    {
+        return $self->_retry_command_id($job);
+    }
+    if ( _has_response( _payload_hash( _column( $stored, 'payload' ) ) ) ) {
+        return $self->_existing_result( $stored, $job->{request_hash} );
+    }
+
+    return $self->_finish_new_command( $job, $stored );
+}
+
+sub _same_text ( $stored, $candidate ) {
+    if ( !defined $stored || !defined $candidate ) {
+        return 0;
+    }
+
+    return $stored eq $candidate ? 1 : 0;
+}
+
+sub _retry_command_id ( $self, $job ) {
+    $job->{row} = { %{ $job->{row} }, command_id => $self->id_service->uuid, };
+    my ( $created, $error ) =
+      GPForum::Infrastructure::UniqueConflict->attempt( $self->schema,
+        sub { return $self->_create_command( $job->{row} ); },
+      );
+    if ($created) {
+        return $self->_finish_new_command( $job, $created );
+    }
+
+    GPForum::Infrastructure::UniqueConflict->rethrow($error);
+}
+
+sub _replay_existing ( $self, $job, $error ) {
+    my $existing = $self->_find_existing( $job->{key} );
+    if ( !$existing ) {
+        GPForum::Infrastructure::UniqueConflict->rethrow($error);
+    }
+
+    return $self->_existing_result( $existing, $job->{request_hash} );
+}
+
+sub _find_existing ( $self, $key ) {
+    return $self->schema->resultset('CommandLog')
+      ->search_rs( { idempotency_key => $key }, { rows => 1 } )
+      ->single;
+}
+
+sub _existing_result ( $self, $row, $request_hash ) {
+    my $payload = _payload_hash( _column( $row, 'payload' ) );
+    if ( ( $payload->{request_hash} || q{} ) ne $request_hash ) {
+        return {
+            conflict => 1,
+            error    => 'idempotency key was already used for another request',
+        };
+    }
+
+    if ( !_has_response($payload) ) {
+        return {
+            in_progress => 1,
+            error       => 'idempotency key is already in progress',
+        };
+    }
+
+    return {
+        replayed => 1,
+        response => $payload->{response},
+    };
+}
+
+sub _command_row ( $self, $job ) {
+    return {
+        actor_id        => _nullable_trim( $job->{input}{actor_id} ),
+        command_id      => $self->id_service->uuid,
+        command_type    => _trim( $job->{input}{command_type} ),
+        correlation_id  => $self->id_service->uuid,
+        created_at      => $self->clock->now_iso8601,
+        handled_at      => undef,
+        idempotency_key => $job->{key},
+        payload         => { request_hash => $job->{request_hash} },
+        response_hash   => undef,
+        status          => 'accepted',
+    };
+}
+
+sub _create_command ( $self, $row ) {
+    return $self->schema->resultset('CommandLog')->create($row);
+}
+
+sub _finish_command_row ( $self, $row, $result, $response ) {
+    my $payload = _payload_hash( _column( $row, 'payload' ) );
+    $payload->{response} = $response || {};
+
+    _update_row(
+        $row,
+        {
+            handled_at    => $self->clock->now_iso8601,
+            payload       => $payload,
+            response_hash => _canonical_hash( $payload->{response} ),
+            status        => _result_status($result),
+        }
+    );
+
+    return;
+}
+
+sub _result_status ($result) {
+    if ( ref $result ne 'HASH' ) {
+        return 'rejected';
+    }
+    if ( $result->{ok} ) {
+        return 'handled';
+    }
+
+    my $status = $result->{status} || q{};
+    return $status eq 'failed' ? 'failed' : 'rejected';
+}
+
+sub _payload_hash ($payload) {
+    if ( ref $payload ne 'HASH' ) {
+        return {};
+    }
+
+    return { %{$payload} };
+}
+
+sub _has_response ($payload) {
+    return ref $payload eq 'HASH' && exists $payload->{response} ? 1 : 0;
+}
+
+sub _canonical_hash ($value) {
+    my $json =
+      JSON::MaybeXS->new( canonical => 1, utf8 => 1 )->encode( $value // {} );
+
+    return sha256_hex($json);
+}
+
+sub _is_failed ($result) {
+    return 0 if ref $result ne 'HASH';
+
+    return ( $result->{status} // q{} ) eq $FAILED_STATUS ? 1 : 0;
+}
+
+sub _command_key ($input) {
+    my $source     = $input || {};
+    my $command_id = _trim( $source->{command_id} );
+    return $command_id if length $command_id;
+
+    return _trim( $source->{idempotency_key} );
+}
+
+sub _update_row ( $row, $values ) {
+    if ( blessed $row && $row->can('update') ) {
+        return $row->update($values);
+    }
+    if ( ref $row eq 'HASH' ) {
+        @{$row}{ keys %{$values} } = values %{$values};
+    }
+
+    return $row;
+}
+
+sub _column ( $row, $name ) {
+    return undef         if !$row;
+    return $row->{$name} if ref $row eq 'HASH';
+    if ( $row->can($name) ) {
+        return $row->$name;
+    }
+    return $row->get_column($name) if $row->can('get_column');
+
+    return undef;
+}
+
+sub _trim ($value) {
+    if ( !defined $value ) {
+        $value = q{};
+    }
+    $value =~ s/\A \s+//msx;
+    $value =~ s/\s+ \z//msx;
+
+    return $value;
+}
+
+sub _nullable_trim ($value) {
+    my $trimmed = _trim($value);
+
+    return length $trimmed ? $trimmed : undef;
+}
+
+1;
+
+__END__
+
+=head1 NAME
+
+GPForum::Service::Operations::CommandIdempotency - Run a write command once per command id and replay its answer.
+
+=head1 VERSION
+
+Version 0.001.
+
+=head1 SYNOPSIS
+
+    my $idempotency = GPForum::Service::Operations::CommandIdempotency->new(
+        schema => $schema,
+    );
+
+    # The shape every workflow returns
+    my $result = $idempotency->result_of(
+        {
+            actor_id     => $user_id,
+            command_id   => $command_id,
+            command_type => 'notification.preferences',
+            request      => $preferences,
+            run          => sub { return $store->save_preferences($preferences) },
+        }
+    );
+
+    # The lower-level call
+    my $guarded = $idempotency->run(
+        {
+            actor_id     => $user_id,
+            command_id   => $command_id,
+            command_type => 'identity.password_change',
+            request      => $request_fields,
+        },
+        sub { return $store->change_password($input) },
+        sub {
+            my ($result) = @_;
+            return { ok => $result->{ok} };
+        },
+    );
+    # $guarded->{recorded}, ->{replayed}, ->{conflict}, ->{in_progress}
+    # or ->{invalid}
+
+=head1 DESCRIPTION
+
+Makes a write safe to retry. The caller's command id (or idempotency key)
+is the key of a C<command_log> row that holds a SHA-256 hash of the
+request, taken over its canonical JSON, and, once the command has run, the
+response to give back. The first call with a key inserts the row, runs the
+command and stores its response, all in one transaction. A later call with
+the same key and the same request gets the stored response without running
+anything; with a different request it is refused as a conflict, and while
+the first call has not finished it is refused as in progress. The insert
+runs under a savepoint through L<GPForum::Infrastructure::UniqueConflict>,
+so two concurrent first calls end with one run and one replay.
+
+A command whose result has C<status> C<failed> is not an answer. The
+transaction is abandoned, so neither what the command wrote before it
+failed nor the C<command_log> row is kept, and retrying the same command id
+can still succeed. The failure is handed back to the caller uncommitted.
+
+L</result_of> wraps L</run> in the result shape the workflows share; seven
+of them used to carry their own copy of it (ADR 0110).
+
+=head1 SUBROUTINES/METHODS
+
+=head2 new
+
+Mojo::Base constructor. C<schema> is required (it must support
+C<txn_do>); C<clock> and C<id_service> default to
+L<GPForum::Service::Clock> and L<GPForum::Infrastructure::Id>.
+
+=head2 result_of
+
+Takes a hash reference with C<actor_id>, C<command_id> (trimmed),
+C<command_type>, C<request> (an empty hash when absent) and C<run> (a code
+reference called with no arguments). Calls L</run> with the result itself
+as the response, and returns:
+
+=over 4
+
+=item * the stored response, on a replay;
+
+=item * the command's result, when it ran (also when it failed and was
+rolled back);
+
+=item * C<< { ok => 0, status => 'invalid', errors => { command_id => 'command_id is required' }, error => undef, stored => undef } >>
+for an empty command id;
+
+=item * C<< { ok => 0, status => 'conflict', error => $message, errors => undef, stored => undef } >>
+when the id was used for another request or is still in progress.
+
+=back
+
+=head2 run
+
+Takes an input hash reference (C<command_id>, or C<idempotency_key> when
+the command id is empty; C<request>; C<actor_id>; C<command_type>), the
+code reference to run (called with no arguments) and a response builder,
+called with the result to make the response to store (the result itself is
+stored when the builder is undefined). Returns a hash reference:
+
+=over 4
+
+=item * C<< { invalid => 1, error => 'command_id is required' } >> when
+both keys are empty;
+
+=item * C<< { recorded => 1, result => $result } >> after running the
+command; the row's status becomes C<handled> when the result has a true
+C<ok> and C<rejected> otherwise;
+
+=item * C<< { recorded => 1, result => $result, rolled_back => 1 } >> when
+the result's status was C<failed> and the transaction was abandoned;
+
+=item * C<< { replayed => 1, response => $response } >> for a key already
+answered with the same request;
+
+=item * C<< { conflict => 1, error => 'idempotency key was already used for another request' } >>;
+
+=item * C<< { in_progress => 1, error => 'idempotency key is already in progress' } >>.
+
+=back
+
+=head1 DIAGNOSTICS
+
+Croaks with the original error when the command dies or the database fails
+for any reason other than the handled unique conflicts (on the command id,
+which is retried once with a fresh id, and on the idempotency key, which
+replays the row that won); the transaction rolls back. The workflows call
+L</result_of> inside a C<try> and turn such an error into their own
+C<failed> result.
+
+=head1 CONFIGURATION AND ENVIRONMENT
+
+None.
+
+=head1 DEPENDENCIES
+
+L<GPForum::Infrastructure::UniqueConflict>, L<GPForum::Infrastructure::Id>,
+L<GPForum::Service::Clock>, L<JSON::MaybeXS>, L<Digest::SHA>.
+
+=head1 INCOMPATIBILITIES
+
+None known.
+
+=head1 BUGS AND LIMITATIONS
+
+None known.
+
+=head1 AUTHOR
+
+Giacomo Picchiarelli.
+
+=head1 LICENSE AND COPYRIGHT
+
+Copyright (c) 2026 Giacomo Picchiarelli. Released under the BSD-3-Clause
+license.
+
+=cut

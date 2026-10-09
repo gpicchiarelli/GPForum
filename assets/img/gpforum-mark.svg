@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="16 16 96 96" role="img" aria-label="GPForum">
+  <style>
+    @media (prefers-color-scheme: dark) {
+      .arcs { stroke: #E8D9BD; }
+      .node { fill: #C69955; }
+    }
+  </style>
+  <g class="arcs" fill="none" stroke="#373630" stroke-width="9" stroke-linecap="round">
+    <path d="M100.252 47.095A40 40 0 0 1 47.095 100.252"/>
+    <path d="M27.748 80.905A40 40 0 0 1 80.905 27.748"/>
+  </g>
+  <circle class="node" cx="92.284" cy="35.716" r="5" fill="#9B6D32"/>
+</svg>

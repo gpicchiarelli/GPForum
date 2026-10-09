@@ -1,0 +1,9 @@
+% layout 'default';
+% title t('auth.email_confirmed_title') . ' - ' . t('app.name');
+
+<section aria-labelledby="email-confirmed-heading">
+  <%= include 'components/page_header',
+    heading_id => 'email-confirmed-heading',
+    component_title => t('auth.email_confirmed_title') %>
+  <%= include 'components/alert', tone => 'success', message => t('auth.email_confirmed_status') %>
+</section>

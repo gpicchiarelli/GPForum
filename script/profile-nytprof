@@ -1,0 +1,40 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: 2026 Giacomo Picchiarelli
+# SPDX-License-Identifier: BSD-3-Clause
+
+set -eu
+
+gpforum_carton="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/gpforum-carton"
+
+usage='Usage:
+  script/profile-nytprof --route /path [benchmark options]
+  script/profile-nytprof -- perl-program [args...]'
+
+if [ "$#" -eq 0 ] || [ "${1:-}" = "--help" ]; then
+    echo "$usage"
+    exit 0
+fi
+
+mkdir -p var/profile
+
+if [ "$1" = "--route" ]; then
+    if [ "$#" -lt 2 ]; then
+        echo "$usage" >&2
+        exit 2
+    fi
+    route="$2"
+    shift 2
+    export NYTPROF="${NYTPROF:-file=var/profile/route-nytprof.out:addpid=1}"
+    exec "$gpforum_carton" exec perl -Ilib -d:NYTProf bin/gpforum-benchmark \
+        --iterations 3 \
+        --warmup 1 \
+        --route "$route" \
+        "$@"
+fi
+
+if [ "$1" = "--" ]; then
+    shift
+fi
+
+export NYTPROF="${NYTPROF:-file=var/profile/nytprof.out:addpid=1}"
+exec "$gpforum_carton" exec perl -d:NYTProf "$@"

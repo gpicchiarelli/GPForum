@@ -1,0 +1,180 @@
+# GPForum SSR UI System
+
+GPForum uses a server-rendered UI system built from Mojolicious partials and a
+single tokenized stylesheet. The goal is durable product UI: dense discussion
+pages, clear admin/moderation workflows, predictable keyboard navigation, and
+localizable presentation text.
+
+## Principles
+
+- SSR-first. Components render from `templates/components/*.html.ep`.
+- Semantic HTML first. ARIA is used only to name regions, status messages, and
+  dialog semantics that native HTML does not provide by itself.
+- No frontend build step. CSS custom properties are the design-token layer.
+  Static files are fingerprinted when the application starts, not by a build
+  (see [Static assets](#static-assets)).
+- Localized presentation. Component callers pass translated labels with `t()`,
+  `tc()`, `ui_label()`, and locale-aware helpers.
+- Presenter helpers. Repeated view-model shapes such as page actions,
+  pagination links, and status badges are normalized through
+  `GPForum::View::Presenter` via `ui_actions()`, `ui_next_page()`, and
+  `ui_badge()`.
+- Bootstrap isolation. UI, locale, translation, breadcrumb, flash, and
+  presenter helpers are registered by `GPForum::Bootstrap::UI`, keeping the
+  main application composition root focused on wiring boundaries.
+- Canonical data stays canonical. Audit, moderation, and job state values remain
+  stored as stable internal names and are translated only at render time.
+
+## Components
+
+| Component | Purpose |
+| --- | --- |
+| `components/site_header` | Application header shell. |
+| `components/primary_nav` | Main product navigation. |
+| `components/identity_nav` | Login/register or logout controls. |
+| `components/locale_selector` | SSR language selector. |
+| `components/theme_selector` | SSR theme selector with validated cookie/user preference persistence. |
+| `components/breadcrumbs` | Breadcrumb navigation from `ui_breadcrumbs`. |
+| `components/flash_messages` | Flash message stack from `ui_flash_messages`. |
+| `components/site_footer` | Product footer shell. |
+| `components/page_header` | Page heading, optional description, page actions. |
+| `components/section_header` | Section heading and optional description. |
+| `components/pagination` | Screen-reader-labeled pagination links. |
+| `components/empty_state` | Empty/no-results surfaces. |
+| `components/alert` | Notice, warning, and error status surfaces. |
+| `components/badge` | Status/moderation/admin indicators. |
+| `components/status_badge` | Localized status badge backed by presenter helpers. |
+| `components/error_summary` | Form-level alert summary with links to invalid fields. |
+| `components/field_error` | Field-level validation message connected by `aria-describedby`. |
+| `components/status_banner` | Section-level warning/error/notice surface. |
+| `components/moderation_indicator` | Presentation-only moderation state badge. |
+| `components/admin_table` | Scroll-safe admin table primitive with labeled columns. |
+| `components/notification_surface` | Inbox notification card with read-state action support. |
+| `components/confirmation` | SSR confirmation copy for reversible or high-impact actions. |
+| `components/card` | Generic card shell for simple repeated records. |
+| `components/loading` | Hidden progressive-enhancement loading state. |
+| `components/dialog` | SSR-safe accessible dialog shell for future enhancement. |
+
+## Semantic Template Architecture
+
+Page templates should describe product regions and pass semantic payloads to
+components. Avoid route-local copies of:
+
+- form error summaries and field error paragraphs;
+- status/warning banners;
+- moderation state labels;
+- notification card structure;
+- shell navigation, locale/theme selectors, breadcrumbs, and flash messages;
+- admin table scaffolding;
+- pagination link lists.
+
+Authenticated account preferences live at `/settings`. That page uses the
+identity presenter for semantic payload shape, persists locale/theme through the
+same controller paths as the shell selectors, and delegates notification channel
+state to `GPForum::Service::Notification::PreferenceStore`. The current product
+enforces the in-app channel during notification delivery; email and digest
+preferences are persisted for their delivery paths.
+
+Controllers and services should not emit HTML-specific fragments except for
+already-sanitized user content boundaries. View models shape data for templates;
+components shape reusable SSR HTML; `gpforum-ssr.css` owns visual decisions.
+When a page needs a new visual pattern, add a component partial and tokenized
+CSS rule before adding one-off route markup.
+
+## Tokens
+
+`assets/css/gpforum-ssr.css` defines:
+
+- spacing scale: `--space-1` through `--space-7`;
+- typography scale: `--font-size-*`, line-height, readable measure;
+- semantic colors: foreground/background/surface/primary/secondary/accent,
+  danger/success/warning/info/focus, state surfaces, and text-on-action
+  colors;
+- default, dark, and high-contrast readiness through `data-theme`;
+- safe theme selection from the configured default plus validated
+  `gpforum_theme` cookies and authenticated `preferred_theme` sessions;
+- direction and typography hooks through `data-direction`, `data-script`, and
+  `typography-*` body classes.
+
+Theme extensions must add semantic tokens first, then component rules. Avoid
+route-specific styling unless a component cannot express the UI.
+
+## Static assets
+
+The application serves `assets/css` and `assets/img` at the site root
+(`/gpforum-ssr.css`, `/gpforum-mark.svg`), searched in that order. Templates
+name such a URL through `ui_asset_url`, never by hand:
+`ui_asset_url('gpforum-ssr.css')` renders `/gpforum-ssr.css?v=<digest>`, where
+the digest is the first twelve hex digits of the SHA-256 of the file's bytes.
+One template still breaks the rule: `components/site_header` links the
+header's mark as a bare `/gpforum-mark.svg`, which therefore gets the short
+lifetime below (`t/233-asset-fingerprints.t` marks that check TODO).
+`GPForum::Web::AssetManifest` digests every file under those roots once, while
+the application starts, so no request reads a file to name it; a misspelt name
+fails the render instead of sending a URL nothing would ever invalidate.
+
+The digest makes the URL name one version of the file, so the static file
+server answers it with `Cache-Control: public, max-age=31536000, immutable`:
+the browser keeps it for a year without revalidating, and a deploy that
+changes the file changes the URL on the next page load. Every other static
+response gets `public, max-age=3600` and the current bytes: a bare URL, an old
+digest (a page rendered before the deploy), a file changed or renamed over on
+disk since the process started, and a file put since then in an earlier root,
+which hides the one digested. A response
+that writes a cookie back says `private` instead of `public`, with the same
+lifetime: the session guard reads the session on every request, so a visitor
+who has seen a form (its CSRF token lives in the session cookie) gets that
+cookie on the stylesheet's response too, and no shared cache may store it for
+the next visitor. In the `development` mode every static response is
+`no-cache`, because a stylesheet is edited under a running server and the
+digest is only taken at startup. Only a response that carries the file or
+confirms the browser's copy (200, 206, 304) gets a lifetime: a 416, which
+refuses a range the file does not have, gets none.
+
+The shipped `deploy/nginx/gpforum.conf` and `deploy/caddy/Caddyfile` serve the
+same roots from disk with the same two values, chosen by whether the request
+has a `v`; a proxy cannot compare it with the digest (the module's BUGS AND
+LIMITATIONS says when that shows, and why a fleet upgraded one host at a time
+should let the application answer these URLs instead). Neither puts a
+lifetime on its own error page: nginx adds `Cache-Control` without `always`,
+and Caddy handles only files that exist and passes a miss to the application.
+The browser headers, CSP included, are unchanged on the application's
+responses; a file the proxy serves itself carries
+`X-Content-Type-Options: nosniff` and none of the others.
+
+There is still no minification or bundling: the files in `assets/` are what
+is served.
+
+## Accessibility Contracts
+
+- Every rendered page has exactly one document `<main>` from the base layout.
+- Page templates use `section` or `article` inside the layout main landmark.
+- Pagination is rendered through `components/pagination` or follows the same
+  labeled `<nav>` contract.
+- Statuses use text plus badge styling; color alone is not the only signal.
+- Form errors use alert summaries and field-level `aria-describedby`.
+- Confirmation and moderation actions include text labels, not color-only
+  state.
+- Focus states remain visible via `:focus-visible`.
+- Motion-sensitive behavior must respect `prefers-reduced-motion`.
+- Tables used for admin/status data are labeled and wrapped for small
+  screens.
+
+## Verification
+
+- `t/65-accessible-theme.t` enforces contrast, focus, direction, and token
+  contracts, including print, screen-reader-only text, and shared status/table
+  surfaces.
+- `t/67-ui-system.t` verifies component partials, no inline CSS proliferation,
+  single-main HTML structure, localized admin rendering, and component presence
+  on product routes.
+- `t/68-view-presenter.t` verifies SSR presenter normalization and Mojolicious
+  helper integration.
+- `t/64-i18n.t` verifies catalog coverage, namespace discipline, fallback,
+  pluralization, and locale metadata.
+- `t/233-asset-fingerprints.t` verifies that every asset URL the layout renders
+  carries the digest of the file it names, that a changed file changes its URL,
+  the `Cache-Control` the static file server sends for each case (a response
+  that sets a cookie, a range, a refused range, a shadowed, renamed-over or
+  rewritten file included), and that the nginx and Caddy configurations send
+  the same values and none on their own error pages.
