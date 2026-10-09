@@ -43,7 +43,8 @@ const my %CHANGE => (
 # effective value, grouped as an operator looks for them. t/212 fails when
 # Config reads a GPFORUM_ variable missing here, so a new setting cannot be
 # left off the page. A renamed setting is listed under its new name only,
-# with the value the old one gave it (audit 5.6).
+# with the value the old one gave it (audit 5.6). A retired setting has no
+# effect, so it is not listed: the start names it, to remove.
 const my @SECTIONS => (
     {
         name     => 'application',
@@ -131,8 +132,6 @@ const my @SECTIONS => (
         settings => [
             [ GPFORUM_WARMUP_ENABLED             => 'warmup_enabled' ],
             [ GPFORUM_WEB_PROCESSES              => 'web_processes' ],
-            [ GPFORUM_WORKER_PROCESSES           => 'worker_processes' ],
-            [ GPFORUM_REALTIME_PROCESSES         => 'realtime_processes' ],
             [ GPFORUM_RUNTIME_LISTEN             => 'runtime_listen' ],
             [ GPFORUM_RUNTIME_WORKER_POLICY      => 'runtime_worker_policy' ],
             [ GPFORUM_RUNTIME_MAX_WEB_PER_CPU    => 'runtime_max_web_per_cpu' ],
@@ -163,7 +162,6 @@ const my @SECTIONS => (
             [ GPFORUM_OS_SENDFILE         => 'os_sendfile' ],
             [ GPFORUM_OS_WORKER_PRIORITY  => 'os_worker_priority' ],
             [ GPFORUM_OS_STATIC_XSENDFILE => 'os_static_xsendfile' ],
-            [ GPFORUM_OS_AFFINITY         => 'os_affinity' ],
             [
                 GPFORUM_OS_MIN_RECOMMENDED_WORKERS =>
                   'os_min_recommended_workers'
