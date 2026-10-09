@@ -289,10 +289,9 @@ GPFORUM_QUERY_BUDGET_ENFORCE=1 script/gpforum-carton exec prove -lr t
 
 throws after dispatch when a request breaks its budget; the response it
 breaks is never sent, so the client waits out its timeout. Every server
-profile ignores the flag -- `production`, `production-small`,
-`production-medium` and `staging` -- and a breach there shows in metrics and
-the release gates instead of failing a response. Only `development`, `test`
-and names outside the profiles honour it.
+profile ignores the flag -- `production` and `staging` -- and a breach there
+shows in metrics and the release gates instead of failing a response. Only
+`development`, `test` and names outside the profiles honour it.
 
 `t/integration/postgres-query-budget.t` holds the measured budgets: 15
 pages, anonymous and signed in, against the seeded forum, from 1 statement

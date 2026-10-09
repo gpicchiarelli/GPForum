@@ -90,8 +90,9 @@ Recommended production posture:
 
 Production must set:
 
-- `GPFORUM_ENV=production` (alias of `production-small`), `production-medium`,
-  or `staging`
+- `GPFORUM_ENV=production` or `staging` (the size comes from the host; the
+  old `production-small` and `production-medium` are read as `production`
+  until v0.3.0)
 - `GPFORUM_SESSION_SECRET` to a high-entropy secret of at least 32
   characters (`openssl rand -hex 32`), not the development default
 - `GPFORUM_SESSION_SECRETS` (optional, comma-separated previous secrets) so

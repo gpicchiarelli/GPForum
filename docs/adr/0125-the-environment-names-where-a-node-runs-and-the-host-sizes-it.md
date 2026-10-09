@@ -135,7 +135,9 @@ What happens to an old name:
 
 - **`gpforum doctor`** lists the same line under `!`. Its fix is
   `set GPFORUM_ENV=production in /etc/gpforum/gpforum.env` for an old
-  value, and the old line to remove for an old variable.
+  value. For an old variable it is two steps, the new line to write and
+  the old one to remove: removed alone, `GPFORUM_SMTP_SSL=off` would leave
+  TLS on. When the new variable is set too, only the old line goes.
 - **Retired settings** (`GPFORUM_WORKER_PROCESSES`,
   `GPFORUM_REALTIME_PROCESSES`, `GPFORUM_OS_AFFINITY`) stay read and ignored
   as before, each with its warning.
@@ -168,6 +170,12 @@ pitr-drill: GPFORUM_PITR_PORT is deprecated; use --port 55500
 
 These scripts are maintainer tools (D9), so the line is English only.
 
+A drill removes its working directory when it ends. `--dir` names a new or
+empty directory: one that holds files is refused, before any cluster
+starts, and left as it was. A relative `--dir` is taken from where the drill
+was run, and made absolute, because PostgreSQL runs the archive and restore
+commands from inside the data directory.
+
 ## Consequences
 
 - **Fewer things to decide.** An operator chooses where a node runs. The
@@ -199,7 +207,7 @@ These scripts are maintainer tools (D9), so the line is English only.
   under mail.
 - `t/613-event-retention-is-a-setting.t`: the setting, the settings page,
   and the partitions job reading it.
-- `t/614-drills-take-flags.t`: the drills' flags, their usage errors, and
-  each old variable's line.
+- `t/614-drills-take-flags.t`: the drills' flags, their usage errors, a
+  `--dir` with files in it refused and kept, and each old variable's line.
 - `t/615-every-alias-resolves.t`: every alias in the settings table resolves
   until its release, and each is in DEPLOYMENT's "Renamed settings".
