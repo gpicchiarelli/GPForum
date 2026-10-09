@@ -25,8 +25,8 @@ line counts what there is to fix.
 ```text
 $ sudo -u gpforum gpforum doctor
 ✓ settings: production, read from /etc/gpforum/gpforum.env
+✓ sized for 2 CPUs, 2 GB: 4 web processes, 4096 cache entries a process
 ✓ host: Linux with epoll, 2 CPUs
-✓ web processes: 4 for 2 CPUs
 ✓ open files: up to 65536
 ✓ database: PostgreSQL 18.6, gpforum at 127.0.0.1:5432
 ✓ schema: current (051)

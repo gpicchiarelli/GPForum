@@ -293,29 +293,40 @@ sub settings ( $self, $environment, $findings ) {
 
 # A setting the environment still names by its old name is read, and the
 # start logs the line that replaces it (Bootstrap::Config); doctor says the
-# same, with the old line to remove, as it does for a retired setting. An
-# old value -- GPFORUM_ENV=production-medium -- is fixed by the line that
-# replaces it, where it is set.
+# same, with the fix. An old value -- GPFORUM_ENV=production-medium -- is
+# fixed by the line that replaces it, where it is set. An old variable is
+# fixed by writing the new line, then removing the old one: removed alone,
+# GPFORUM_SMTP_SSL=off would leave TLS on. When the new variable is set as
+# well, it is already the one read, and the old line only goes.
 sub _renamed ( $self, $findings, $config, $host ) {
     for my $renamed ( @{ $config->renamed_settings } ) {
         my $variable = $renamed->{variable};
         my $message  = GPForum::Config::Report->renamed($renamed);
-        my $fix =
-          defined $renamed->{old}
-          ? $self->_set_fix( $host, $variable, $message )
-          : $self->_from_shell($variable) ? "unset $variable"
-          : [
-            'doctor.fix_remove',
-            {
-                variable => $variable,
-                file     => $self->file // $host->settings_file
+        my @fixes;
+        if ( defined $renamed->{old} ) {
+            push @fixes, $self->_set_fix( $host, $variable, $message );
+        }
+        else {
+            my $new = $self->environment->{ $renamed->{replacement} };
+            if ( !defined $new || !length $new ) {
+                push @fixes, $self->_set_fix( $host, $variable, $message );
             }
-          ];
+            push @fixes,
+              $self->_from_shell($variable)
+              ? "unset $variable"
+              : [
+                'doctor.fix_remove',
+                {
+                    variable => $variable,
+                    file     => $self->file // $host->settings_file
+                }
+              ];
+        }
         $findings->add(
             name    => 'settings',
             status  => 'degraded',
             message => $message,
-            fixes   => [$fix],
+            fixes   => \@fixes,
         );
     }
 
@@ -506,12 +517,22 @@ sub _from_shell ( $self, $variable ) {
     return ( any { $_ eq $variable } @{$assigned} ) ? 0 : 1;
 }
 
+# os-preflight's findings, but for the web processes when they are fine and
+# the sizing line has already counted them: one line says it, not two.
 sub _preflight ( $self, $state ) {
-    my $report = $self->_probe( 'preflight', $state->{config} );
-
+    my $config = $state->{config};
+    my $report = $self->_probe( 'preflight', $config );
+    my $found =
+      GPForum::Service::Operations::Findings->new( catalog => $self->catalog );
     GPForum::Service::Operations::OSPreflight->new(
-        host => $self->_host( $state->{config}->environment ) )
-      ->findings( $report, $state->{findings} );
+        host => $self->_host( $config->environment ) )
+      ->findings( $report, $found );
+
+    my $sized =
+      defined $self->_probe( 'sizing', $config )->{sizes}{web_processes};
+    push @{ $state->{findings}->items }, grep {
+        !( $sized && $_->{name} eq 'web_processes' && $_->{status} eq 'ok' )
+    } @{ $found->items };
 
     return;
 }

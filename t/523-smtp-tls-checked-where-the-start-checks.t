@@ -126,8 +126,12 @@ subtest 'doctor warns of an old name, as the start does' => sub {
     );
     is_deeply(
         $renamed->{fixes},
-        ['remove the GPFORUM_SMTP_SSL line from /etc/gpforum/gpforum.env'],
-        'and the old line to remove from the file'
+        [
+            'set GPFORUM_SMTP_TLS=off in /etc/gpforum/gpforum.env',
+            'remove the GPFORUM_SMTP_SSL line from /etc/gpforum/gpforum.env'
+        ],
+        'the new line to write, then the old one to remove: removed alone,'
+          . ' off would turn into starttls'
     );
 
     ( $findings, $config ) = _doctor_settings( \%old, 1, assigned => [] );
@@ -135,8 +139,21 @@ subtest 'doctor warns of an old name, as the start does' => sub {
       grep { $_->{status} eq 'degraded' } @{ $findings->document };
     is_deeply(
         $renamed->{fixes},
-        ['unset GPFORUM_SMTP_SSL'],
+        [
+            q{set GPFORUM_SMTP_TLS=off in your shell's environment},
+            'unset GPFORUM_SMTP_SSL'
+        ],
         'or the shell, when it set the old name'
+    );
+
+    my %both = ( %old, GPFORUM_SMTP_TLS => 'implicit' );
+    ( $findings, $config ) = _doctor_settings( \%both, 1 );
+    ($renamed) =
+      grep { $_->{status} eq 'degraded' } @{ $findings->document };
+    is_deeply(
+        $renamed->{fixes},
+        ['remove the GPFORUM_SMTP_SSL line from /etc/gpforum/gpforum.env'],
+        'and only the old line to remove, when the new one is set too'
     );
 };
 

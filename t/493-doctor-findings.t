@@ -67,7 +67,6 @@ subtest 'a healthy development checkout is check marks only' => sub {
             "\N{CHECK MARK} sized for 2 CPUs, 2 GB: 4 web processes, 4096"
               . ' cache entries a process',
             "\N{CHECK MARK} host: Linux with epoll, 2 CPUs",
-            "\N{CHECK MARK} web processes: 4 for 2 CPUs",
             "\N{CHECK MARK} open files: up to 65536",
 "\N{CHECK MARK} database: PostgreSQL 18.6, gpforum at 127.0.0.1:5432",
             "\N{CHECK MARK} schema: current (051)",
@@ -82,7 +81,25 @@ subtest 'a healthy development checkout is check marks only' => sub {
             q{},
             'Nothing to fix.' )
           . "\n",
-        'every check, one line each, and the count'
+        'every check, one line each, and the count: the web processes once'
+    );
+
+    my $by_hand = _text(
+        _doctor(
+            { GPFORUM_ENV => 'development' },
+            sizing => sub {
+                return {
+                    cpus         => 2,
+                    memory_bytes => $MEMORY,
+                    sizes        => { local_cache_max_entries => $CACHE },
+                };
+            }
+        )
+    );
+    _has(
+        $by_hand,
+        "\N{CHECK MARK} web processes: 4 for 2 CPUs\n",
+        'and the preflight counts them when the host did not size them'
     );
 };
 
