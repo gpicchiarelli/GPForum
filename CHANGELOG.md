@@ -15,6 +15,21 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Operator action required
 
+- **`GPFORUM_ENV=production-small` and `production-medium` are old names of
+  `production`.** They still start, read as production until v0.3.0, and
+  each start logs the line to write, `GPFORUM_ENV=production`; `gpforum
+  doctor` lists it under `!` (docs/DEPLOYMENT.md, "Renamed settings"). The
+  size they named comes from the host: the web processes from its CPUs, as
+  before, and each web process's cache from its memory
+  (`GPFORUM_LOCAL_CACHE_MAX_ENTRIES=auto`, the new default, which may give
+  more or fewer than the old 4096 entries; set `4096` to keep that). The
+  event log is kept `GPFORUM_EVENT_RETENTION_DAYS` days, 365 in every
+  environment: a `production-medium` host that kept 730 sets
+  `GPFORUM_EVENT_RETENTION_DAYS=730`. The drills take flags --
+  `script/pitr-drill --port --dir`, `script/standby-drill --primary-port
+  --standby-port --dir`, `script/gpforum-evidence-live --out --env-file` --
+  and their old variables print one line naming the flag until v0.3.0.
+
 - Run `make install-deps-production` after pulling: the lock now installs
   IO::Socket::SSL (with Net::SSLeay, built against the host's OpenSSL), which
   mail over TLS needs. On FreeBSD and macOS the service now takes its mode from
@@ -820,6 +835,17 @@ CI, evidence and internal refactors with no change in behaviour.
   foundations.
 
 ### Changed
+
+- **`gpforum setup` writes the decisions alone**: the ten settings an
+  installation decides, each under one line saying what it is, and the SMTP
+  lines commented out under the mail -- 41 lines where it wrote 258. A file
+  written before keeps its lines. `deploy/gpforum.env.example` lists every
+  setting, as before. **`gpforum doctor` says what the host sized the forum
+  for**, in English or Italian: `sized for 2 CPUs, 2 GB: 4 web processes,
+  4096 cache entries a process`. The operational profiles are three,
+  version 2 (`development`, `staging`, `production`), and each floor gives
+  way to what the host is sized for; `/health/ready`'s profile report no
+  longer carries worker, realtime or retention fields (ADR 0125).
 
 - **The README quick start is four commands**: the dependencies, `sudo
   bin/gpforum setup --environment development` (without `sudo` on macOS),
@@ -2277,6 +2303,14 @@ CI, evidence and internal refactors with no change in behaviour.
   and controller `optional_param` now return an explicit undef.
 
 ### Development
+
+- `t/610` to `t/615` hold ADR 0125: the three environments and the old
+  names (the start's line in both languages, doctor's `!` and its fix), the
+  sizing from the host (memory per system and per cgroup, the cache bounds,
+  doctor's line), the file setup writes, the retention setting, the drill
+  flags, and every alias resolving until its release with a row in
+  DEPLOYMENT's "Renamed settings". The settings table's `renamed_from` is
+  `aliases`, which also holds old values, each with `read_until`.
 
 - `t/602-upgrade-from-help.t` holds `gpforum upgrade` to `gpforum help` and
   to the three lines of `docs/ops/upgrade.md`.

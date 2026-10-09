@@ -91,8 +91,10 @@ trusts) and the mail (`log`: in development each message goes to the
 terminal). It writes the settings to `/etc/gpforum/gpforum.env`
 (`$(brew --prefix)/etc/gpforum/gpforum.env` on macOS), yours to read, with
 a database password and secrets nobody has to type, and brings the schema
-up to date. Every `gpforum` command reads that file; run setup again and it
-changes nothing. Without a system server, a cluster in your home directory
+up to date. The file holds only what an installation decides, one line on
+each; [deploy/gpforum.env.example](deploy/gpforum.env.example) lists every
+other setting. Every `gpforum` command reads that file; run setup again and
+it changes nothing. Without a system server, a cluster in your home directory
 is enough, as [docs/ops/staging-drills.md](docs/ops/staging-drills.md)
 shows: answer its data source to the database question. For a production
 host, follow [Production on Debian or Ubuntu](#production-on-debian-or-ubuntu)
@@ -154,8 +156,9 @@ setup nothing here needs to be read again. `service print --to` writes
 GPForum's own files where systemd and nginx read them and touches nothing
 else there; Debian's default site stays. Then sign in at
 `https://forum.example.org/login`, and run `sudo -u gpforum gpforum doctor`,
-which checks everything from the settings to the public address and says
-how to fix what is wrong. Mail leaves through the host's `sendmail` unless
+which checks everything from the settings to the public address, says what
+the host's CPUs and memory sized the forum for, and says how to fix what is
+wrong. Mail leaves through the host's `sendmail` unless
 you answered `smtp HOST:PORT USER`; the antivirus needs `StreamMaxLength
 26M` in `/etc/clamav/clamd.conf`. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 explains each step, FreeBSD and macOS.

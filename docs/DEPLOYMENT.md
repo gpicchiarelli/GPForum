@@ -98,10 +98,13 @@ site=forum.example.com
    before `sudo gpforum setup` again.
    `sudo gpforum setup --yes --public-url "https://$site" --database create
    --mail sendmail` answers for a script, and `--dry-run` shows what setup
-   would do. Everything else in the file keeps its default; a setting
-   GPForum cannot use stops the start, and every command, with every
-   problem at once, each with the variable to set and the file to set it
-   in.
+   would do. The file holds what setup asked and made, each under one line
+   saying what it is; every other setting keeps its default, and
+   `deploy/gpforum.env.example` lists them all. There is no size to choose:
+   `GPFORUM_ENV=production` runs as many web processes as the CPUs carry,
+   each caching its part of the memory. A setting GPForum cannot use stops
+   the start, and every command, with every problem at once, each with the
+   variable to set and the file to set it in.
 
 4. **Commands as the service runs them.** `gpforum` reads
    `/etc/gpforum/gpforum.env` itself, as the service does, so a command typed
@@ -193,8 +196,10 @@ site=forum.example.com
 
 Then check it all: `sudo -u gpforum gpforum doctor` goes from the settings
 to the public address, one line each, with the command for anything to
-fix, and `sudo -u gpforum gpforum status` shows the running service's
-readiness report ([ops/doctor.md](ops/doctor.md)).
+fix. Under the settings it says what the host sized the forum for, such as
+`sized for 2 CPUs, 2 GB: 4 web processes, 4096 cache entries a process`.
+`sudo -u gpforum gpforum status` shows the running service's readiness
+report ([ops/doctor.md](ops/doctor.md)).
 
 Upgrading later is three commands, which `sudo -u gpforum gpforum upgrade`
 prints for this host. The last one, `sudo -u gpforum gpforum doctor
@@ -267,15 +272,33 @@ file.
 | `GPFORUM_REALTIME_PROCESSES` | Unreleased | Live updates run inside each web process. |
 | `GPFORUM_OS_AFFINITY` | Unreleased | It only flipped a reported flag; CPU affinity is a non-goal. |
 
-A renamed setting is still read under its old name while the new one is not
-set, and each start logs the line to write instead, such as
-`GPFORUM_SMTP_SSL is now called GPFORUM_SMTP_TLS; write
-GPFORUM_SMTP_TLS=starttls in the environment file in its place.` The
-settings page shows it under its new name.
+### Renamed settings
 
-| Old name | New name | Renamed in | What the old values read as |
-| --- | --- | --- | --- |
-| `GPFORUM_SMTP_SSL` | `GPFORUM_SMTP_TLS` | Unreleased | `on` (or `1`, `yes`, `true`) is `starttls`, `off` (or `0`, `no`, `false`) is `off`. Unset, the new default follows the port: `implicit` on 465, `starttls` on any other. |
+An old name, or an old value, is still read until the release in the table
+(ADR 0125). A renamed setting is read under its old name while the new one
+is not set; an old value is read as the one it is now called. Each start
+logs the line to write instead, and `gpforum doctor` lists it under `!`
+with that line:
+
+```text
+! GPFORUM_ENV=production-medium is now called production; write GPFORUM_ENV=production in the environment file in its place.
+    Fix: set GPFORUM_ENV=production in /etc/gpforum/gpforum.env
+```
+
+The settings page shows each under its new name. The drills are
+maintainer tools: an old variable prints one line naming its flag.
+
+| Old name | Write instead | Renamed in | Read until | Notes |
+| --- | --- | --- | --- | --- |
+| `GPFORUM_SMTP_SSL` | `GPFORUM_SMTP_TLS` | Unreleased | v0.3.0 | `on` (or `1`, `yes`, `true`) is `starttls`, `off` (or `0`, `no`, `false`) is `off`. Unset, the new default follows the port: `implicit` on 465, `starttls` on any other. |
+| `GPFORUM_ENV=production-small` | `GPFORUM_ENV=production` | Unreleased | v0.3.0 | The size comes from the host, and its other values are production's defaults. |
+| `GPFORUM_ENV=production-medium` | `GPFORUM_ENV=production` | Unreleased | v0.3.0 | The size comes from the host. It kept the event log 730 days: add `GPFORUM_EVENT_RETENTION_DAYS=730` to keep them. |
+| `GPFORUM_PITR_PORT`, `GPFORUM_PITR_DIR` | `script/pitr-drill --port N --dir PATH` | Unreleased | v0.3.0 | |
+| `GPFORUM_STANDBY_PRIMARY_PORT`, `GPFORUM_STANDBY_PORT`, `GPFORUM_STANDBY_DIR` | `script/standby-drill --primary-port N --standby-port N --dir PATH` | Unreleased | v0.3.0 | |
+| `GPFORUM_EVIDENCE_DIR`, `GPFORUM_EVIDENCE_ENV_FILE` | `script/gpforum-evidence-live --out DIR --env-file PATH` | Unreleased | v0.3.0 | |
+
+`GPFORUM_LOCAL_CACHE_MAX_ENTRIES` keeps its name; its default is `auto` now,
+sized from the host's memory. Set `4096` to keep the old fixed size.
 
 Values production refuses now, which an older release took:
 
