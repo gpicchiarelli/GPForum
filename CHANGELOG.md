@@ -1450,6 +1450,19 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A drill no longer removes a directory it did not make.**
+  `script/pitr-drill` and `script/standby-drill` delete their working
+  directory when they end; `--dir` naming one that already held files took
+  them with it. Such a directory is now refused before any cluster starts,
+  and a relative `--dir` is read from where the drill was run.
+- **Doctor's fix for a renamed variable keeps its value.** For
+  `GPFORUM_SMTP_SSL=off` it said only to remove the line, which turned TLS
+  back on; it now says to write `GPFORUM_SMTP_TLS=off`, then remove the old
+  line. The web processes are counted once, in the sizing line.
+- **Setup writes `GPFORUM_ENV=production` over `production-small` or
+  `production-medium`** instead of asking for `--force`, and the settings
+  page no longer lists the three retired settings.
+
 - **A metrics rotation in a file named with `--env-file` needs no restart
   either.** `gpforum secret rotate metrics` drops the restart whenever the
   installed web unit names the file it rotated, not only for the host's own
