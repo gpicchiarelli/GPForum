@@ -2317,6 +2317,13 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Development
 
+- ADR 0126 records the owner's decision to move every SQL statement into
+  PostgreSQL functions created by migrations, with Perl binding parameters
+  and reading rows, and `docs/architecture/sql-functions-inventory.md`
+  lists every statement the integration suite sends, by area and
+  operation, with the baseline: DBIx::Class is 51 to 54% of each forum
+  write and 25 to 53% of each page it was not already removed from.
+
 - `t/610` to `t/615` hold ADR 0125: the three environments and the old
   names (the start's line in both languages, doctor's `!` and its fix), the
   sizing from the host (memory per system and per cgroup, the cache bounds,
