@@ -76,36 +76,32 @@ export PATH="$(brew --prefix postgresql@18)/bin:$PATH"
 From a clone of the repository:
 
 ```sh
-make system-perl                                    # check the interpreter
-make install-deps-postgres                          # carton install --deployment from cpanfile.snapshot
-script/system-preflight                             # check the host
-sudo ln -s "$PWD/bin/gpforum" /usr/local/bin/gpforum   # once; macOS: ln -s "$PWD/bin/gpforum" "$(brew --prefix)/bin/"
-sudo gpforum setup --environment development        # three questions; macOS: without sudo
+make install-deps-postgres                        # carton install --deployment, into local/
+sudo bin/gpforum setup --environment development  # three questions; macOS: without sudo
 gpforum admin create --email you@example.com --username you
-gpforum start --foreground                          # then open http://127.0.0.1:3000
+gpforum start --foreground                        # then open http://127.0.0.1:3000
 ```
 
-`bin/gpforum` finds its dependencies from any directory, so the link is all
-it needs to be on your `PATH`. `gpforum setup` asks three questions, and
-Enter takes each suggestion: the address (`http://127.0.0.1:3000`), the
-database (it makes `gpforum` on this host as PostgreSQL's superuser -- the
-`postgres` account through `sudo`, or on macOS your own role, which
-Homebrew's PostgreSQL trusts) and the mail (`log`: in development each
-message goes to the terminal). It writes the settings to
-`/etc/gpforum/gpforum.env` (`$(brew --prefix)/etc/gpforum/gpforum.env` on
-macOS), yours to read, with a database password and secrets nobody has to
-type, and brings the schema up to date. Every `gpforum` command reads that
-file; run setup again and it changes nothing. Without a system server, a
-cluster in your home directory is enough, as
-[docs/ops/staging-drills.md](docs/ops/staging-drills.md) shows: answer its
-data source to the database question. For a production host, follow
-[Production on Debian or Ubuntu](#production-on-debian-or-ubuntu) instead.
+`gpforum setup` links `gpforum` onto your `PATH` (`/usr/local/bin`, or
+Homebrew's `bin` on macOS) and asks three questions, Enter taking each
+suggestion: the address (`http://127.0.0.1:3000`), the database (it makes
+`gpforum` on this host as PostgreSQL's superuser -- the `postgres` account
+through `sudo`, or on macOS your own role, which Homebrew's PostgreSQL
+trusts) and the mail (`log`: in development each message goes to the
+terminal). It writes the settings to `/etc/gpforum/gpforum.env`
+(`$(brew --prefix)/etc/gpforum/gpforum.env` on macOS), yours to read, with
+a database password and secrets nobody has to type, and brings the schema
+up to date. Every `gpforum` command reads that file; run setup again and it
+changes nothing. Without a system server, a cluster in your home directory
+is enough, as [docs/ops/staging-drills.md](docs/ops/staging-drills.md)
+shows: answer its data source to the database question. For a production
+host, follow [Production on Debian or Ubuntu](#production-on-debian-or-ubuntu)
+instead.
 
 `gpforum admin create` asks for a password and creates an active, verified
-owner. Open <http://127.0.0.1:3000> to sign in. Run `gpforum` for help, or
-`gpforum migrate --plan` to preview migrations. `gpforum doctor` checks the
-whole setup, one line each, and says how to fix what is wrong
-([docs/ops/doctor.md](docs/ops/doctor.md)).
+owner. Open <http://127.0.0.1:3000> to sign in. `gpforum` alone lists its
+commands; `gpforum doctor` checks the whole setup, one line each, and says
+how to fix what is wrong ([docs/ops/doctor.md](docs/ops/doctor.md)).
 
 A member who registers gets a verification mail. In development GPForum
 sends none: the outbox worker writes each message, its link included, to the

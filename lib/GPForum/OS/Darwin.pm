@@ -69,6 +69,15 @@ sub environment_file ($self) {
     return ( $prefix // $HOMEBREW_PREFIXES[0] ) . "/$HOMEBREW_FILE";
 }
 
+# Homebrew's bin, the operator's own and on their PATH, as the README had
+# them link gpforum into by hand; none when it is not theirs to write.
+sub operator_bin ($self) {
+    my $bin =
+      $self->environment_file =~ s{ /etc/gpforum/gpforum[.]env \z}{/bin}rmsx;
+
+    return -d $bin && -w $bin ? $bin : undef;
+}
+
 # Homebrew's postgresql@18: a `brew services` service run as the operator's
 # own user, who is the server's superuser and is trusted locally.
 sub postgresql_packaging {

@@ -88,10 +88,35 @@ subtest 'in Italian, under --dry-run, and for anyone but root' => sub {
     );
     ok( !-e "$bin/gpforum", 'and does not' );
 
-    my $user = GPForum::Command::Setup->new( effective_uid => $NOT_ROOT );
+    my $user = GPForum::Command::Setup->new(
+        effective_uid => $NOT_ROOT,
+        os            => GPForum::OS->from_name('linux')
+    );
     is( $user->links_into, undef, q{anyone else's PATH is their own} );
     is( GPForum::Command::Setup->new( effective_uid => 0 )->links_into,
         '/usr/local/bin', q{root's is /usr/local/bin} );
+};
+
+# The quick start had a macOS developer type ln -s "$PWD/bin/gpforum"
+# "$(brew --prefix)/bin/" before setup, which runs there without sudo:
+# Homebrew's bin is theirs, and on their PATH.
+subtest q{on macOS, anyone's is Homebrew's bin, when it is theirs} => sub {
+    my $prefix = path( tempdir( CLEANUP => 1 ) );
+    local $ENV{HOMEBREW_PREFIX} = "$prefix";
+    my $mac = sub {
+        return GPForum::Command::Setup->new(
+            effective_uid => $NOT_ROOT,
+            os            => GPForum::OS->from_name('darwin'),
+        )->links_into;
+    };
+    is( $mac->(), undef, 'none without a bin' );
+    $prefix->child('bin')->make_path;
+    is( $mac->(), "$prefix/bin", q{Homebrew's bin} );
+    $prefix->child('bin')->chmod( oct '555' );
+    if ( $EFFECTIVE_USER_ID != 0 ) {
+        is( $mac->(), undef, 'but not one they cannot write' );
+    }
+    $prefix->child('bin')->chmod( oct '755' );
 };
 
 done_testing();

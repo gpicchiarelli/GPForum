@@ -275,11 +275,14 @@ subtest 'the README quick start works on Debian as written' => sub {
     $block //= q{};
     _has(
         $block,
-        "\nsudo gpforum setup --environment development ",
+        "\nsudo bin/gpforum setup --environment development ",
         'setup, as root, for development'
     );
-    ok( index( $block, 'sudo ln -s' ) < index( $block, 'gpforum setup' ),
-        'once gpforum is on the PATH' );
+    unlike(
+        $block,
+        qr/ln [ ] -s/msx,
+        'which links gpforum onto the PATH itself'
+    );
     unlike(
         $block,
         qr/createuser|export [ ] GPFORUM_/msx,

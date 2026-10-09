@@ -46,13 +46,15 @@ const my $THROWAWAY_DSN =>
   qr/\A dbi:Pg:$SERVER_PAIRS;dbname=($THROWAWAY_NAME) \z/msx;
 
 # Quick start lines the run does not repeat, because they install or inspect
-# the host or set the shell's environment: the link onto the PATH, among
-# them. The script's usage says they must be done first. `sudo -u postgres
-# createuser` is not one of them: it is the quick start's createuser, run as
-# the server's superuser on Debian. Nor is `sudo gpforum setup`: the run
-# types it as bin/gpforum in the clone, as the operator it was written for.
+# the host or set the shell's environment. The script's usage says they must
+# be done first. `sudo -u postgres createuser` is not one of them: it is the
+# quick start's createuser, run as the server's superuser on Debian. Nor is
+# `sudo bin/gpforum setup`: the run types it as bin/gpforum in the clone, as
+# the operator it was written for.
+const my $QUICK_START_SUDO =>
+  qr{sudo \s+ (?! -u \s+ postgres \s | (?:bin/)?gpforum \s)}msx;
 const my $HOST_PREREQUISITE =>
-qr{\A (?: sudo \s+ (?! -u \s+ postgres \s | gpforum \s) | which \s | export \s )}msx;
+  qr{\A (?: $QUICK_START_SUDO | which \s | export \s )}msx;
 
 # The run's steps that need a database, and a gpforum command the stand-in
 # Carton recorded: the environment file it was given, the verb and the rest.
@@ -67,7 +69,7 @@ const my $FRONT_DOOR_CALL =>
 # admin create run, against a stand-in Carton that records what it was
 # given.
 const my @NEEDS_A_HOST => map { ( '--skip', $_ ) }
-  qw(system-preflight createuser createdb start);
+  qw(createuser createdb start);
 const my @GPFORUM_CALLS => ( 'gpforum setup', 'gpforum admin' );
 
 plan tests => $EXPECTED_TESTS;
@@ -244,7 +246,7 @@ sub _fresh_checkout_plan {
         'in the order the README gives them'
     );
 
-    for my $target ( 'system-perl', _check_targets() ) {
+    for my $target ( _check_targets() ) {
         is( $command_of{$target}, "make $target",
             "the run includes make check's $target" );
     }
@@ -301,8 +303,8 @@ sub _fresh_checkout_isolation {
     is_deeply(
         [ map { _label($_) } @calls ],
         [
-            qw(system-perl install-deps-postgres), @GPFORUM_CALLS,
-            _check_targets(),                      'integration'
+            'install-deps-postgres', @GPFORUM_CALLS,
+            _check_targets(),        'integration'
         ],
         'the quick start, then make check, then the integration tier'
     );
@@ -385,8 +387,7 @@ sub _fresh_checkout_failure {
       @{$stand_in}{qw(make tmp record)};
     local $ENV{GPFORUM_DATABASE_DSN} = q{};
     local $ENV{STAND_IN_FAIL}        = 'test';
-    my ( $status, $output ) =
-      _run( $FRESH_CHECK, '--skip', 'system-preflight' );
+    my ( $status, $output ) = _run($FRESH_CHECK);
     is( $status, $EXIT_FAILURE, 'the run fails' );
     like( $output, qr/^[ ]+test[ ]+fail[ ]/msx, 'naming the step' );
     like( $output, qr/status=fail/msx,          'and saying it did not pass' );
@@ -395,20 +396,19 @@ sub _fresh_checkout_failure {
     is( _left_behind($stand_in), 0,
         'and the temporary directory is still removed' );
 
-    _run( $FRESH_CHECK, '--keep', '--skip', 'system-preflight' );
+    _run( $FRESH_CHECK, '--keep' );
     my ($kept) = path( $stand_in->{tmp} )->list( { dir => 1 } )->each;
     ok( $kept && -f $kept->child( 'logs', 'test.log' ),
         '--keep keeps one log per step' );
     ok( $kept && -d $kept->child( 'gpforum', '.git' ), 'and the clone' );
 
     my $calls_before = () = _calls($stand_in);
-    my ( $going, $going_output ) =
-      _run( $FRESH_CHECK, '--keep-going', '--skip', 'system-preflight' );
+    my ( $going, $going_output ) = _run( $FRESH_CHECK, '--keep-going' );
     my @going = map { $_->{target} } _calls($stand_in);
     is( $going, $EXIT_FAILURE, '--keep-going still fails the run' );
     is_deeply(
         [ @going[ $calls_before .. $#going ] ],
-        [ 'system-perl', 'install-deps-postgres', _check_targets() ],
+        [ 'install-deps-postgres', _check_targets() ],
         'but runs every step after the failing one'
     );
     like(
@@ -433,20 +433,16 @@ sub _fresh_checkout_gone {
       @{$stand_in}{qw(make tmp record)};
     local $ENV{GPFORUM_DATABASE_DSN} = q{};
     local $ENV{STAND_IN_REMOVE}      = 'install-deps-postgres';
-    my ( $status, $output ) =
-      _run( $FRESH_CHECK, '--keep-going', '--skip', 'system-preflight' );
+    my ( $status, $output ) = _run( $FRESH_CHECK, '--keep-going' );
     is( $status, $EXIT_FAILURE, 'the run fails once the clone is gone' );
-    like( $output, qr/failed=syntax,/msx, 'at the first step after it' );
+    like( $output, qr/failed=system-perl,/msx, 'at the first step after it' );
 
     my @calls  = _calls($stand_in);
     my $inside = path( $stand_in->{tmp} )->realpath;
     is_deeply( [ grep { index( $_->{cwd}, "$inside/" ) != 0 } @calls ],
         [], 'and not one step ran anywhere else' );
-    is_deeply(
-        [ map { $_->{target} } @calls ],
-        [qw(system-perl install-deps-postgres)],
-        'none ran at all after the clone went'
-    );
+    is_deeply( [ map { $_->{target} } @calls ],
+        ['install-deps-postgres'], 'none ran at all after the clone went' );
     is( _left_behind($stand_in), 0, 'and the temporary directory is removed' );
 
     return;
@@ -534,7 +530,8 @@ sub _same_step {
     if ( defined $client ) {
         return $name eq $client;
     }
-    my ($verb) = $command =~ /\A (?: sudo \s+ )? gpforum \s+ (\S.*) \z/msx;
+    my ($verb) =
+      $command =~ m{\A (?: sudo \s+ )? (?:bin/)? gpforum \s+ (\S.*) \z}msx;
     if ( defined $verb ) {
         my $typed = qq{bin/gpforum --env-file "\$fresh_env" $verb};
         return $step_command =~ /(?: \A | \s ) \Q$typed\E (?: \s | \z )/msx;
@@ -549,12 +546,11 @@ sub _plan_steps {
       split /\n/msx, $plan;
 }
 
-# make check's prerequisites at HEAD, after the system-perl the quick start
-# has already run.
+# make check's prerequisites at HEAD, in order.
 sub _check_targets {
     my ( undef, $makefile ) = _run( 'git', 'show', 'HEAD:Makefile' );
     my ($prerequisites) = $makefile =~ /^check:([^#\n]*)/msx;
-    return grep { $_ ne 'system-perl' } split q{ }, $prerequisites // q{};
+    return split q{ }, $prerequisites // q{};
 }
 
 # A `make` that records each call -- the target, where it ran, and what the

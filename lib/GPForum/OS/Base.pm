@@ -112,6 +112,13 @@ sub service_account_commands ( $self, $user, $home ) {
     return [];
 }
 
+# A directory on the operator's PATH that is theirs to write, where gpforum
+# setup links gpforum when it is not run as root; none where only root's
+# /usr/local/bin is.
+sub operator_bin {
+    return undef;
+}
+
 sub cpu_count ($self) {
     return $self->cpu_detection->{count};
 }

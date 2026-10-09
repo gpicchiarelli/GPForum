@@ -160,18 +160,17 @@ fi
 # The quick start's commands for a host that already has the prerequisites,
 # in the README's order. Each line is "name command"; a command is shown as it
 # is written here, so the database's connection details and password are
-# expanded only when it runs. The README's link onto the PATH is a host
-# prerequisite, outside the clone, so each gpforum command is bin/gpforum,
-# typed with the README's own arguments and what answers its questions.
-# setup finds the throwaway role and database the two steps before it made
-# -- as a superuser setup would make them itself -- and the role's password
-# in the file it is given.
-quick_start_names='system-perl install-deps-postgres system-preflight'
+# expanded only when it runs. Each gpforum command is bin/gpforum in the
+# clone, typed with the README's own arguments and what answers its
+# questions; setup's link onto the PATH is left out, since the clone is
+# removed afterwards -- not run as root, and with a Homebrew prefix of the
+# run's own, setup finds nowhere to make it. setup finds the throwaway role
+# and database the two steps before it made -- as a superuser setup would
+# make them itself -- and the role's password in the file it is given.
+quick_start_names='install-deps-postgres'
 quick_start_steps() {
     printf '%s\n' \
-        "system-perl $make_command system-perl" \
-        "install-deps-postgres $make_command install-deps-postgres" \
-        "system-preflight script/system-preflight"
+        "install-deps-postgres $make_command install-deps-postgres"
     if [ -n "$db_dsn" ]; then
         printf '%s\n' "createuser createuser_with_password \"\$fresh_role\""
         if [ -n "$db_user" ]; then
@@ -180,7 +179,7 @@ quick_start_steps() {
             printf '%s\n' "createdb createdb --maintenance-db=\"\$maintenance_db\" --owner=\"\$fresh_role\" \"\$fresh_db\""
         fi
         printf '%s\n' \
-            "setup write_fresh_env && script/gpforum-carton exec bin/gpforum --env-file \"\$fresh_env\" setup --environment development --yes --database \"\$fresh_dsn\" --database-user \"\$fresh_role\" --mail log" \
+            "setup write_fresh_env && HOMEBREW_PREFIX=\"\$workdir/homebrew\" script/gpforum-carton exec bin/gpforum --env-file \"\$fresh_env\" setup --environment development --yes --database \"\$fresh_dsn\" --database-user \"\$fresh_role\" --mail log" \
             "admin-create printf '%s\\n' \"\$fresh_admin_password\" | script/gpforum-carton exec bin/gpforum --env-file \"\$fresh_env\" admin create --email you@example.com --username you --password-stdin" \
             "start start_and_probe script/gpforum-carton exec bin/gpforum --env-file \"\$fresh_env\" start --foreground --listen \"\$fresh_listen\""
     fi

@@ -821,6 +821,16 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- **The README quick start is four commands**: the dependencies, `sudo
+  bin/gpforum setup --environment development` (without `sudo` on macOS),
+  `gpforum admin create` and `gpforum start --foreground`. `make
+  system-perl`, `script/system-preflight` and the `ln -s` onto the `PATH`
+  are gone: `bin/gpforum` checks its Perl, `gpforum doctor` the host, and
+  setup now links `gpforum` into Homebrew's `bin` on macOS when it is not
+  run as root, as it links it into `/usr/local/bin` as root. DEPLOYMENT's
+  systemd section no longer repeats the timers' `enable --now`, which the
+  install's one start line already gives.
+
 - **The README carries the production path**: the `apt` line, then eight
   commands from the clone to a signed-in owner behind TLS on Debian or
   Ubuntu -- the clone, `sudo /opt/gpforum/bin/gpforum setup`, the units into

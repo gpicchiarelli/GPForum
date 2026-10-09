@@ -126,11 +126,12 @@ has root => sub {
     return path(__FILE__)->to_abs->dirname->dirname->dirname->dirname;
 };
 
-# Where root links gpforum, so it runs from any directory: /usr/local/bin,
-# on the PATH of Debian, FreeBSD and macOS alike. None for anyone else, whose
-# PATH is their own; a test gives its own.
+# Where setup links gpforum, so it runs from any directory: root's
+# /usr/local/bin, on the PATH of Debian, FreeBSD and macOS alike, or the
+# operator's own bin where the system has one (Homebrew's, on macOS); none
+# otherwise. A test gives its own.
 has links_into => sub ($self) {
-    return $self->_is_root ? '/usr/local/bin' : undef;
+    return $self->_is_root ? '/usr/local/bin' : $self->os->operator_bin;
 };
 
 has account => sub ($self) {
@@ -217,8 +218,8 @@ install-deps-production does. Then it:
 
   - makes the account gpforum the services run as, with the directory its
     uploads go in, when run as root (useradd, pw, or dscl on macOS);
-  - links gpforum into /usr/local/bin when run as root, so it runs from
-    any directory;
+  - links gpforum into /usr/local/bin when run as root, or into Homebrew's
+    bin on macOS, so it runs from any directory;
   - writes the environment file the service reads (/etc/gpforum/gpforum.env,
     /usr/local/etc/gpforum/gpforum.env on FreeBSD, Homebrew's etc/ on
     macOS), mode 0640, root:gpforum when run as root, with a new session
@@ -866,14 +867,6 @@ sub _dry_run ( $self, $options, $state, $plan, $database, $lines, $findings ) {
             : [ 'setup.account_missing', { user => $self->account->name } ],
         );
     }
-    my $link = $self->_link_wanted;
-    if ( $link && !$link->{other} ) {
-        $findings->add(
-            name    => 'command',
-            status  => 'ok',
-            message => [ 'setup.would_link', $link ],
-        );
-    }
     my $file = $self->_file_message( $state, $lines, 'would_' );
     $findings->add(
         name    => 'file',
@@ -887,6 +880,16 @@ sub _dry_run ( $self, $options, $state, $plan, $database, $lines, $findings ) {
         ],
     );
     $self->_say_sender( $state, $findings );
+
+    # In the order a run does them: the file, then the link.
+    my $link = $self->_link_wanted;
+    if ( $link && !$link->{other} ) {
+        $findings->add(
+            name    => 'command',
+            status  => 'ok',
+            message => [ 'setup.would_link', $link ],
+        );
+    }
     $findings->add(
         name => 'database',
         %{ $self->_would_database( $state, $plan, $database ) },
@@ -1736,7 +1739,7 @@ C<gpforum setup> asks for the public address, the database and how mail
 leaves, Enter taking each suggestion, and then does what a fresh install
 needs, saying each step as a line of C<gpforum doctor>'s kind: it makes the
 account the services run as (as root) and links C<gpforum> into
-F</usr/local/bin>, writes the
+F</usr/local/bin> (or Homebrew's F<bin>), writes the
 environment file the service reads with new secrets, makes the database role
 and database as PostgreSQL's superuser when it can reach one, applies the
 migrations, and names the next steps. Re-run on a host it set up, it changes
@@ -1760,7 +1763,8 @@ The text C<--help> prints.
 
 =head2 links_into
 
-Where root links C<gpforum>: F</usr/local/bin>, or undef for anyone else.
+Where setup links C<gpforum>: F</usr/local/bin> for root, Homebrew's
+F<bin> for anyone else on macOS, or undef.
 
 =head1 DIAGNOSTICS
 

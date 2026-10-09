@@ -281,6 +281,7 @@ sub _setup {
         catalog => GPForum::Service::I18N::CliCatalog->new( language => 'en' ),
         host_name     => $HOST,
         effective_uid => $NOT_ROOT,
+        links_into    => undef,
         output        => _handle( \$output ),
         prompt        => _handle( \$errors ),
     );

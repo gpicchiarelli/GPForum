@@ -465,21 +465,12 @@ file; `systemctl reload` is refused on purpose
 The systemd units create `/run/gpforum` with `RuntimeDirectory=gpforum`, and
 Hypnotoad keeps its pid file there (`PIDFile=/run/gpforum/hypnotoad.pid`). The
 units set only `GPFORUM_ENV=production` and the log path (the unix-socket
-unit also its listen address); every other setting
-takes its default unless `/etc/gpforum/gpforum.env` sets it, so an override
-belongs in that file, not in a copy of the unit.
+unit also its listen address); every other setting takes its default unless
+`/etc/gpforum/gpforum.env` sets it, so an override belongs in that file, not
+in a copy of the unit.
 
-Hourly operational sweeps are a timer, not a daemon:
-
-```text
-deploy/systemd/gpforum-scheduled-jobs.timer
-deploy/systemd/gpforum-scheduled-jobs.service
-```
-
-```sh
-systemctl enable --now gpforum-scheduled-jobs.timer
-```
-
+Hourly operational sweeps are a timer, not a daemon
+(`gpforum-scheduled-jobs.timer`, which the install starts with the rest).
 The oneshot unit runs `gpforum scheduled-jobs --once --limit 100` through
 `bin/gpforum`. It deletes stale sessions, rate-limit buckets,
 identity tokens, completed outbox rows, and dead letters in bounded
@@ -488,23 +479,14 @@ policy/evidence. It does not loop and does not execute partition DDL.
 See `docs/ops/scheduled-jobs.md`.
 
 The monthly partitions of `audit_log`, `event_log` and `notifications` are
-kept ahead by a daily timer of their own (ADR 0113):
-
-```text
-deploy/systemd/gpforum-partition-maintenance.timer
-deploy/systemd/gpforum-partition-maintenance.service
-```
-
-```sh
-systemctl enable --now gpforum-partition-maintenance.timer
-```
-
-It runs `gpforum partitions --apply`, which creates the
-current month and the two after it where they are missing. The parent
-tables stay open to writes; reads that open the DEFAULT partition, and the
-event and audit writes that start with one, wait for each attach, half a
-second at most plus the scan of DEFAULT. Enable it on every node: the runs take an
-advisory lock, and the ones that do not get it do nothing. It needs the role
+kept ahead by a daily timer of their own (ADR 0113),
+`gpforum-partition-maintenance.timer`, also started by the install. It runs
+`gpforum partitions --apply`, which creates the current month and the two
+after it where they are missing. The parent tables stay open to writes;
+reads that open the DEFAULT partition, and the event and audit writes that
+start with one, wait for each attach, half a second at most plus the scan
+of DEFAULT. Enable it on every node: the runs take an advisory lock, and
+the ones that do not get it do nothing. It needs the role
 that owns those tables -- the one the migrations run as; if the application's
 role is not the owner, give the unit an `EnvironmentFile` with the migration
 role's DSN. `gpforum migrate` does the same after every deploy's
