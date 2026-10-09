@@ -82,25 +82,26 @@ has host => sub ($self) {
     );
 };
 
-# Whether this host has the web service's file in place, the one its
-# service manager starts it from; a test says.
+# The web service's file where this host's service manager reads it, the
+# one it starts the service from, or undef when it is not in place; a test
+# gives its own.
+has web_unit => sub ($self) { return $self->_web_service_file; };
+
+# Whether this host has the web service's file in place; a test says.
 has services_installed => sub ($self) {
-    return defined $self->_web_service_file ? 1 : 0;
+    return defined $self->web_unit ? 1 : 0;
 };
 
 # Whether the running web service reads the metrics tokens from this file
-# again by itself (ADR 0124), so a rotation needs no restart: it follows the
-# file its supervisor read, which every unit GPForum ships names as the
-# host's own. One read with --env-file is followed once the service is told
-# it with GPFORUM_ENV_FILE; until then it keeps its restart. A test says.
+# again by itself (ADR 0124), so a rotation needs no restart: the installed
+# web unit names the file, and bin/gpforum, which it runs, tells the
+# service that one in GPFORUM_ENV_FILE -- the host's own, or the one
+# gpforum --env-file FILE service print wrote the unit for. A test says.
 has metrics_reread => sub ($self) {
-    return 0 if !$self->services_installed;
+    my ( $unit, $file ) = ( $self->web_unit, $self->file );
+    return 0 if !defined $unit || !defined $file || !-r $unit;
 
-    my $file = $self->file;
-    return
-      defined $file && $file eq $self->service_environment->default_file
-      ? 1
-      : 0;
+    return path($unit)->slurp =~ _naming($file) ? 1 : 0;
 };
 
 # The live outcomes of a metrics rotation the service reads by itself: what
@@ -448,27 +449,39 @@ sub _say_if_open ( $self, $file ) {
     return;
 }
 
+# A file's name as a service file writes it: a whole word of a unit line,
+# a shell argument or a plist string, quoted or not.
+sub _naming ($file) {
+    return qr{(?: \A | (?<= [\s"'=>] ) ) \Q$file\E (?= [\s"'<] | \z )}msx;
+}
+
 # What makes the service read the new secret: the web service and its
 # outbox worker read the session secret only when they start, so running
 # ones are restarted; so are they for a metrics token on a service that does
 # not follow the file. On a first install nothing runs them yet, and the restart
 # answered "Unit gpforum.service not found": the step is then the one that
-# installs and starts them, or, in development, the server started by hand.
+# installs and starts them -- gpforum service print --to where this host's
+# service manager reads them, as setup offers it -- or, in development, the
+# server started by hand.
 sub _restart ($self) {
     if ( !$self->services_installed ) {
-        return $self->_said( 'setup.next_services',
-            { command => 'gpforum service print' } )
-          if $self->host->is_deployed;
         return $self->_said( 'setup.next_start',
-            { command => 'gpforum start --foreground' } );
+            { command => 'gpforum start --foreground' } )
+          if !$self->host->is_deployed;
+
+        my $install = GPForum::Service::Operations::ServiceFiles->new(
+            host             => $self->host,
+            environment_file => $self->file,
+        )->install_step;
+        return $self->_said( 'setup.next_services', { command => $install } )
+          if defined $install;
+        return $self->_said('setup.next_services_by_hand');
     }
 
     return $self->service_environment->restart_command
       // $self->_said('cli.restart_service');
 }
 
-# The web service's file where this host's service manager reads it, or
-# undef when it is not in place.
 sub _web_service_file ($self) {
     my $files =
       GPForum::Service::Operations::ServiceFiles->new( host => $self->host );
@@ -561,9 +574,10 @@ the file again by itself (ADR 0124), so a metrics rotation is three
 commands: rotate, give the scrapers the new token, C<--finish>. A session
 secret is read only at start: the step is the restart this host's
 supervisor needs -- or, on a host whose service files are not in place yet,
-C<gpforum service print>, which installs them, and in development
-C<gpforum start --foreground>. So is it for a metrics token in a file
-that is not the host's own, which the service is not known to follow.
+C<gpforum service print --to> the directory this host's service manager
+reads, which installs and starts them, and in development C<gpforum start
+--foreground>. So is it for a metrics token in a file the installed web
+unit does not name, which the service does not follow.
 C<--finish> drops the previous ones once nothing uses them. A secret the
 service could not have started with -- the development default, or in
 production a session secret shorter than 32 characters -- signed nothing:
@@ -587,6 +601,11 @@ written, and 2 on misuse, which says what was wrong.
 
 The L<GPForum::Service::Operations::Host> the service runs on.
 
+=head2 web_unit
+
+The path of the web service's file where this host's service manager reads
+it, or undef when it is not in place.
+
 =head2 services_installed
 
 True when the web service's file is where this host's service manager reads
@@ -595,8 +614,9 @@ it, so the step after a rotation is a restart.
 =head2 metrics_reread
 
 True when the running web service reads the metrics tokens from the file
-again by itself, so a metrics rotation names no restart: its service files
-are in place, and the file is the host's own.
+again by itself, so a metrics rotation names no restart: the installed web
+unit names the file -- the host's own, or the one given with
+C<gpforum --env-file FILE service print>.
 
 =head2 usage_text
 

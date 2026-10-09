@@ -28,7 +28,9 @@ our $VERSION = '0.001';
 # found" (and launchd's kickstart "Could not find service"). Until the
 # service files are installed the next step is the one that installs them,
 # or, in development, the server started by hand; once they are, the
-# restart.
+# restart. Walkthrough 3, friction 7: that step was a bare gpforum service
+# print, which writes every unit to the terminal; it is the --to form setup
+# offers.
 
 const my $SECRET_FILE_MODE => oct '640';
 const my $LONG             => 'x' x 64;
@@ -41,9 +43,10 @@ subtest 'a first install is sent to the service files, not a restart' => sub {
     is( $run->{status}, 0, 'the secret is written' );
     is(
         _next( $run->{output} ),
-        "Next: install and start the services, with gpforum --env-file $file"
-          . ' service print',
-        'and the step after is printing the services, for the file it wrote'
+        'Next: install and start the services, with sudo gpforum --env-file'
+          . " $file service print systemd --to /etc/systemd/system",
+        'and the step after writes the units where systemd reads them,'
+          . ' for the file it wrote'
     );
     unlike(
         $run->{output},
@@ -53,8 +56,8 @@ subtest 'a first install is sent to the service files, not a restart' => sub {
 
     like(
         _next( _rotate( 'production', 'darwin', 0 )->{output} ),
-        qr/service [ ] print \z/msx,
-        'nor a launchctl kickstart on macOS'
+qr{service [ ] print [ ] launchd [ ] --to [ ] /Library/LaunchDaemons \z}msx,
+'nor a launchctl kickstart on macOS: the plists, where launchd reads them'
     );
 };
 
@@ -81,8 +84,8 @@ subtest 'in Italian' => sub {
     local $ENV{LC_ALL} = 'it_IT.UTF-8';
     is(
         _next( _rotate( 'production', 'linux', 0, 'it' )->{output} ),
-"Prossimo passo: installa e avvia i servizi, con gpforum --env-file $file"
-          . ' service print',
+'Prossimo passo: installa e avvia i servizi, con sudo gpforum --env-file'
+          . " $file service print systemd --to /etc/systemd/system",
         'the same step, in the operator language'
     );
 };

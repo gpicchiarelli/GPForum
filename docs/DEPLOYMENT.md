@@ -602,8 +602,9 @@ under `brew services`, which reads the certificate certbot keeps root's,
 and certbot's renewals stop and start it as the first one did.
 
 The jobs are loaded too: a plist launchd has not loaded never runs. With
-`gpforum --env-file FILE service print launchd`, each job reads that file
-before it starts, since launchd has none of its own.
+`gpforum --env-file FILE service print launchd`, each job hands that file to
+`bin/gpforum` with `--env-file`, as the systemd units and the rc scripts
+do, so the web service follows its metrics tokens with no restart.
 
 macOS remains primarily a development and profiling platform. It is supported
 for local persistent runs, but production throughput tuning should be measured

@@ -9,7 +9,7 @@ use Mojo::Base -base, -signatures;
 use v5.40;
 use Mojo::File qw(path);
 use Mojo::URL;
-use Mojo::Util qw(decode url_unescape);
+use Mojo::Util qw(decode url_unescape xml_escape);
 
 use GPForum::Config;
 use GPForum::OS;
@@ -137,10 +137,11 @@ const my %TARGET => (
 # only once it is loaded again.
 sub _plist ( $job, $starts ) {
     return {
-        name     => "com.gpforum.$job.plist",
-        template => "deploy/launchd/com.gpforum.$job.plist",
-        starts   => $starts,
-        restarts => 1,
+        name       => "com.gpforum.$job.plist",
+        template   => "deploy/launchd/com.gpforum.$job.plist",
+        starts     => $starts,
+        restarts   => 1,
+        front_door => 1,
     };
 }
 
@@ -516,6 +517,20 @@ sub _reload_and_start ( $self, $target, $files, $place, $start ) {
     return ( @after, @start );
 }
 
+# The step that writes this host's service files where its service manager
+# reads them -- gpforum service print --to that directory, the first of
+# steps() -- which setup and secret rotate offer before the services are in
+# place. A bare print wrote every unit to the terminal before saying to use
+# --to. Undef where GPForum ships no service files.
+sub install_step ($self) {
+    my $target = $self->default_target;
+    return undef if !defined $target;
+
+    return
+      first { /\b gpforum [ ] service [ ] print \b/msx }
+      @{ $self->steps( $target, start => 1 ) };
+}
+
 # The command that takes the certificate the proxy's site names, for the
 # forum's own name; undef for a proxy that takes its own, or for an example
 # name, which would never be issued.
@@ -636,16 +651,24 @@ sub _target_os ( $self, $target ) {
 }
 
 # A file that reads an environment file other than the one the front door
-# reads by itself: the systemd units' and the crontab's commands name it
-# with --env-file, so bin/gpforum reads the file the unit gives the service
-# and not the host's beside it. The rc scripts pass their gpforum_env_file
-# themselves. Each launchd job sources the file its template names before
-# it starts, which is replaced as the code directory is.
+# reads by itself: the systemd units', the crontab's and the launchd jobs'
+# commands name it with --env-file, so bin/gpforum reads the file the unit
+# gives the service and not the host's beside it -- and the web service,
+# told it in GPFORUM_ENV_FILE, follows that one's metrics tokens (ADR
+# 0124). The rc scripts pass their gpforum_env_file themselves. A plist
+# takes it as two more arguments after bin/gpforum.
 sub _reading ( $self, $target, $text, $file_read, $file ) {
-    my $quoted = _shell_quoted($file_read);
-    if ( $file->{front_door} ) {
-        $text =~ s{(/bin/gpforum) [ ]}{$1 --env-file $quoted }gmsx;
+    return $text if !$file->{front_door};
+
+    if ( $target eq 'launchd' ) {
+        my $escaped = xml_escape($file_read);
+        $text =~ s{(<string>[^<]*/bin/gpforum</string>) (\s+)}
+                  {$1$2<string>--env-file</string>$2<string>$escaped</string>$2}gmsx;
+        return $text;
     }
+
+    my $quoted = _shell_quoted($file_read);
+    $text =~ s{(/bin/gpforum) [ ]}{$1 --env-file $quoted }gmsx;
 
     return $text;
 }
@@ -924,6 +947,12 @@ from, or the copies from the directory given as C<from>, or nothing with
 C<in_place>; then the reload and, with C<start>, the commands that start
 what they run, on one line under systemd.
 
+=head2 install_step
+
+The command that writes this host's service files where its service
+manager reads them, C<gpforum service print --to> that directory, or undef
+where GPForum ships none.
+
 =head2 certificate_command
 
 The command that takes the certificate the nginx site names, for the
@@ -965,9 +994,9 @@ None known.
 
 The proxy follows the first address C<GPFORUM_RUNTIME_LISTEN> names, over
 plain HTTP. The service account is C<gpforum>, as every template and the
-deployment guide name it. The nginx certificate lines keep certbot's
-F</etc/letsencrypt/live/> paths, which only the Linux steps take a
-certificate for.
+deployment guide name it. The nginx site names certbot's F<live/>
+directory, under F</usr/local/etc/letsencrypt> on FreeBSD and
+F</etc/letsencrypt> elsewhere.
 
 =head1 AUTHOR
 

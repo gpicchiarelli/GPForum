@@ -1633,10 +1633,9 @@ sub _services_step ( $self, $state ) {
     return $self->_said('setup.next_services_by_hand');
 }
 
-# gpforum service print's own first step for this host's service manager --
-# the files written to a directory with --to, for the file setup wrote --
-# not a bare print, which wrote every unit to the terminal before saying to
-# use --to. Undef where GPForum ships no service files.
+# gpforum service print --to the directory this host's service manager
+# reads, for the file setup wrote; undef where GPForum ships no service
+# files.
 sub _service_print ( $self, $state ) {
     my $host = GPForum::Service::Operations::Host->new(
         os               => $self->os,
@@ -1644,16 +1643,11 @@ sub _service_print ( $self, $state ) {
         environment      => $state->{environment},
         environment_file => $state->{file},
     );
-    my $files = GPForum::Service::Operations::ServiceFiles->new(
+
+    return GPForum::Service::Operations::ServiceFiles->new(
         host             => $host,
         environment_file => $state->{file},
-    );
-    my $target = $files->default_target;
-    return undef if !defined $target;
-
-    return
-      first { /\b gpforum [ ] service [ ] print \b/msx }
-      @{ $files->steps( $target, start => 1 ) };
+    )->install_step;
 }
 
 # Who the next steps run as, each reading the file setup wrote: on a

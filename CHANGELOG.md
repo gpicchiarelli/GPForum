@@ -1414,6 +1414,17 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Fixed
 
+- **A metrics rotation in a file named with `--env-file` needs no restart
+  either.** `gpforum secret rotate metrics` drops the restart whenever the
+  installed web unit names the file it rotated, not only for the host's own
+  file: the units `gpforum --env-file FILE service print` writes hand FILE
+  to `bin/gpforum`, which tells the service in `GPFORUM_ENV_FILE`. The
+  launchd jobs did not: they sourced FILE and then `bin/gpforum` read the
+  host's file over it. Each plist printed for another file now passes it
+  with `--env-file`. Before the services are installed, the step `secret
+  rotate` offers is `gpforum service print --to` the directory the host's
+  service manager reads, as setup offers it, not a bare `service print`.
+
 - `gpforum setup` kept `GPFORUM_MAIL_FROM` at the old domain when the
   address changed. A sender it derived (`forum@` the address's host) now
   follows the new address, and setup says so (`GPFORUM_MAIL_FROM:

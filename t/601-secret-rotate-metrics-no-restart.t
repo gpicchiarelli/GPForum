@@ -126,23 +126,43 @@ subtest 'the session secret keeps its restart' => sub {
         'cookies are signed with the secret the service started with' );
 };
 
-subtest 'the host\'s own file is the one a running service follows' => sub {
-    my $linux = GPForum::Command::Support::ServiceEnvironment->new(
-        os => GPForum::OS->from_name('linux') );
-    my $reread = sub ( $at, $installed ) {
+# The service follows the file its web unit names: the host's own, or the
+# one gpforum --env-file FILE service print wrote the unit for, which
+# bin/gpforum tells the service in GPFORUM_ENV_FILE.
+subtest 'the file the installed web unit names is the one it follows' => sub {
+    my $units  = path( tempdir( CLEANUP => 1 ) );
+    my $reread = sub ( $at, $unit ) {
         return GPForum::Command::Secret->new(
-            file                => $at,
-            services_installed  => $installed,
-            service_environment => $linux,
+            file     => $at,
+            web_unit => defined $unit ? "$unit" : undef,
         )->metrics_reread;
     };
-    ok( $reread->( '/etc/gpforum/gpforum.env', 1 ),
-        '/etc/gpforum/gpforum.env' );
-    ok( !$reread->( "$file", 1 ), 'not one named with --env-file' );
+
+    my $own = $units->child('gpforum.service');
+    $own->spew( "EnvironmentFile=/etc/gpforum/gpforum.env\n"
+          . "ExecStart=/opt/gpforum/bin/gpforum start --service\n" );
+    ok( $reread->( '/etc/gpforum/gpforum.env', $own ), q{the host's own} );
+    ok( !$reread->( "$file",                   $own ), 'not another file' );
     ok(
-        !$reread->( '/etc/gpforum/gpforum.env', 0 ),
-        'nor a host whose services are not installed'
+        !$reread->( '/etc/gpforum/gpforum', $own ),
+        'nor a name the unit holds only the start of'
     );
+
+    my $other = $units->child('other.service');
+    $other->spew( "EnvironmentFile=$file\n"
+          . "ExecStart=/opt/gpforum/bin/gpforum --env-file $file start"
+          . " --service\n" );
+    ok( $reread->( "$file", $other ), 'one named with --env-file' );
+    ok( !$reread->( '/etc/gpforum/gpforum.env', $other ),
+        q{and then not the host's own} );
+
+    my $plist = $units->child('com.gpforum.app.plist');
+    $plist->spew( "    <string>/opt/gpforum/bin/gpforum</string>\n"
+          . "    <string>--env-file</string>\n    <string>$file</string>\n" );
+    ok( $reread->( "$file", $plist ), 'and in a plist' );
+
+    ok( !$reread->( "$file", undef ),
+        'nor a host whose services are not installed' );
 };
 
 done_testing();
