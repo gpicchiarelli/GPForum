@@ -7,7 +7,9 @@ use v5.40;
 
 use Const::Fast;
 use English    qw(-no_match_vars);
+use File::Temp qw(tempdir);
 use IPC::Open3 qw(open3);
+use Mojo::File qw(path);
 use Symbol     qw(gensym);
 use Test::More;
 
@@ -52,6 +54,20 @@ for my $drill ( sort keys %DRILL ) {
         my $word = _run( {}, $drill, $port, 'many' );
         is( $word->{status}, $USAGE, "$port takes a number" );
         like( $word->{err}, qr/'many'/msx, 'and says what it was given' );
+
+        # The drill removes its directory when it ends: one that holds files
+        # is refused before anything starts, and left as it was. A relative
+        # one is the caller's, not the checkout's.
+        my $caller = path( tempdir( CLEANUP => 1 ) )->realpath->to_string;
+        path( $caller, 'mine' )->make_path->child('notes.txt')->touch;
+        my $full = _run_in( $caller, {}, $drill, '--dir', 'mine' );
+        is( $full->{status}, $USAGE, '--dir naming a directory with files' );
+        like(
+            $full->{err},
+            qr/--dir [ ] \Q$caller\E\/mine [ ] is [ ] not [ ] empty/msx,
+            'is refused, named from where the drill was run'
+        );
+        ok( -e path( $caller, 'mine', 'notes.txt' ), 'and nothing is removed' );
 
         for my $old ( sort keys %{ $DRILL{$drill}{old} } ) {
             my $flag   = $DRILL{$drill}{old}{$old};
@@ -118,6 +134,17 @@ sub _run ( $variables, @command ) {
         out    => $out,
         err    => $err
     };
+}
+
+# The same, run from another directory.
+sub _run_in ( $directory, $variables, $script, @arguments ) {
+    my $command = path($script)->to_abs->to_string;
+    my $here    = path->to_abs;
+    chdir $directory or return {};
+    my $result = _run( $variables, $command, @arguments );
+    chdir $here or return {};
+
+    return $result;
 }
 
 sub _slurp ($handle) {

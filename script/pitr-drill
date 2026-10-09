@@ -17,6 +17,7 @@
 
 set -eu
 
+here=$(pwd)
 root=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 cd "$root"
 
@@ -63,7 +64,7 @@ Rehearses point-in-time recovery against a throwaway PostgreSQL cluster and
 reports whether the restore landed on the requested instant.
 
   --port N    port for the throwaway cluster (default 55444)
-  --dir PATH  working directory (default a temporary one)
+  --dir PATH  a new or empty working directory (default a temporary one)
   --keep      leave the cluster and the archive behind for inspection
   --help      show this help
 
@@ -86,6 +87,25 @@ case "$port" in
 esac
 workdir=${workdir:-${TMPDIR:-/tmp}/gpforum-pitr.$$}
 
+# The working directory is the drill's alone, and it is removed at the end:
+# one that already holds files is refused, never emptied. A relative one is
+# the caller's, not the checkout's, and is made absolute, because PostgreSQL
+# runs archive_command and restore_command from inside the data directory.
+case "$workdir" in
+    /*) ;;
+    *) workdir="$here/$workdir" ;;
+esac
+made=1
+if [ -e "$workdir" ]; then
+    if [ ! -d "$workdir" ] || [ -n "$(ls -A "$workdir")" ]; then
+        echo "pitr-drill: --dir $workdir is not empty; name a new or empty directory" >&2
+        exit 2
+    fi
+    made=0
+fi
+mkdir -p "$workdir"
+workdir=$(CDPATH= cd -- "$workdir" && pwd)
+
 if ! command -v initdb >/dev/null 2>&1; then
     eval "$(script/gpforum-homebrew-env 2>/dev/null || true)"
 fi
@@ -103,7 +123,13 @@ mkdir -p "$archive" "$socket"
 
 cleanup() {
     pg_ctl -D "$data" -m immediate stop >/dev/null 2>&1 || true
-    [ "$keep" -eq 1 ] || rm -rf "$workdir" "$socket"
+    [ "$keep" -eq 1 ] && return
+    if [ "$made" -eq 1 ]; then
+        rm -rf "$workdir"
+    else
+        find "$workdir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+    fi
+    rm -rf "$socket"
 }
 trap cleanup EXIT HUP INT TERM
 
