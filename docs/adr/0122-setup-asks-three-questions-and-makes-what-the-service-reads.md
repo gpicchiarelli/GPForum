@@ -212,3 +212,39 @@ included, where the plists keep the pid file. `gpforum doctor` says when
 the account the service files run as is missing, with `sudo gpforum
 setup`. Verified by `t/533-setup-service-account.t` and
 `t/591-service-print-into-place.t`.
+
+**A typed answer is the say-so** (friction 9). Section 3 asked `Replace
+it? [y/N]` after an answer the operator had just typed. A value typed at
+the prompt now replaces the file's at once; a change no one typed -- an
+option given at a terminal -- is still asked about, and under `--yes` still
+needs `--force`. A sender setup derived
+(`forum@` the address's host) follows a new address, and says so; one the
+operator wrote stays. Verified by `t/534-setup-command.t`.
+
+**The superuser setup reaches, and why none answered** (friction 8).
+Section 4's ways in are joined by the logins the operator gives: the user
+and password a data source names (`user=`, `password=`), then
+`GPFORUM_DATABASE_USER` and `GPFORUM_DATABASE_PASSWORD` from the shell
+setup was started in, read before the file it writes is loaded. The line
+of what was made names the way in (`as PostgreSQL's superuser postgres,
+from GPFORUM_DATABASE_USER`). When none answers, setup says what libpq told
+each login, offers the run with `PGUSER`, and prints only the statements
+for what is missing: `CREATE DATABASE` alone for a role that exists.
+Verified by `t/532-setup-database-provisioning.t` and
+`t/534-setup-command.t`.
+
+**The next steps** (friction 7 and 13). Section 8's lines are now:
+
+```text
+Next: make the forum's owner, with sudo -u gpforum gpforum admin create --email EMAIL --username NAME
+Then: install and start the services, with sudo gpforum service print systemd --to /etc/systemd/system
+Then: check the whole forum, with sudo -u gpforum gpforum doctor
+```
+
+The owner's line names what to type, not a placeholder address. The
+services' line is `gpforum service print`'s own first step for this host
+(`ServiceFiles->install_step`), which writes the files where the service
+manager reads them and ends with the start; a bare `service print` wrote
+every unit to the terminal first. `gpforum secret rotate`, before the
+services are installed, offers the same line. Verified by
+`t/534-setup-command.t` and `t/560-secret-rotate-next-step.t`.

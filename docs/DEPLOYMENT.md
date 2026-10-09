@@ -89,9 +89,13 @@ site=forum.example.com
    file has is replaced only when you say so.
 
    For a database on another host, answer its data source
-   (`dbi:Pg:dbname=gpforum;host=db.internal;port=5432`); when no superuser
-   of it answers here, setup prints the two `psql` commands that make the
-   role and the database, to run there before `sudo gpforum setup` again.
+   (`dbi:Pg:dbname=gpforum;host=db.internal;port=5432`). Setup reaches its
+   superuser as psql would -- `PGUSER` names it, `~/.pgpass` holds its
+   password -- then with the user and password the data source, or
+   `GPFORUM_DATABASE_USER` and `GPFORUM_DATABASE_PASSWORD`, give. When none
+   answers, it says what PostgreSQL told each, offers the `PGUSER=...` run,
+   and prints the `psql` commands that make what is missing, to run there
+   before `sudo gpforum setup` again.
    `sudo gpforum setup --yes --public-url "https://$site" --database create
    --mail sendmail` answers for a script, and `--dry-run` shows what setup
    would do. Everything else in the file keeps its default; a setting
@@ -380,7 +384,7 @@ make system-perl   # script/gpforum-system-perl --preflight
 Host packages (before Carton):
 
 - Debian/Ubuntu: `perl`, `build-essential`, `cpanminus`, `libpq-dev`,
-  `postgresql-client`
+  `libssl-dev`, `zlib1g-dev`, `postgresql-client`
 - FreeBSD: `perl5`, `p5-App-cpanminus`, `postgresql16-client`
 - macOS (Homebrew): `brew install perl cpanminus postgresql@18`. Homebrew
   installs a versioned PostgreSQL keg-only, so put its client tools on
@@ -399,9 +403,9 @@ Host packages (before Carton):
 - Then: `cpanm -M https://cpan.metacpan.org/ Carton` for that system Perl
 
 IO::Socket::SSL, for mail over TLS, builds Net::SSLeay against the host's
-OpenSSL headers: `libpq-dev` brings `libssl-dev` on Debian and Ubuntu,
-FreeBSD has them in base, and on macOS `script/bootstrap-deps` finds
-Homebrew's `openssl@3`, which `postgresql@18` installs (or set
+OpenSSL headers: `libssl-dev` on Debian and Ubuntu (`libpq-dev` does not
+bring them), FreeBSD's base, and on macOS Homebrew's `openssl@3`, which
+`postgresql@18` installs and `script/bootstrap-deps` finds (or set
 `OPENSSL_PREFIX`).
 
 GPForum recognizes runtime modules from `cpanfile`, PostgreSQL modules from

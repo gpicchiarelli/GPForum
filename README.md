@@ -49,7 +49,7 @@ PostgreSQL 16, 17 or 18. See [deployment](docs/DEPLOYMENT.md) for production.
 Debian 13 or Ubuntu 26.04, which also starts a PostgreSQL server:
 
 ```sh
-sudo apt install perl build-essential cpanminus libpq-dev libssl-dev postgresql postgresql-client
+sudo apt install perl build-essential cpanminus libpq-dev libssl-dev zlib1g-dev postgresql postgresql-client
 sudo cpanm -M https://cpan.metacpan.org/ Carton
 ```
 

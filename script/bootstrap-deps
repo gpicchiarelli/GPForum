@@ -170,9 +170,9 @@ if [ "$with_postgres" -eq 1 ]; then
 fi
 
 # Net::SSLeay, under IO::Socket::SSL, builds against OpenSSL's headers.
-# Debian, Ubuntu and FreeBSD keep them under /usr (libpq-dev brings
-# libssl-dev); macOS has them only in Homebrew's keg-only openssl@3, which
-# Net::SSLeay finds when OPENSSL_PREFIX names it.
+# Debian and Ubuntu install them under /usr with libssl-dev (libpq-dev does
+# not bring it), FreeBSD has them in base; macOS has them only in Homebrew's
+# keg-only openssl@3, which Net::SSLeay finds when OPENSSL_PREFIX names it.
 if [ -z "${OPENSSL_PREFIX:-}" ] && [ ! -f /usr/include/openssl/ssl.h ]; then
     for candidate in /opt/homebrew/opt/openssl@3 /usr/local/opt/openssl@3; do
         if [ -f "$candidate/include/openssl/ssl.h" ]; then
