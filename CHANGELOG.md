@@ -821,6 +821,15 @@ CI, evidence and internal refactors with no change in behaviour.
 
 ### Changed
 
+- **The README carries the production path**: the `apt` line, then eight
+  commands from the clone to a signed-in owner behind TLS on Debian or
+  Ubuntu -- the clone, `sudo /opt/gpforum/bin/gpforum setup`, the units into
+  place and started, the certificate, the nginx site into place and
+  reloaded, `admin create`. DEPLOYMENT's install drops `cd`, `make
+  install-deps-production`, the link, the copies and the `rm` of the
+  default site, and no longer sends mail over TLS to
+  `libio-socket-ssl-perl`, which the dependencies install.
+
 - **`gpforum service print --to` puts the files in place**: given the
   directory the host reads them from -- `/etc/systemd/system`,
   `/Library/LaunchDaemons`, `rc.d`, nginx's `sites-enabled` -- it writes its

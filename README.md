@@ -99,9 +99,7 @@ file; run setup again and it changes nothing. Without a system server, a
 cluster in your home directory is enough, as
 [docs/ops/staging-drills.md](docs/ops/staging-drills.md) shows: answer its
 data source to the database question. For a production host, follow
-[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#install-on-debian-or-ubuntu)
-instead: it installs with `make install-deps-production`, without the
-maintainer's tools.
+[Production on Debian or Ubuntu](#production-on-debian-or-ubuntu) instead.
 
 `gpforum admin create` asks for a password and creates an active, verified
 owner. Open <http://127.0.0.1:3000> to sign in. Run `gpforum` for help, or
@@ -124,6 +122,47 @@ For development: `make check` runs the quality checks; `make integration`
 runs the PostgreSQL tests with `GPFORUM_DATABASE_DSN` set. `make fresh-checkout`
 verifies a clean clone. Use `script/coverage`, `script/bench-http` and
 `script/profile-route` for measurement, and `make help` for the other tasks.
+
+## Production on Debian or Ubuntu
+
+From a bare Debian 13 or Ubuntu 26.04 host to a signed-in owner behind TLS.
+First the packages -- PostgreSQL, nginx with certbot, ClamAV for the upload
+scan -- and Carton for the system Perl:
+
+```sh
+sudo apt install git perl build-essential cpanminus libpq-dev libssl-dev zlib1g-dev \
+  postgresql nginx certbot python3-certbot-nginx clamav-daemon clamav-freshclam
+sudo cpanm -M https://cpan.metacpan.org/ Carton
+```
+
+Then eight commands, with your forum's name for `forum.example.org`:
+
+```sh
+sudo git clone https://github.com/gpicchiarelli/GPForum.git /opt/gpforum
+sudo /opt/gpforum/bin/gpforum setup
+sudo gpforum service print --to /etc/systemd/system
+sudo systemctl daemon-reload && sudo systemctl enable --now gpforum gpforum-outbox gpforum-scheduled-jobs.timer gpforum-partition-maintenance.timer
+sudo certbot certonly --nginx -d forum.example.org
+sudo gpforum service print nginx --to /etc/nginx/sites-enabled
+sudo nginx -t && sudo systemctl reload nginx
+sudo -u gpforum gpforum admin create --email EMAIL --username NAME
+```
+
+`gpforum setup` installs the dependencies, as `make install-deps-production`
+does, links `gpforum` into `/usr/local/bin`, and asks three questions:
+Enter takes each suggestion, and the address is the one to type. It makes
+the account the services run as, writes `/etc/gpforum/gpforum.env` with new
+secrets, makes the database as the `postgres` account, and brings the
+schema up to date. Each command ends by saying the next one, so after
+setup nothing here needs to be read again. `service print --to` writes
+GPForum's own files where systemd and nginx read them and touches nothing
+else there; Debian's default site stays. Then sign in at
+`https://forum.example.org/login`, and run `sudo -u gpforum gpforum doctor`,
+which checks everything from the settings to the public address and says
+how to fix what is wrong. Mail leaves through the host's `sendmail` unless
+you answered `smtp HOST:PORT USER`; the antivirus needs `StreamMaxLength
+26M` in `/etc/clamav/clamd.conf`. [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+explains each step, FreeBSD and macOS.
 
 ## How it is built
 

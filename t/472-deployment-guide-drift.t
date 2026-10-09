@@ -190,7 +190,7 @@ subtest 'every path that reaches /metrics is kept to the loopback' => sub {
 subtest 'the steps the walkthrough could not find are written down' => sub {
     like(
         $install,
-        qr/^ [ ]* sudo [ ] gpforum [ ] setup $/msx,
+        qr{^ [ ]* sudo [ ] (?:/opt/gpforum/bin/)?gpforum [ ] setup $}msx,
         'one command for the service user, its file, the database and schema'
     );
     is_deeply(

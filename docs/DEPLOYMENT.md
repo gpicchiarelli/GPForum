@@ -36,43 +36,45 @@ site=forum.example.com
    upload scan, and Carton for the system Perl.
 
    ```sh
-   sudo apt install git perl build-essential cpanminus libpq-dev \
+   sudo apt install git perl build-essential cpanminus libpq-dev libssl-dev zlib1g-dev \
      postgresql postgresql-client nginx certbot python3-certbot-nginx \
      clamav-daemon clamav-freshclam
    sudo cpanm -M https://cpan.metacpan.org/ Carton
    ```
 
-2. **The code, and `gpforum` on the `PATH`.** The code belongs to root, so
-   the service cannot rewrite it. `gpforum`, the command every step below
-   uses, is linked onto the `PATH`.
+2. **The code.** The code belongs to root, so the service cannot rewrite it.
 
    ```sh
    sudo git clone https://github.com/gpicchiarelli/GPForum.git /opt/gpforum
-   cd /opt/gpforum
-   sudo make install-deps-production
-   sudo ln -s /opt/gpforum/bin/gpforum /usr/local/bin/gpforum
    ```
 
-3. **Setup.** Three questions, Enter taking each suggestion: the address
-   members reach the forum at, the database (Enter makes `gpforum` on this
-   host), and how mail leaves (step 5).
+3. **Setup.** On a fresh clone it installs the dependencies first, as `make
+   install-deps-production` does, without the maintainer's tools, and links
+   `gpforum`, the command every step below uses, into `/usr/local/bin`.
+   Then three questions, Enter taking each suggestion: the address members
+   reach the forum at, the database (Enter makes `gpforum` on this host),
+   and how mail leaves (step 5).
 
    ```sh
-   sudo gpforum setup
+   sudo /opt/gpforum/bin/gpforum setup
    ```
 
    ```text
+   gpforum setup installs the dependencies into /opt/gpforum/local first, as make install-deps-production does: carton install --deployment --without develop
+   ...
+   ✓ dependencies: installed into /opt/gpforum/local, for Perl 5.40.1
    GPForum setup. Three questions; Enter accepts the suggestion.
    Public address [https://forum.example.org]:
    Database [create 'gpforum' on this host]:
    Mail (sendmail, smtp HOST:PORT USER, or log) [sendmail]:
    ✓ account gpforum: made, with /opt/gpforum/var/attachments for its uploads
    ✓ /etc/gpforum/gpforum.env: written, 0640 root:gpforum, with a new session secret and metrics token
+   ✓ gpforum: linked into /usr/local/bin, so it runs from any directory
    ✓ database gpforum at 127.0.0.1:5432: made, with its role gpforum
    ✓ Applied 51 migrations, 001 to 051; synced the query budgets (25 changed)
 
-   Next: make the forum's owner, with sudo -u gpforum gpforum admin create --email you@example.com --username you
-   Then: install and start the services, with sudo gpforum service print
+   Next: make the forum's owner, with sudo -u gpforum gpforum admin create --email EMAIL --username NAME
+   Then: install and start the services, with sudo gpforum service print systemd --to /etc/systemd/system
    Then: check the whole forum, with sudo -u gpforum gpforum doctor
    ```
 
